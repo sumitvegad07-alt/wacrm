@@ -10,6 +10,8 @@ import {
   TemplatePicker,
   type TemplateSendValues,
 } from '@/components/inbox/template-picker';
+import { TaskListEmbedded } from '@/components/tasks/task-list-embedded';
+import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import {
   Sheet,
   SheetContent,
@@ -22,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -147,7 +150,7 @@ export function ContactDetailView({
     setLoadingCustom(true);
 
     const [fieldsRes, valuesRes] = await Promise.all([
-      supabase.from('custom_fields').select('*').order('field_name'),
+      supabase.from('custom_fields').select('*').eq('module_name', 'contact').order('field_name'),
       supabase
         .from('contact_custom_values')
         .select('*')
@@ -486,6 +489,12 @@ export function ContactDetailView({
                 >
                   Deals
                 </TabsTrigger>
+                <TabsTrigger
+                  value="tasks"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                >
+                  Tasks
+                </TabsTrigger>
               </TabsList>
 
               {/* Details Tab */}
@@ -662,16 +671,10 @@ export function ContactDetailView({
                         <Label className="text-muted-foreground text-xs capitalize">
                           {field.field_name}
                         </Label>
-                        <Input
-                          value={customValues[field.id] ?? ''}
-                          onChange={(e) =>
-                            setCustomValues((prev) => ({
-                              ...prev,
-                              [field.id]: e.target.value,
-                            }))
-                          }
-                          placeholder={`Enter ${field.field_name}...`}
-                          className="bg-muted border-border text-foreground h-8 text-sm placeholder:text-muted-foreground"
+                        <CustomFieldInput 
+                          field={field} 
+                          value={customValues[field.id] ?? ''} 
+                          onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
                         />
                       </div>
                     ))}
@@ -747,6 +750,11 @@ export function ContactDetailView({
                     ))}
                   </div>
                 )}
+              </TabsContent>
+
+              {/* Tasks Tab */}
+              <TabsContent value="tasks" className="flex-1 overflow-y-auto px-4 py-3">
+                <TaskListEmbedded contactId={contactId || undefined} />
               </TabsContent>
             </Tabs>
           </div>

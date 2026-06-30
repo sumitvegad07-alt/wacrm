@@ -33,6 +33,7 @@ import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
+import { TodaysTasks } from '@/components/dashboard/todays-tasks'
 
 type RangeDays = 7 | 30 | 90
 
@@ -210,8 +211,16 @@ export default function DashboardPage() {
       {/* Response time */}
       <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
 
-      {/* Activity feed */}
-      <ActivityFeed items={activity} loading={activityLoading} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          {/* Activity feed */}
+          <ActivityFeed items={activity} loading={activityLoading} />
+        </div>
+        <div className="lg:col-span-1">
+          {/* Today's Tasks */}
+          <TodaysTasks />
+        </div>
+      </div>
     </div>
   )
 }

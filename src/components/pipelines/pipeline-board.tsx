@@ -136,7 +136,6 @@ export function PipelineBoard({
               stage={
                 sortedStages.find((s) => s.id === activeDeal.stage_id) ?? null
               }
-              onEdit={() => {}}
               isOverlay
             />
           </div>
@@ -284,7 +283,7 @@ function DraggableDealCard({
       {...attributes}
       style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
     >
-      <DealCard deal={deal} stage={stage} onEdit={onEdit} />
+      <DealCard deal={deal} stage={stage} />
     </div>
   );
 }

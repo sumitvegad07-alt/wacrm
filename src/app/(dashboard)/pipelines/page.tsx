@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Pipeline, PipelineStage, Deal } from "@/types";
 import { PipelineBoard } from "@/components/pipelines/pipeline-board";
 import { PipelineSettings } from "@/components/pipelines/pipeline-settings";
 import { DealForm } from "@/components/pipelines/deal-form";
 import { PipelineAnalytics } from "@/components/pipelines/pipeline-analytics";
+import { ImportDealsModal } from "@/components/pipelines/import-deals-modal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -49,6 +51,8 @@ export default function PipelinesPage() {
   const canEditSettings = useCan("edit-settings");
   const canCreateDeals = useCan("send-messages");
   const { accountId } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
@@ -67,6 +71,8 @@ export default function PipelinesPage() {
   const [dealFormOpen, setDealFormOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [defaultStageId, setDefaultStageId] = useState<string>("");
+
+  const [importDealsOpen, setImportDealsOpen] = useState(false);
 
   // Guard against double-seeding (React StrictMode double-effect in dev).
   const seedAttempted = useRef(false);
@@ -239,6 +245,13 @@ export default function PipelinesPage() {
     [stages],
   );
 
+  useEffect(() => {
+    if (searchParams.get("new") === "true" && !loading && stages.length > 0 && selectedPipelineId && !dealFormOpen) {
+      handleAddDeal();
+      router.replace('/pipelines');
+    }
+  }, [searchParams, loading, stages, selectedPipelineId, router, handleAddDeal, dealFormOpen]);
+
   const handleEditDeal = useCallback((deal: Deal) => {
     setEditingDeal(deal);
     setDefaultStageId(deal.stage_id);
@@ -385,6 +398,17 @@ export default function PipelinesPage() {
             <Plus className="mr-1 h-4 w-4" />
             Add Deal
           </GatedButton>
+          <GatedButton
+            variant="outline"
+            canAct={canCreateDeals}
+            gateReason="import deals"
+            disabled={!selectedPipelineId}
+            onClick={() => setImportDealsOpen(true)}
+            className="border-border bg-card text-foreground hover:bg-muted"
+          >
+            <Upload className="mr-1 h-4 w-4" />
+            Import
+          </GatedButton>
         </div>
       </div>
 
@@ -486,6 +510,15 @@ export default function PipelinesPage() {
         stages={stages}
         defaultStageId={defaultStageId}
         onSaved={refreshDeals}
+      />
+      
+      <ImportDealsModal
+        open={importDealsOpen}
+        onOpenChange={setImportDealsOpen}
+        pipelineId={selectedPipelineId}
+        onImported={() => {
+          if (selectedPipelineId) refreshDeals();
+        }}
       />
     </div>
   );

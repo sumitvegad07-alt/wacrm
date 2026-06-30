@@ -12,7 +12,9 @@ import type {
   DealStatus,
   PipelineStage,
   Profile,
+  CustomField,
 } from "@/types";
+import { CustomFieldInput } from "@/components/ui/custom-field-input";
 import {
   Sheet,
   SheetContent,
@@ -23,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Check,
   X,
@@ -32,6 +35,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { TaskListEmbedded } from "@/components/tasks/task-list-embedded";
 
 interface DealFormProps {
   open: boolean;
@@ -69,6 +73,9 @@ export function DealForm({
   const [linkedConversation, setLinkedConversation] =
     useState<Conversation | null>(null);
 
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
+
   const [saving, setSaving] = useState(false);
   const [statusAction, setStatusAction] = useState<DealStatus | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -104,6 +111,49 @@ export function DealForm({
     }
   }, [open, deal, defaultStageId, stages, defaultCurrency]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    
+    async function fetchCustomFields() {
+      if (!accountId) return;
+      const { data: fields } = await supabase
+        .from("custom_fields")
+        .select("*")
+        .eq("module_name", "deal")
+        .order("field_name");
+        
+      if (cancelled) return;
+      
+      if (fields) {
+        setCustomFields(fields as CustomField[]);
+        
+        if (deal?.id) {
+          const { data: values } = await supabase
+            .from("deal_custom_values")
+            .select("*")
+            .eq("deal_id", deal.id);
+            
+          if (cancelled) return;
+            
+          if (values) {
+            const vals: Record<string, string> = {};
+            values.forEach((v) => {
+              if (v.value) vals[v.custom_field_id] = v.value;
+            });
+            setCustomValues(vals);
+          }
+        } else {
+          setCustomValues({});
+        }
+      }
+    }
+    
+    fetchCustomFields();
+    
+    return () => { cancelled = true; };
+  }, [open, deal, accountId, supabase]);
 
   // Load supporting data once the sheet is open
   useEffect(() => {
@@ -168,6 +218,8 @@ export function DealForm({
       expected_close_date: expectedCloseDate || null,
     };
 
+    let savedDealId = deal?.id;
+
     if (deal) {
       const { error } = await supabase
         .from("deals")
@@ -193,13 +245,31 @@ export function DealForm({
         setSaving(false);
         return;
       }
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("deals")
-        .insert({ ...payload, user_id: user.id, account_id: accountId, status: "open" });
+        .insert({ ...payload, user_id: user.id, account_id: accountId, status: "open" })
+        .select("id")
+        .single();
       if (error) {
         toast.error("Failed to create deal");
         setSaving(false);
         return;
+      }
+      savedDealId = data.id;
+    }
+
+    if (savedDealId) {
+      const cfUpserts = customFields
+        .filter(f => customValues[f.id] !== undefined)
+        .map((f) => ({
+           deal_id: savedDealId,
+           custom_field_id: f.id,
+           value: customValues[f.id]
+        }));
+      
+      if (cfUpserts.length > 0) {
+        await supabase.from('deal_custom_values').delete().eq('deal_id', savedDealId);
+        await supabase.from('deal_custom_values').insert(cfUpserts);
       }
     }
 
@@ -269,18 +339,17 @@ export function DealForm({
 
             <div className="grid gap-2">
               <Label className="text-muted-foreground">Contact</Label>
-              <select
+              <SearchableSelect
                 value={contactId}
-                onChange={(e) => setContactId(e.target.value)}
-                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-              >
-                <option value="">Select a contact</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name || c.phone}
-                  </option>
-                ))}
-              </select>
+                onChange={setContactId}
+                placeholder="Select a contact"
+                searchPlaceholder="Search contacts..."
+                emptyMessage="No contacts found."
+                options={contacts.map((c) => ({
+                  value: c.id,
+                  label: c.name || c.phone,
+                }))}
+              />
 
               {linkedConversation && (
                 <Link
@@ -374,55 +443,79 @@ export function DealForm({
               />
             </div>
 
-            {deal && (
-              <div className="space-y-2 rounded-lg border border-border bg-muted/50 p-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Status
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    onClick={() => handleStatusChange("won")}
-                    disabled={!!statusAction || deal.status === "won"}
-                    className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    {statusAction === "won" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Check className="mr-1 h-4 w-4" />
-                        Mark as Won
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => handleStatusChange("lost")}
-                    disabled={!!statusAction || deal.status === "lost"}
-                    className="flex-1 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-                  >
-                    {statusAction === "lost" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        <X className="mr-1 h-4 w-4" />
-                        Mark as Lost
-                      </>
-                    )}
-                  </Button>
-                </div>
-                {deal.status && deal.status !== "open" && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => handleStatusChange("open")}
-                    disabled={!!statusAction}
-                    className="w-full text-muted-foreground hover:text-foreground"
-                  >
-                    Reopen deal
-                  </Button>
-                )}
+            {customFields.length > 0 && (
+              <div className="space-y-4 pt-4 border-t border-border/50">
+                <h4 className="text-sm font-medium text-foreground">Custom Fields</h4>
+                {customFields.map((field) => (
+                  <div key={field.id} className="grid gap-2">
+                    <Label className="text-muted-foreground capitalize">
+                      {field.field_name}
+                    </Label>
+                    <CustomFieldInput 
+                      field={field} 
+                      value={customValues[field.id] ?? ''} 
+                      onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
+                    />
+                  </div>
+                ))}
               </div>
+            )}
+
+            {deal && (
+              <>
+                <div className="space-y-2 rounded-lg border border-border bg-muted/50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Status
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => handleStatusChange("won")}
+                      disabled={!!statusAction || deal.status === "won"}
+                      className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {statusAction === "won" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Check className="mr-1 h-4 w-4" />
+                          Mark as Won
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => handleStatusChange("lost")}
+                      disabled={!!statusAction || deal.status === "lost"}
+                      className="flex-1 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {statusAction === "lost" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <X className="mr-1 h-4 w-4" />
+                          Mark as Lost
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {deal.status && deal.status !== "open" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => handleStatusChange("open")}
+                      disabled={!!statusAction}
+                      className="w-full text-muted-foreground hover:text-foreground"
+                    >
+                      Reopen deal
+                    </Button>
+                  )}
+                </div>
+
+                <div className="rounded-lg border border-border p-3 mt-4">
+                  <TaskListEmbedded dealId={deal.id} />
+                </div>
+              </>
             )}
           </div>
 

@@ -121,10 +121,39 @@ export interface CustomField {
   user_id: string;
   /** Tenancy key — NOT NULL since migration 017. */
   account_id: string;
+  module_name: 'contact' | 'deal' | 'task' | 'product';
   field_name: string;
   field_type: string;
   field_options?: Record<string, unknown>;
   created_at: string;
+}
+
+export interface ContactCustomValue {
+  id: string;
+  contact_id: string;
+  custom_field_id: string;
+  value?: string;
+}
+
+export interface DealCustomValue {
+  id: string;
+  deal_id: string;
+  custom_field_id: string;
+  value?: string;
+}
+
+export interface ProductCustomValue {
+  id: string;
+  product_id: string;
+  custom_field_id: string;
+  value?: string;
+}
+
+export interface TaskCustomValue {
+  id: string;
+  task_id: string;
+  custom_field_id: string;
+  value?: string;
 }
 
 export interface ContactCustomValue {
@@ -285,9 +314,28 @@ export interface PipelineStage {
   id: string;
   pipeline_id: string;
   name: string;
-  position: number;
-  color: string;
+  size?: number;
+  type?: string;
+}
+
+// ============================================================
+// PRODUCTS
+// ============================================================
+
+export interface Product {
+  id: string;
+  user_id: string;
+  account_id: string;
+  name: string;
+  description?: string | null;
+  sku?: string | null;
+  price?: number | null;
+  image?: string | null;
+  category?: string | null;
+  unit?: string | null;
+  active: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export type DealStatus = 'open' | 'won' | 'lost';
@@ -541,4 +589,68 @@ export interface AutomationLog {
   error_message?: string | null;
   created_at: string;
   contact?: Contact;
+}
+
+// ============================================================
+// Tasks (migration 027)
+// ============================================================
+
+export type TaskStatus = 'Pending' | 'In Progress' | 'Waiting' | 'Completed' | 'Cancelled';
+export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
+
+export interface Task {
+  id: string;
+  user_id: string;
+  title: string;
+  description?: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assigned_user_id?: string | null;
+  due_date?: string | null;
+  due_time?: string | null;
+  start_date?: string | null;
+  reminder_date?: string | null;
+  reminder_time?: string | null;
+  contact_id?: string | null;
+  deal_id?: string | null;
+  product_id?: string | null;
+  conversation_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  contact?: Contact;
+  deal?: Deal;
+  product?: Product;
+  conversation?: Conversation;
+  assignee?: Profile;
+}
+
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  user?: Profile;
+}
+
+export interface TaskChecklist {
+  id: string;
+  task_id: string;
+  title: string;
+  is_completed: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskAttachment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  file_name: string;
+  file_url: string;
+  file_size?: number | null;
+  content_type?: string | null;
+  created_at: string;
 }

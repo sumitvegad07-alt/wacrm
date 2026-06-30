@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag } from '@/types';
+import type { Contact, Tag, ContactTag, CustomField } from '@/types';
+import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import {
   findExistingContact,
   isExactMatch,
@@ -67,6 +68,9 @@ export function ContactForm({
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [loadingTags, setLoadingTags] = useState(false);
 
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
+
   useEffect(() => {
     if (open) {
       setName(contact?.name ?? '');
@@ -76,6 +80,7 @@ export function ContactForm({
       setSelectedTagIds(contactTags.map((ct) => ct.tag_id));
       setDupMatch(null);
       fetchTags();
+      fetchCustomFields();
     }
   }, [open, contact]);
 
@@ -109,6 +114,36 @@ export function ContactForm({
       .order('name');
     if (data) setTags(data);
     setLoadingTags(false);
+  }
+
+  async function fetchCustomFields() {
+    if (!accountId) return;
+    const { data: fields } = await supabase
+      .from('custom_fields')
+      .select('*')
+      .eq('module_name', 'contact')
+      .order('field_name');
+    
+    if (fields) {
+      setCustomFields(fields as CustomField[]);
+      
+      if (isEdit && contact?.id) {
+        const { data: values } = await supabase
+          .from('contact_custom_values')
+          .select('*')
+          .eq('contact_id', contact.id);
+          
+        if (values) {
+          const vals: Record<string, string> = {};
+          values.forEach((v) => {
+            if (v.value) vals[v.custom_field_id] = v.value;
+          });
+          setCustomValues(vals);
+        }
+      } else {
+        setCustomValues({});
+      }
+    }
   }
 
   function toggleTag(tagId: string) {
@@ -191,6 +226,20 @@ export function ContactForm({
             .from('contact_tags')
             .insert(tagRows);
           if (tagError) throw tagError;
+        }
+
+        // Sync custom fields
+        const cfUpserts = customFields
+          .filter(f => customValues[f.id] !== undefined)
+          .map((f) => ({
+             contact_id: contactId!,
+             custom_field_id: f.id,
+             value: customValues[f.id]
+          }));
+        
+        if (cfUpserts.length > 0) {
+          await supabase.from('contact_custom_values').delete().eq('contact_id', contactId);
+          await supabase.from('contact_custom_values').insert(cfUpserts);
         }
       }
 
@@ -323,6 +372,24 @@ export function ContactForm({
               className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
             />
           </div>
+
+          {customFields.length > 0 && (
+            <div className="space-y-4 pt-2 border-t border-border">
+              <h4 className="text-sm font-medium text-foreground">Custom Fields</h4>
+              {customFields.map((field) => (
+                <div key={field.id} className="space-y-2">
+                  <Label className="text-muted-foreground capitalize">
+                    {field.field_name}
+                  </Label>
+                  <CustomFieldInput 
+                    field={field} 
+                    value={customValues[field.id] ?? ''} 
+                    onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label className="text-muted-foreground">Tags</Label>

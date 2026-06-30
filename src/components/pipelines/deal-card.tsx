@@ -3,11 +3,11 @@
 import type { Deal, PipelineStage } from "@/types";
 import { Calendar, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
+import { useRouter } from "next/navigation";
 
 interface DealCardProps {
   deal: Deal;
   stage: PipelineStage | null;
-  onEdit: (deal: Deal) => void;
   isOverlay?: boolean;
 }
 
@@ -25,7 +25,8 @@ function initials(name?: string, fallback?: string) {
   return source.charAt(0).toUpperCase();
 }
 
-export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
+export function DealCard({ deal, stage, isOverlay }: DealCardProps) {
+  const router = useRouter();
   const contactLabel = deal.contact?.name || deal.contact?.phone || "No contact";
   const assigneeLabel = deal.assignee?.full_name || null;
 
@@ -33,11 +34,9 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
     <button
       type="button"
       onClick={(e) => {
-        // `onClick` still fires after a non-drag tap because the PointerSensor
-        // requires 5px movement before it counts as a drag.
         if (isOverlay) return;
         e.stopPropagation();
-        onEdit(deal);
+        router.push(`/deals/${deal.id}`);
       }}
       className={`group relative w-full cursor-pointer rounded-xl border border-border/50 bg-muted/70 pl-4 pr-3 py-3 text-left shadow-sm transition-all ${
         isOverlay

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 
 interface CustomFieldsManagerProps {
@@ -60,7 +61,12 @@ export function CustomFieldsPanel() {
 
   const [fields, setFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(true);
+  
   const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState('text');
+  const [newModule, setNewModule] = useState<'contact'|'deal'|'task'|'product'>('contact');
+  const [newChoices, setNewChoices] = useState<string[]>(['']);
+  
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -75,9 +81,6 @@ export function CustomFieldsPanel() {
     setLoading(false);
   }, [supabase, accountId]);
 
-  // Load the field list on mount once the account is known. The setters
-  // inside fetchFields run after the Supabase await — not synchronously in
-  // the effect body — so the cascade the lint rule warns about doesn't apply.
   useEffect(() => {
     if (accountId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -85,13 +88,14 @@ export function CustomFieldsPanel() {
     }
   }, [accountId, fetchFields]);
 
-  /** Case-insensitive name clash within the loaded list. */
   function isDuplicate(name: string, exceptId?: string): boolean {
     const lower = name.toLowerCase();
     return fields.some(
       (f) => f.id !== exceptId && f.field_name.toLowerCase() === lower
     );
   }
+
+  const needsChoices = ['dropdown', 'radio', 'multi-select'].includes(newType);
 
   async function handleCreate() {
     const name = newName.trim();
@@ -105,10 +109,22 @@ export function CustomFieldsPanel() {
       return;
     }
 
+    let options = null;
+    if (needsChoices) {
+      const validChoices = newChoices.map(c => c.trim()).filter(Boolean);
+      if (validChoices.length === 0) {
+        toast.error('Please provide at least one choice for this field type.');
+        return;
+      }
+      options = { choices: validChoices };
+    }
+
     setCreating(true);
     const { error } = await supabase.from('custom_fields').insert({
       field_name: name,
-      field_type: 'text',
+      field_type: newType,
+      module_name: newModule,
+      field_options: options,
       user_id: user.id,
       account_id: accountId,
     });
@@ -120,11 +136,12 @@ export function CustomFieldsPanel() {
     }
     toast.success(`Created "${name}".`);
     setNewName('');
+    setNewType('text');
+    setNewModule('contact');
+    setNewChoices(['']);
     await fetchFields();
   }
 
-  /** Returns true on success so the row can keep the new name, false so it
-   *  reverts to the previous one. No-ops (blank / unchanged) count as success. */
   async function handleRename(
     field: CustomField,
     nextName: string
@@ -174,31 +191,96 @@ export function CustomFieldsPanel() {
   return (
     <div className="space-y-4">
       {/* Create */}
-      <div className="flex items-center gap-2">
-        <Input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void handleCreate();
-            }
-          }}
-          placeholder="New field name…"
-          className="bg-muted text-foreground"
-        />
-        <Button
-          onClick={handleCreate}
-          disabled={creating || !newName.trim()}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
-        >
-          {creating ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Plus className="size-4" />
-          )}
-          Add
-        </Button>
+      <div className="space-y-3 bg-muted/30 p-3 rounded-lg border border-border">
+        <div className="flex items-center gap-2">
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !needsChoices) {
+                e.preventDefault();
+                void handleCreate();
+              }
+            }}
+            placeholder="New field name…"
+            className="bg-background text-foreground flex-1"
+          />
+          <select
+            value={newModule}
+            onChange={(e) => setNewModule(e.target.value as 'contact'|'deal'|'task'|'product')}
+            className="h-9 rounded-md border border-border bg-background px-2.5 text-sm outline-none w-28 text-muted-foreground"
+          >
+            <option value="contact">Contact</option>
+            <option value="deal">Deal</option>
+            <option value="task">Task</option>
+            <option value="product">Product</option>
+          </select>
+          <select
+            value={newType}
+            onChange={(e) => setNewType(e.target.value)}
+            className="h-9 rounded-md border border-border bg-background px-2.5 text-sm outline-none w-36"
+          >
+            <option value="text">Text (Single line)</option>
+            <option value="number">Number</option>
+            <option value="email">Email</option>
+            <option value="phone">Phone</option>
+            <option value="date">Date</option>
+            <option value="checkbox">Checkbox (True/False)</option>
+            <option value="dropdown">Dropdown (Single select)</option>
+            <option value="radio">Radio (Single select)</option>
+            <option value="multi-select">Multi-select</option>
+            <option value="attachment">Attachment</option>
+          </select>
+          <Button
+            onClick={handleCreate}
+            disabled={creating || !newName.trim()}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
+          >
+            {creating ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Add
+          </Button>
+        </div>
+
+        {needsChoices && (
+          <div className="space-y-2 pl-2 border-l-2 border-border/50">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Options</p>
+            {newChoices.map((choice, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={choice}
+                  onChange={(e) => {
+                    const next = [...newChoices];
+                    next[i] = e.target.value;
+                    setNewChoices(next);
+                  }}
+                  placeholder={`Option ${i + 1}`}
+                  className="h-8 bg-background text-sm flex-1"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setNewChoices(newChoices.filter((_, idx) => idx !== i))}
+                  disabled={newChoices.length === 1}
+                  className="text-muted-foreground hover:text-red-400"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setNewChoices([...newChoices, ''])}
+              className="h-8 text-xs bg-background"
+            >
+              <Plus className="size-3.5 mr-1" /> Add Option
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* List */}
@@ -265,8 +347,14 @@ function FieldRow({
           if (e.key === 'Enter') e.currentTarget.blur();
         }}
         aria-label={`Rename ${field.field_name}`}
-        className="focus:border-primary h-8 border-transparent bg-transparent text-foreground hover:border-border"
+        className="focus:border-primary h-8 border-transparent bg-transparent text-foreground hover:border-border flex-1 min-w-[120px]"
       />
+      <Badge variant="outline" className="shrink-0 font-normal uppercase text-[10px] tracking-wider bg-card">
+        {field.module_name || 'contact'}
+      </Badge>
+      <Badge variant="secondary" className="shrink-0 font-normal capitalize text-xs">
+        {field.field_type}
+      </Badge>
       <Button
         variant="ghost"
         size="icon-sm"

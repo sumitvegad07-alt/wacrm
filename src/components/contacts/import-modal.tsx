@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -134,7 +134,21 @@ export function ImportModal({
   const [tagColorByKey, setTagColorByKey] = useState<Map<string, string>>(
     new Map()
   );
+  const [customFields, setCustomFields] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    if (open && accountId) {
+      supabase
+        .from('custom_fields')
+        .select('*')
+        .eq('module_name', 'contact')
+        .order('field_name')
+        .then(({ data }) => {
+          if (data) setCustomFields(data);
+        });
+    }
+  }, [open, accountId]);
   const [result, setResult] = useState<{
     imported: number;
     skipped: number;
@@ -155,6 +169,22 @@ export function ImportModal({
   function handleOpenChange(next: boolean) {
     if (!next) reset();
     onOpenChange(next);
+  }
+
+  function handleDownloadDemo() {
+    const headers = ['phone', 'name', 'email', 'company', 'tags', ...customFields.map((f) => f.field_name.toLowerCase())];
+    const row = ['+1234567890', 'John Doe', 'john@example.com', 'Acme Corp', 'VIP, Lead', ...customFields.map(() => '')];
+    const csvContent = [headers.join(','), row.join(',')].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'contacts_demo.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -261,6 +291,12 @@ export function ImportModal({
       }
 
       const tagAssignments: ContactTagAssignment[] = [];
+      const customFieldAssignments: { contact_id: string, custom_field_id: string, value: string }[] = [];
+
+      const cfMapping: { [key: string]: string } = {};
+      customFields.forEach((cf) => {
+        cfMapping[cf.field_name.toLowerCase()] = cf.id;
+      });
 
       // 4) Batch insert the genuinely-new rows in chunks of 50. The DB
       //    unique index is the backstop: a 23505 (race, or a format
@@ -303,6 +339,17 @@ export function ImportModal({
                   tagNames: source.tagNames,
                 });
               }
+              if (source.customValues) {
+                Object.entries(source.customValues).forEach(([k, v]) => {
+                  if (cfMapping[k]) {
+                    customFieldAssignments.push({
+                      contact_id: singleData.id,
+                      custom_field_id: cfMapping[k],
+                      value: v
+                    });
+                  }
+                });
+              }
             } else if (isUniqueViolation(singleErr)) {
               skipped++;
             } else {
@@ -315,14 +362,27 @@ export function ImportModal({
           // inserted[j] ↔ chunk[j] only holds because a single INSERT
           // preserves RETURNING order. If this path is ever split into
           // parallel inserts, zip by phone or returned id instead.
-          for (let j = 0; j < inserted.length; j++) {
-            const source = chunk[j];
-            if (!source || source.tagNames.length === 0) continue;
-            tagAssignments.push({
-              contactId: inserted[j].id,
-              tagNames: source.tagNames,
-            });
-          }
+            for (let j = 0; j < inserted.length; j++) {
+              const source = chunk[j];
+              if (!source) continue;
+              if (source.tagNames.length > 0) {
+                tagAssignments.push({
+                  contactId: inserted[j].id,
+                  tagNames: source.tagNames,
+                });
+              }
+              if (source.customValues) {
+                Object.entries(source.customValues).forEach(([k, v]) => {
+                  if (cfMapping[k]) {
+                    customFieldAssignments.push({
+                      contact_id: inserted[j].id,
+                      custom_field_id: cfMapping[k],
+                      value: v
+                    });
+                  }
+                });
+              }
+            }
         }
       }
 
@@ -335,8 +395,21 @@ export function ImportModal({
           tagAssignments,
           tagIdByKey
         );
-      } catch {
-        toast.warning('Contacts imported, but some tag assignments failed.');
+        } catch (tagErr) {
+          console.error('Tag assignment failed (non-fatal):', tagErr);
+        }
+
+      if (customFieldAssignments.length > 0) {
+        try {
+          // Batch insert in chunks of 100
+          for (let i = 0; i < customFieldAssignments.length; i += 100) {
+            await supabase.from('contact_custom_values').insert(
+              customFieldAssignments.slice(i, i + 100)
+            );
+          }
+        } catch (cfErr) {
+          console.error('Custom field assignment failed:', cfErr);
+        }
       }
 
       setResult({ imported, skipped, failed, tagsAssigned });
@@ -404,29 +477,16 @@ export function ImportModal({
             <DialogTitle className="text-lg text-popover-foreground">
               Import Contacts
             </DialogTitle>
-            <DialogDescription className="leading-relaxed text-muted-foreground">
-              Upload a CSV with a required{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                phone
-              </code>{' '}
-              column. Optional:{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                name
-              </code>
-              ,{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                email
-              </code>
-              ,{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                company
-              </code>
-              ,{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                tags
-              </code>{' '}
-              (comma-separated; quote multi-tag cells).
+            <DialogDescription>
+              Upload a CSV. We match <code className="rounded bg-muted px-1 text-[11px]">phone</code> to avoid duplicates within the file and against your existing contacts.
+              You can optionally map <code className="rounded bg-muted px-1 text-[11px]">name</code>, <code className="rounded bg-muted px-1 text-[11px]">email</code>, <code className="rounded bg-muted px-1 text-[11px]">company</code>, <code className="rounded bg-muted px-1 text-[11px]">tags</code>, and any custom fields.
             </DialogDescription>
+            <div className="pt-2">
+              <Button variant="outline" size="sm" onClick={handleDownloadDemo} className="gap-2 text-xs h-8">
+                <FileText className="size-3.5" />
+                Download Demo CSV
+              </Button>
+            </div>
           </DialogHeader>
 
           <div

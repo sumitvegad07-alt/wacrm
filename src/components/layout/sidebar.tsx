@@ -22,6 +22,9 @@ import {
   Workflow,
   X,
   Zap,
+  CheckSquare,
+  Plus,
+  Package,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 
@@ -91,6 +94,8 @@ const navItems: NavItem[] = [
   { href: "/inbox", label: "Inbox", icon: MessageSquare },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
+  { href: "/tasks", label: "Tasks", icon: CheckSquare },
+  { href: "/products", label: "Products", icon: Package },
   { href: "/broadcasts", label: "Broadcasts", icon: Radio },
   { href: "/automations", label: "Automations", icon: Zap },
   { href: "/flows", label: "Flows", icon: Workflow, beta: true },
@@ -237,6 +242,45 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
                       </span>
+                    )}
+                    {item.href === "/contacts" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.location.href = "/contacts?new=true";
+                        }}
+                        className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
+                    {item.href === "/pipelines" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.location.href = "/pipelines?new=true";
+                        }}
+                        className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
+                    {item.href === "/tasks" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.location.href = "/tasks?new=true";
+                        }}
+                        className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
                     )}
                   </Link>
                 </li>

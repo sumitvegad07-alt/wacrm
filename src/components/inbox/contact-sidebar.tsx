@@ -15,16 +15,19 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  CheckSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
+import { TaskListEmbedded } from "@/components/tasks/task-list-embedded";
 
 interface ContactSidebarProps {
   contact: Contact | null;
+  conversationId?: string;
 }
 
-export function ContactSidebar({ contact }: ContactSidebarProps) {
+export function ContactSidebar({ contact, conversationId }: ContactSidebarProps) {
   const { accountId } = useAuth();
   const [copied, setCopied] = useState(false);
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -249,6 +252,14 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
           {/* Divider */}
           <div className="my-4 border-t border-border" />
+
+          {/* Tasks */}
+          {conversationId && (
+            <div className="mb-4">
+              <TaskListEmbedded conversationId={conversationId} contactId={contact.id} />
+              <div className="my-4 border-t border-border" />
+            </div>
+          )}
 
           {/* Notes */}
           <div>

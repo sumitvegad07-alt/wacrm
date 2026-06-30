@@ -10,6 +10,7 @@ export interface ParsedContactRow {
   company?: string;
   /** Tag names from the optional `tags` column (comma/semicolon separated). */
   tagNames: string[];
+  customValues: Record<string, string>;
 }
 
 /** Split a CSV cell into unique tag names (case-insensitive de-dupe). */
@@ -85,6 +86,17 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
           : undefined,
       tagNames:
         tagsIdx >= 0 ? parseTagCell(values[tagsIdx]?.replace(/["']/g, '')) : [],
+      customValues: (() => {
+        const known = new Set(['phone', 'name', 'email', 'company', 'tags']);
+        const custom: Record<string, string> = {};
+        headers.forEach((h, idx) => {
+          if (!known.has(h) && values[idx]) {
+            const v = values[idx]?.replace(/["']/g, '').trim();
+            if (v) custom[h] = v;
+          }
+        });
+        return custom;
+      })(),
     });
   }
 
