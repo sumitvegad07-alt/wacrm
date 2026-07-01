@@ -121,7 +121,7 @@ export interface CustomField {
   user_id: string;
   /** Tenancy key — NOT NULL since migration 017. */
   account_id: string;
-  module_name: 'contact' | 'deal' | 'task' | 'product';
+  module_name: 'contact' | 'deal' | 'task' | 'product' | 'quotation';
   field_name: string;
   field_type: string;
   field_options?: Record<string, unknown>;
@@ -314,8 +314,10 @@ export interface PipelineStage {
   id: string;
   pipeline_id: string;
   name: string;
+  color?: string;
   size?: number;
   type?: string;
+  position?: number;
 }
 
 // ============================================================
@@ -615,6 +617,7 @@ export interface Task {
   deal_id?: string | null;
   product_id?: string | null;
   conversation_id?: string | null;
+  quotation_id?: string | null;
   created_at: string;
   updated_at: string;
   contact?: Contact;
@@ -653,4 +656,65 @@ export interface TaskAttachment {
   file_size?: number | null;
   content_type?: string | null;
   created_at: string;
+}
+
+// ============================================================
+// QUOTATIONS
+// ============================================================
+
+export type QuotationStatus = 'Draft' | 'Sent' | 'Accepted' | 'Rejected';
+
+export interface Quotation {
+  id: string;
+  account_id: string;
+  user_id: string;
+  contact_id: string;
+  quotation_number: string;
+  version: number;
+  parent_id?: string | null;
+  date: string;
+  valid_until?: string | null;
+  sub_total: number;
+  tax_total: number;
+  total_amount: number;
+  status: QuotationStatus;
+  terms_conditions?: string | null;
+  created_at: string;
+  updated_at: string;
+  contact?: Contact;
+  creator?: Profile;
+  items?: QuotationItem[];
+}
+
+export interface QuotationItem {
+  id: string;
+  quotation_id: string;
+  product_id?: string | null;
+  product_name: string;
+  unit?: string | null;
+  quantity: number;
+  price: number;
+  tax_rate: number;
+  tax_amount: number;
+  sub_total: number;
+  total: number;
+  position: number;
+  created_at: string;
+}
+
+export interface QuotationTermsTemplate {
+  id: string;
+  account_id: string;
+  title: string;
+  content: string;
+  status: string;
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface QuotationCustomValue {
+  id: string;
+  quotation_id: string;
+  custom_field_id: string;
+  value?: string;
 }

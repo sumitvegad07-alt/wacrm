@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { ContactForm } from "@/components/contacts/contact-form";
+import { Timeline } from "@/components/shared/timeline";
 
 export default function ContactDetailsPage() {
   const { id } = useParams() as { id: string };
@@ -26,6 +27,7 @@ export default function ContactDetailsPage() {
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [deals, setDeals] = useState<Deal[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
@@ -55,7 +57,8 @@ export default function ContactDetailsPage() {
       fieldsRes,
       valuesRes,
       dealsRes,
-      tasksRes
+      tasksRes,
+      activitiesRes
     ] = await Promise.all([
       supabase.from('tags').select('*'),
       supabase.from('contact_tags').select('tag_id').eq('contact_id', id),
@@ -63,7 +66,8 @@ export default function ContactDetailsPage() {
       supabase.from('custom_fields').select('*').eq('module_name', 'contact').order('field_name'),
       supabase.from('contact_custom_values').select('*').eq('contact_id', id),
       supabase.from('deals').select('*, stage:pipeline_stages(*)').eq('contact_id', id).order('created_at', { ascending: false }),
-      supabase.from('tasks').select('*').eq('contact_id', id).order('created_at', { ascending: false })
+      supabase.from('tasks').select('*').eq('contact_id', id).order('created_at', { ascending: false }),
+      supabase.from('module_activities').select('*').eq('module_name', 'contact').eq('record_id', id).order('created_at', { ascending: false })
     ]);
 
     // Tags
@@ -92,6 +96,29 @@ export default function ContactDetailsPage() {
     // Tasks
     if (tasksRes.data) setTasks(tasksRes.data as Task[]);
 
+    // Activities
+    const activitiesData = activitiesRes.data;
+    if (activitiesData && activitiesData.length > 0) {
+      const userIds = Array.from(new Set(activitiesData.map((a: any) => a.user_id).filter(Boolean)));
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', userIds);
+        const profileMap = (profiles || []).reduce((acc: any, p: any) => {
+          acc[p.user_id] = p;
+          return acc;
+        }, {});
+        
+        const enrichedActivities = activitiesData.map((a: any) => ({
+          ...a,
+          user: profileMap[a.user_id] || null
+        }));
+        setActivities(enrichedActivities);
+      } else {
+        setActivities(activitiesData);
+      }
+    } else {
+      setActivities([]);
+    }
+
     setLoading(false);
   }, [id, supabase, router]);
 
@@ -109,8 +136,7 @@ export default function ContactDetailsPage() {
 
   if (!contact) return null;
 
-  const plannedTasks = tasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled');
-  const pastTasks = tasks.filter(t => t.status === 'Completed' || t.status === 'Cancelled');
+  if (!contact) return null;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto flex flex-col h-full">
@@ -233,76 +259,15 @@ export default function ContactDetailsPage() {
         </div>
 
         {/* Right Column: Timeline */}
-        <div className="bg-card border border-border rounded-lg flex flex-col overflow-hidden h-[calc(100vh-140px)] sticky top-6">
-          <div className="p-4 border-b border-border bg-muted/30">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Calendar className="size-4" />
-              Timeline
-            </h3>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-8">
-            {/* Planned Section */}
-            <div>
-              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Planned</h4>
-              {plannedTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic pl-2 border-l-2 border-border">No upcoming activities.</p>
-              ) : (
-                <div className="space-y-4">
-                  {plannedTasks.map(task => (
-                    <div key={task.id} className="relative pl-6 before:absolute before:left-1.5 before:top-2 before:h-2 before:w-2 before:rounded-full before:bg-primary before:ring-4 before:ring-card">
-                      <div className="absolute left-2 top-4 bottom-[-16px] w-[1px] bg-border last:hidden" />
-                      <p className="text-sm font-medium">
-                        <Link href={`/tasks/${task.id}`} className="hover:underline text-primary">{task.title}</Link>
-                      </p>
-                      <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                        <Badge variant="outline" className="text-[10px] px-1 py-0">{task.priority}</Badge>
-                        {task.due_date && <span>Scheduled: {new Date(task.due_date).toLocaleDateString()}</span>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Past Section */}
-            <div>
-              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Past</h4>
-              {notes.length === 0 && pastTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic pl-2 border-l-2 border-border">No past activities.</p>
-              ) : (
-                <div className="space-y-4 pb-4">
-                  {/* Sort combined past events by date */}
-                  {[
-                    ...notes.map(n => ({ type: 'note', date: new Date(n.created_at), data: n })),
-                    ...pastTasks.map(t => ({ type: 'task', date: new Date(t.created_at), data: t }))
-                  ].sort((a, b) => b.date.getTime() - a.date.getTime()).map((event, i, arr) => (
-                    <div key={`${event.type}-${event.data.id}`} className="relative pl-6 before:absolute before:left-1.5 before:top-2 before:h-2 before:w-2 before:rounded-full before:bg-muted-foreground/40 before:ring-4 before:ring-card">
-                      {i !== arr.length - 1 && <div className="absolute left-2 top-4 bottom-[-16px] w-[1px] bg-border" />}
-                      
-                      {event.type === 'note' ? (
-                        <div className="bg-muted/40 rounded p-3 text-sm border border-border/50">
-                          <p className="font-semibold text-xs text-muted-foreground mb-1">Note Added</p>
-                          <p className="whitespace-pre-wrap">{(event.data as ContactNote).note_text}</p>
-                          <p className="text-[10px] text-muted-foreground mt-2">{event.date.toLocaleString()}</p>
-                        </div>
-                      ) : (
-                        <div className="text-sm">
-                          <p className="font-medium flex items-center gap-2">
-                            <CheckSquare className="size-3 text-green-500" />
-                            <Link href={`/tasks/${event.data.id}`} className="hover:underline line-through text-muted-foreground">
-                              {(event.data as Task).title}
-                            </Link>
-                          </p>
-                          <p className="text-[10px] text-muted-foreground mt-1">Completed task • {event.date.toLocaleString()}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="w-full">
+          <Timeline 
+            moduleName="contact" 
+            recordId={id} 
+            tasks={tasks} 
+            notes={notes}
+            activities={activities} 
+            onRefresh={fetchAllData} 
+          />
         </div>
       </div>
 

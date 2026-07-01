@@ -84,7 +84,7 @@ export function PipelineSettings({
   useEffect(() => {
     if (!open) return;
     setName(pipeline.name);
-    setLocalStages([...stages].sort((a, b) => a.position - b.position));
+    setLocalStages([...stages].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)));
     setShowDeleteConfirm(false);
   }, [open, pipeline, stages]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -400,7 +400,7 @@ function SortableStageRow({
       >
         <GripVertical className="h-4 w-4" />
       </button>
-      <ColorSwatch value={stage.color} onChange={onColorChange} colors={colors} />
+      <ColorSwatch value={stage.color || "#94a3b8"} onChange={onColorChange} colors={colors} />
       <Input
         value={stage.name}
         onChange={(e) => onNameChange(e.target.value)}

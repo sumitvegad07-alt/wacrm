@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Product } from '@/types';
+import { formatCurrency } from '@/lib/currency';
+import { useAuth } from '@/hooks/use-auth';
 
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -55,10 +57,13 @@ const PAGE_SIZE = 25;
 export default function ProductsPage() {
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { account } = useAuth();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [hideInactive, setHideInactive] = useState(false);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -88,7 +93,11 @@ export default function ProductsPage() {
       query = query.or(`name.ilike.%${search.trim()}%,sku.ilike.%${search.trim()}%`);
     }
 
-    query = query.order('name', { ascending: true }).range(from, to);
+    if (hideInactive) {
+      query = query.eq('active', true);
+    }
+
+    query = query.order('created_at', { ascending: false }).range(from, to);
 
     const { data, count, error } = await query;
 
@@ -100,11 +109,22 @@ export default function ProductsPage() {
       setSelectedProductIds(new Set());
     }
     setLoading(false);
-  }, [supabase, page, search]);
+  }, [supabase, page, search, hideInactive]);
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      setFormOpen(true);
+      
+      // Clean up the URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('new');
+      window.history.replaceState({}, '', url);
+    }
+  }, [searchParams]);
 
   // Handle Search input with debounce
   useEffect(() => {
@@ -204,6 +224,20 @@ export default function ProductsPage() {
               />
             </div>
             
+            <div className="flex items-center space-x-2 mr-auto sm:ml-4 sm:mr-0">
+              <Checkbox 
+                id="hideInactive" 
+                checked={hideInactive} 
+                onCheckedChange={(checked) => { setPage(0); setHideInactive(checked === true); }} 
+              />
+              <label
+                htmlFor="hideInactive"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground"
+              >
+                Hide inactive
+              </label>
+            </div>
+            
             {selectedProductIds.size > 0 && (
               <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
                 <span className="text-sm text-muted-foreground mr-2 hidden sm:inline-block">
@@ -247,9 +281,11 @@ export default function ProductsPage() {
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="w-12 px-4">
-                      <Checkbox
+                      <input
+                        type="checkbox"
+                        className="size-4 cursor-pointer accent-primary align-middle"
                         checked={selectedProductIds.size === products.length && products.length > 0}
-                        onCheckedChange={handleSelectAll}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
                         aria-label="Select all"
                       />
                     </TableHead>
@@ -294,9 +330,11 @@ export default function ProductsPage() {
                         onClick={() => router.push(`/products/${product.id}`)}
                       >
                         <TableCell className="px-4" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
+                          <input
+                            type="checkbox"
+                            className="size-4 cursor-pointer accent-primary align-middle"
                             checked={selectedProductIds.has(product.id)}
-                            onCheckedChange={(c) => handleSelectProduct(product.id, !!c)}
+                            onChange={(e) => handleSelectProduct(product.id, e.target.checked)}
                             aria-label={`Select ${product.name}`}
                           />
                         </TableCell>
@@ -326,7 +364,7 @@ export default function ProductsPage() {
                           {product.sku || '—'}
                         </TableCell>
                         <TableCell>
-                          {product.price != null ? `$${product.price.toFixed(2)}` : '—'}
+                          {product.price != null ? formatCurrency(product.price, account?.default_currency) : '—'}
                           {product.unit ? <span className="text-muted-foreground text-xs ml-1">/ {product.unit}</span> : ''}
                         </TableCell>
                         <TableCell>

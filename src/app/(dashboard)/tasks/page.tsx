@@ -400,9 +400,11 @@ export default function TasksPage() {
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="w-12 text-center">
-                <Checkbox 
+                <input
+                  type="checkbox"
+                  className="size-4 cursor-pointer accent-primary align-middle"
                   checked={tasks.length > 0 && selectedTaskIds.size === tasks.length}
-                  onCheckedChange={toggleAllSelection}
+                  onChange={toggleAllSelection}
                 />
               </TableHead>
               <TableHead className="text-muted-foreground">Title</TableHead>
@@ -453,9 +455,11 @@ export default function TasksPage() {
                 >
                   <TableCell onClick={(e) => e.stopPropagation()} className="text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <Checkbox 
+                      <input
+                        type="checkbox"
+                        className="size-4 cursor-pointer accent-primary align-middle"
                         checked={selectedTaskIds.has(task.id)}
-                        onCheckedChange={() => toggleTaskSelection(task.id, { stopPropagation: () => {} } as any)}
+                        onChange={(e) => toggleTaskSelection(task.id, e as any)}
                       />
                       <button 
                         onClick={(e) => handleQuickComplete(task, e)}

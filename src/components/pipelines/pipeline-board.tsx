@@ -40,7 +40,7 @@ export function PipelineBoard({
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
 
   const sortedStages = useMemo(
-    () => [...stages].sort((a, b) => a.position - b.position),
+    () => [...stages].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
     [stages],
   );
 

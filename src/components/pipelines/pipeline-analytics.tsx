@@ -48,7 +48,7 @@ function computeStageProbability(
 export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
   const { defaultCurrency } = useAuth();
   const sortedStages = useMemo(
-    () => [...stages].sort((a, b) => a.position - b.position),
+    () => [...stages].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
     [stages],
   );
 

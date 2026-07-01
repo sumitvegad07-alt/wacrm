@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertTriangle } from 'lucide-react';
+import { logModuleActivity } from '@/lib/activities';
 
 interface ContactFormProps {
   open: boolean;
@@ -72,7 +73,7 @@ export function ContactForm({
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (open) {
+    if (open && accountId) {
       setName(contact?.name ?? '');
       setPhone(contact?.phone ?? '');
       setEmail(contact?.email ?? '');
@@ -82,7 +83,7 @@ export function ContactForm({
       fetchTags();
       fetchCustomFields();
     }
-  }, [open, contact]);
+  }, [open, contact, accountId]);
 
   // Look up an existing contact with this number (new contacts only).
   // Runs on blur so we don't query on every keystroke.
@@ -121,7 +122,7 @@ export function ContactForm({
     const { data: fields } = await supabase
       .from('custom_fields')
       .select('*')
-      .eq('module_name', 'contact')
+      .or('module_name.eq.contact,module_name.is.null')
       .order('field_name');
     
     if (fields) {
@@ -243,6 +244,13 @@ export function ContactForm({
         }
       }
 
+      await logModuleActivity(supabase, {
+        moduleName: 'contact',
+        recordId: contactId!,
+        action: isEdit ? 'updated' : 'created',
+        message: isEdit ? 'Customer updated.' : 'Customer generated.'
+      });
+
       toast.success(isEdit ? 'Contact updated' : 'Contact created');
       onOpenChange(false);
       onSaved();
@@ -272,9 +280,9 @@ export function ContactForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-md">
+      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-popover-foreground">
+          <DialogTitle className="text-popover-foreground text-xl">
             {isEdit ? 'Edit Contact' : 'Add Contact'}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
@@ -284,8 +292,11 @@ export function ContactForm({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
+        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+          <div className="space-y-4">
+            <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">Primary Details</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
             <Label htmlFor="cf-name" className="text-muted-foreground">
               Name
             </Label>
@@ -364,30 +375,34 @@ export function ContactForm({
             <Label htmlFor="cf-company" className="text-muted-foreground">
               Company
             </Label>
-            <Input
-              id="cf-company"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Acme Inc."
-              className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-            />
+              <Input
+                id="cf-company"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                placeholder="Acme Inc."
+                className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            </div>
           </div>
 
           {customFields.length > 0 && (
-            <div className="space-y-4 pt-2 border-t border-border">
-              <h4 className="text-sm font-medium text-foreground">Custom Fields</h4>
-              {customFields.map((field) => (
-                <div key={field.id} className="space-y-2">
-                  <Label className="text-muted-foreground capitalize">
-                    {field.field_name}
-                  </Label>
-                  <CustomFieldInput 
-                    field={field} 
-                    value={customValues[field.id] ?? ''} 
-                    onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
-                  />
-                </div>
-              ))}
+            <div className="space-y-4 pt-2">
+              <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">Custom Fields</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {customFields.map((field) => (
+                  <div key={field.id} className="space-y-2">
+                    <Label className="text-muted-foreground capitalize">
+                      {field.field_name}
+                    </Label>
+                    <CustomFieldInput 
+                      field={field} 
+                      value={customValues[field.id] ?? ''} 
+                      onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

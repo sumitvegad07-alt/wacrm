@@ -539,10 +539,16 @@ export default function ContactsPage() {
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="w-10">
-                <Checkbox
+                <input
+                  type="checkbox"
+                  className="size-4 cursor-pointer accent-primary align-middle"
                   checked={allOnPageSelected}
-                  indeterminate={!allOnPageSelected && someOnPageSelected}
-                  onCheckedChange={toggleSelectAll}
+                  ref={input => {
+                    if (input) {
+                      input.indeterminate = !allOnPageSelected && someOnPageSelected;
+                    }
+                  }}
+                  onChange={toggleSelectAll}
                   disabled={contacts.length === 0}
                   aria-label="Select all contacts on this page"
                 />
@@ -598,9 +604,11 @@ export default function ContactsPage() {
                   onClick={() => openDetail(contact.id)}
                 >
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
+                    <input
+                      type="checkbox"
+                      className="size-4 cursor-pointer accent-primary align-middle"
                       checked={selected.has(contact.id)}
-                      onCheckedChange={() => toggleSelect(contact.id)}
+                      onChange={() => toggleSelect(contact.id)}
                       aria-label={`Select ${contact.name || contact.phone}`}
                     />
                   </TableCell>

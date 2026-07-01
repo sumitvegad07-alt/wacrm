@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
 
 interface CustomFieldsManagerProps {
   open: boolean;
@@ -326,49 +326,90 @@ function FieldRow({
   onDelete: (field: CustomField) => void;
 }) {
   const [name, setName] = useState(field.field_name);
+  const [isEditing, setIsEditing] = useState(false);
 
   async function commit() {
     if (name.trim() === field.field_name) {
       setName(field.field_name); // normalise any whitespace-only edit
+      setIsEditing(false);
       return;
     }
     const ok = await onRename(field, name);
     if (!ok) setName(field.field_name);
+    else setIsEditing(false);
   }
 
   return (
-    <li className="flex items-center gap-2 px-3 py-2">
-      <Input
-        value={name}
-        disabled={busy}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-        }}
-        aria-label={`Rename ${field.field_name}`}
-        className="focus:border-primary h-8 border-transparent bg-transparent text-foreground hover:border-border flex-1 min-w-[120px]"
-      />
-      <Badge variant="outline" className="shrink-0 font-normal uppercase text-[10px] tracking-wider bg-card">
-        {field.module_name || 'contact'}
-      </Badge>
-      <Badge variant="secondary" className="shrink-0 font-normal capitalize text-xs">
-        {field.field_type}
-      </Badge>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={busy}
-        onClick={() => onDelete(field)}
-        title="Delete field"
-        className="shrink-0 text-muted-foreground hover:text-red-400"
-      >
-        {busy ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Trash2 className="size-4" />
-        )}
-      </Button>
+    <li className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30 transition-colors">
+      {isEditing ? (
+        <>
+          <Input
+            value={name}
+            disabled={busy}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void commit();
+              if (e.key === 'Escape') {
+                setName(field.field_name);
+                setIsEditing(false);
+              }
+            }}
+            autoFocus
+            className="h-8 flex-1 min-w-[120px]"
+          />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={busy}
+            onClick={() => void commit()}
+            className="shrink-0 text-green-500 hover:text-green-600"
+          >
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={busy}
+            onClick={() => {
+              setName(field.field_name);
+              setIsEditing(false);
+            }}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-4" />
+          </Button>
+        </>
+      ) : (
+        <>
+          <span className="flex-1 text-sm font-medium">{field.field_name}</span>
+          <Badge variant="outline" className="shrink-0 font-normal uppercase text-[10px] tracking-wider bg-card">
+            {field.module_name || 'contact'}
+          </Badge>
+          <Badge variant="secondary" className="shrink-0 font-normal capitalize text-xs">
+            {field.field_type}
+          </Badge>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={busy}
+            onClick={() => setIsEditing(true)}
+            title="Edit field name"
+            className="shrink-0 text-muted-foreground hover:text-primary"
+          >
+            <Edit2 className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={busy}
+            onClick={() => onDelete(field)}
+            title="Delete field"
+            className="shrink-0 text-muted-foreground hover:text-red-400"
+          >
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+          </Button>
+        </>
+      )}
     </li>
   );
 }

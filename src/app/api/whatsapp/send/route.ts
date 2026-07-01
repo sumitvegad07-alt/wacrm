@@ -491,8 +491,9 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Error in WhatsApp send POST:', error)
+    const errMessage = error instanceof Error ? error.message : 'Failed to send message'
     return NextResponse.json(
-      { error: 'Failed to send message' },
+      { error: errMessage },
       { status: 500 }
     )
   }

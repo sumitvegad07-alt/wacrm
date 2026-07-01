@@ -25,6 +25,7 @@ import {
   CheckSquare,
   Plus,
   Package,
+  FileText,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 
@@ -96,6 +97,7 @@ const navItems: NavItem[] = [
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/products", label: "Products", icon: Package },
+  { href: "/quotations", label: "Quotations", icon: FileText },
   { href: "/broadcasts", label: "Broadcasts", icon: Radio },
   { href: "/automations", label: "Automations", icon: Zap },
   { href: "/flows", label: "Flows", icon: Workflow, beta: true },
@@ -276,6 +278,32 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                           e.preventDefault();
                           e.stopPropagation();
                           window.location.href = "/tasks?new=true";
+                        }}
+                        className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
+                    {item.href === "/quotations" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.location.href = "/quotations?new=true";
+                        }}
+                        className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
+                    {item.href === "/products" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.location.href = "/products?new=true";
                         }}
                         className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
                       >

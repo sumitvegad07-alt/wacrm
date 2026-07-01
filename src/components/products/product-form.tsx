@@ -7,16 +7,18 @@ import { toast } from 'sonner';
 import type { Product, CustomField } from '@/types';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Upload, X } from 'lucide-react';
+import { logModuleActivity } from '@/lib/activities';
 
 interface ProductFormProps {
   open: boolean;
@@ -52,7 +54,7 @@ export function ProductForm({
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (open) {
+    if (open && accountId) {
       setConfirmDelete(false);
       setName(product?.name ?? '');
       setDescription(product?.description ?? '');
@@ -65,7 +67,7 @@ export function ProductForm({
       setActive(product?.active ?? true);
       fetchCustomFields();
     }
-  }, [open, product]);
+  }, [open, product, accountId]);
 
   async function fetchCustomFields() {
     if (!accountId) return;
@@ -145,6 +147,14 @@ export function ProductForm({
           .eq('id', product.id);
 
         if (error) throw error;
+        
+        await logModuleActivity(supabase, {
+          moduleName: 'product',
+          recordId: product.id,
+          action: 'Product Updated',
+          message: `Product details for "${payload.name}" were updated.`,
+          details: { updated_fields: Object.keys(payload) }
+        });
       } else {
         const { data, error } = await supabase
           .from('products')
@@ -158,6 +168,13 @@ export function ProductForm({
 
         if (error) throw error;
         savedProductId = data.id;
+        
+        await logModuleActivity(supabase, {
+          moduleName: 'product',
+          recordId: data.id,
+          action: 'Product Created',
+          message: `Product "${payload.name}" was created.`,
+        });
       }
 
       // Save custom fields
@@ -202,39 +219,40 @@ export function ProductForm({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="bg-popover border-border text-popover-foreground sm:max-w-lg w-full p-0 flex flex-col"
-      >
-        <SheetHeader className="border-b border-border/50 p-4 shrink-0">
-          <SheetTitle className="text-popover-foreground">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-4xl w-full p-0 flex flex-col max-h-[90vh]">
+        <DialogHeader className="border-b border-border/50 p-4 shrink-0">
+          <DialogTitle className="text-popover-foreground">
             {isEdit ? 'Edit Product' : 'New Product'}
-          </SheetTitle>
-        </SheetHeader>
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground hidden">
+            Create or edit a product.
+          </DialogDescription>
+        </DialogHeader>
 
-        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0">
+        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">Product Name <span className="text-red-400">*</span></Label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Product Name"
-                className="border-border bg-muted text-foreground"
-                autoFocus
-              />
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">Product Name <span className="text-red-400">*</span></Label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Product Name"
+                  className="border-border bg-muted text-foreground"
+                  autoFocus
+                />
+              </div>
 
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">Description</Label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief description..."
-                className="min-h-[80px] border-border bg-muted text-foreground"
-              />
-            </div>
+              <div className="grid gap-2 md:col-span-2">
+                <Label className="text-muted-foreground">Description</Label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Brief description..."
+                  className="min-h-[80px] border-border bg-muted text-foreground"
+                />
+              </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
@@ -259,7 +277,7 @@ export function ProductForm({
               </div>
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-2 md:col-span-2">
               <Label className="text-muted-foreground">Category</Label>
               <Input
                 value={category}
@@ -269,7 +287,7 @@ export function ProductForm({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 md:col-span-2">
               <div className="grid gap-2">
                 <Label className="text-muted-foreground">Unit</Label>
                 <Input
@@ -331,22 +349,25 @@ export function ProductForm({
             </div>
 
             {customFields.length > 0 && (
-              <div className="space-y-4 pt-4 mt-4 border-t border-border/50">
+              <div className="space-y-4 pt-4 mt-4 border-t border-border/50 md:col-span-2">
                 <h4 className="text-sm font-medium text-foreground">Custom Fields</h4>
-                {customFields.map((field) => (
-                  <div key={field.id} className="grid gap-2">
-                    <Label className="text-muted-foreground capitalize">
-                      {field.field_name}
-                    </Label>
-                    <CustomFieldInput 
-                      field={field} 
-                      value={customValues[field.id] ?? ''} 
-                      onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
-                    />
-                  </div>
-                ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {customFields.map((field) => (
+                    <div key={field.id} className="grid gap-2">
+                      <Label className="text-muted-foreground capitalize">
+                        {field.field_name}
+                      </Label>
+                      <CustomFieldInput 
+                        field={field} 
+                        value={customValues[field.id] ?? ''} 
+                        onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+            </div>
           </div>
 
           <div className="border-t border-border/50 bg-popover/80 p-4 shrink-0 mt-auto">
@@ -403,7 +424,7 @@ export function ProductForm({
               ))}
           </div>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

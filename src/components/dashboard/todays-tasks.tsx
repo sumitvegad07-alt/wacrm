@@ -27,7 +27,6 @@ export function TodaysTasks() {
       const { data, error } = await supabase
         .from("tasks")
         .select("*")
-        .eq("assigned_user_id", user?.id)
         .neq("status", "Completed")
         .neq("status", "Cancelled")
         .lte("due_date", todayString)
