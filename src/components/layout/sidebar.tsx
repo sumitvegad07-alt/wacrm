@@ -107,7 +107,7 @@ const navItems: NavItem[] = [
 ];
 
 const bottomNavItems = [
-  { href: "/settings/ai", label: "AI Assistant", icon: Bot },
+  { href: "/settings?tab=ai", label: "AI Assistant", icon: Bot },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
