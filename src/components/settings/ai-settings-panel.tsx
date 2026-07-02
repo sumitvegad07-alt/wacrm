@@ -6,11 +6,11 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Trash, Plus, FileText, CheckCircle2, AlertCircle } from 'lucide-react'
-import { saveBotSettings, addKnowledgeDocument, deleteKnowledgeDocument } from './actions'
+import { saveBotSettings, addKnowledgeDocument, deleteKnowledgeDocument } from '@/app/(dashboard)/settings/ai/actions'
 
 export const metadata = { title: 'AI Assistant' }
 
-export default async function AISettingsPage() {
+export async function AISettingsPanel() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('account_id').eq('user_id', user?.id).single()
