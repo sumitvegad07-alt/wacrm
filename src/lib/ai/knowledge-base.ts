@@ -1,0 +1,73 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+function getGenAI() {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) {
+    throw new Error('GEMINI_API_KEY is not set');
+  }
+  return new GoogleGenerativeAI(key);
+}
+
+/**
+ * Generates a 768-dimensional embedding vector for the given text.
+ */
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const model = getGenAI().getGenerativeModel({ model: 'gemini-embedding-2' });
+  const result = await model.embedContent({
+    content: { role: 'user', parts: [{ text }] },
+    outputDimensionality: 768
+  });
+  
+  return result.embedding.values;
+}
+
+/**
+ * Splits a large body of text into smaller chunks for vector storage.
+ * A very simple implementation splitting by paragraphs for phase 1.
+ */
+export function chunkText(text: string, maxChunkLength = 1000): string[] {
+  const paragraphs = text.split(/\n\s*\n/);
+  const chunks: string[] = [];
+  
+  let currentChunk = '';
+  for (const paragraph of paragraphs) {
+    if (currentChunk.length + paragraph.length > maxChunkLength) {
+      if (currentChunk) chunks.push(currentChunk.trim());
+      currentChunk = paragraph;
+    } else {
+      currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+    }
+  }
+  if (currentChunk) {
+    chunks.push(currentChunk.trim());
+  }
+  
+  return chunks;
+}
+
+/**
+ * Generates an answer using the provided context chunks.
+ */
+export async function generateRagResponse(
+  userQuery: string,
+  contextChunks: string[],
+  systemPrompt: string
+): Promise<string> {
+  const model = getGenAI().getGenerativeModel({
+    model: 'gemini-1.5-flash',
+    systemInstruction: systemPrompt,
+  });
+
+  const contextStr = contextChunks.map((c, i) => `[Context ${i + 1}]:\n${c}`).join('\n\n');
+  
+  const prompt = `Here is the knowledge base context:\n\n${contextStr}\n\nUser Question:\n${userQuery}`;
+
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0.1, // Keep it grounded to the context
+    }
+  });
+
+  return result.response.text();
+}

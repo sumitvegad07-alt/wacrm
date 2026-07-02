@@ -22,11 +22,14 @@ ALTER TABLE module_activities ENABLE ROW LEVEL SECURITY;
 -- If account_id is null (e.g., tasks which might not have account_id?), 
 -- wait, we should always try to set account_id.
 -- Let's define policies that allow access if the user is in the account.
-DROP POLICY IF EXISTS "module_activities_select" ON module_activities;
-CREATE POLICY "Users can view activities in their account"
+DROP POLICY IF EXISTS "Users can view activities in their account" ON public.module_activities;
+DROP POLICY IF EXISTS "module_activities_select" ON public.module_activities;
+CREATE POLICY "module_activities_select"
   ON public.module_activities FOR SELECT
   USING (is_account_member(account_id));
 
-CREATE POLICY "Users can insert activities in their account"
+DROP POLICY IF EXISTS "Users can insert activities in their account" ON public.module_activities;
+DROP POLICY IF EXISTS "module_activities_insert" ON public.module_activities;
+CREATE POLICY "module_activities_insert"
   ON public.module_activities FOR INSERT
   WITH CHECK (is_account_member(account_id));

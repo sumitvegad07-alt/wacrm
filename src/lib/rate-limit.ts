@@ -148,6 +148,10 @@ export const RATE_LIMITS = {
    *  instance deploy needs the Redis swap described at the top of
    *  this file (the per-key call sites don't change). */
   publicApi: { limit: 120, windowMs: 60_000 },
+  /** Batch upload endpoint for field staff location pings. 10/min per
+   *  user is plenty for opportunisitic offline-sync bursts without
+   *  choking the server or their data plan. */
+  locationPings: { limit: 10, windowMs: 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't

@@ -450,6 +450,7 @@ export async function POST(request: Request) {
         last_message_text: content_text || `[${message_type}]`,
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        bot_status: 'paused', // Agent intervened, pause the bot
       })
       .eq('id', conversation_id)
 

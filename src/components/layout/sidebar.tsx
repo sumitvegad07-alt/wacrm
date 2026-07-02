@@ -26,6 +26,8 @@ import {
   Plus,
   Package,
   FileText,
+  MapPin,
+  Bot,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 
@@ -99,11 +101,13 @@ const navItems: NavItem[] = [
   { href: "/products", label: "Products", icon: Package },
   { href: "/quotations", label: "Quotations", icon: FileText },
   { href: "/broadcasts", label: "Broadcasts", icon: Radio },
+  { href: "/field-staff", label: "Field Staff", icon: MapPin },
   { href: "/automations", label: "Automations", icon: Zap },
   { href: "/flows", label: "Flows", icon: Workflow, beta: true },
 ];
 
 const bottomNavItems = [
+  { href: "/settings/ai", label: "AI Assistant", icon: Bot },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

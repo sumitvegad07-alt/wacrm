@@ -16,18 +16,22 @@ ON CONFLICT (id) DO UPDATE SET
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 
 -- RLS for product-images bucket
-CREATE POLICY "Public Access" 
+DROP POLICY IF EXISTS "product_images_public_access" ON storage.objects;
+CREATE POLICY "product_images_public_access" 
 ON storage.objects FOR SELECT 
 USING ( bucket_id = 'product-images' );
 
-CREATE POLICY "Authenticated users can upload" 
+DROP POLICY IF EXISTS "product_images_auth_upload" ON storage.objects;
+CREATE POLICY "product_images_auth_upload" 
 ON storage.objects FOR INSERT 
 WITH CHECK ( bucket_id = 'product-images' AND auth.role() = 'authenticated' );
 
-CREATE POLICY "Authenticated users can update" 
+DROP POLICY IF EXISTS "product_images_auth_update" ON storage.objects;
+CREATE POLICY "product_images_auth_update" 
 ON storage.objects FOR UPDATE 
 USING ( bucket_id = 'product-images' AND auth.role() = 'authenticated' );
 
-CREATE POLICY "Authenticated users can delete" 
+DROP POLICY IF EXISTS "product_images_auth_delete" ON storage.objects;
+CREATE POLICY "product_images_auth_delete" 
 ON storage.objects FOR DELETE 
 USING ( bucket_id = 'product-images' AND auth.role() = 'authenticated' );

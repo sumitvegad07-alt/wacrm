@@ -11,6 +11,7 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
+import { dispatchInboundToAI } from '@/lib/ai/engine'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -660,6 +661,45 @@ async function processMessage(
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
 
   // ============================================================
+  // AI Bot Dispatch
+  //
+  // Intercept the message with the AI Knowledge Base. If the AI 
+  // generates an answer or triggers a Handoff, it is considered 
+  // "consumed" and we skip Flows and content-based Automations.
+  // ============================================================
+  const inboundText = contentText ?? message.text?.body ?? ''
+  
+  if (inboundText) {
+    const aiResult = await dispatchInboundToAI({
+      accountId,
+      conversationId: conversation.id,
+      contactPhone: contactRecord.phone,
+      messageText: inboundText,
+      botStatus: conversation.bot_status ?? 'active',
+      accessToken,
+      phoneNumberId: config.phone_number_id,
+    })
+    
+    if (aiResult.consumed) {
+      // AI handled the message. We still fire contact-lifecycle triggers, 
+      // but NOT keyword triggers.
+      const lifecycleTriggers: ('new_contact_created' | 'first_inbound_message')[] = []
+      if (contactOutcome.wasCreated) lifecycleTriggers.push('new_contact_created')
+      if (isFirstInboundMessage) lifecycleTriggers.push('first_inbound_message')
+      
+      for (const triggerType of lifecycleTriggers) {
+        runAutomationsForTrigger({
+          accountId,
+          triggerType,
+          contactId: contactRecord.id,
+          context: { message_text: inboundText, conversation_id: conversation.id },
+        }).catch((err) => console.error('[automations] dispatch failed:', err))
+      }
+      return // Halt further processing (Flows, Keywords)
+    }
+  }
+
+  // ============================================================
   // Flow runner dispatch.
   //
   // If the runner consumes the message (it either advanced an active
@@ -705,7 +745,6 @@ async function processMessage(
   // message all exist before any step — including send_message — runs.
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
-  const inboundText = contentText ?? message.text?.body ?? ''
   const automationTriggers: (
     | 'new_contact_created'
     | 'first_inbound_message'
