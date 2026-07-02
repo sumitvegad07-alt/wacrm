@@ -67,7 +67,7 @@ export async function dispatchInboundToAI({
     return { consumed: false };
   }
 
-  const contextChunks = matches?.map((m) => m.content) || [];
+  const contextChunks = matches?.map((m: any) => m.content) || [];
 
   // If no relevant context found, hand off immediately
   if (contextChunks.length === 0) {

@@ -62,7 +62,7 @@ export function AISettingsPanel() {
             <CardTitle>Assistant Configuration</CardTitle>
             <CardDescription>Adjust how the AI behaves and when it hands off to a human.</CardDescription>
           </CardHeader>
-          <form action={saveBotSettings}>
+          <form action={saveBotSettings as any}>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-2">
                 <Switch 
@@ -136,7 +136,7 @@ export function AISettingsPanel() {
                         <span>• {doc.chunks[0]?.count ?? 0} chunks</span>
                       </div>
                     </div>
-                    <form action={deleteKnowledgeDocument.bind(null, doc.id)}>
+                    <form action={deleteKnowledgeDocument.bind(null, doc.id) as any}>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash className="size-4" /></Button>
                     </form>
                   </li>
@@ -152,7 +152,7 @@ export function AISettingsPanel() {
             <CardTitle>Add New Source</CardTitle>
             <CardDescription>Paste raw text to ingest into the vector store.</CardDescription>
           </CardHeader>
-          <form action={addKnowledgeDocument}>
+          <form action={addKnowledgeDocument as any}>
             <CardContent className="space-y-4">
               <div className="space-y-1">
                 <Label htmlFor="title">Title</Label>
