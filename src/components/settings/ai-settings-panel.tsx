@@ -1,33 +1,50 @@
-import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Button } from '@/components/ui/button'
-import { Trash, Plus, FileText, CheckCircle2, AlertCircle } from 'lucide-react'
-import { saveBotSettings, addKnowledgeDocument, deleteKnowledgeDocument } from '@/app/(dashboard)/settings/ai/actions'
+'use client';
 
-export const metadata = { title: 'AI Assistant' }
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Trash, Plus, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { saveBotSettings, addKnowledgeDocument, deleteKnowledgeDocument } from '@/app/(dashboard)/settings/ai/actions';
+import { useAuth } from '@/hooks/use-auth';
 
-export async function AISettingsPanel() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('account_id').eq('user_id', user?.id).single()
+export function AISettingsPanel() {
+  const { accountId } = useAuth();
+  const [settings, setSettings] = useState<any>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // 1. Fetch Bot Settings
-  const { data: settings } = await supabase
-    .from('bot_settings')
-    .select('*')
-    .eq('account_id', profile?.account_id)
-    .maybeSingle()
+  useEffect(() => {
+    if (!accountId) return;
+    const fetchAI = async () => {
+      const supabase = createClient();
+      
+      const { data: s } = await supabase
+        .from('bot_settings')
+        .select('*')
+        .eq('account_id', accountId)
+        .maybeSingle();
+      
+      const { data: docs } = await supabase
+        .from('kb_documents')
+        .select('*, chunks:kb_chunks(count)')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: false });
 
-  // 2. Fetch Knowledge Base Docs
-  const { data: documents } = await supabase
-    .from('kb_documents')
-    .select('*, chunks:kb_chunks(count)')
-    .eq('account_id', profile?.account_id)
-    .order('created_at', { ascending: false })
+      setSettings(s);
+      setDocuments(docs || []);
+      setLoading(false);
+    };
+    fetchAI();
+  }, [accountId]);
+
+  if (loading) {
+    return <div className="flex h-32 items-center justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>;
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
