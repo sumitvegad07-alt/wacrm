@@ -16,6 +16,7 @@ export async function saveBotSettings(formData: FormData) {
   const bot_name = formData.get('bot_name') as string
   const system_prompt = formData.get('system_prompt') as string
   const handoff_message = formData.get('handoff_message') as string
+  const gemini_api_key = formData.get('gemini_api_key') as string
 
   const { error } = await supabase
     .from('bot_settings')
@@ -25,6 +26,7 @@ export async function saveBotSettings(formData: FormData) {
       bot_name,
       system_prompt,
       handoff_message,
+      gemini_api_key,
     })
 
   if (error) {
@@ -51,6 +53,13 @@ export async function addKnowledgeDocument(formData: FormData) {
     throw new Error('Title and content are required')
   }
 
+  const { data: settings } = await supabase.from('bot_settings').select('gemini_api_key').eq('account_id', profile.account_id).single()
+  const apiKey = settings?.gemini_api_key
+  
+  if (!apiKey) {
+    throw new Error('You must provide a Gemini API Key in the settings first!')
+  }
+
   // 1. Save Document
   const { data: doc, error: docError } = await supabase
     .from('kb_documents')
@@ -75,7 +84,7 @@ export async function addKnowledgeDocument(formData: FormData) {
     const records = []
 
     for (const chunk of chunks) {
-      const embedding = await generateEmbedding(chunk)
+      const embedding = await generateEmbedding(chunk, apiKey)
       records.push({
         document_id: doc.id,
         account_id: profile.account_id,

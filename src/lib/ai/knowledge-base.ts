@@ -1,18 +1,14 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-function getGenAI() {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    throw new Error('GEMINI_API_KEY is not set');
-  }
-  return new GoogleGenerativeAI(key);
+function getGenAI(apiKey: string) {
+  return new GoogleGenerativeAI(apiKey);
 }
 
 /**
  * Generates a 768-dimensional embedding vector for the given text.
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
-  const model = getGenAI().getGenerativeModel({ model: 'gemini-embedding-2' });
+export async function generateEmbedding(text: string, apiKey: string): Promise<number[]> {
+  const model = getGenAI(apiKey).getGenerativeModel({ model: 'gemini-embedding-2' });
   const result = await model.embedContent({
     content: { role: 'user', parts: [{ text }] },
     // @ts-ignore - Some SDK versions don't have this in their type definitions
@@ -52,9 +48,10 @@ export function chunkText(text: string, maxChunkLength = 1000): string[] {
 export async function generateRagResponse(
   userQuery: string,
   contextChunks: string[],
-  systemPrompt: string
+  systemPrompt: string,
+  apiKey: string
 ): Promise<string> {
-  const model = getGenAI().getGenerativeModel({
+  const model = getGenAI(apiKey).getGenerativeModel({
     model: 'gemini-1.5-flash',
     systemInstruction: systemPrompt,
   });

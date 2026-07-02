@@ -36,18 +36,18 @@ export async function dispatchInboundToAI({
   // 2. Check if the account has AI enabled
   const { data: settings } = await supabase
     .from('bot_settings')
-    .select('is_active, system_prompt, handoff_message')
+    .select('is_active, system_prompt, handoff_message, gemini_api_key')
     .eq('account_id', accountId)
     .maybeSingle();
 
-  if (!settings || !settings.is_active) {
+  if (!settings || !settings.is_active || !settings.gemini_api_key) {
     return { consumed: false };
   }
 
   // 3. Generate embedding for the user's message
   let queryEmbedding: number[];
   try {
-    queryEmbedding = await generateEmbedding(messageText);
+    queryEmbedding = await generateEmbedding(messageText, settings.gemini_api_key);
   } catch (err) {
     console.error('[AI] Failed to generate embedding:', err);
     return { consumed: false };
@@ -78,7 +78,7 @@ export async function dispatchInboundToAI({
   // 5. Generate reply via LLM
   let replyText = '';
   try {
-    replyText = await generateRagResponse(messageText, contextChunks, settings.system_prompt);
+    replyText = await generateRagResponse(messageText, contextChunks, settings.system_prompt, settings.gemini_api_key);
   } catch (err) {
     console.error('[AI] LLM generation failed:', err);
     return { consumed: false };

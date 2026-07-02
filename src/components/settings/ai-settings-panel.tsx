@@ -93,6 +93,18 @@ export function AISettingsPanel() {
               </div>
 
               <div className="space-y-1">
+                <Label htmlFor="gemini_api_key">Gemini API Key</Label>
+                <p className="text-xs text-muted-foreground">Get a free key from Google AI Studio.</p>
+                <Input 
+                  id="gemini_api_key" 
+                  name="gemini_api_key" 
+                  type="password"
+                  placeholder="AIzaSy..."
+                  defaultValue={settings?.gemini_api_key ?? ''} 
+                />
+              </div>
+
+              <div className="space-y-1">
                 <Label htmlFor="system_prompt">System Prompt</Label>
                 <p className="text-xs text-muted-foreground">The core instructions for the LLM. Keep it strict so it does not hallucinate.</p>
                 <Textarea 
