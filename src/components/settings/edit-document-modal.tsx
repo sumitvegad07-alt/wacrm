@@ -27,7 +27,10 @@ export function EditDocumentModal({ document, onSuccess }: EditDocumentModalProp
   const [open, setOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);
 
-  const handleUpdate = async (formData: FormData) => {
+  const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     setIsPending(true);
     try {
       const result = await updateKnowledgeDocument(document.id, formData);
@@ -51,7 +54,7 @@ export function EditDocumentModal({ document, onSuccess }: EditDocumentModalProp
         <Pencil className="size-4" />
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
-        <form action={handleUpdate}>
+        <form onSubmit={handleUpdate}>
           <DialogHeader>
             <DialogTitle>Edit Knowledge Document</DialogTitle>
             <DialogDescription>

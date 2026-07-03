@@ -55,7 +55,10 @@ export function AISettingsPanel() {
     }
   };
 
-  const handleAddDocument = async (formData: FormData) => {
+  const handleAddDocument = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     try {
       const result = await addKnowledgeDocument(formData);
       if (result?.error) {
@@ -63,7 +66,7 @@ export function AISettingsPanel() {
         return;
       }
       toast.success('Document ingested successfully');
-      (document.getElementById('add-doc-form') as HTMLFormElement)?.reset();
+      form.reset();
       fetchAI();
     } catch (error: any) {
       toast.error(error.message || 'Failed to ingest document');
@@ -225,7 +228,7 @@ export function AISettingsPanel() {
             </div>
 
             <TabsContent value="text">
-              <form action={handleAddDocument}>
+              <form onSubmit={handleAddDocument}>
                 <input type="hidden" name="source_type" value="text" />
                 <CardContent className="space-y-4 mt-4">
                   <div className="space-y-1">
@@ -246,7 +249,7 @@ export function AISettingsPanel() {
             </TabsContent>
 
             <TabsContent value="url">
-              <form action={handleAddDocument}>
+              <form onSubmit={handleAddDocument}>
                 <input type="hidden" name="source_type" value="url" />
                 <CardContent className="space-y-4 mt-4">
                   <div className="space-y-1">
@@ -260,15 +263,16 @@ export function AISettingsPanel() {
                   <p className="text-xs text-muted-foreground">The bot will scrape the readable text from this webpage.</p>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    <Plus className="size-4 mr-2" /> Ingest URL
+                  <Button type="submit" className="w-full" disabled={isPending}>
+                    {isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                    Save & Train AI
                   </Button>
                 </CardFooter>
               </form>
             </TabsContent>
 
             <TabsContent value="youtube">
-              <form action={handleAddDocument}>
+              <form onSubmit={handleAddDocument}>
                 <input type="hidden" name="source_type" value="youtube" />
                 <CardContent className="space-y-4 mt-4">
                   <div className="space-y-1">
@@ -290,7 +294,7 @@ export function AISettingsPanel() {
             </TabsContent>
 
             <TabsContent value="file">
-              <form action={handleAddDocument}>
+              <form onSubmit={handleAddDocument}>
                 <input type="hidden" name="source_type" value="file" />
                 <CardContent className="space-y-4 mt-4">
                   <div className="space-y-1">
