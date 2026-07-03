@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { generateEmbedding, chunkText } from '@/lib/ai/knowledge-base'
+import { extractTextFromURL, extractTextFromYouTube, extractTextFromFile } from '@/lib/ai/document-parser'
 
 export async function saveBotSettings(formData: FormData) {
   const supabase = await createClient()
@@ -47,10 +48,10 @@ export async function addKnowledgeDocument(formData: FormData) {
   if (!profile?.account_id) throw new Error('No account found')
 
   const title = formData.get('title') as string
-  const content = formData.get('content') as string
+  const sourceType = formData.get('source_type') as string // 'text', 'url', 'youtube', 'file'
 
-  if (!title || !content) {
-    throw new Error('Title and content are required')
+  if (!title || !sourceType) {
+    throw new Error('Title and source type are required')
   }
 
   const { data: settings } = await supabase.from('bot_settings').select('gemini_api_key').eq('account_id', profile.account_id).single()
@@ -60,13 +61,47 @@ export async function addKnowledgeDocument(formData: FormData) {
     throw new Error('You must provide a Gemini API Key in the settings first!')
   }
 
+  let content = '';
+
+  // Extract text based on source type
+  try {
+    if (sourceType === 'text') {
+      content = formData.get('content') as string;
+      if (!content) throw new Error('Raw text content is required');
+    } 
+    else if (sourceType === 'url') {
+      const url = formData.get('url') as string;
+      if (!url) throw new Error('URL is required');
+      content = await extractTextFromURL(url);
+    }
+    else if (sourceType === 'youtube') {
+      const url = formData.get('youtube_url') as string;
+      if (!url) throw new Error('YouTube URL is required');
+      content = await extractTextFromYouTube(url);
+    }
+    else if (sourceType === 'file') {
+      const file = formData.get('file') as File;
+      if (!file || file.size === 0) throw new Error('File is required');
+      content = await extractTextFromFile(file);
+    }
+    else {
+      throw new Error('Invalid source type');
+    }
+  } catch (error: any) {
+    throw new Error(`Failed to extract text: ${error.message}`);
+  }
+
+  if (!content || content.trim().length === 0) {
+    throw new Error('No readable text could be extracted from this source.');
+  }
+
   // 1. Save Document
   const { data: doc, error: docError } = await supabase
     .from('kb_documents')
     .insert({
       account_id: profile.account_id,
       title,
-      source_type: 'text',
+      source_type: sourceType === 'url' || sourceType === 'youtube' ? 'url' : sourceType === 'file' ? 'file' : 'text',
       content_text: content,
       status: 'ready'
     })
@@ -119,6 +154,80 @@ export async function deleteKnowledgeDocument(docId: string) {
   if (error) {
     console.error('Error deleting document:', error)
     throw new Error('Failed to delete document')
+  }
+
+  revalidatePath('/settings/ai')
+  return { success: true }
+}
+
+export async function updateKnowledgeDocument(docId: string, formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: profile } = await supabase.from('profiles').select('account_id').eq('user_id', user.id).single()
+  if (!profile?.account_id) throw new Error('No account found')
+
+  const title = formData.get('title') as string
+  const content = formData.get('content') as string
+
+  if (!title || !content) {
+    throw new Error('Title and content are required')
+  }
+
+  const { data: settings } = await supabase.from('bot_settings').select('gemini_api_key').eq('account_id', profile.account_id).single()
+  const apiKey = settings?.gemini_api_key
+  
+  if (!apiKey) {
+    throw new Error('You must provide a Gemini API Key in the settings first!')
+  }
+
+  // 1. Update Document status to processing
+  const { error: docError } = await supabase
+    .from('kb_documents')
+    .update({
+      title,
+      content_text: content,
+      status: 'processing'
+    })
+    .eq('id', docId)
+
+  if (docError) {
+    console.error('Error updating document:', docError)
+    throw new Error('Failed to update document')
+  }
+
+  // 2. Delete old chunks
+  await supabase.from('kb_chunks').delete().eq('document_id', docId)
+
+  // 3. Chunk text and generate new embeddings
+  try {
+    const chunks = chunkText(content)
+    const records = []
+
+    for (const chunk of chunks) {
+      const embedding = await generateEmbedding(chunk, apiKey)
+      records.push({
+        document_id: docId,
+        account_id: profile.account_id,
+        content: chunk,
+        embedding: `[${embedding.join(',')}]`
+      })
+    }
+
+    const { error: chunkError } = await supabase.from('kb_chunks').insert(records)
+    if (chunkError) {
+      console.error('Error inserting chunks:', chunkError)
+      throw new Error('Failed to insert chunks')
+    }
+
+    // Mark as ready
+    await supabase.from('kb_documents').update({ status: 'ready' }).eq('id', docId)
+
+  } catch (err: any) {
+    console.error('Embedding generation failed:', err)
+    await supabase.from('kb_documents').update({ status: 'failed' }).eq('id', docId)
+    throw new Error('Failed to generate embeddings: ' + (err.message || 'Unknown error'))
   }
 
   revalidatePath('/settings/ai')

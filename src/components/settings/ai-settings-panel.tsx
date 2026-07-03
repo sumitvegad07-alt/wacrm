@@ -8,10 +8,12 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Trash, Plus, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Trash, Plus, FileText, CheckCircle2, AlertCircle, Loader2, Link2, Video, FileUp } from 'lucide-react';
 import { saveBotSettings, addKnowledgeDocument, deleteKnowledgeDocument } from '@/app/(dashboard)/settings/ai/actions';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
+import { EditDocumentModal } from './edit-document-modal';
 
 export function AISettingsPanel() {
   const { accountId } = useAuth();
@@ -140,7 +142,7 @@ export function AISettingsPanel() {
                   id="system_prompt" 
                   name="system_prompt" 
                   rows={4}
-                  defaultValue={settings?.system_prompt ?? 'You are a helpful customer support assistant. Answer the user\'s question based ONLY on the provided context. If the answer is not in the context, reply with the exact word: HANDOFF.'} 
+                  defaultValue={settings?.system_prompt ?? 'You are a helpful, polite, and conversational customer support assistant. Start with a friendly greeting when appropriate. Synthesize the answer naturally based ONLY on the provided context, rather than copy-pasting raw text. If the answer is not in the context, reply with the exact word: HANDOFF.'} 
                 />
               </div>
             </CardContent>
@@ -177,9 +179,12 @@ export function AISettingsPanel() {
                         <span>• {doc.chunks[0]?.count ?? 0} chunks</span>
                       </div>
                     </div>
-                    <form action={() => handleDeleteDocument(doc.id)}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash className="size-4" /></Button>
-                    </form>
+                    <div className="flex items-center gap-1">
+                      <EditDocumentModal document={doc} />
+                      <form action={() => handleDeleteDocument(doc.id)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash className="size-4" /></Button>
+                      </form>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -191,31 +196,105 @@ export function AISettingsPanel() {
         <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle>Add New Source</CardTitle>
-            <CardDescription>Paste raw text to ingest into the vector store.</CardDescription>
+            <CardDescription>Provide a source to ingest into the vector store.</CardDescription>
           </CardHeader>
-          <form id="add-doc-form" action={handleAddDocument}>
-            <CardContent className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="title">Title</Label>
-                <Input id="title" name="title" required placeholder="e.g. Return Policy" />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="content">Raw Text Content</Label>
-                <Textarea 
-                  id="content" 
-                  name="content" 
-                  required 
-                  rows={6} 
-                  placeholder="Paste the text here..." 
-                />
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full">
-                <Plus className="size-4 mr-2" /> Ingest Text
-              </Button>
-            </CardFooter>
-          </form>
+          <Tabs defaultValue="text" className="w-full">
+            <div className="px-6">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="text"><FileText className="size-4" /></TabsTrigger>
+                <TabsTrigger value="url"><Link2 className="size-4" /></TabsTrigger>
+                <TabsTrigger value="youtube"><Video className="size-4" /></TabsTrigger>
+                <TabsTrigger value="file"><FileUp className="size-4" /></TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value="text">
+              <form action={handleAddDocument}>
+                <input type="hidden" name="source_type" value="text" />
+                <CardContent className="space-y-4 mt-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="title-text">Title</Label>
+                    <Input id="title-text" name="title" required placeholder="e.g. Return Policy" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="content">Raw Text Content</Label>
+                    <Textarea id="content" name="content" required rows={6} placeholder="Paste the text here..." />
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    <Plus className="size-4 mr-2" /> Ingest Text
+                  </Button>
+                </CardFooter>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="url">
+              <form action={handleAddDocument}>
+                <input type="hidden" name="source_type" value="url" />
+                <CardContent className="space-y-4 mt-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="title-url">Title</Label>
+                    <Input id="title-url" name="title" required placeholder="e.g. Homepage" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="url">Website URL</Label>
+                    <Input id="url" name="url" type="url" required placeholder="https://example.com" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">The bot will scrape the readable text from this webpage.</p>
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    <Plus className="size-4 mr-2" /> Ingest URL
+                  </Button>
+                </CardFooter>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="youtube">
+              <form action={handleAddDocument}>
+                <input type="hidden" name="source_type" value="youtube" />
+                <CardContent className="space-y-4 mt-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="title-yt">Title</Label>
+                    <Input id="title-yt" name="title" required placeholder="e.g. Product Demo" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="youtube_url">YouTube URL</Label>
+                    <Input id="youtube_url" name="youtube_url" type="url" required placeholder="https://youtube.com/watch?v=..." />
+                  </div>
+                  <p className="text-xs text-muted-foreground">The bot will download and index the video's captions/transcript.</p>
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    <Plus className="size-4 mr-2" /> Ingest YouTube
+                  </Button>
+                </CardFooter>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="file">
+              <form action={handleAddDocument}>
+                <input type="hidden" name="source_type" value="file" />
+                <CardContent className="space-y-4 mt-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="title-file">Title</Label>
+                    <Input id="title-file" name="title" required placeholder="e.g. Training Manual" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="file">File (PDF, Word, Text)</Label>
+                    <Input id="file" name="file" type="file" accept=".pdf,.doc,.docx,.txt" required />
+                  </div>
+                  <p className="text-xs text-muted-foreground">The bot will extract text from the uploaded document.</p>
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    <Plus className="size-4 mr-2" /> Ingest File
+                  </Button>
+                </CardFooter>
+              </form>
+            </TabsContent>
+          </Tabs>
         </Card>
       </div>
     </div>

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS bot_settings (
   account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
   is_active BOOLEAN DEFAULT false,
   bot_name TEXT DEFAULT 'Assistant',
-  system_prompt TEXT DEFAULT 'You are a helpful customer support assistant. Answer the user''s question based ONLY on the provided context. If the answer is not in the context, reply with the exact word: HANDOFF.',
+  system_prompt TEXT DEFAULT 'You are a helpful, polite, and conversational customer support assistant. Start with a friendly greeting when appropriate. Synthesize the answer naturally based ONLY on the provided context, rather than copy-pasting raw text. If the answer is not in the context, reply with the exact word: HANDOFF.',
   handoff_message TEXT DEFAULT 'I am unable to answer that right now, let me connect you with a human agent.',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
