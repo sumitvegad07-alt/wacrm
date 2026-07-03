@@ -46,16 +46,14 @@ export async function extractTextFromFile(file: File): Promise<string> {
   const buffer = Buffer.from(arrayBuffer);
   
   if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-    // Polyfill DOMMatrix and Path2D for Node.js environments (Vercel) to prevent pdf.js crash
-    if (typeof globalThis.DOMMatrix === 'undefined') {
-      (globalThis as any).DOMMatrix = class DOMMatrix { constructor() {} };
-    }
-    if (typeof globalThis.Path2D === 'undefined') {
-      (globalThis as any).Path2D = class Path2D { constructor() {} };
-    }
-    const pdf = require('pdf-parse');
-    const data = await pdf(buffer);
-    return data.text;
+    const PDFParser = (await import('pdf2json')).default;
+    return new Promise((resolve, reject) => {
+      // @ts-ignore
+      const pdfParser = new PDFParser(null, 1);
+      pdfParser.on('pdfParser_dataError', (errData: any) => reject(new Error(errData.parserError)));
+      pdfParser.on('pdfParser_dataReady', () => resolve(pdfParser.getRawTextContent()));
+      pdfParser.parseBuffer(buffer);
+    });
   } 
   else if (
     file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
