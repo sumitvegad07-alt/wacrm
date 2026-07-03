@@ -30,7 +30,11 @@ export function EditDocumentModal({ document, onSuccess }: EditDocumentModalProp
   const handleUpdate = async (formData: FormData) => {
     setIsPending(true);
     try {
-      await updateKnowledgeDocument(document.id, formData);
+      const result = await updateKnowledgeDocument(document.id, formData);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
       toast.success('Document updated successfully');
       setOpen(false);
       if (onSuccess) onSuccess();

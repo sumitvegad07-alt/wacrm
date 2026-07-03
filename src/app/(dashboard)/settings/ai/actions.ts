@@ -42,23 +42,23 @@ export async function saveBotSettings(formData: FormData) {
 export async function addKnowledgeDocument(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
+  if (!user) return { error: 'Unauthorized' }
 
   const { data: profile } = await supabase.from('profiles').select('account_id').eq('user_id', user.id).single()
-  if (!profile?.account_id) throw new Error('No account found')
+  if (!profile?.account_id) return { error: 'No account found' }
 
   const title = formData.get('title') as string
   const sourceType = formData.get('source_type') as string // 'text', 'url', 'youtube', 'file'
 
   if (!title || !sourceType) {
-    throw new Error('Title and source type are required')
+    return { error: 'Title and source type are required' }
   }
 
   const { data: settings } = await supabase.from('bot_settings').select('gemini_api_key').eq('account_id', profile.account_id).single()
   const apiKey = settings?.gemini_api_key
   
   if (!apiKey) {
-    throw new Error('You must provide a Gemini API Key in the settings first!')
+    return { error: 'You must provide a Gemini API Key in the settings first!' }
   }
 
   let content = '';
@@ -88,11 +88,11 @@ export async function addKnowledgeDocument(formData: FormData) {
       throw new Error('Invalid source type');
     }
   } catch (error: any) {
-    throw new Error(`Failed to extract text: ${error.message}`);
+    return { error: `Failed to extract text: ${error.message}` };
   }
 
   if (!content || content.trim().length === 0) {
-    throw new Error('No readable text could be extracted from this source.');
+    return { error: 'No readable text could be extracted from this source.' };
   }
 
   // 1. Save Document
@@ -110,7 +110,7 @@ export async function addKnowledgeDocument(formData: FormData) {
 
   if (docError || !doc) {
     console.error('Error creating document:', docError)
-    throw new Error('Failed to create document')
+    return { error: 'Failed to create document' }
   }
 
   // 2. Chunk text and generate embeddings
@@ -131,14 +131,14 @@ export async function addKnowledgeDocument(formData: FormData) {
     const { error: chunkError } = await supabase.from('kb_chunks').insert(records)
     if (chunkError) {
       console.error('Error inserting chunks:', chunkError)
-      throw new Error('Failed to insert chunks')
+      return { error: 'Failed to insert chunks' }
     }
 
   } catch (err: any) {
     console.error('Embedding generation failed:', err)
     // Mark document as failed so the user knows
     await supabase.from('kb_documents').update({ status: 'failed' }).eq('id', doc.id)
-    throw new Error('Failed to generate embeddings: ' + (err.message || 'Unknown error'))
+    return { error: 'Failed to generate embeddings: ' + (err.message || 'Unknown error') }
   }
 
   revalidatePath('/settings')
@@ -153,7 +153,7 @@ export async function deleteKnowledgeDocument(docId: string) {
   
   if (error) {
     console.error('Error deleting document:', error)
-    throw new Error('Failed to delete document')
+    return { error: 'Failed to delete document' }
   }
 
   revalidatePath('/settings')
@@ -163,23 +163,23 @@ export async function deleteKnowledgeDocument(docId: string) {
 export async function updateKnowledgeDocument(docId: string, formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
+  if (!user) return { error: 'Unauthorized' }
 
   const { data: profile } = await supabase.from('profiles').select('account_id').eq('user_id', user.id).single()
-  if (!profile?.account_id) throw new Error('No account found')
+  if (!profile?.account_id) return { error: 'No account found' }
 
   const title = formData.get('title') as string
   const content = formData.get('content') as string
 
   if (!title || !content) {
-    throw new Error('Title and content are required')
+    return { error: 'Title and content are required' }
   }
 
   const { data: settings } = await supabase.from('bot_settings').select('gemini_api_key').eq('account_id', profile.account_id).single()
   const apiKey = settings?.gemini_api_key
   
   if (!apiKey) {
-    throw new Error('You must provide a Gemini API Key in the settings first!')
+    return { error: 'You must provide a Gemini API Key in the settings first!' }
   }
 
   // 1. Update Document status to processing
@@ -194,7 +194,7 @@ export async function updateKnowledgeDocument(docId: string, formData: FormData)
 
   if (docError) {
     console.error('Error updating document:', docError)
-    throw new Error('Failed to update document')
+    return { error: 'Failed to update document' }
   }
 
   // 2. Delete old chunks
@@ -218,7 +218,7 @@ export async function updateKnowledgeDocument(docId: string, formData: FormData)
     const { error: chunkError } = await supabase.from('kb_chunks').insert(records)
     if (chunkError) {
       console.error('Error inserting chunks:', chunkError)
-      throw new Error('Failed to insert chunks')
+      return { error: 'Failed to insert chunks' }
     }
 
     // Mark as ready
@@ -227,7 +227,7 @@ export async function updateKnowledgeDocument(docId: string, formData: FormData)
   } catch (err: any) {
     console.error('Embedding generation failed:', err)
     await supabase.from('kb_documents').update({ status: 'failed' }).eq('id', docId)
-    throw new Error('Failed to generate embeddings: ' + (err.message || 'Unknown error'))
+    return { error: 'Failed to generate embeddings: ' + (err.message || 'Unknown error') }
   }
 
   revalidatePath('/settings')

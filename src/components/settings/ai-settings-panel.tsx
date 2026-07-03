@@ -57,7 +57,11 @@ export function AISettingsPanel() {
 
   const handleAddDocument = async (formData: FormData) => {
     try {
-      await addKnowledgeDocument(formData);
+      const result = await addKnowledgeDocument(formData);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
       toast.success('Document ingested successfully');
       (document.getElementById('add-doc-form') as HTMLFormElement)?.reset();
       fetchAI();
@@ -68,7 +72,11 @@ export function AISettingsPanel() {
 
   const handleDeleteDocument = async (id: string) => {
     try {
-      await deleteKnowledgeDocument(id);
+      const result = await deleteKnowledgeDocument(id);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
       toast.success('Document deleted');
       fetchAI();
     } catch (error: any) {
@@ -184,9 +192,14 @@ export function AISettingsPanel() {
                     </div>
                     <div className="flex items-center gap-1">
                       <EditDocumentModal document={doc} onSuccess={fetchAI} />
-                      <form action={() => handleDeleteDocument(doc.id)}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash className="size-4" /></Button>
-                      </form>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => handleDeleteDocument(doc.id)}
+                      >
+                        <Trash className="size-4" />
+                      </Button>
                     </div>
                   </li>
                 ))}
