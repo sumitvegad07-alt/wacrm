@@ -79,12 +79,14 @@ export async function dispatchInboundToAI({
   const contextChunks = matches?.map((m: any) => m.content) || [];
 
   // 4.5 Fetch conversation history
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: historyData } = await supabase
     .from('messages')
     .select('sender_type, content_text')
     .eq('conversation_id', conversationId)
+    .gte('created_at', twentyFourHoursAgo)
     .order('created_at', { ascending: false })
-    .limit(5);
+    .limit(40);
 
   const history = (historyData || [])
     .reverse()
