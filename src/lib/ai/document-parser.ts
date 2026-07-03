@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import { YoutubeTranscript } from 'youtube-transcript';
-import mammoth from 'mammoth';
-const pdf = require('pdf-parse');
+
+
 
 /**
  * Extracts text from a generic URL using Cheerio
@@ -50,6 +50,7 @@ export async function extractTextFromFile(file: File): Promise<string> {
   const buffer = Buffer.from(arrayBuffer);
   
   if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+    const pdf = require('pdf-parse');
     const data = await pdf(buffer);
     return data.text;
   } 
@@ -57,6 +58,7 @@ export async function extractTextFromFile(file: File): Promise<string> {
     file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
     file.name.endsWith('.docx')
   ) {
+    const mammoth = (await import('mammoth')).default;
     const result = await mammoth.extractRawText({ buffer });
     return result.value;
   }
