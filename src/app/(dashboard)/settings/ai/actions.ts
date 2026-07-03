@@ -141,7 +141,7 @@ export async function addKnowledgeDocument(formData: FormData) {
     return { error: 'Failed to generate embeddings: ' + (err.message || 'Unknown error') }
   }
 
-  revalidatePath('/settings')
+
   return { success: true }
 }
 
@@ -156,7 +156,6 @@ export async function deleteKnowledgeDocument(docId: string) {
     return { error: 'Failed to delete document' }
   }
 
-  revalidatePath('/settings')
   return { success: true }
 }
 
@@ -230,6 +229,6 @@ export async function updateKnowledgeDocument(docId: string, formData: FormData)
     return { error: 'Failed to generate embeddings: ' + (err.message || 'Unknown error') }
   }
 
-  revalidatePath('/settings')
+
   return { success: true }
 }
