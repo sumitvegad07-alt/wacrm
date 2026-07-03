@@ -17,14 +17,10 @@ export async function extractTextFromURL(url: string): Promise<string> {
   // Remove unnecessary tags
   $('script, style, noscript, iframe, img, svg, nav, footer, header').remove();
 
-  // Extract text, keeping some structure
-  let text = '';
-  $('h1, h2, h3, h4, h5, h6, p, li').each((_, el) => {
-    const elText = $(el).text().trim();
-    if (elText) {
-      text += elText + '\n\n';
-    }
-  });
+  let text = $('body').text();
+  
+  // Clean up excessive whitespace
+  text = text.replace(/\\s+/g, ' ');
 
   return text.trim();
 }
@@ -50,6 +46,13 @@ export async function extractTextFromFile(file: File): Promise<string> {
   const buffer = Buffer.from(arrayBuffer);
   
   if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+    // Polyfill DOMMatrix and Path2D for Node.js environments (Vercel) to prevent pdf.js crash
+    if (typeof globalThis.DOMMatrix === 'undefined') {
+      (globalThis as any).DOMMatrix = class DOMMatrix { constructor() {} };
+    }
+    if (typeof globalThis.Path2D === 'undefined') {
+      (globalThis as any).Path2D = class Path2D { constructor() {} };
+    }
     const pdf = require('pdf-parse');
     const data = await pdf(buffer);
     return data.text;
