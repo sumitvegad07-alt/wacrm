@@ -40,17 +40,25 @@ export async function dispatchInboundToAI({
     .eq('account_id', accountId)
     .maybeSingle();
 
-  if (!settings || !settings.is_active || !settings.gemini_api_key) {
+  if (!settings) {
     return { consumed: false };
+  }
+  if (!settings.is_active) {
+    return { consumed: false };
+  }
+  if (!settings.gemini_api_key) {
+    await sendBotMessage(conversationId, "⚠️ AI Error: Gemini API Key is missing in settings.", contactPhone, accessToken, phoneNumberId);
+    return { consumed: true };
   }
 
   // 3. Generate embedding for the user's message
   let queryEmbedding: number[];
   try {
     queryEmbedding = await generateEmbedding(messageText, settings.gemini_api_key);
-  } catch (err) {
+  } catch (err: any) {
     console.error('[AI] Failed to generate embedding:', err);
-    return { consumed: false };
+    await sendBotMessage(conversationId, "⚠️ AI Error generating embedding: " + (err.message || 'Unknown'), contactPhone, accessToken, phoneNumberId);
+    return { consumed: true };
   }
 
   // 4. Search for relevant context in the Knowledge Base
@@ -64,7 +72,8 @@ export async function dispatchInboundToAI({
 
   if (matchError) {
     console.error('[AI] Failed to match kb chunks:', matchError);
-    return { consumed: false };
+    await sendBotMessage(conversationId, "⚠️ AI Error searching knowledge base: " + matchError.message, contactPhone, accessToken, phoneNumberId);
+    return { consumed: true };
   }
 
   const contextChunks = matches?.map((m: any) => m.content) || [];
@@ -79,9 +88,10 @@ export async function dispatchInboundToAI({
   let replyText = '';
   try {
     replyText = await generateRagResponse(messageText, contextChunks, settings.system_prompt, settings.gemini_api_key);
-  } catch (err) {
+  } catch (err: any) {
     console.error('[AI] LLM generation failed:', err);
-    return { consumed: false };
+    await sendBotMessage(conversationId, "⚠️ AI Error generating reply: " + (err.message || 'Unknown'), contactPhone, accessToken, phoneNumberId);
+    return { consumed: true };
   }
 
   const trimmedReply = replyText.trim();
