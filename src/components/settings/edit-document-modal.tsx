@@ -37,10 +37,8 @@ export function EditDocumentModal({ document }: { document: any }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-          <Pencil className="size-4" />
-        </Button>
+      <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" />}>
+        <Pencil className="size-4" />
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
         <form action={handleUpdate}>
