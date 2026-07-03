@@ -18,7 +18,12 @@ import { Pencil } from 'lucide-react';
 import { updateKnowledgeDocument } from '@/app/(dashboard)/settings/ai/actions';
 import { toast } from 'sonner';
 
-export function EditDocumentModal({ document }: { document: any }) {
+interface EditDocumentModalProps {
+  document: any;
+  onSuccess?: () => void;
+}
+
+export function EditDocumentModal({ document, onSuccess }: EditDocumentModalProps) {
   const [open, setOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);
 
@@ -28,6 +33,7 @@ export function EditDocumentModal({ document }: { document: any }) {
       await updateKnowledgeDocument(document.id, formData);
       toast.success('Document updated successfully');
       setOpen(false);
+      if (onSuccess) onSuccess();
     } catch (error: any) {
       toast.error(error.message || 'Failed to update document');
     } finally {

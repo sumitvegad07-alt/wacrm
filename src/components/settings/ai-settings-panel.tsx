@@ -21,27 +21,28 @@ export function AISettingsPanel() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchAI = async () => {
     if (!accountId) return;
-    const fetchAI = async () => {
-      const supabase = createClient();
-      
-      const { data: s } = await supabase
-        .from('bot_settings')
-        .select('*')
-        .eq('account_id', accountId)
-        .maybeSingle();
-      
-      const { data: docs } = await supabase
-        .from('kb_documents')
-        .select('*, chunks:kb_chunks(count)')
-        .eq('account_id', accountId)
-        .order('created_at', { ascending: false });
+    const supabase = createClient();
+    
+    const { data: s } = await supabase
+      .from('bot_settings')
+      .select('*')
+      .eq('account_id', accountId)
+      .maybeSingle();
+    
+    const { data: docs } = await supabase
+      .from('kb_documents')
+      .select('*, chunks:kb_chunks(count)')
+      .eq('account_id', accountId)
+      .order('created_at', { ascending: false });
 
-      setSettings(s);
-      setDocuments(docs || []);
-      setLoading(false);
-    };
+    setSettings(s);
+    setDocuments(docs || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
     fetchAI();
   }, [accountId]);
 
@@ -59,6 +60,7 @@ export function AISettingsPanel() {
       await addKnowledgeDocument(formData);
       toast.success('Document ingested successfully');
       (document.getElementById('add-doc-form') as HTMLFormElement)?.reset();
+      fetchAI();
     } catch (error: any) {
       toast.error(error.message || 'Failed to ingest document');
     }
@@ -68,6 +70,7 @@ export function AISettingsPanel() {
     try {
       await deleteKnowledgeDocument(id);
       toast.success('Document deleted');
+      fetchAI();
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete document');
     }
@@ -180,7 +183,7 @@ export function AISettingsPanel() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <EditDocumentModal document={doc} />
+                      <EditDocumentModal document={doc} onSuccess={fetchAI} />
                       <form action={() => handleDeleteDocument(doc.id)}>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash className="size-4" /></Button>
                       </form>

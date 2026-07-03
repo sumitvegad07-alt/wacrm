@@ -141,7 +141,7 @@ export async function addKnowledgeDocument(formData: FormData) {
     throw new Error('Failed to generate embeddings: ' + (err.message || 'Unknown error'))
   }
 
-  revalidatePath('/settings/ai')
+  revalidatePath('/settings')
   return { success: true }
 }
 
@@ -156,7 +156,7 @@ export async function deleteKnowledgeDocument(docId: string) {
     throw new Error('Failed to delete document')
   }
 
-  revalidatePath('/settings/ai')
+  revalidatePath('/settings')
   return { success: true }
 }
 
@@ -230,6 +230,6 @@ export async function updateKnowledgeDocument(docId: string, formData: FormData)
     throw new Error('Failed to generate embeddings: ' + (err.message || 'Unknown error'))
   }
 
-  revalidatePath('/settings/ai')
+  revalidatePath('/settings')
   return { success: true }
 }
