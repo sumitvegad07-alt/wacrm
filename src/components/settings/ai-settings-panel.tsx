@@ -20,6 +20,7 @@ export function AISettingsPanel() {
   const [settings, setSettings] = useState<any>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPending, setIsPending] = useState(false);
 
   const fetchAI = async () => {
     if (!accountId) return;
@@ -59,6 +60,7 @@ export function AISettingsPanel() {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
+    setIsPending(true);
     try {
       const result = await addKnowledgeDocument(formData);
       if (result?.error) {
@@ -70,6 +72,8 @@ export function AISettingsPanel() {
       fetchAI();
     } catch (error: any) {
       toast.error(error.message || 'Failed to ingest document');
+    } finally {
+      setIsPending(false);
     }
   };
 
@@ -241,8 +245,9 @@ export function AISettingsPanel() {
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    <Plus className="size-4 mr-2" /> Ingest Text
+                  <Button type="submit" className="w-full" disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
+                    Save & Train AI
                   </Button>
                 </CardFooter>
               </form>
@@ -264,7 +269,7 @@ export function AISettingsPanel() {
                 </CardContent>
                 <CardFooter>
                   <Button type="submit" className="w-full" disabled={isPending}>
-                    {isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                    {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
                     Save & Train AI
                   </Button>
                 </CardFooter>
@@ -286,8 +291,9 @@ export function AISettingsPanel() {
                   <p className="text-xs text-muted-foreground">The bot will download and index the video's captions/transcript.</p>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    <Plus className="size-4 mr-2" /> Ingest YouTube
+                  <Button type="submit" className="w-full" disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
+                    Save & Train AI
                   </Button>
                 </CardFooter>
               </form>
@@ -308,8 +314,9 @@ export function AISettingsPanel() {
                   <p className="text-xs text-muted-foreground">The bot will extract text from the uploaded document.</p>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    <Plus className="size-4 mr-2" /> Ingest File
+                  <Button type="submit" className="w-full" disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
+                    Save & Train AI
                   </Button>
                 </CardFooter>
               </form>
