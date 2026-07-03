@@ -78,16 +78,22 @@ export async function dispatchInboundToAI({
 
   const contextChunks = matches?.map((m: any) => m.content) || [];
 
-  // If no relevant context found, hand off immediately
-  if (contextChunks.length === 0) {
-    await handoffToHuman(conversationId, settings.handoff_message, contactPhone, accessToken, phoneNumberId);
-    return { consumed: true }; // Consumed because the bot took the "Handoff" action
-  }
+  // 4.5 Fetch conversation history
+  const { data: historyData } = await supabase
+    .from('messages')
+    .select('sender_type, content_text')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  const history = (historyData || [])
+    .reverse()
+    .map(m => ({ role: m.sender_type, content: m.content_text || '' }));
 
   // 5. Generate reply via LLM
   let replyText = '';
   try {
-    replyText = await generateRagResponse(messageText, contextChunks, settings.system_prompt, settings.gemini_api_key);
+    replyText = await generateRagResponse(messageText, contextChunks, settings.system_prompt, settings.gemini_api_key, history);
   } catch (err: any) {
     console.error('[AI] LLM generation failed:', err);
     await sendBotMessage(conversationId, "⚠️ AI Error generating reply: " + (err.message || 'Unknown'), contactPhone, accessToken, phoneNumberId);

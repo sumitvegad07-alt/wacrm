@@ -49,16 +49,24 @@ export async function generateRagResponse(
   userQuery: string,
   contextChunks: string[],
   systemPrompt: string,
-  apiKey: string
+  apiKey: string,
+  conversationHistory: { role: string; content: string }[] = []
 ): Promise<string> {
   const model = getGenAI(apiKey).getGenerativeModel({
     model: 'gemini-2.5-flash',
     systemInstruction: systemPrompt,
   });
 
-  const contextStr = contextChunks.map((c, i) => `[Context ${i + 1}]:\n${c}`).join('\n\n');
+  const contextStr = contextChunks.length > 0 
+    ? contextChunks.map((c, i) => `[Context ${i + 1}]:\n${c}`).join('\n\n')
+    : 'No relevant context found in the knowledge base.';
   
-  const prompt = `Here is the knowledge base context:\n\n${contextStr}\n\nUser Question:\n${userQuery}`;
+  let historyStr = '';
+  if (conversationHistory.length > 0) {
+    historyStr = 'Conversation History:\n' + conversationHistory.map(msg => `${msg.role === 'bot' ? 'Assistant' : 'User'}: ${msg.content}`).join('\n') + '\n\n';
+  }
+
+  const prompt = `${historyStr}Here is the knowledge base context:\n\n${contextStr}\n\nUser Question:\n${userQuery}`;
 
   const result = await model.generateContent({
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
