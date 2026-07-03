@@ -182,6 +182,7 @@ export interface Conversation {
   last_message_text?: string;
   last_message_at?: string;
   unread_count: number;
+  bot_status?: 'active' | 'paused';
   created_at: string;
   updated_at: string;
   contact?: Contact;

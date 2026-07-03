@@ -26,6 +26,8 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Bot,
+  BotOff,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -576,6 +578,29 @@ export function MessageThread({
     [conversation, onStatusChange]
   );
 
+  const handleToggleBotStatus = useCallback(async () => {
+    if (!conversation) return;
+    
+    // Default to 'active' if undefined, so toggling pauses it. If 'paused', resume it.
+    const currentStatus = conversation.bot_status || 'active';
+    const newStatus = currentStatus === 'paused' ? 'active' : 'paused';
+    const supabase = createClient();
+    
+    const { error } = await supabase
+      .from("conversations")
+      .update({ bot_status: newStatus })
+      .eq("id", conversation.id);
+
+    if (error) {
+      console.error("Failed to update AI bot status:", error);
+      toast.error("Failed to update AI bot status");
+      return;
+    }
+
+    toast.success(newStatus === 'active' ? "AI Assistant Resumed" : "AI Assistant Paused");
+    if (onRefresh) onRefresh();
+  }, [conversation, onRefresh]);
+
   const handleOpenTemplates = useCallback(() => {
     setTemplateModalOpen(true);
   }, []);
@@ -882,6 +907,20 @@ export function MessageThread({
               )}
             </button>
           )}
+
+          {/* AI Bot Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleBotStatus}
+            aria-label={conversation.bot_status === 'paused' ? "Resume AI Bot" : "Pause AI Bot"}
+            title={conversation.bot_status === 'paused' ? "AI is Paused (Click to Resume)" : "AI is Active (Click to Pause)"}
+            className={cn(
+              "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted",
+              conversation.bot_status === 'paused' ? "text-destructive bg-destructive/10 hover:bg-destructive/20" : "text-primary hover:text-primary/80"
+            )}
+          >
+            {conversation.bot_status === 'paused' ? <BotOff className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+          </button>
 
           {/* Manual refresh — forces a refetch of the messages + the
               conversation list (the parent bumps its resyncToken). Useful
