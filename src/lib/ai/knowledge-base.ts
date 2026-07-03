@@ -8,7 +8,7 @@ function getGenAI(apiKey: string) {
  * Generates a 768-dimensional embedding vector for the given text.
  */
 export async function generateEmbedding(text: string, apiKey: string): Promise<number[]> {
-  const model = getGenAI(apiKey).getGenerativeModel({ model: 'gemini-embedding-2' });
+  const model = getGenAI(apiKey).getGenerativeModel({ model: 'text-embedding-004' });
   const result = await model.embedContent({
     content: { role: 'user', parts: [{ text }] },
     // @ts-ignore - Some SDK versions don't have this in their type definitions

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Trash, Plus, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { saveBotSettings, addKnowledgeDocument, deleteKnowledgeDocument } from '@/app/(dashboard)/settings/ai/actions';
 import { useAuth } from '@/hooks/use-auth';
+import { toast } from 'sonner';
 
 export function AISettingsPanel() {
   const { accountId } = useAuth();
@@ -42,6 +43,34 @@ export function AISettingsPanel() {
     fetchAI();
   }, [accountId]);
 
+  const handleSaveSettings = async (formData: FormData) => {
+    try {
+      await saveBotSettings(formData);
+      toast.success('Settings saved successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save settings');
+    }
+  };
+
+  const handleAddDocument = async (formData: FormData) => {
+    try {
+      await addKnowledgeDocument(formData);
+      toast.success('Document ingested successfully');
+      (document.getElementById('add-doc-form') as HTMLFormElement)?.reset();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to ingest document');
+    }
+  };
+
+  const handleDeleteDocument = async (id: string) => {
+    try {
+      await deleteKnowledgeDocument(id);
+      toast.success('Document deleted');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete document');
+    }
+  };
+
   if (loading) {
     return <div className="flex h-32 items-center justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -62,7 +91,7 @@ export function AISettingsPanel() {
             <CardTitle>Assistant Configuration</CardTitle>
             <CardDescription>Adjust how the AI behaves and when it hands off to a human.</CardDescription>
           </CardHeader>
-          <form action={saveBotSettings as any}>
+          <form action={handleSaveSettings}>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-2">
                 <Switch 
@@ -148,7 +177,7 @@ export function AISettingsPanel() {
                         <span>• {doc.chunks[0]?.count ?? 0} chunks</span>
                       </div>
                     </div>
-                    <form action={deleteKnowledgeDocument.bind(null, doc.id) as any}>
+                    <form action={() => handleDeleteDocument(doc.id)}>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash className="size-4" /></Button>
                     </form>
                   </li>
@@ -164,7 +193,7 @@ export function AISettingsPanel() {
             <CardTitle>Add New Source</CardTitle>
             <CardDescription>Paste raw text to ingest into the vector store.</CardDescription>
           </CardHeader>
-          <form action={addKnowledgeDocument as any}>
+          <form id="add-doc-form" action={handleAddDocument}>
             <CardContent className="space-y-4">
               <div className="space-y-1">
                 <Label htmlFor="title">Title</Label>
