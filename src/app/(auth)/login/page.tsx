@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,6 @@ function LoginPageInner() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -59,12 +58,34 @@ function LoginPageInner() {
       return;
     }
 
+    // Check if this user is a superadmin — if so, send them straight
+    // to the superadmin panel instead of the regular dashboard.
+    // Use a full page reload (window.location.href) so the browser
+    // sends the newly-set auth cookie with the next request, avoiding
+    // the middleware redirect-loop that causes a stuck "Signing in..."
+    // state with client-side router.push().
     if (inviteToken) {
-      router.push(`/join/${encodeURIComponent(inviteToken)}`);
-    } else {
-      router.push("/dashboard");
+      window.location.href = `/join/${encodeURIComponent(inviteToken)}`;
+      return;
     }
+
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_superadmin")
+        .eq("user_id", currentUser.id)
+        .maybeSingle();
+
+      if (profile?.is_superadmin) {
+        window.location.href = "/admin";
+        return;
+      }
+    }
+
+    window.location.href = "/dashboard";
   };
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">

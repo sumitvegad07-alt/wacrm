@@ -23,6 +23,7 @@ import {
   X,
   Zap,
   CheckSquare,
+  Building2,
   Plus,
   Package,
   FileText,
@@ -101,7 +102,9 @@ const navItems: NavItem[] = [
   { href: "/products", label: "Products", icon: Package },
   { href: "/quotations", label: "Quotations", icon: FileText },
   { href: "/broadcasts", label: "Broadcasts", icon: Radio },
-  { href: "/field-staff", label: "Field Staff", icon: MapPin },
+  { href: "/location-tracking/dashboard", label: "Location Dashboard", icon: MapPin },
+  { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound },
+  { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2 },
   { href: "/automations", label: "Automations", icon: Zap },
   { href: "/flows", label: "Flows", icon: Workflow, beta: true },
 ];
@@ -119,8 +122,16 @@ interface SidebarProps {
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const { profile, profileLoading, account, accountRole, signOut, hasAutomations, hasBroadcasts, hasLocationTracking } = useAuth();
   const totalUnread = useTotalUnread();
+
+  const filteredNavItems = navItems.filter((item) => {
+    if (item.href === "/broadcasts" && !hasBroadcasts) return false;
+    if (item.href === "/automations" && !hasAutomations) return false;
+    if (item.href === "/flows" && !hasAutomations) return false;
+    if (item.href.startsWith("/location-tracking") && !hasLocationTracking) return false;
+    return true;
+  });
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -207,10 +218,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {filteredNavItems.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));

@@ -34,6 +34,7 @@ interface Profile {
   beta_features: string[];
   account_id: string | null;
   account_role: AccountRole | null;
+  is_superadmin: boolean;
 }
 
 interface AccountSummary {
@@ -42,6 +43,10 @@ interface AccountSummary {
   /** Default deal currency (ISO-4217). NOT NULL DEFAULT 'USD' in the
    *  DB (migration 021); narrowed to DEFAULT_CURRENCY when absent. */
   default_currency: string;
+  subscription_status: 'active' | 'expired' | 'deactivated' | 'trialing';
+  subscription_plan: string;
+  industry: string;
+  is_provisioned: boolean;
 }
 
 interface AuthContextValue {
@@ -101,6 +106,12 @@ interface AuthContextValue {
   canEditSettings: boolean;
   /** True if the caller can send messages and edit operational data (agent+). */
   canSendMessages: boolean;
+  isSuperadmin: boolean;
+  hasWhatsApp: boolean;
+  hasAutomations: boolean;
+  hasBroadcasts: boolean;
+  hasAdvancedAI: boolean;
+  hasLocationTracking: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -131,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase
         .from("profiles")
         .select(
-          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role",
+          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, is_superadmin",
         )
         .eq("user_id", userId)
         .maybeSingle();
@@ -163,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .from("accounts")
             // default_currency added in migration 021; narrowed to the
             // USD fallback below for older schemas where it reads null.
-            .select("id, name, default_currency")
+            .select("id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned")
             .eq("id", data.account_id)
             .maybeSingle();
           if (accountErr) {
@@ -178,6 +189,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id: account.id,
               name: account.name,
               default_currency: account.default_currency ?? DEFAULT_CURRENCY,
+              subscription_status: account.subscription_status ?? 'active',
+              subscription_plan: account.subscription_plan ?? 'Basic',
+              industry: account.industry ?? 'Other',
+              is_provisioned: account.is_provisioned ?? false,
             };
           }
         }
@@ -204,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           beta_features: data.beta_features ?? [],
           account_id: data.account_id ?? null,
           account_role: accountRole,
+          is_superadmin: data.is_superadmin ?? false,
         });
         setAccount(accountRow);
       }
@@ -306,6 +322,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // dependencies downstream.
   const derived = useMemo(() => {
     const role = profile?.account_role ?? null;
+    const plan = account?.subscription_plan ?? 'Basic';
+    const hasLocationTracking = plan === 'Pro' || plan === 'Enterprise' || plan === 'Premium'; 
+
     return {
       accountRole: role,
       accountId: profile?.account_id ?? null,
@@ -316,8 +335,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canManageMembers: role ? canManageMembersFor(role) : false,
       canEditSettings: role ? canEditSettingsFor(role) : false,
       canSendMessages: role ? canSendMessagesFor(role) : false,
+      isSuperadmin: profile?.is_superadmin ?? false,
+      hasWhatsApp: plan === 'Pro' || plan === 'Enterprise',
+      hasAutomations: plan === 'Pro' || plan === 'Enterprise',
+      hasBroadcasts: plan === 'Pro' || plan === 'Enterprise',
+      hasAdvancedAI: plan === 'Enterprise',
+      hasLocationTracking,
     };
-  }, [profile?.account_role, profile?.account_id]);
+  }, [profile?.account_role, profile?.account_id, profile?.is_superadmin, account?.subscription_plan]);
 
   return (
     <AuthContext.Provider
@@ -369,6 +394,12 @@ export function useAuth(): AuthContextValue {
       canManageMembers: false,
       canEditSettings: false,
       canSendMessages: false,
+      isSuperadmin: false,
+      hasWhatsApp: false,
+      hasAutomations: false,
+      hasBroadcasts: false,
+      hasAdvancedAI: false,
+      hasLocationTracking: false,
     };
   }
   return ctx;

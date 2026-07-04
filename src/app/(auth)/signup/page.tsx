@@ -14,6 +14,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { MessageSquare, CheckCircle, UsersRound } from "lucide-react";
 
 // `useSearchParams` opts the component out of static prerendering
@@ -39,6 +46,7 @@ function SignupPageInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [industry, setIndustry] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -74,6 +82,7 @@ function SignupPageInner() {
       options: {
         data: {
           full_name: fullName,
+          industry: industry || "Other",
         },
         ...(emailRedirectTo ? { emailRedirectTo } : {}),
       },
@@ -183,6 +192,26 @@ function SignupPageInner() {
                 required
                 className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
               />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="industry" className="text-muted-foreground">
+                Industry
+              </Label>
+              <Select value={industry} onValueChange={(v) => setIndustry(v || "")} required>
+                <SelectTrigger id="industry" className="border-border bg-muted text-foreground">
+                  <SelectValue placeholder="Select your industry" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Retail & E-commerce">Retail & E-commerce</SelectItem>
+                  <SelectItem value="Real Estate">Real Estate</SelectItem>
+                  <SelectItem value="Healthcare & Dental">Healthcare & Dental</SelectItem>
+                  <SelectItem value="Education">Education</SelectItem>
+                  <SelectItem value="IT & Software">IT & Software</SelectItem>
+                  <SelectItem value="Agency & Consulting">Agency & Consulting</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex flex-col gap-2">
