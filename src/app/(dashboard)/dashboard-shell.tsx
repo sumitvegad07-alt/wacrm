@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
+import { Button } from "@/components/ui/button";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -77,7 +78,20 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
         {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {account?.subscription_status === 'trialing' && (
+            <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-2">
+              <div>
+                <span className="font-bold text-destructive">Your Pro trial ends in 3 days.</span>
+                <span className="ml-0 sm:ml-2 mt-1 sm:mt-0 block sm:inline">Upgrade now to avoid losing your AI Auto-Replies, Shared Team Inbox, and active Automations.</span>
+              </div>
+              <Button size="sm" variant="destructive" className="shrink-0" onClick={() => router.push('/settings?tab=overview')}>
+                Keep My Features
+              </Button>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );

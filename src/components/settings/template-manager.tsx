@@ -125,7 +125,7 @@ function emptyButton(type: TemplateButton['type']): TemplateButton {
 
 export function TemplateManager() {
   const supabase = createClient();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, account } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -251,7 +251,28 @@ export function TemplateManager() {
 
   function openCreate() {
     setEditingId(null);
-    setForm(emptyForm);
+    let templateStarter = { ...emptyForm };
+    const industry = account?.industry || 'Other';
+    
+    if (industry.includes("Real Estate")) {
+       templateStarter.name = "property_viewing_confirmation";
+       templateStarter.body_text = "Hi {{1}}, your property viewing for {{2}} is confirmed for {{3}}. We look forward to seeing you!";
+       templateStarter.body_samples = ["John", "123 Main St", "Tomorrow at 2 PM"];
+    } else if (industry.includes("Healthcare") || industry.includes("Dental")) {
+       templateStarter.name = "appointment_reminder";
+       templateStarter.body_text = "Hi {{1}}, this is a reminder for your upcoming appointment on {{2}} at {{3}}.";
+       templateStarter.body_samples = ["John", "Tomorrow", "10:00 AM"];
+    } else if (industry.includes("Retail") || industry.includes("E-commerce")) {
+       templateStarter.name = "order_update";
+       templateStarter.body_text = "Hi {{1}}, your order {{2}} has been shipped and is on its way!";
+       templateStarter.body_samples = ["John", "#12345"];
+    } else if (industry.includes("Education")) {
+       templateStarter.name = "course_registration";
+       templateStarter.body_text = "Hi {{1}}, your registration for {{2}} is confirmed. Classes start on {{3}}.";
+       templateStarter.body_samples = ["John", "Math 101", "Monday"];
+    }
+
+    setForm(templateStarter);
     setDialogOpen(true);
   }
 

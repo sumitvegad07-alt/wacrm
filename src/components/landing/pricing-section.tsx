@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, ArrowRight } from "lucide-react";
+import { Check, ArrowRight, Sparkles } from "lucide-react";
 
 interface PlanTier {
   name: string;
@@ -16,15 +16,16 @@ interface PlanTier {
 
 const PLANS: PlanTier[] = [
   {
-    name: "Basic",
-    price: 100,
+    name: "Enterprise",
+    price: 350,
     features: [
       "Min 3 Users",
-      "Core CRM (Contacts, Pipelines, Tasks)",
-      "Quotations & Products",
-      "Custom Fields & Tags",
+      "Full AI Assistant",
+      "AI Knowledge Base",
+      "Advanced Flows (Builder)",
+      "VIP Support",
     ],
-    color: "text-slate-700 dark:text-slate-300",
+    color: "text-violet-500",
     bgColor: "bg-card border-border",
     buttonVariant: "outline",
   },
@@ -44,16 +45,15 @@ const PLANS: PlanTier[] = [
     popular: true,
   },
   {
-    name: "Enterprise",
-    price: 350,
+    name: "Basic",
+    price: 100,
     features: [
       "Min 3 Users",
-      "Full AI Assistant",
-      "AI Knowledge Base",
-      "Advanced Flows (Builder)",
-      "VIP Support",
+      "Core CRM (Contacts, Pipelines, Tasks)",
+      "Quotations & Products",
+      "Custom Fields & Tags",
     ],
-    color: "text-violet-500",
+    color: "text-slate-700 dark:text-slate-300",
     bgColor: "bg-card border-border",
     buttonVariant: "outline",
   },
@@ -143,6 +143,15 @@ export function PricingSection() {
                   </li>
                 ))}
               </ul>
+
+              {plan.name !== "Enterprise" && (
+                <button 
+                  onClick={() => alert("Simulating AI Reply:\n\nUser: What are your working hours?\nwaCRM AI: Hi! We are open Monday to Friday from 9 AM to 6 PM. How can I help you today?")}
+                  className="mt-6 w-full py-2.5 px-4 rounded-xl text-sm font-bold text-center transition-all flex items-center justify-center gap-2 border border-violet-500/30 text-violet-500 hover:bg-violet-500/10"
+                >
+                  <Sparkles className="h-4 w-4" /> Preview AI Reply
+                </button>
+              )}
             </div>
           ))}
         </div>

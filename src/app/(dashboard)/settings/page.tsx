@@ -21,7 +21,17 @@ import {
   resolveSection,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
-import { BrainCircuit, Zap } from 'lucide-react';
+import { BrainCircuit, Zap, Sparkles, AlertTriangle, ArrowRight, MapPin } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 function SettingsContent() {
   const router = useRouter();
@@ -30,6 +40,8 @@ function SettingsContent() {
   const { mode } = useTheme();
 
   const [activeTab, setActiveTab] = useState<SettingsSection>(resolveSection(searchParams.get('tab')));
+
+  const [manageState, setManageState] = useState<'overview' | 'downgrade'>('overview');
 
   // Sync if URL changes externally (e.g. back button)
   useEffect(() => {
@@ -87,7 +99,13 @@ function SettingsContent() {
           the full Agentic AI Assistant, knowledge base, and smart reply features.
         </p>
         <div className="flex flex-col items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-500">
+          <button 
+            onClick={() => alert("Simulating AI Reply:\n\nUser: What are your working hours?\nwaCRM AI: Hi! We are open Monday to Friday from 9 AM to 6 PM. How can I help you today?")}
+            className="flex items-center gap-2 rounded-lg bg-violet-500 text-white px-4 py-2 text-sm font-medium hover:bg-violet-600 transition-all shadow-sm"
+          >
+            <Sparkles className="h-4 w-4" /> Preview AI Reply
+          </button>
+          <div className="flex items-center gap-2 rounded-lg bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-500 mt-2">
             <Zap className="h-4 w-4" />
             Contact your admin to upgrade to Enterprise
           </div>
@@ -103,14 +121,102 @@ function SettingsContent() {
 
   return (
     <div>
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Settings
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Everything in one place — your account and your workspace. Pick a
-          section to manage it.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Settings
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Everything in one place — your account and your workspace. Pick a
+            section to manage it.
+          </p>
+        </div>
+
+        {/* Downgrade/Cancel Modal */}
+        <Dialog onOpenChange={(open) => !open && setTimeout(() => setManageState('overview'), 200)}>
+          <DialogTrigger render={<Button variant="outline" className="text-muted-foreground" />}>
+            Manage Plan
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            {manageState === 'overview' ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Your Subscription</DialogTitle>
+                  <DialogDescription>
+                    Manage your base plan and add-ons.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-2">
+                  <div className="mb-4 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-foreground">Pro Plan</span>
+                      <span className="font-bold text-blue-500">₹200/mo</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">Includes WhatsApp Integration, Automations, and Core CRM.</p>
+                    <Button variant="outline" size="sm" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive" onClick={() => setManageState('downgrade')}>
+                      Cancel / Downgrade
+                    </Button>
+                  </div>
+
+                  <div className="rounded-xl border border-border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-foreground flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" /> Location Tracking Add-on</span>
+                      <span className="font-bold text-foreground">₹50/mo</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">Track field sales staff and visits in real-time. (Requires Pro plan or higher)</p>
+                    <Button size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                      Add to Plan
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5" /> Cancel Subscription?
+                  </DialogTitle>
+                  <DialogDescription>
+                    If you downgrade to the Free plan, you will lose access to several premium features immediately:
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                  <ul className="space-y-3">
+                    <li className="flex items-center gap-3 text-sm text-foreground">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-destructive/10 text-destructive font-bold text-xs">X</span>
+                      <span><strong>AI Auto-Replies</strong> will be disabled.</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm text-foreground">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-destructive/10 text-destructive font-bold text-xs">X</span>
+                      <span><strong>Shared Team Inbox</strong> will lock for 3+ members.</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm text-foreground">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-destructive/10 text-destructive font-bold text-xs">X</span>
+                      <span><strong>Advanced Automations</strong> will stop running.</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm text-foreground">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-destructive/10 text-destructive font-bold text-xs">X</span>
+                      <span>Your <strong>WhatsApp API integration</strong> will be disconnected.</span>
+                    </li>
+                  </ul>
+                  <div className="mt-6 rounded-lg bg-muted p-4">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Are you sure you want to give up these features? Over <strong>85% of businesses</strong> see a drop in lead response times after downgrading.
+                    </p>
+                    <Button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold" onClick={() => setManageState('overview')}>
+                      Keep My Plan <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </div>
+                </div>
+                <DialogFooter className="sm:justify-center">
+                  <Button variant="ghost" className="text-muted-foreground text-xs hover:text-destructive">
+                    Yes, downgrade and lose features
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">

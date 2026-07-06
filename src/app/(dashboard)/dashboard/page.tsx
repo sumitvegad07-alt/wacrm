@@ -34,6 +34,7 @@ import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
 import { TodaysTasks } from '@/components/dashboard/todays-tasks'
+import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
 
 type RangeDays = 7 | 30 | 90
 
@@ -121,6 +122,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
+      {/* Onboarding Checklist */}
+      <OnboardingChecklist />
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>

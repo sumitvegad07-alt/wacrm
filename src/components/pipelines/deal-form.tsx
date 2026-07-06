@@ -60,7 +60,7 @@ export function DealForm({
   onSaved,
 }: DealFormProps) {
   const supabase = createClient();
-  const { accountId, defaultCurrency } = useAuth();
+  const { user, accountId, defaultCurrency } = useAuth();
 
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
@@ -108,11 +108,11 @@ export function DealForm({
       setCurrency(defaultCurrency);
       setContactId("");
       setStageId(defaultStageId || stages[0]?.id || "");
-      setAssignedTo("");
+      setAssignedTo(user?.id ?? "");
       setExpectedCloseDate("");
       setNotes("");
     }
-  }, [open, deal, defaultStageId, stages, defaultCurrency]);
+  }, [open, deal, defaultStageId, stages, defaultCurrency, user?.id]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {

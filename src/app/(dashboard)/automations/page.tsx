@@ -155,6 +155,7 @@ export default function AutomationsPage() {
   }
 
   const showTemplates = automations.length < 3
+  const isFreeTierAndLimitReached = !canCreate && automations.length >= 1
 
   return (
     <div className="space-y-6">
@@ -166,8 +167,8 @@ export default function AutomationsPage() {
           </p>
         </div>
         <GatedButton
-          canAct={canCreate}
-          gateReason="create automations"
+          canAct={!isFreeTierAndLimitReached}
+          gateReason="create multiple automations. You are allowed 1 free automation on your current plan."
           onClick={() => router.push("/automations/new")}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
@@ -186,7 +187,13 @@ export default function AutomationsPage() {
               return (
                 <button
                   key={slug}
-                  onClick={() => startFromTemplate(slug)}
+                  onClick={() => {
+                    if (isFreeTierAndLimitReached) {
+                      toast.error("Upgrade required", { description: "You have used your 1 free automation. Please upgrade to create more." })
+                      return
+                    }
+                    startFromTemplate(slug)
+                  }}
                   className="group flex flex-col items-start rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/50 hover:bg-card/80"
                 >
                   <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15">

@@ -45,6 +45,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@google/generative-ai": "^0.24.1",
+    "@radix-ui/react-progress": "^1.1.11",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
     "@types/leaflet": "^1.9.21",

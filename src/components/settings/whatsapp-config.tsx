@@ -28,6 +28,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from '@/components/ui/accordion';
+import { Progress } from '@/components/ui/progress';
 import type { WhatsAppConfig as WhatsAppConfigType } from '@/types';
 
 const MASKED_TOKEN = '••••••••••••••••';
@@ -374,6 +375,14 @@ export function WhatsAppConfig() {
   }
 
   const showResetBanner = resetReason === 'token_corrupted';
+
+  const setupTasks = [
+    { id: 'app', done: true }, // Assumed true if they are on this page configuring
+    { id: 'product', done: true }, // Assumed true
+    { id: 'creds', done: !!config && !!phoneNumberId },
+    { id: 'webhook', done: !!config?.registered_at },
+  ];
+  const setupProgress = Math.round((setupTasks.filter(t => t.done).length / setupTasks.length) * 100);
 
   return (
     <section className="animate-in fade-in-50 duration-200">
@@ -756,6 +765,13 @@ export function WhatsAppConfig() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-foreground">Setup Progress</span>
+                <span className="text-sm font-medium text-primary">{setupProgress}%</span>
+              </div>
+              <Progress value={setupProgress} className="h-2" />
+            </div>
             <Accordion>
               <AccordionItem className="border-border">
                 <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
