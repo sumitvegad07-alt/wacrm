@@ -16,7 +16,7 @@ export interface TimelineEvent {
 }
 
 interface TimelineProps {
-  moduleName: 'contact' | 'deal' | 'quotation' | 'product';
+  moduleName: 'contact' | 'deal' | 'quotation' | 'product' | 'lead';
   recordId: string;
   tasks: any[];
   notes?: any[];
@@ -196,6 +196,7 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
         defaultContactId={moduleName === 'contact' ? recordId : undefined}
         defaultDealId={moduleName === 'deal' ? recordId : undefined}
         defaultQuotationId={moduleName === 'quotation' ? recordId : undefined}
+        defaultLeadId={moduleName === 'lead' ? recordId : undefined}
         onSaved={onRefresh}
       />
     </div>
