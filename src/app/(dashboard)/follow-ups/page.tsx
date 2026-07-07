@@ -70,7 +70,7 @@ export default function FollowUpsPage() {
           {/* Assign To */}
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground font-normal">Assign To</Label>
-            <Select value={assignTo} onValueChange={setAssignTo}>
+            <Select value={assignTo} onValueChange={(val) => setAssignTo(val || "")}>
               <SelectTrigger className="h-9 text-sm bg-background">
                 <SelectValue placeholder="Select user" />
               </SelectTrigger>
@@ -87,7 +87,7 @@ export default function FollowUpsPage() {
           {/* Activity Status */}
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground font-normal">Activity Status</Label>
-            <Select value={activityStatus} onValueChange={setActivityStatus}>
+            <Select value={activityStatus} onValueChange={(val) => setActivityStatus(val || "")}>
               <SelectTrigger className="h-9 text-sm bg-background">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
@@ -102,7 +102,7 @@ export default function FollowUpsPage() {
           {/* Period */}
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground font-normal">Period</Label>
-            <Select value={period} onValueChange={setPeriod}>
+            <Select value={period} onValueChange={(val) => setPeriod(val || "")}>
               <SelectTrigger className="h-9 text-sm bg-background">
                 <SelectValue placeholder="Select period" />
               </SelectTrigger>
@@ -118,7 +118,7 @@ export default function FollowUpsPage() {
           {/* Activity Type */}
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground font-normal">Activity Type</Label>
-            <Select value={activityType} onValueChange={setActivityType}>
+            <Select value={activityType} onValueChange={(val) => setActivityType(val || "")}>
               <SelectTrigger className="h-9 text-sm bg-background text-muted-foreground">
                 <SelectValue placeholder="Select Activity Type" />
               </SelectTrigger>
