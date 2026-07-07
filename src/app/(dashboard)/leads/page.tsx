@@ -10,7 +10,6 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LeadForm } from "@/components/leads/lead-form";
-import { LeadExportDialog } from "@/components/leads/lead-export-dialog";
 import { LeadImportDialog } from "@/components/leads/lead-import-dialog";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
