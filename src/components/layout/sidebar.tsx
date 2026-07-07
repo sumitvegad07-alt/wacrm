@@ -111,7 +111,7 @@ interface NavItem {
   beta?: boolean;
 }
 
-const navGroups = [
+const navGroups: { label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[] }[] = [
   {
     label: "CRM",
     icon: Briefcase,

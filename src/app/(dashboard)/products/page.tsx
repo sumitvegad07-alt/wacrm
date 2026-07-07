@@ -35,7 +35,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { ImportProductsModal } from '@/components/products/import-products-modal';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
-import { CustomFieldsDialog } from "@/components/custom-fields/custom-fields-dialog";
+import { useCan } from '@/hooks/use-can';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";

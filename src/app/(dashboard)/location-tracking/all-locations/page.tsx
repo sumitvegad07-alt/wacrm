@@ -95,8 +95,8 @@ export default function AllLocationsPage() {
 
         return {
           id: p.id,
-          name: p.profiles?.full_name || "Unknown",
-          role: p.profiles?.role || "Field Staff",
+          name: (p.profiles as any)?.full_name || "Unknown",
+          role: (p.profiles as any)?.role || "Field Staff",
           rawDate: p.recorded_at,
           date: new Date(p.recorded_at).toLocaleString('en-IN', {
             day: '2-digit', month: '2-digit', year: 'numeric',

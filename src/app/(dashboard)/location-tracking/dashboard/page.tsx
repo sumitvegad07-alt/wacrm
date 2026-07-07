@@ -41,8 +41,8 @@ export default function LocationDashboardPage() {
       const activeUsers = sessions.map(s => ({
         id: s.user_id,
         sessionId: s.id,
-        name: s.profiles?.full_name || "Unknown",
-        role: s.profiles?.role || "Field Staff",
+        name: (s.profiles as any)?.full_name || "Unknown",
+        role: (s.profiles as any)?.role || "Field Staff",
         status: "active",
         punchedIn: new Date(s.started_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
         battery: 0,

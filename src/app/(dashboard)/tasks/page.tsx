@@ -43,7 +43,7 @@ import { TaskForm } from '@/components/tasks/task-form';
 import { ImportTasksModal } from '@/components/tasks/import-tasks-modal';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { CustomFieldsDialog } from "@/components/custom-fields/custom-fields-dialog";
+import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
@@ -432,10 +432,10 @@ export default function TasksPage() {
               {selectedTaskIds.size} selected
             </span>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 bg-background hover:bg-muted text-foreground" disabled={bulkActionLoading}>
-                  Change Status
-                </Button>
+              <DropdownMenuTrigger
+                render={<Button variant="outline" size="sm" className="h-8 bg-background hover:bg-muted text-foreground" disabled={bulkActionLoading} />}
+              >
+                Change Status
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 {Object.keys(STATUS_COLORS).map(s => (

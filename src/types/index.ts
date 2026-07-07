@@ -623,6 +623,7 @@ export interface Task {
   product_id?: string | null;
   conversation_id?: string | null;
   quotation_id?: string | null;
+  lead_id?: string | null;
   created_at: string;
   updated_at: string;
   contact?: Contact;

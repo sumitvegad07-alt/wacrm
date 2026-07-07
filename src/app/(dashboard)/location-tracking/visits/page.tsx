@@ -51,7 +51,7 @@ export default function CustomerVisitsPage() {
     if (data) {
       const formatted = data.map(v => ({
         id: v.id,
-        name: v.contacts?.name ? `[${v.contacts.name}]` : "Unknown",
+        name: (v.contacts as any)?.name ? `[${(v.contacts as any).name}]` : "Unknown",
         rawCheckIn: v.check_in_at,
         rawCheckOut: v.check_out_at,
         checkIn: new Date(v.check_in_at).toLocaleString('en-IN'),
@@ -59,7 +59,7 @@ export default function CustomerVisitsPage() {
         duration: v.check_out_at ? Math.round((new Date(v.check_out_at).getTime() - new Date(v.check_in_at).getTime()) / 60000) + "min" : "-",
         feedbackType: v.feedback_type || "N/A",
         feedback: v.feedback_text || "-",
-        visitedBy: v.profiles?.full_name || "Unknown",
+        visitedBy: (v.profiles as any)?.full_name || "Unknown",
         img: v.visit_photo_url || null
       }));
       setVisitsData(formatted);

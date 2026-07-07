@@ -70,8 +70,8 @@ export default function TrackReportPage() {
         if (!userAggregates[p.user_id]) {
           userAggregates[p.user_id] = {
             id: p.user_id,
-            name: p.profiles?.full_name || "Unknown",
-            role: p.profiles?.role || "Field Staff",
+            name: (p.profiles as any)?.full_name || "Unknown",
+            role: (p.profiles as any)?.role || "Field Staff",
             totalPings: 0,
             regular: 0,
             gpsOff: 0,
