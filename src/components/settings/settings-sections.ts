@@ -31,6 +31,7 @@ export const SETTINGS_SECTIONS = [
   'templates',
   'fields',
   'deals',
+  'leads',
   'members',
   'api',
 ] as const;
@@ -44,20 +45,21 @@ export interface SectionMeta {
   id: SettingsSection;
   label: string;
   icon: LucideIcon;
-  group: 'top' | 'account' | 'workspace';
+  group: 'top' | 'account' | 'workspace' | 'hidden';
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top' },
-  profile: { id: 'profile', label: 'Your profile', icon: User, group: 'account' },
+  profile: { id: 'profile', label: 'Profile', icon: User, group: 'account' },
   security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
-  whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
-  ai: { id: 'ai', label: 'AI Assistant', icon: BrainCircuit, group: 'workspace' },
-  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace' },
+  whatsapp: { id: 'whatsapp', label: 'WhatsApp Settings', icon: PlugZap, group: 'workspace' },
+  ai: { id: 'ai', label: 'Knowledge Base', icon: BrainCircuit, group: 'hidden' }, // hidden in rail
+  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'hidden' }, // hidden in rail
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
-  deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
-  members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
+  deals: { id: 'deals', label: 'Currency', icon: Coins, group: 'workspace' },
+  leads: { id: 'leads', label: 'Leads', icon: User, group: 'workspace' },
+  members: { id: 'members', label: 'Team', icon: UsersRound, group: 'workspace' },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
 };
 

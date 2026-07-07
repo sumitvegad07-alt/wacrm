@@ -41,6 +41,7 @@ interface TaskFormProps {
   defaultProductId?: string;
   defaultConversationId?: string;
   defaultQuotationId?: string;
+  defaultLeadId?: string;
   onSaved: () => void;
 }
 
@@ -56,10 +57,11 @@ export function TaskForm({
   defaultProductId,
   defaultConversationId,
   defaultQuotationId,
+  defaultLeadId,
   onSaved,
 }: TaskFormProps) {
   const supabase = createClient();
-  const { user } = useAuth();
+  const { user, accountId } = useAuth();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -74,6 +76,9 @@ export function TaskForm({
   const [productId, setProductId] = useState("");
   const [conversationId, setConversationId] = useState("");
   const [quotationId, setQuotationId] = useState("");
+  const [leadId, setLeadId] = useState("");
+  
+  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead">("None");
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -81,6 +86,7 @@ export function TaskForm({
   const [products, setProducts] = useState<Product[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [quotations, setQuotations] = useState<any[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
 
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -106,6 +112,14 @@ export function TaskForm({
         setProductId(task.product_id || "");
         setConversationId(task.conversation_id || "");
         setQuotationId(task.quotation_id || "");
+        setLeadId(task.lead_id || "");
+        if (task.contact_id) setLinkedModule("Contact");
+        else if (task.lead_id) setLinkedModule("Lead");
+        else if (task.deal_id) setLinkedModule("Deal");
+        else if (task.quotation_id) setLinkedModule("Quotation");
+        else if (task.product_id) setLinkedModule("Product");
+        else if (task.conversation_id) setLinkedModule("Conversation");
+        else setLinkedModule("None");
       } else {
         setTitle("");
         setDescription("");
@@ -119,23 +133,33 @@ export function TaskForm({
         setProductId(defaultProductId || "");
         setConversationId(defaultConversationId || "");
         setQuotationId(defaultQuotationId || "");
+        setLeadId(defaultLeadId || "");
+        
+        if (defaultContactId) setLinkedModule("Contact");
+        else if (defaultLeadId) setLinkedModule("Lead");
+        else if (defaultDealId) setLinkedModule("Deal");
+        else if (defaultQuotationId) setLinkedModule("Quotation");
+        else if (defaultProductId) setLinkedModule("Product");
+        else if (defaultConversationId) setLinkedModule("Conversation");
+        else setLinkedModule("None");
       }
     }
-  }, [open, task, defaultContactId, defaultDealId, defaultProductId, defaultConversationId, defaultQuotationId]);
+  }, [open, task, defaultContactId, defaultDealId, defaultProductId, defaultConversationId, defaultQuotationId, defaultLeadId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     (async () => {
-      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes] = await Promise.all([
+      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes] = await Promise.all([
         supabase.from("profiles").select("*").order("full_name"),
         supabase.from("contacts").select("*").order("name"),
         supabase.from("deals").select("*").order("title"),
         supabase.from("products").select("*").order("name"),
         supabase.from("conversations").select("*, contact:contacts(name, phone)").order("last_message_at", { ascending: false }),
         supabase.from("custom_fields").select("*").eq("module_name", "task").order("field_name"),
-        supabase.from("quotations").select("*, contact:contacts(name)").order("quotation_number", { ascending: false })
+        supabase.from("quotations").select("*, contact:contacts(name)").order("quotation_number", { ascending: false }),
+        supabase.from("leads").select("*").order("name")
       ]);
       if (cancelled) return;
       setProfiles((pRes.data ?? []) as Profile[]);
@@ -144,6 +168,7 @@ export function TaskForm({
       setProducts((prodRes.data ?? []) as Product[]);
       setConversations((convRes.data ?? []) as Conversation[]);
       setQuotations((qRes.data ?? []) as any[]);
+      setLeads((lRes.data ?? []) as any[]);
       
       const fields = cfRes.data as CustomField[] ?? [];
       setCustomFields(fields);
@@ -180,6 +205,7 @@ export function TaskForm({
     setSaving(true);
 
     const payload = {
+      account_id: accountId,
       title: title.trim(),
       description: description.trim() || null,
       status,
@@ -187,11 +213,12 @@ export function TaskForm({
       assigned_user_id: assignedUserId || null,
       due_date: dueDate || null,
       due_time: dueTime || null,
-      contact_id: contactId || null,
-      deal_id: dealId || null,
-      product_id: productId || null,
-      conversation_id: conversationId || null,
-      quotation_id: quotationId || null,
+      contact_id: linkedModule === "Contact" ? contactId : null,
+      deal_id: linkedModule === "Deal" ? dealId : null,
+      product_id: linkedModule === "Product" ? productId : null,
+      conversation_id: linkedModule === "Conversation" ? conversationId : null,
+      quotation_id: linkedModule === "Quotation" ? quotationId : null,
+      lead_id: linkedModule === "Lead" ? leadId : null,
     };
 
     let savedTaskId = task?.id;
@@ -246,6 +273,7 @@ export function TaskForm({
       if (dealId) logPromises.push(logModuleActivity(supabase, { moduleName: 'deal', recordId: dealId, action: task ? 'updated' : 'created', message: msg }));
       if (quotationId) logPromises.push(logModuleActivity(supabase, { moduleName: 'quotation', recordId: quotationId, action: task ? 'updated' : 'created', message: msg }));
       if (productId) logPromises.push(logModuleActivity(supabase, { moduleName: 'product', recordId: productId, action: task ? 'updated' : 'created', message: msg }));
+      if (leadId) logPromises.push(logModuleActivity(supabase, { moduleName: 'lead', recordId: leadId, action: task ? 'updated' : 'created', message: msg }));
       await Promise.all(logPromises);
     }
 
@@ -375,81 +403,89 @@ export function TaskForm({
           </div>
 
           <div className="border-t border-border/50 pt-4 mt-4 space-y-4 md:col-span-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label className="text-muted-foreground">Linked Contact</Label>
-                <SearchableSelect
-                  value={contactId}
-                  onChange={setContactId}
-                  placeholder="None"
-                  searchPlaceholder="Search contacts..."
-                  emptyMessage="No contacts found."
-                  options={contacts.map((c) => ({
-                    value: c.id,
-                    label: c.name || c.phone,
-                  }))}
-                />
-              </div>
-              
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Linked Deal</Label>
-                <SearchableSelect
-                  value={dealId}
-                  onChange={setDealId}
-                  placeholder="None"
-                  searchPlaceholder="Search deals..."
-                  emptyMessage="No deals found."
-                  options={deals.map((d) => ({
-                    value: d.id,
-                    label: d.title,
-                  }))}
-                />
+                <Label className="text-muted-foreground">Linked To</Label>
+                <select
+                  value={linkedModule}
+                  onChange={(e) => setLinkedModule(e.target.value as any)}
+                  className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                >
+                  <option value="None">None</option>
+                  <option value="Contact">Contact</option>
+                  <option value="Lead">Lead</option>
+                  <option value="Deal">Deal</option>
+                  <option value="Quotation">Quotation</option>
+                  <option value="Product">Product</option>
+                  <option value="Conversation">Conversation</option>
+                </select>
               </div>
 
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Linked Product</Label>
-                <SearchableSelect
-                  value={productId}
-                  onChange={setProductId}
-                  placeholder="None"
-                  searchPlaceholder="Search products..."
-                  emptyMessage="No products found."
-                  options={products.map((p) => ({
-                    value: p.id,
-                    label: p.name,
-                  }))}
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Linked Quotation</Label>
-                <SearchableSelect
-                  value={quotationId}
-                  onChange={setQuotationId}
-                  placeholder="None"
-                  searchPlaceholder="Search quotations..."
-                  emptyMessage="No quotations found."
-                  options={quotations.map((q) => ({
-                    value: q.id,
-                    label: `${q.quotation_number} (v${q.version}) - ${q.contact?.name || 'Unknown'}`,
-                  }))}
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Linked Conversation</Label>
-                <SearchableSelect
-                  value={conversationId}
-                  onChange={setConversationId}
-                  placeholder="None"
-                  searchPlaceholder="Search conversations..."
-                  emptyMessage="No conversations found."
-                  options={conversations.map((c) => ({
-                    value: c.id,
-                    label: `${c.contact?.name || c.contact?.phone || 'Unknown'} - ${new Date(c.last_message_at || c.created_at).toLocaleDateString()}`,
-                  }))}
-                />
-              </div>
+              {linkedModule !== "None" && (
+                <div className="grid gap-2">
+                  <Label className="text-transparent hidden md:block">Record</Label>
+                  {linkedModule === "Contact" && (
+                    <SearchableSelect
+                      value={contactId}
+                      onChange={setContactId}
+                      placeholder="Select Contact..."
+                      searchPlaceholder="Search contacts..."
+                      emptyMessage="No contacts found."
+                      options={contacts.map((c) => ({ value: c.id, label: c.name || c.phone }))}
+                    />
+                  )}
+                  {linkedModule === "Lead" && (
+                    <SearchableSelect
+                      value={leadId}
+                      onChange={setLeadId}
+                      placeholder="Select Lead..."
+                      searchPlaceholder="Search leads..."
+                      emptyMessage="No leads found."
+                      options={leads.map((l) => ({ value: l.id, label: l.name }))}
+                    />
+                  )}
+                  {linkedModule === "Deal" && (
+                    <SearchableSelect
+                      value={dealId}
+                      onChange={setDealId}
+                      placeholder="Select Deal..."
+                      searchPlaceholder="Search deals..."
+                      emptyMessage="No deals found."
+                      options={deals.map((d) => ({ value: d.id, label: d.title }))}
+                    />
+                  )}
+                  {linkedModule === "Quotation" && (
+                    <SearchableSelect
+                      value={quotationId}
+                      onChange={setQuotationId}
+                      placeholder="Select Quotation..."
+                      searchPlaceholder="Search quotations..."
+                      emptyMessage="No quotations found."
+                      options={quotations.map((q) => ({ value: q.id, label: `${q.quotation_number} - ${q.contact?.name || 'Unknown'}` }))}
+                    />
+                  )}
+                  {linkedModule === "Product" && (
+                    <SearchableSelect
+                      value={productId}
+                      onChange={setProductId}
+                      placeholder="Select Product..."
+                      searchPlaceholder="Search products..."
+                      emptyMessage="No products found."
+                      options={products.map((p) => ({ value: p.id, label: p.name }))}
+                    />
+                  )}
+                  {linkedModule === "Conversation" && (
+                    <SearchableSelect
+                      value={conversationId}
+                      onChange={setConversationId}
+                      placeholder="Select Conversation..."
+                      searchPlaceholder="Search conversations..."
+                      emptyMessage="No conversations found."
+                      options={conversations.map((c) => ({ value: c.id, label: `${c.contact?.name || c.contact?.phone || 'Unknown'} - ${new Date(c.last_message_at || c.created_at).toLocaleDateString()}` }))}
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
             {customFields.length > 0 && (

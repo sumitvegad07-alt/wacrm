@@ -121,10 +121,12 @@ export interface CustomField {
   user_id: string;
   /** Tenancy key — NOT NULL since migration 017. */
   account_id: string;
-  module_name: 'contact' | 'deal' | 'task' | 'product' | 'quotation';
+  module_name: 'contact' | 'deal' | 'task' | 'product' | 'quotation' | 'lead';
   field_name: string;
   field_type: string;
   field_options?: Record<string, unknown>;
+  source_type?: 'static' | 'module';
+  source_module?: string;
   created_at: string;
 }
 
@@ -367,6 +369,8 @@ export interface Deal {
   stage?: PipelineStage;
   assignee?: Profile;
 }
+
+
 
 export type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed';
 export type RecipientStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'replied' | 'failed';

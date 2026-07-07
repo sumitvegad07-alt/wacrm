@@ -1,27 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import type { Quotation } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -38,20 +22,29 @@ import {
   Trash2,
   Loader2,
   FileText,
-  ChevronLeft,
-  ChevronRight,
   Copy,
   Send,
   Check,
   X,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
-import { Checkbox } from '@/components/ui/checkbox';
 import { logQuotationActivity } from '@/lib/quotations';
 import { QuotationForm } from '@/components/quotations/quotation-form';
+import { useAuth } from '@/hooks/use-auth';
+import { useCan } from '@/hooks/use-can';
+import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 
-const PAGE_SIZE = 25;
+import { DataTable } from '@/components/ui/data-table/data-table';
+import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
+import { isDateInFilter } from "@/lib/date-filters";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -64,15 +57,22 @@ export default function QuotationsPage() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const canEditSettings = useCan('edit-settings');
+  const { account } = useAuth();
 
   const [quotations, setQuotations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-
+  
+  // DataTable state
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [filterState, setFilterState] = useState<FilterState>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  
+  // Lookups
+  const [customFields, setCustomFields] = useState<any[]>([]);
+
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
@@ -96,46 +96,38 @@ export default function QuotationsPage() {
 
   const fetchQuotations = useCallback(async () => {
     setLoading(true);
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
 
-    let matchingContactIds: string[] = [];
-    if (search.trim()) {
-      const { data: contacts } = await supabase
-        .from('contacts')
-        .select('id')
-        .ilike('name', `%${search.trim()}%`);
-      if (contacts && contacts.length > 0) {
-        matchingContactIds = contacts.map(c => c.id);
+    const [{ data: quotationsData }, { data: fieldsData }] = await Promise.all([
+      supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), creator:profiles!quotations_user_id_fkey(full_name, email)').eq('is_latest_version', true).order('created_at', { ascending: false }),
+      supabase.from('custom_fields').select('*').eq('module_name', 'quotation')
+    ]);
+
+    setCustomFields(fieldsData || []);
+
+    let enhancedQuotations = quotationsData || [];
+    if (quotationsData && quotationsData.length > 0) {
+      const quotationIds = quotationsData.map(q => q.id);
+      const { data: valuesData } = await supabase
+        .from('quotation_custom_values')
+        .select('*')
+        .in('quotation_id', quotationIds);
+
+      if (valuesData && valuesData.length > 0) {
+        enhancedQuotations = quotationsData.map(quotation => {
+          const quotationValues = valuesData.filter((v: any) => v.quotation_id === quotation.id);
+          const customData: any = {};
+          quotationValues.forEach((v: any) => {
+            customData[`cf_${v.custom_field_id}`] = v.value;
+          });
+          return { ...quotation, ...customData };
+        });
       }
     }
 
-    let query = supabase
-      .from('quotations')
-      .select('*, contact:contacts!quotations_contact_id_fkey(name, company)', { count: 'exact' })
-      .eq('is_latest_version', true);
-
-    if (search.trim()) {
-      if (matchingContactIds.length > 0) {
-        query = query.or(`quotation_number.ilike.%${search.trim()}%,contact_id.in.(${matchingContactIds.join(',')})`);
-      } else {
-        query = query.ilike('quotation_number', `%${search.trim()}%`);
-      }
-    }
-
-    query = query.order('created_at', { ascending: false }).range(from, to);
-
-    const { data, count, error } = await query;
-
-    if (error) {
-      toast.error('Failed to load quotations');
-    } else {
-      setQuotations(data || []);
-      setTotalCount(count || 0);
-      setSelectedIds(new Set());
-    }
+    setQuotations(enhancedQuotations);
     setLoading(false);
-  }, [supabase, page, search]);
+    setSelectedIds(new Set());
+  }, [supabase]);
 
   useEffect(() => {
     fetchQuotations();
@@ -153,46 +145,15 @@ export default function QuotationsPage() {
     }
   };
 
-  function confirmDelete(quotation: any) {
-    setDeleteTarget(quotation);
-    setDeleteConfirmOpen(true);
-  }
-
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
-
-    const { error } = await supabase
-      .from('quotations')
-      .delete()
-      .eq('id', deleteTarget.id);
-
-    if (error) {
-      toast.error('Failed to delete quotation');
-    } else {
-      toast.success('Quotation deleted');
-      fetchQuotations();
-    }
-
+    const { error } = await supabase.from('quotations').delete().eq('id', deleteTarget.id);
+    if (error) toast.error('Failed to delete quotation');
+    else { toast.success('Quotation deleted'); fetchQuotations(); }
     setDeleting(false);
     setDeleteConfirmOpen(false);
     setDeleteTarget(null);
-  }
-
-  function toggleSelection(id: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedIds(newSet);
-  }
-
-  function toggleAllSelection() {
-    if (selectedIds.size === quotations.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(quotations.map((q) => q.id)));
-    }
   }
 
   async function handleBulkDelete() {
@@ -211,64 +172,241 @@ export default function QuotationsPage() {
     setBulkActionLoading(false);
   }
 
-  async function handleSelectAllMatching() {
-    if (!search.trim()) return;
-    setBulkActionLoading(true);
-    
-    // Fetch all matching contact IDs first
-    let matchingContactIds: string[] = [];
-    const { data: contacts } = await supabase
-      .from('contacts')
-      .select('id')
-      .ilike('name', `%${search.trim()}%`);
-      
-    if (contacts && contacts.length > 0) {
-      matchingContactIds = contacts.map(c => c.id);
+  const columns: ColumnDef<any>[] = [
+    {
+      id: "quotation_number",
+      label: "Quotation Number",
+      type: "text",
+      render: (quotation) => (
+        <div className="flex items-center gap-2">
+          {!quotation.is_read && (
+            <div className="size-2 rounded-full bg-blue-500" title="Unread" />
+          )}
+          <span className="font-medium text-foreground">
+            {quotation.quotation_number}
+          </span>
+          {quotation.version > 1 && (
+            <Badge variant="secondary" className="font-normal text-[10px] px-1.5 py-0">
+              v{quotation.version}
+            </Badge>
+          )}
+        </div>
+      )
+    },
+    {
+      id: "date",
+      label: "Date",
+      type: "date",
+      render: (quotation) => <span className="text-muted-foreground">{quotation.date ? new Date(quotation.date).toLocaleDateString() : '-'}</span>
+    },
+    {
+      id: "contact",
+      label: "Quotation For",
+      type: "text",
+      render: (quotation) => (
+        quotation.contact ? (
+          <div className="flex flex-col">
+            <span className="font-medium text-foreground">{quotation.contact.name}</span>
+            {quotation.contact.company && (
+              <span className="text-xs text-muted-foreground">{quotation.contact.company}</span>
+            )}
+          </div>
+        ) : (
+          <span className="text-muted-foreground italic">Unknown</span>
+        )
+      )
+    },
+    {
+      id: "amount",
+      label: "Amount",
+      type: "text",
+      render: (quotation) => (
+        <span className="font-medium text-foreground">
+          ₹{quotation.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+      )
+    },
+    {
+      id: "status",
+      label: "Status",
+      type: "select",
+      options: Object.keys(STATUS_COLORS).map(s => ({ label: s, value: s })),
+      render: (quotation) => (
+        <Badge variant="outline" className={`font-normal ${STATUS_COLORS[quotation.status] || ''}`}>
+          {quotation.status}
+        </Badge>
+      )
+    },
+    {
+      id: "creator",
+      label: "Created By",
+      type: "text",
+      render: (quotation) => <span className="text-muted-foreground text-sm">{quotation.creator?.full_name || quotation.creator?.email || '-'}</span>
+    },
+    {
+      id: "actions",
+      label: "",
+      visibleByDefault: true,
+      render: (quotation) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger 
+            render={<Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" />}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-popover border-border">
+            <DropdownMenuItem 
+              className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/quotations/${quotation.id}`);
+              }}
+            >
+              <FileText className="size-4 mr-2" /> View
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setFormQuotationId(quotation.id);
+                setFormCloneId(undefined);
+                setFormVersionId(undefined);
+                setFormOpen(true);
+              }}
+            >
+              <Pencil className="size-4 mr-2" /> Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setFormQuotationId(undefined);
+                setFormCloneId(undefined);
+                setFormVersionId(quotation.id);
+                setFormOpen(true);
+              }}
+            >
+              <Copy className="size-4 mr-2" /> New Version
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-border" />
+            
+            {quotation.status === 'Pending' && (
+              <DropdownMenuItem 
+                className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
+                onClick={(e) => changeStatus(quotation.id, 'Sent', e)}
+              >
+                <Send className="size-4 mr-2 text-blue-500" /> Mark Sent
+              </DropdownMenuItem>
+            )}
+            {(quotation.status === 'Pending' || quotation.status === 'Sent') && (
+              <>
+                <DropdownMenuItem 
+                  className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
+                  onClick={(e) => changeStatus(quotation.id, 'Approved', e)}
+                >
+                  <Check className="size-4 mr-2 text-emerald-500" /> Approve
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
+                  onClick={(e) => changeStatus(quotation.id, 'Rejected', e)}
+                >
+                  <X className="size-4 mr-2 text-red-500" /> Reject
+                </DropdownMenuItem>
+              </>
+            )}
+            <DropdownMenuSeparator className="bg-border" />
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteTarget(quotation);
+                setDeleteConfirmOpen(true);
+              }}
+            >
+              <Trash2 className="size-4 mr-2" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
+    }
+  ];
+
+  // Append custom fields
+  customFields.forEach(cf => {
+    let type: any = "text";
+    let options: any[] = [];
+    if (cf.field_type === 'dropdown' || cf.field_type === 'radio' || cf.field_type === 'multi-select') {
+      type = "select";
+      const uniqueVals = Array.from(new Set(quotations.map(q => q[`cf_${cf.id}`]).filter(Boolean)));
+      options = uniqueVals.map(val => ({ label: val as string, value: val as string }));
+    } else if (cf.field_type === 'date') {
+      type = "date";
     }
 
-    let query = supabase.from('quotations').select('id').eq('is_latest_version', true);
-    
-    if (matchingContactIds.length > 0) {
-      query = query.or(`quotation_number.ilike.%${search.trim()}%,contact_id.in.(${matchingContactIds.join(',')})`);
-    } else {
-      query = query.ilike('quotation_number', `%${search.trim()}%`);
-    }
+    columns.splice(columns.length - 1, 0, {
+      id: `cf_${cf.id}`,
+      label: cf.field_name,
+      type: type,
+      options: options.length > 0 ? options : undefined,
+      visibleByDefault: false,
+      render: (quotation) => {
+        const val = quotation[`cf_${cf.id}`];
+        if (!val) return <span className="text-muted-foreground">-</span>;
+        if (cf.field_type === 'checkbox') return <span>{val === 'true' ? 'Yes' : 'No'}</span>;
+        if (cf.field_type === 'attachment') return <a href={val} target="_blank" rel="noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>View</a>;
+        return <span>{val}</span>;
+      }
+    });
+  });
 
-    const { data } = await query;
-    if (data) {
-      setSelectedIds(new Set(data.map(d => d.id)));
-      toast.success(`Selected all ${data.length} matching quotations`);
-    }
-    setBulkActionLoading(false);
-  }
+  const filteredQuotations = useMemo(() => {
+    return quotations.filter(quotation => {
+      // Global search
+      if (globalSearch && !quotation.quotation_number?.toLowerCase().includes(globalSearch.toLowerCase()) && !quotation.contact?.name?.toLowerCase().includes(globalSearch.toLowerCase())) {
+        return false;
+      }
 
+      // Column filters
+      for (const [colId, val] of Object.entries(filterState)) {
+        if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
 
-  const handleClone = (quotation: any) => {
-    setFormQuotationId(undefined);
-    setFormCloneId(quotation.id);
-    setFormVersionId(undefined);
-    setFormOpen(true);
-  };
-
-  const handleCreateVersion = (quotation: any) => {
-    setFormQuotationId(undefined);
-    setFormCloneId(undefined);
-    setFormVersionId(quotation.id);
-    setFormOpen(true);
-  };
-
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  const hasNext = page < totalPages - 1;
-  const hasPrev = page > 0;
+        if (colId === "quotation_number") {
+          if (!quotation.quotation_number?.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "status") {
+          if (!(val as string[]).includes(quotation.status)) return false;
+        } else if (colId === "contact") {
+          if (!quotation.contact?.name?.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "creator") {
+          const creatorName = quotation.creator?.full_name || quotation.creator?.email || "";
+          if (!creatorName.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "date") {
+          if (!isDateInFilter(quotation.date, val as string | string[])) return false;
+        } else if (colId.startsWith("cf_")) {
+          const cfVal = quotation[colId];
+          const typeOfCf = customFields.find(f => `cf_${f.id}` === colId)?.field_type;
+          
+          if (typeOfCf === 'date') {
+            if (!isDateInFilter(cfVal, val as string | string[])) return false;
+          } else if (typeOfCf === 'dropdown' || typeOfCf === 'radio' || typeOfCf === 'multi-select') {
+             if (!(val as string[]).includes(cfVal)) return false;
+          } else {
+             if (!cfVal?.toLowerCase().includes((val as string).toLowerCase())) return false;
+          }
+        }
+      }
+      return true;
+    });
+  }, [quotations, filterState, globalSearch, customFields]);
 
   return (
-    <div className="space-y-6">
-      <header className="flex shrink-0 items-center justify-between border-b border-border bg-card px-6 py-4">
+    <div className="flex flex-col h-full space-y-6">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Quotations</h1>
-          <p className="text-sm text-muted-foreground">Manage and track your quotations.</p>
+          <h1 className="text-2xl font-bold text-foreground">Quotations</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage and track your quotations.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {process.env.NODE_ENV === 'development' && (
             <Button 
               variant="secondary"
@@ -313,6 +451,11 @@ export default function QuotationsPage() {
               Seed Dummy
             </Button>
           )}
+          {canEditSettings && (
+            <Button variant="outline" onClick={() => setCustomFieldsOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
+              <SlidersHorizontal className="size-4 mr-2" /> Custom fields
+            </Button>
+          )}
           <Button 
             className="gap-2"
             onClick={() => {
@@ -328,276 +471,48 @@ export default function QuotationsPage() {
         </div>
       </header>
 
-      <div className="flex flex-col sm:flex-row gap-2 px-6">
+      <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl border border-border">
         <div className="relative w-full max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
+            value={globalSearch}
+            onChange={(e) => setGlobalSearch(e.target.value)}
             placeholder="Search by number or contact..."
-            className="pl-8 bg-card border-border text-foreground placeholder:text-muted-foreground"
+            className="pl-9 bg-background border-border"
           />
         </div>
-      </div>
-
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-md p-2 px-4 mx-6 shadow-sm animate-in fade-in slide-in-from-top-2">
-          <span className="text-sm font-medium text-primary">
-            {selectedIds.size} quotation{selectedIds.size > 1 ? 's' : ''} selected
-          </span>
-          {search.trim() && totalCount > selectedIds.size && (
-            <>
-              <div className="h-4 w-px bg-primary/20 mx-2" />
-              <Button variant="ghost" size="sm" disabled={bulkActionLoading} onClick={handleSelectAllMatching} className="text-primary hover:text-primary hover:bg-primary/20">
-                Select all {totalCount} matching quotations
-              </Button>
-            </>
-          )}
-          <div className="flex-1" />
-          <Button variant="destructive" size="sm" disabled={bulkActionLoading} onClick={handleBulkDelete}>
-            <Trash2 className="size-3.5 mr-2" />
-            Delete Selected
-          </Button>
-        </div>
-      )}
-
-      <div className="rounded-lg border border-border overflow-hidden mx-6">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="w-12 text-center">
-                <input
-                  type="checkbox"
-                  className="size-4 cursor-pointer accent-primary align-middle"
-                  checked={quotations.length > 0 && selectedIds.size === quotations.length}
-                  onChange={toggleAllSelection}
-                />
-              </TableHead>
-              <TableHead className="text-muted-foreground">Quotation Number</TableHead>
-              <TableHead className="text-muted-foreground">Date</TableHead>
-              <TableHead className="text-muted-foreground">Quotation For</TableHead>
-              <TableHead className="text-muted-foreground">Amount</TableHead>
-              <TableHead className="text-muted-foreground">Status</TableHead>
-              <TableHead className="text-muted-foreground hidden md:table-cell">Created By</TableHead>
-              <TableHead className="text-muted-foreground w-12" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow className="border-border">
-                <TableCell colSpan={8} className="text-center py-12">
-                  <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="size-6 animate-spin text-primary" />
-                    <p className="text-sm text-muted-foreground">Loading quotations...</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : quotations.length === 0 ? (
-              <TableRow className="border-border">
-                <TableCell colSpan={8} className="text-center py-12">
-                  <div className="flex flex-col items-center gap-2">
-                    <FileText className="size-8 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">No quotations found.</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 border-border text-muted-foreground hover:bg-muted"
-                        onClick={() => {
-                          setFormQuotationId(undefined);
-                          setFormCloneId(undefined);
-                          setFormVersionId(undefined);
-                          setFormOpen(true);
-                        }}
-                      >
-                        <Plus className="size-3.5 mr-2" />
-                        Create a quotation
-                      </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              quotations.map((quotation) => (
-                <TableRow
-                  key={quotation.id}
-                  className={`border-border hover:bg-muted/50 cursor-pointer ${
-                    !quotation.is_read ? 'bg-blue-500/5 font-semibold text-foreground dark:bg-blue-500/10' : ''
-                  }`}
-                  onClick={() => router.push(`/quotations/${quotation.id}`)}
-                >
-                  <TableCell onClick={(e) => e.stopPropagation()} className={`text-center ${!quotation.is_read ? 'border-l-4 border-l-blue-500 dark:border-l-blue-400' : 'border-l-4 border-l-transparent'}`}>
-                    <input
-                      type="checkbox"
-                      className="size-4 cursor-pointer accent-primary align-middle"
-                      checked={selectedIds.has(quotation.id)}
-                      onChange={(e) => toggleSelection(quotation.id, e as any)}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium text-foreground flex items-center gap-2">
-                    {quotation.quotation_number}
-                    {quotation.version > 1 && (
-                      <Badge variant="secondary" className="font-normal text-[10px] px-1.5 py-0">
-                        v{quotation.version}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {quotation.date ? new Date(quotation.date).toLocaleDateString() : '-'}
-                  </TableCell>
-                  <TableCell>
-                    {quotation.contact ? (
-                      <div className="flex flex-col">
-                        <span className="font-medium text-foreground">{quotation.contact.name}</span>
-                        {quotation.contact.company && (
-                          <span className="text-xs text-muted-foreground">{quotation.contact.company}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground italic">Unknown</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium text-foreground">
-                    ₹{quotation.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={`font-normal ${STATUS_COLORS[quotation.status] || ''}`}>
-                      {quotation.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground hidden md:table-cell text-sm">
-                    {quotation.creator?.full_name || quotation.creator?.email || '-'}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                          />
-                        }
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MoreHorizontal className="size-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-popover border-border">
-                        <DropdownMenuItem 
-                          className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/quotations/${quotation.id}`);
-                          }}
-                        >
-                          <FileText className="size-4 mr-2" />
-                          View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFormQuotationId(quotation.id);
-                            setFormCloneId(undefined);
-                            setFormVersionId(undefined);
-                            setFormOpen(true);
-                          }}
-                        >
-                          <Pencil className="size-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCreateVersion(quotation);
-                          }}
-                        >
-                          <Copy className="size-4 mr-2" />
-                          New Version
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-border" />
-                        
-                        {quotation.status === 'Pending' && (
-                          <DropdownMenuItem 
-                            className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-                            onClick={(e) => changeStatus(quotation.id, 'Sent', e)}
-                          >
-                            <Send className="size-4 mr-2 text-blue-500" />
-                            Mark Sent
-                          </DropdownMenuItem>
-                        )}
-                        {(quotation.status === 'Pending' || quotation.status === 'Sent') && (
-                          <>
-                            <DropdownMenuItem 
-                              className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-                              onClick={(e) => changeStatus(quotation.id, 'Approved', e)}
-                            >
-                              <Check className="size-4 mr-2 text-emerald-500" />
-                              Approve
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-                              onClick={(e) => changeStatus(quotation.id, 'Rejected', e)}
-                            >
-                              <X className="size-4 mr-2 text-red-500" />
-                              Reject
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                        <DropdownMenuSeparator className="bg-border" />
-
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            confirmDelete(quotation);
-                          }}
-                        >
-                          <Trash2 className="size-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-6">
-          <p className="text-xs text-muted-foreground">
-            Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}
-          </p>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              disabled={!hasPrev}
-              onClick={() => setPage((p) => p - 1)}
-              className="border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-            <span className="text-xs text-muted-foreground px-2">
-              Page {page + 1} of {totalPages}
+        
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 ml-auto shrink-0 bg-primary/10 border border-primary/20 rounded-md p-1 px-3">
+            <span className="text-sm font-medium text-primary mr-2 hidden sm:inline-block">
+              {selectedIds.size} selected
             </span>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              disabled={!hasNext}
-              onClick={() => setPage((p) => p + 1)}
-              className="border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-            >
-              <ChevronRight className="size-4" />
+            <Button variant="destructive" size="sm" className="h-8" disabled={bulkActionLoading} onClick={handleBulkDelete}>
+              {bulkActionLoading ? <Loader2 className="size-3.5 animate-spin mr-2" /> : <Trash2 className="size-3.5 mr-2" />} Delete
             </Button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={filteredQuotations}
+        filterState={filterState}
+        onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
+        storageKey="wacrm_quotations_table_columns"
+        isLoading={loading}
+        rowKey={(quotation) => quotation.id}
+        onRowClick={(quotation) => router.push(`/quotations/${quotation.id}`)}
+        selection={{
+          selectedIds: selectedIds,
+          onSelectAll: (checked) => setSelectedIds(checked ? new Set(filteredQuotations.map(q => q.id)) : new Set()),
+          onSelect: (id, checked) => setSelectedIds(prev => {
+             const next = new Set(prev);
+             if (checked) next.add(id); else next.delete(id);
+             return next;
+          })
+        }}
+      />
 
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
@@ -640,6 +555,8 @@ export default function QuotationsPage() {
           }}
         />
       )}
+      
+      {canEditSettings && <CustomFieldsManager open={customFieldsOpen} onOpenChange={setCustomFieldsOpen} />}
     </div>
   );
 }

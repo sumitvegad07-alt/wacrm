@@ -64,7 +64,9 @@ export function CustomFieldsPanel() {
   
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState('text');
-  const [newModule, setNewModule] = useState<'contact'|'deal'|'task'|'product'>('contact');
+  const [newModule, setNewModule] = useState<'contact'|'deal'|'task'|'product'|'lead'>('contact');
+  const [newSourceType, setNewSourceType] = useState<'static'|'module'>('static');
+  const [newSourceModule, setNewSourceModule] = useState<'product'|'user'|'contact'|'lead'|'deal'>('product');
   const [newChoices, setNewChoices] = useState<string[]>(['']);
   
   const [creating, setCreating] = useState(false);
@@ -88,10 +90,10 @@ export function CustomFieldsPanel() {
     }
   }, [accountId, fetchFields]);
 
-  function isDuplicate(name: string, exceptId?: string): boolean {
+  function isDuplicate(name: string, module: string, exceptId?: string): boolean {
     const lower = name.toLowerCase();
     return fields.some(
-      (f) => f.id !== exceptId && f.field_name.toLowerCase() === lower
+      (f) => f.id !== exceptId && f.field_name.toLowerCase() === lower && f.module_name === module
     );
   }
 
@@ -104,13 +106,13 @@ export function CustomFieldsPanel() {
       toast.error('Your profile is not linked to an account.');
       return;
     }
-    if (isDuplicate(name)) {
-      toast.error(`A field named "${name}" already exists.`);
+    if (isDuplicate(name, newModule)) {
+      toast.error(`A field named "${name}" already exists for the ${newModule} module.`);
       return;
     }
 
     let options = null;
-    if (needsChoices) {
+    if (needsChoices && newSourceType === 'static') {
       const validChoices = newChoices.map(c => c.trim()).filter(Boolean);
       if (validChoices.length === 0) {
         toast.error('Please provide at least one choice for this field type.');
@@ -125,6 +127,8 @@ export function CustomFieldsPanel() {
       field_type: newType,
       module_name: newModule,
       field_options: options,
+      source_type: needsChoices ? newSourceType : 'static',
+      source_module: (needsChoices && newSourceType === 'module') ? newSourceModule : null,
       user_id: user.id,
       account_id: accountId,
     });
@@ -138,6 +142,8 @@ export function CustomFieldsPanel() {
     setNewName('');
     setNewType('text');
     setNewModule('contact');
+    setNewSourceType('static');
+    setNewSourceModule('product');
     setNewChoices(['']);
     await fetchFields();
   }
@@ -148,8 +154,8 @@ export function CustomFieldsPanel() {
   ): Promise<boolean> {
     const name = nextName.trim();
     if (!name || name === field.field_name) return true;
-    if (isDuplicate(name, field.id)) {
-      toast.error(`A field named "${name}" already exists.`);
+    if (isDuplicate(name, field.module_name, field.id)) {
+      toast.error(`A field named "${name}" already exists for the ${field.module_name} module.`);
       return false;
     }
     setBusyId(field.id);
@@ -207,10 +213,11 @@ export function CustomFieldsPanel() {
           />
           <select
             value={newModule}
-            onChange={(e) => setNewModule(e.target.value as 'contact'|'deal'|'task'|'product')}
+            onChange={(e) => setNewModule(e.target.value as 'contact'|'deal'|'task'|'product'|'lead')}
             className="h-9 rounded-md border border-border bg-background px-2.5 text-sm outline-none w-28 text-muted-foreground"
           >
             <option value="contact">Contact</option>
+            <option value="lead">Lead</option>
             <option value="deal">Deal</option>
             <option value="task">Task</option>
             <option value="product">Product</option>
@@ -246,39 +253,82 @@ export function CustomFieldsPanel() {
         </div>
 
         {needsChoices && (
-          <div className="space-y-2 pl-2 border-l-2 border-border/50">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Options</p>
-            {newChoices.map((choice, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Input
-                  value={choice}
-                  onChange={(e) => {
-                    const next = [...newChoices];
-                    next[i] = e.target.value;
-                    setNewChoices(next);
-                  }}
-                  placeholder={`Option ${i + 1}`}
-                  className="h-8 bg-background text-sm flex-1"
+          <div className="space-y-4 pl-2 border-l-2 border-border/50">
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input 
+                  type="radio" 
+                  checked={newSourceType === 'static'}
+                  onChange={() => setNewSourceType('static')}
+                  className="accent-primary"
                 />
+                Static List
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input 
+                  type="radio" 
+                  checked={newSourceType === 'module'}
+                  onChange={() => setNewSourceType('module')}
+                  className="accent-primary"
+                />
+                From Module
+              </label>
+            </div>
+
+            {newSourceType === 'static' ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Options</p>
+                {newChoices.map((choice, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      value={choice}
+                      onChange={(e) => {
+                        const next = [...newChoices];
+                        next[i] = e.target.value;
+                        setNewChoices(next);
+                      }}
+                      placeholder={`Option ${i + 1}`}
+                      className="h-8 bg-background text-sm flex-1"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setNewChoices(newChoices.filter((_, idx) => idx !== i))}
+                      disabled={newChoices.length === 1}
+                      className="text-muted-foreground hover:text-red-400"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setNewChoices(newChoices.filter((_, idx) => idx !== i))}
-                  disabled={newChoices.length === 1}
-                  className="text-muted-foreground hover:text-red-400"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setNewChoices([...newChoices, ''])}
+                  className="h-8 text-xs bg-background"
                 >
-                  <Trash2 className="size-3.5" />
+                  <Plus className="size-3.5 mr-1" /> Add Option
                 </Button>
               </div>
-            ))}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setNewChoices([...newChoices, ''])}
-              className="h-8 text-xs bg-background"
-            >
-              <Plus className="size-3.5 mr-1" /> Add Option
-            </Button>
+            ) : (
+              <div className="space-y-2 max-w-sm">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Source Module</p>
+                <select
+                  value={newSourceModule}
+                  onChange={(e) => setNewSourceModule(e.target.value as any)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none"
+                >
+                  <option value="product">Products</option>
+                  <option value="user">Users (Team)</option>
+                  <option value="contact">Contacts</option>
+                  <option value="lead">Leads</option>
+                  <option value="deal">Deals</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  The dropdown options will automatically sync with all active records in this module.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

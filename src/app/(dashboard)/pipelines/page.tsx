@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { Pipeline, PipelineStage, Deal } from "@/types";
+import type { Pipeline, PipelineStage, Deal, CustomField } from "@/types";
 import { PipelineBoard } from "@/components/pipelines/pipeline-board";
 import { PipelineSettings } from "@/components/pipelines/pipeline-settings";
 import { DealForm } from "@/components/pipelines/deal-form";
@@ -26,24 +26,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings, Upload } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, Upload, LayoutDashboard, List } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
 import { GatedButton } from "@/components/ui/gated-button";
 
-// Pipeline creation is admin-class (settings-tier write under
-// the new RLS); deal creation is operational and only requires
-// agent+. The two CTAs gate on different `useCan` capabilities,
-// not on different copy.
+import { DataTable } from "@/components/ui/data-table/data-table";
+import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 
-// Spec-defined seed — name and color per the product spec.
 const SPEC_DEFAULT_STAGES = [
-  { name: "New Lead", color: "#3b82f6", position: 0 }, // blue
-  { name: "Qualified", color: "#eab308", position: 1 }, // yellow
-  { name: "Proposal Sent", color: "#f97316", position: 2 }, // orange
-  { name: "Negotiation", color: "#8b5cf6", position: 3 }, // purple
-  { name: "Won", color: "#22c55e", position: 4 }, // green
+  { name: "New Lead", color: "#3b82f6", position: 0 },
+  { name: "Qualified", color: "#eab308", position: 1 },
+  { name: "Proposal Sent", color: "#f97316", position: 2 },
+  { name: "Negotiation", color: "#8b5cf6", position: 3 },
+  { name: "Won", color: "#22c55e", position: 4 },
 ];
 
 export default function PipelinesPage() {
@@ -57,8 +54,15 @@ export default function PipelinesPage() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
   const [stages, setStages] = useState<PipelineStage[]>([]);
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [deals, setDeals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Toggle view
+  const [viewMode, setViewMode] = useState<"board" | "list">("board");
+
+  // DataTable state
+  const [filterState, setFilterState] = useState<FilterState>({});
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
   // Dialog / sheet state
   const [newPipelineOpen, setNewPipelineOpen] = useState(false);
@@ -66,15 +70,12 @@ export default function PipelinesPage() {
   const [creating, setCreating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Deal form state is lifted here so both the top-bar "Add Deal" and
-  // the per-column "+" trigger the same Sheet.
   const [dealFormOpen, setDealFormOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [defaultStageId, setDefaultStageId] = useState<string>("");
 
   const [importDealsOpen, setImportDealsOpen] = useState(false);
 
-  // Guard against double-seeding (React StrictMode double-effect in dev).
   const seedAttempted = useRef(false);
 
   const loadPipelines = useCallback(async () => {
@@ -103,12 +104,39 @@ export default function PipelinesPage() {
 
   const loadDeals = useCallback(
     async (pipelineId: string) => {
-      const { data } = await supabase
+      const { data: dealsData } = await supabase
         .from("deals")
         .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
         .eq("pipeline_id", pipelineId)
         .order("created_at", { ascending: false });
-      return (data ?? []) as Deal[];
+
+      const { data: fieldsData } = await supabase
+        .from("custom_fields")
+        .select("*")
+        .eq("module_name", "deal");
+
+      setCustomFields(fieldsData || []);
+
+      let enhancedDeals = dealsData || [];
+      if (dealsData && dealsData.length > 0) {
+        const dealIds = dealsData.map((d: any) => d.id);
+        const { data: valuesData } = await supabase
+          .from("deal_custom_values")
+          .select("*")
+          .in("deal_id", dealIds);
+          
+        if (valuesData && valuesData.length > 0) {
+          enhancedDeals = dealsData.map((deal: any) => {
+            const dealValues = valuesData.filter((v: any) => v.deal_id === deal.id);
+            const customData: any = {};
+            dealValues.forEach((v: any) => {
+              customData[`cf_${v.custom_field_id}`] = v.value;
+            });
+            return { ...deal, ...customData };
+          });
+        }
+      }
+      return enhancedDeals as Deal[];
     },
     [supabase],
   );
@@ -119,7 +147,6 @@ export default function PipelinesPage() {
     } = await supabase.auth.getSession();
     const user = session?.user;
     if (!user) return null;
-    // pipelines.account_id is NOT NULL post-017 with no DB default.
     if (!accountId) return null;
 
     const { data: pipeline, error } = await supabase
@@ -144,7 +171,6 @@ export default function PipelinesPage() {
     return pipeline as Pipeline;
   }, [supabase, accountId]);
 
-  // Initial load + seed-if-empty
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -173,15 +199,9 @@ export default function PipelinesPage() {
     };
   }, [loadPipelines, seedDefaultPipeline]);
 
-  // Load stages + deals whenever selected pipeline changes.
-  // Clearing on no-selection is a legitimate sync with URL/prop
-  // state; the load completion uses async setters inside promise
-  // callbacks (not synchronous in the effect body).
   useEffect(() => {
     if (!selectedPipelineId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStages([]);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDeals([]);
       return;
     }
@@ -220,7 +240,6 @@ export default function PipelinesPage() {
 
   const handleDealMoved = useCallback(
     async (dealId: string, newStageId: string) => {
-      // Optimistic update — board already animated; just persist.
       setDeals((prev) =>
         prev.map((d) => (d.id === dealId ? { ...d, stage_id: newStageId } : d)),
       );
@@ -271,7 +290,6 @@ export default function PipelinesPage() {
       setCreating(false);
       return;
     }
-    // pipelines.account_id is NOT NULL post-017 with no DB default.
     if (!accountId) {
       toast.error("Your profile is not linked to an account.");
       setCreating(false);
@@ -308,6 +326,130 @@ export default function PipelinesPage() {
 
   const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
 
+  // Table logic
+  const columns: ColumnDef<any>[] = [
+    {
+      id: "title",
+      label: "Deal Title",
+      type: "text",
+      render: (deal) => <span className="font-medium text-foreground">{deal.title}</span>
+    },
+    {
+      id: "value",
+      label: "Value",
+      type: "text",
+      render: (deal) => <span className="text-muted-foreground">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(deal.value || 0)}</span>
+    },
+    {
+      id: "stage_id",
+      label: "Stage",
+      type: "select",
+      options: stages.map(s => ({ label: s.name, value: s.id })),
+      render: (deal) => {
+        const stage = stages.find(s => s.id === deal.stage_id);
+        return <span className="px-2 py-1 rounded-full text-xs" style={{ backgroundColor: `${stage?.color}20`, color: stage?.color }}>{stage?.name || '-'}</span>
+      }
+    },
+    {
+      id: "contact",
+      label: "Contact",
+      type: "text",
+      render: (deal) => <span>{deal.contact?.name || "-"}</span>
+    },
+    {
+      id: "assignee",
+      label: "Assignee",
+      type: "text",
+      render: (deal) => <span>{deal.assignee?.full_name || "-"}</span>
+    },
+    {
+      id: "created_at",
+      label: "Created at",
+      type: "date",
+      render: (deal) => (
+        <span className="text-muted-foreground text-sm">
+          {new Date(deal.created_at).toLocaleDateString()}
+        </span>
+      )
+    },
+  ];
+
+  // Append custom fields
+  customFields.forEach(cf => {
+    let type: any = "text";
+    let options: any[] = [];
+    if (cf.field_type === 'dropdown' || cf.field_type === 'radio' || cf.field_type === 'multi-select') {
+      type = "select";
+      const uniqueVals = Array.from(new Set(deals.map(d => d[`cf_${cf.id}`]).filter(Boolean)));
+      options = uniqueVals.map(val => ({ label: val as string, value: val as string }));
+    } else if (cf.field_type === 'date') {
+      type = "date";
+    }
+
+    columns.push({
+      id: `cf_${cf.id}`,
+      label: cf.field_name,
+      type: type,
+      options: options.length > 0 ? options : undefined,
+      visibleByDefault: false,
+      render: (deal) => {
+        const val = deal[`cf_${cf.id}`];
+        if (!val) return <span className="text-muted-foreground">-</span>;
+        if (cf.field_type === 'checkbox') return <span>{val === 'true' ? 'Yes' : 'No'}</span>;
+        if (cf.field_type === 'attachment') return <a href={val} target="_blank" rel="noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>View</a>;
+        return <span>{val}</span>;
+      }
+    });
+  });
+
+  const filteredDeals = useMemo(() => {
+    return deals.filter(deal => {
+      for (const [colId, val] of Object.entries(filterState)) {
+        if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
+
+        if (colId === "title") {
+          if (!deal.title?.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "contact") {
+          if (!deal.contact?.name?.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "assignee") {
+          if (!deal.assignee?.full_name?.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "stage_id") {
+          if (!(val as string[]).includes(deal.stage_id)) return false;
+        } else if (colId === "created_at") {
+          const leadDate = new Date(deal.created_at);
+          const now = new Date();
+          
+          if (Array.isArray(val)) {
+            const start = val[0] ? new Date(val[0]) : null;
+            const end = val[1] ? new Date(val[1]) : null;
+            if (end) end.setHours(23, 59, 59, 999);
+            if (start && leadDate < start) return false;
+            if (end && leadDate > end) return false;
+          } else if (val === "today") {
+            if (leadDate.toDateString() !== now.toDateString()) return false;
+          } else if (val === "yesterday") {
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (leadDate.toDateString() !== yesterday.toDateString()) return false;
+          } else if (val === "current_month") {
+            if (leadDate.getMonth() !== now.getMonth() || leadDate.getFullYear() !== now.getFullYear()) return false;
+          } else if (val === "current_year") {
+            if (leadDate.getFullYear() !== now.getFullYear()) return false;
+          }
+        } else if (colId.startsWith("cf_")) {
+          const cfVal = deal[colId];
+          const typeOfCf = customFields.find(f => `cf_${f.id}` === colId)?.field_type;
+          if (typeOfCf === 'dropdown' || typeOfCf === 'radio' || typeOfCf === 'multi-select') {
+             if (!(val as string[]).includes(cfVal)) return false;
+          } else {
+             if (!cfVal?.toLowerCase().includes((val as string).toLowerCase())) return false;
+          }
+        }
+      }
+      return true;
+    });
+  }, [deals, filterState, customFields]);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -326,10 +468,8 @@ export default function PipelinesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          {/* Pipeline selector dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors data-[popup-open]:bg-muted"
@@ -375,6 +515,26 @@ export default function PipelinesPage() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* View Toggle */}
+          <div className="flex items-center p-0.5 bg-muted rounded-md border border-border">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode("board")}
+              className={`h-7 px-2 text-xs ${viewMode === "board" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}
+            >
+              <LayoutDashboard className="size-3.5 mr-1" /> Board
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode("list")}
+              className={`h-7 px-2 text-xs ${viewMode === "list" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}
+            >
+              <List className="size-3.5 mr-1" /> List
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -412,7 +572,6 @@ export default function PipelinesPage() {
         </div>
       </div>
 
-      {/* Board */}
       {pipelines.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20">
           <GitBranch className="h-12 w-12 text-muted-foreground" />
@@ -435,17 +594,31 @@ export default function PipelinesPage() {
       ) : (
         <>
           <PipelineAnalytics stages={stages} deals={deals} />
-          <PipelineBoard
-            stages={stages}
-            deals={deals}
-            onDealMoved={handleDealMoved}
-            onAddDeal={handleAddDeal}
-            onEditDeal={handleEditDeal}
-          />
+          
+          {viewMode === "board" ? (
+            <PipelineBoard
+              stages={stages}
+              deals={deals}
+              onDealMoved={handleDealMoved}
+              onAddDeal={handleAddDeal}
+              onEditDeal={handleEditDeal}
+            />
+          ) : (
+            <div className="mt-4">
+              <DataTable
+                columns={columns}
+                data={filteredDeals}
+                filterState={filterState}
+                onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
+                storageKey={`wacrm_deals_table_${selectedPipelineId}`}
+                onRowClick={(deal) => handleEditDeal(deal)}
+                rowKey={(deal) => deal.id}
+              />
+            </div>
+          )}
         </>
       )}
 
-      {/* New Pipeline Dialog */}
       <Dialog open={newPipelineOpen} onOpenChange={setNewPipelineOpen}>
         <DialogContent className="sm:max-w-sm bg-popover border-border">
           <DialogHeader>
@@ -485,7 +658,6 @@ export default function PipelinesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Pipeline Settings */}
       {selectedPipeline && (
         <PipelineSettings
           open={settingsOpen}
@@ -501,7 +673,6 @@ export default function PipelinesPage() {
         />
       )}
 
-      {/* Deal Form (Sheet) */}
       <DealForm
         open={dealFormOpen}
         onOpenChange={setDealFormOpen}

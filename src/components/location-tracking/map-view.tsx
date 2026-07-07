@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import { useEffect, useState, useRef } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, ZoomControl } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -21,7 +21,27 @@ interface Point {
   label?: string;
 }
 
-export default function MapView({ points }: { points: Point[] }) {
+export type MapLayerType = "standard" | "satellite";
+
+function MapUpdater({ points }: { points: Point[] }) {
+  const map = useMap();
+  const initialFitted = useRef(false);
+
+  useEffect(() => {
+    if (points.length > 0 && !initialFitted.current) {
+      initialFitted.current = true;
+      if (points.length === 1) {
+        map.flyTo([points[0].lat, points[0].lng], 15);
+      } else {
+        const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+  }, [points, map]);
+  return null;
+}
+
+export default function MapView({ points, layerType = "standard" }: { points: Point[], layerType?: MapLayerType }) {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -38,12 +58,22 @@ export default function MapView({ points }: { points: Point[] }) {
       <MapContainer
         center={center as [number, number]}
         zoom={13}
-        style={{ height: "100%", width: "100%", zIndex: 0 }}
+        zoomControl={false}
+        style={{ height: "100%", width: "100%" }}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <ZoomControl position="bottomright" />
+        {layerType === "standard" ? (
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+        ) : (
+          <TileLayer
+            attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          />
+        )}
+        <MapUpdater points={points} />
         
         {points.map((point, idx) => (
           <Marker key={idx} position={[point.lat, point.lng]}>

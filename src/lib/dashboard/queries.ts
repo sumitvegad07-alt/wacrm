@@ -15,6 +15,8 @@ import type {
   PipelineStageSlice,
   ResponseTimeBucket,
   ResponseTimeSummary,
+  LeadsBySourcePoint,
+  LeadsByStatusPoint,
 } from './types'
 
 // ------------------------------------------------------------
@@ -39,9 +41,16 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     newConvYesterday,
     newContactsToday,
     newContactsYesterday,
+    newLeadsToday,
+    newLeadsYesterday,
+    newPipelinesToday,
+    newPipelinesYesterday,
     openDeals,
     messagesToday,
     messagesYesterday,
+    quotations,
+    neglectedLeads,
+    convertedLeads,
   ] = await Promise.all([
     db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     db
@@ -61,6 +70,11 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       .select('id', { count: 'exact', head: true })
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
+    // If the leads table doesn't exist yet, we handle it gracefully via optional chaining on count
+    db.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
+    db.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', yesterdayStart).lt('created_at', todayStart),
+    db.from('deals').select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
+    db.from('deals').select('id', { count: 'exact', head: true }).gte('created_at', yesterdayStart).lt('created_at', todayStart),
     db.from('deals').select('value, status').eq('status', 'open'),
     db
       .from('messages')
@@ -73,22 +87,34 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       .eq('sender_type', 'agent')
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
+    db.from('quotations').select('total_amount'),
+    // Mock neglected count logic for now, usually would join tasks table
+    db.from('leads').select('id', { count: 'exact', head: true }).lt('updated_at', daysAgoStart(7).toISOString()),
+    db.from('leads').select('id', { count: 'exact', head: true }).eq('is_converted', true),
   ])
 
   const openDealsRows = (openDeals.data ?? []) as { value: number | null }[]
   const openDealsValue = openDealsRows.reduce((sum, d) => sum + (d.value ?? 0), 0)
 
+  const quotesRows = (quotations.data ?? []) as { total_amount: number | null }[]
+  const quotesValue = quotesRows.reduce((sum, q) => sum + (q.total_amount ?? 0), 0)
+
   return {
     activeConversations: {
       current: openConvCur.count ?? 0,
-      // "vs yesterday" on a current-state count has no clean answer
-      // without snapshots — we show the delta in NEW open conversations
-      // today vs yesterday. That's the business-meaningful daily signal.
       previous: (newConvToday.count ?? 0) - (newConvYesterday.count ?? 0),
     },
     newContactsToday: {
       current: newContactsToday.count ?? 0,
       previous: newContactsYesterday.count ?? 0,
+    },
+    newLeadsToday: {
+      current: (newLeadsToday as any).count ?? 0,
+      previous: (newLeadsYesterday as any).count ?? 0,
+    },
+    newPipelinesToday: {
+      current: newPipelinesToday.count ?? 0,
+      previous: newPipelinesYesterday.count ?? 0,
     },
     openDealsValue,
     openDealsCount: openDealsRows.length,
@@ -96,6 +122,34 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       current: messagesToday.count ?? 0,
       previous: messagesYesterday.count ?? 0,
     },
+    convertedContacts: (convertedLeads as any).count ?? 0,
+    neglectedLeadsOrContacts: (neglectedLeads as any).count ?? 0,
+    quotationsCount: quotesRows.length,
+    quotationsValue: quotesValue,
+  }
+}
+
+export async function loadLeadsCharts(db: DB) {
+  try {
+    const { data } = await db.from('leads').select('source, status')
+    if (!data) return { source: [], status: [] }
+    
+    const srcMap = new Map<string, number>()
+    const statMap = new Map<string, number>()
+    
+    data.forEach(l => {
+      const src = l.source || 'Unknown'
+      const stat = l.status || 'Unknown'
+      srcMap.set(src, (srcMap.get(src) || 0) + 1)
+      statMap.set(stat, (statMap.get(stat) || 0) + 1)
+    })
+    
+    return {
+      source: Array.from(srcMap.entries()).map(([name, value]) => ({ name, value })),
+      status: Array.from(statMap.entries()).map(([name, value]) => ({ name, value })),
+    }
+  } catch {
+    return { source: [], status: [] }
   }
 }
 

@@ -10,9 +10,25 @@ export interface MetricDelta {
 export interface MetricsBundle {
   activeConversations: MetricDelta
   newContactsToday: MetricDelta
+  newLeadsToday: MetricDelta
   openDealsValue: number
   openDealsCount: number
   messagesSentToday: MetricDelta
+  newPipelinesToday: MetricDelta
+  convertedContacts: number
+  neglectedLeadsOrContacts: number
+  quotationsCount: number
+  quotationsValue: number
+}
+
+export interface LeadsBySourcePoint {
+  name: string
+  value: number
+}
+
+export interface LeadsByStatusPoint {
+  name: string
+  value: number
 }
 
 export interface ConversationsSeriesPoint {

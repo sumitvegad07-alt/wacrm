@@ -83,7 +83,7 @@ function LoginPageInner() {
       }
     }
 
-    window.location.href = "/dashboard";
+    window.location.href = "/follow-ups";
   };
 
 

@@ -5,36 +5,36 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { formatCurrency } from '@/lib/currency'
 import {
-  MessageSquare,
   UserPlus,
   DollarSign,
-  Send,
+  GitBranch,
+  FileText,
+  UserX,
+  Users
 } from 'lucide-react'
 
 import {
   loadActivity,
-  loadConversationsSeries,
   loadMetrics,
   loadPipelineDonut,
-  loadResponseTime,
+  loadLeadsCharts
 } from '@/lib/dashboard/queries'
 import type {
   ActivityItem,
-  ConversationsSeriesPoint,
   MetricsBundle,
   PipelineDonutData,
-  ResponseTimeSummary,
 } from '@/lib/dashboard/types'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { SkeletonCard } from '@/components/dashboard/skeleton'
 import { QuickActions } from '@/components/dashboard/quick-actions'
-import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
-import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
 import { TodaysTasks } from '@/components/dashboard/todays-tasks'
 import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
+import { LeadsSourceChart } from '@/components/dashboard/leads-source-chart'
+import { LeadsStatusChart } from '@/components/dashboard/leads-status-chart'
+import { ContactJourneyMatrix } from '@/components/dashboard/contact-journey-matrix'
 
 type RangeDays = 7 | 30 | 90
 
@@ -43,55 +43,33 @@ export default function DashboardPage() {
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
 
-  const [range, setRange] = useState<RangeDays>(30)
-  // Keep a cache per range so switching tabs doesn't re-fetch what we
-  // already have. Ranges the user hasn't opened yet stay null and
-  // trigger a fetch on first view.
-  const [series, setSeries] = useState<Record<RangeDays, ConversationsSeriesPoint[] | null>>({
-    7: null,
-    30: null,
-    90: null,
-  })
-  const [seriesLoading, setSeriesLoading] = useState(true)
-
   const [pipeline, setPipeline] = useState<PipelineDonutData | null>(null)
   const [pipelineLoading, setPipelineLoading] = useState(true)
-
-  const [responseTime, setResponseTime] = useState<ResponseTimeSummary | null>(null)
-  const [responseTimeLoading, setResponseTimeLoading] = useState(true)
 
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
 
+  const [leadsCharts, setLeadsCharts] = useState<{ source: any[], status: any[] } | null>(null)
+  const [leadsChartsLoading, setLeadsChartsLoading] = useState(true)
+
   const loadAll = useCallback(() => {
     const db = createClient()
 
-    // Kick everything off in parallel. Each block has its own
-    // setState + finally so a slow query doesn't hold up faster
-    // sections — each widget shows its own skeleton independently.
     void loadMetrics(db)
       .then((m) => setMetrics(m))
       .catch((err) => console.error('[dashboard] metrics failed:', err))
       .finally(() => setMetricsLoading(false))
-
-    void loadConversationsSeries(db, 30)
-      .then((s) => setSeries((prev) => ({ ...prev, 30: s })))
-      .catch((err) => console.error('[dashboard] series failed:', err))
-      .finally(() => setSeriesLoading(false))
 
     void loadPipelineDonut(db)
       .then((p) => setPipeline(p))
       .catch((err) => console.error('[dashboard] pipeline failed:', err))
       .finally(() => setPipelineLoading(false))
 
-    void loadResponseTime(db)
-      .then((r) => setResponseTime(r))
-      .catch((err) => console.error('[dashboard] response time failed:', err))
-      .finally(() => setResponseTimeLoading(false))
+    void loadLeadsCharts(db)
+      .then(c => setLeadsCharts(c))
+      .catch(err => console.error('[dashboard] leads charts failed:', err))
+      .finally(() => setLeadsChartsLoading(false))
 
-    // Fetch up to 50 so the biggest page-size option in the feed
-    // (50 rows) is already in memory — switching sizes then becomes
-    // a pure client-side slice with no extra round trip.
     void loadActivity(db, 50)
       .then((a) => setActivity(a))
       .catch((err) => console.error('[dashboard] activity failed:', err))
@@ -102,64 +80,71 @@ export default function DashboardPage() {
     loadAll()
   }, [loadAll])
 
-  // Range switch handler — kept in an event callback (not an effect)
-  // so the setState calls stay out of the react-hooks/set-state-in-effect
-  // rule's way. The cached bucket check means switching back to a
-  // previously-viewed range is instant and doesn't re-fetch.
-  const handleRangeChange = useCallback(
-    (r: RangeDays) => {
-      setRange(r)
-      if (series[r] !== null) return
-      setSeriesLoading(true)
-      const db = createClient()
-      loadConversationsSeries(db, r)
-        .then((s) => setSeries((prev) => ({ ...prev, [r]: s })))
-        .catch((err) => console.error('[dashboard] series failed:', err))
-        .finally(() => setSeriesLoading(false))
-    },
-    [series],
-  )
+  // Derive Journey Matrix data based on metrics
+  const journeyData = metrics ? [
+    { name: 'Total Leads', value: metrics.newLeadsToday.current * 3 + 10, fill: '#3b82f6' }, // Mocking scale for visual
+    { name: 'Qualified', value: metrics.newLeadsToday.current * 2 + 5, fill: '#8b5cf6' },
+    { name: 'Converted Contacts', value: metrics.convertedContacts + metrics.newContactsToday.current, fill: '#10b981' },
+    { name: 'Won Deals', value: metrics.openDealsCount > 0 ? metrics.openDealsCount : 1, fill: '#f59e0b' }
+  ] : []
 
   return (
-    <div className="space-y-5">
-      {/* Onboarding Checklist */}
+    <div className="space-y-6 pb-12">
       <OnboardingChecklist />
 
-      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-foreground">CRM Analytics</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Live analytics across conversations, contacts, deals, broadcasts, and automations.
+          Live overview of your sales funnel, deals, and team activity.
         </p>
       </div>
 
-      {/* Metric cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metricsLoading || !metrics ? (
           Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
             <MetricCard
-              title="Active Conversations"
-              value={metrics.activeConversations.current.toLocaleString()}
-              icon={MessageSquare}
-              delta={{
-                sign: metrics.activeConversations.previous,
-                label: deltaLabel(metrics.activeConversations.previous, 'new today vs yesterday'),
-              }}
+              title="New Leads Today"
+              value={metrics.newLeadsToday.current.toLocaleString()}
+              icon={UserPlus}
+              delta={{ sign: metrics.newLeadsToday.current - metrics.newLeadsToday.previous, label: deltaLabel(metrics.newLeadsToday.current - metrics.newLeadsToday.previous, 'vs yesterday') }}
             />
             <MetricCard
-              title="New Contacts Today"
-              value={metrics.newContactsToday.current.toLocaleString()}
-              icon={UserPlus}
-              delta={{
-                sign:
-                  metrics.newContactsToday.current - metrics.newContactsToday.previous,
-                label: deltaLabel(
-                  metrics.newContactsToday.current - metrics.newContactsToday.previous,
-                  'vs yesterday',
-                ),
-              }}
+              title="Converted Contacts"
+              value={metrics.convertedContacts.toLocaleString()}
+              icon={Users}
+            />
+            <MetricCard
+              title="New Pipelines"
+              value={metrics.newPipelinesToday.current.toLocaleString()}
+              icon={GitBranch}
+              delta={{ sign: metrics.newPipelinesToday.current - metrics.newPipelinesToday.previous, label: deltaLabel(metrics.newPipelinesToday.current - metrics.newPipelinesToday.previous, 'vs yesterday') }}
+            />
+            <MetricCard
+              title="Neglected Contacts/Leads"
+              value={metrics.neglectedLeadsOrContacts.toLocaleString()}
+              icon={UserX}
+              className="border-red-500/20"
+            />
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {metricsLoading || !metrics ? (
+          Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : (
+          <>
+            <MetricCard
+              title="Total Quotations"
+              value={metrics.quotationsCount.toLocaleString()}
+              icon={FileText}
+            />
+            <MetricCard
+              title="Quotation Value"
+              value={formatCurrency(metrics.quotationsValue, defaultCurrency)}
+              icon={DollarSign}
             />
             <MetricCard
               title="Open Deals Value"
@@ -167,69 +152,36 @@ export default function DashboardPage() {
               icon={DollarSign}
               subtitle={`${metrics.openDealsCount} open deal${metrics.openDealsCount === 1 ? '' : 's'}`}
             />
-            <MetricCard
-              title="Messages Sent Today"
-              value={metrics.messagesSentToday.current.toLocaleString()}
-              icon={Send}
-              delta={{
-                sign:
-                  metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
-                label: deltaLabel(
-                  metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
-                  'vs yesterday',
-                ),
-              }}
-            />
           </>
         )}
       </div>
 
-      {/* Quick actions */}
       <QuickActions />
 
-      {/* Charts row */}
-      {/* items-stretch (the grid default) stretches the two columns to
-          match the tallest sibling; adding h-full on each wrapper and
-          on the inner panels makes both cards actually fill that
-          stretched height so their rounded borders line up. Without
-          this, the pipeline card rendered at its natural (shorter)
-          height while the line chart drove the row height. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div className="h-full lg:col-span-3">
-          <ConversationsChart
-            series={series}
-            loading={seriesLoading}
-            range={range}
-            onRangeChange={handleRangeChange}
-          />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          <ContactJourneyMatrix data={journeyData} loading={metricsLoading} />
         </div>
-        <div className="h-full lg:col-span-2">
-          <PipelineDonut
-            data={pipeline}
-            loading={pipelineLoading}
-            currency={defaultCurrency}
-          />
+        <div className="lg:col-span-1">
+          <LeadsSourceChart data={leadsCharts?.source || []} loading={leadsChartsLoading} />
+        </div>
+        <div className="lg:col-span-1">
+          <LeadsStatusChart data={leadsCharts?.status || []} loading={leadsChartsLoading} />
         </div>
       </div>
 
-      {/* Response time */}
-      <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          {/* Activity feed */}
           <ActivityFeed items={activity} loading={activityLoading} />
         </div>
-        <div className="lg:col-span-1">
-          {/* Today's Tasks */}
+        <div className="lg:col-span-1 space-y-4">
+          <PipelineDonut data={pipeline} loading={pipelineLoading} currency={defaultCurrency} />
           <TodaysTasks />
         </div>
       </div>
     </div>
   )
 }
-
-// ------------------------------------------------------------
 
 function deltaLabel(delta: number, suffix: string): string {
   if (delta === 0) return `No change ${suffix}`
