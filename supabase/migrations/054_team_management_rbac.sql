@@ -21,7 +21,10 @@ CREATE INDEX IF NOT EXISTS idx_employee_roles_account ON employee_roles(account_
 
 ALTER TABLE employee_roles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS employee_roles_select ON employee_roles;
 CREATE POLICY employee_roles_select ON employee_roles FOR SELECT USING (is_account_member(account_id));
+
+DROP POLICY IF EXISTS employee_roles_modify ON employee_roles;
 CREATE POLICY employee_roles_modify ON employee_roles FOR ALL USING (is_account_member(account_id, 'admin')) WITH CHECK (is_account_member(account_id, 'admin'));
 
 -- 2. Augment profiles table to act as Employees (combines System Role and Business Role)
