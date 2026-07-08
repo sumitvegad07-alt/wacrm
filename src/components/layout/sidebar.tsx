@@ -143,7 +143,7 @@ const navGroups: { label: string; icon: React.ComponentType<{ className?: string
     label: "Location Tracking",
     icon: MapPin,
     items: [
-      { href: "/location-tracking/overview", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/location-tracking/overview", label: "Overview", icon: LayoutDashboard },
       { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin },
       { href: "/location-tracking/all-locations", label: "All Locations", icon: Map },
       { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2 },
