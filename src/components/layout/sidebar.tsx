@@ -109,6 +109,8 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /** RBAC module key for permission checking */
+  module?: string;
 }
 
 const navGroups: { label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[] }[] = [
@@ -116,39 +118,47 @@ const navGroups: { label: string; icon: React.ComponentType<{ className?: string
     label: "CRM",
     icon: Briefcase,
     items: [
-      { href: "/leads", label: "Leads", icon: UserPlus },
-      { href: "/contacts", label: "Contacts", icon: Users },
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/follow-ups", label: "Follow ups", icon: FileText },
-      { href: "/pipelines", label: "Pipelines", icon: GitBranch },
-      { href: "/tasks", label: "Tasks", icon: CheckSquare },
-      { href: "/products", label: "Products", icon: Package },
-      { href: "/quotations", label: "Quotations", icon: FileText },
+      { href: "/leads", label: "Leads", icon: UserPlus, module: "leads" },
+      { href: "/contacts", label: "Contacts", icon: Users, module: "contacts" },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
+      { href: "/follow-ups", label: "Follow ups", icon: FileText, module: "activities" },
+      { href: "/pipelines", label: "Pipelines", icon: GitBranch, module: "deals" },
+      { href: "/tasks", label: "Tasks", icon: CheckSquare, module: "tasks" },
+      { href: "/products", label: "Products", icon: Package, module: "products" },
+      { href: "/quotations", label: "Quotations", icon: FileText, module: "orders" },
     ],
   },
   {
     label: "WhatsApp",
     icon: WhatsAppIcon,
     items: [
-      { href: "/whatsapp/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/inbox", label: "Inbox", icon: MessageSquare },
-      { href: "/broadcasts", label: "Broadcasts", icon: Radio },
-      { href: "/automations", label: "Automations", icon: Zap },
-      { href: "/flows", label: "Flows", icon: Workflow, beta: true },
-      { href: "/settings?tab=templates", label: "Templates", icon: FileText },
-      { href: "/settings?tab=ai", label: "Knowledge base", icon: Bot },
+      { href: "/whatsapp/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "whatsapp" },
+      { href: "/inbox", label: "Inbox", icon: MessageSquare, module: "whatsapp" },
+      { href: "/broadcasts", label: "Broadcasts", icon: Radio, module: "whatsapp_broadcasts" },
+      { href: "/automations", label: "Automations", icon: Zap, module: "whatsapp_automations" },
+      { href: "/flows", label: "Flows", icon: Workflow, beta: true, module: "whatsapp_flows" },
+      { href: "/settings?tab=templates", label: "Templates", icon: FileText, module: "whatsapp_templates" },
+      { href: "/settings?tab=ai", label: "Knowledge base", icon: Bot, module: "ai_assistant" },
     ],
   },
   {
     label: "Location Tracking",
     icon: MapPin,
     items: [
-      { href: "/location-tracking/overview", label: "Overview", icon: LayoutDashboard },
-      { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin },
-      { href: "/location-tracking/all-locations", label: "All Locations", icon: Map },
-      { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2 },
-      { href: "/location-tracking/track-report", label: "Track report", icon: LineChart },
-      { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound },
+      { href: "/location-tracking/overview", label: "Overview", icon: LayoutDashboard, module: "location_tracking" },
+      { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin, module: "location_tracking" },
+      { href: "/location-tracking/all-locations", label: "All Locations", icon: Map, module: "location_tracking" },
+      { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
+      { href: "/location-tracking/track-report", label: "Track report", icon: LineChart, module: "location_tracking" },
+      { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
+    ],
+  },
+  {
+    label: "Team",
+    icon: Users,
+    items: [
+      { href: "/team/employees", label: "Employees", icon: User, module: "team_management" },
+      { href: "/team/roles", label: "Employee Roles", icon: Shield, module: "team_management" },
     ],
   }
 ];
@@ -166,7 +176,7 @@ interface SidebarProps {
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { profile, profileLoading, account, accountRole, signOut, hasAutomations, hasBroadcasts, hasLocationTracking } = useAuth();
+  const { profile, profileLoading, account, accountRole, signOut, hasAutomations, hasBroadcasts, hasLocationTracking, hasPermission } = useAuth();
   const totalUnread = useTotalUnread();
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
@@ -181,6 +191,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
   const filteredGroups = navGroups.map(group => {
     const items = group.items.filter((item) => {
+      // Role-based visibility check
+      if (item.module && !hasPermission(`view_${item.module}`)) return false;
+
       if (item.href === "/broadcasts" && !hasBroadcasts) return false;
       if (item.href === "/automations" && !hasAutomations) return false;
       if (item.href === "/flows" && !hasAutomations) return false;

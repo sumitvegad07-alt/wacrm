@@ -19,6 +19,7 @@ import {
   isAccountRole,
   type AccountRole,
 } from "@/lib/auth/roles";
+import { type RolePermissions, hasPermission, getDataScope } from "@/lib/auth/rbac";
 
 interface Profile {
   id: string;
@@ -33,8 +34,23 @@ interface Profile {
    */
   beta_features: string[];
   account_id: string | null;
-  account_role: AccountRole | null;
+  account_role: AccountRole | null; // System Role
   is_superadmin: boolean;
+  // Business Role / Employee Fields
+  employee_code?: string;
+  mobile?: string;
+  department?: string;
+  designation?: string;
+  branch?: string;
+  status?: string;
+  web_access?: boolean;
+  mobile_access?: boolean;
+  employee_role_id?: string | null;
+  employee_role?: {
+    id: string;
+    name: string;
+    permissions: RolePermissions;
+  } | null;
 }
 
 interface AccountSummary {
@@ -112,6 +128,11 @@ interface AuthContextValue {
   hasBroadcasts: boolean;
   hasAdvancedAI: boolean;
   hasLocationTracking: boolean;
+  
+  // RBAC Evaluators
+  permissions: RolePermissions | null;
+  hasPermission: (key: string) => boolean;
+  getDataScope: (module: string) => string;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -142,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase
         .from("profiles")
         .select(
-          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, is_superadmin",
+          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, is_superadmin, employee_code, mobile, department, designation, branch, status, web_access, mobile_access, employee_role_id, employee_roles(id, name, permissions)",
         )
         .eq("user_id", userId)
         .maybeSingle();
@@ -220,6 +241,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           account_id: data.account_id ?? null,
           account_role: accountRole,
           is_superadmin: data.is_superadmin ?? false,
+          employee_code: data.employee_code,
+          mobile: data.mobile,
+          department: data.department,
+          designation: data.designation,
+          branch: data.branch,
+          status: data.status ?? 'active',
+          web_access: data.web_access ?? true,
+          mobile_access: data.mobile_access ?? true,
+          employee_role_id: data.employee_role_id,
+          employee_role: data.employee_roles ? {
+            id: (data.employee_roles as any).id,
+            name: (data.employee_roles as any).name,
+            permissions: (data.employee_roles as any).permissions as RolePermissions
+          } : null,
         });
         setAccount(accountRow);
       }
@@ -341,8 +376,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasBroadcasts: plan === 'Pro' || plan === 'Enterprise',
       hasAdvancedAI: plan === 'Enterprise',
       hasLocationTracking,
+      permissions: profile?.employee_role?.permissions ?? null,
     };
-  }, [profile?.account_role, profile?.account_id, profile?.is_superadmin, account?.subscription_plan]);
+  }, [profile, account?.subscription_plan]);
 
   return (
     <AuthContext.Provider
@@ -356,6 +392,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         account,
         defaultCurrency: account?.default_currency ?? DEFAULT_CURRENCY,
         ...derived,
+        hasPermission: (key: string) => hasPermission(derived.permissions, key),
+        getDataScope: (module: string) => getDataScope(derived.permissions, module),
       }}
     >
       {children}
@@ -400,6 +438,9 @@ export function useAuth(): AuthContextValue {
       hasBroadcasts: false,
       hasAdvancedAI: false,
       hasLocationTracking: false,
+      permissions: null,
+      hasPermission: () => false,
+      getDataScope: () => "own",
     };
   }
   return ctx;
