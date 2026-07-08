@@ -105,7 +105,7 @@ export default function LocationDashboardPage() {
       setTimelineAddresses({});
       setUserAddress("");
     }
-  }, [selectedUser]);
+  }, [selectedUser?.sessionId]);
 
   const fetchUserPoints = async (sessionId: string) => {
     const { data: pings } = await supabase
