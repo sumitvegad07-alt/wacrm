@@ -66,7 +66,7 @@ export function TaskListEmbedded({ contactId, dealId, conversationId, leadId }: 
     }
   }
 
-  function getTaskIcon(type?: string) {
+  function getTaskIcon(type?: string | null) {
     switch (type?.toLowerCase()) {
       case "call": return <Phone className="size-4 text-blue-500" />;
       case "visit": return <MapPin className="size-4 text-green-500" />;
