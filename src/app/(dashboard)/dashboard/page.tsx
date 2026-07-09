@@ -176,7 +176,6 @@ export default function DashboardPage() {
         </div>
         <div className="lg:col-span-1 space-y-4">
           <PipelineDonut data={pipeline} loading={pipelineLoading} currency={defaultCurrency} />
-          <TodaysTasks />
         </div>
       </div>
     </div>

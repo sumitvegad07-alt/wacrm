@@ -10,6 +10,7 @@ import {
   User,
   UsersRound,
   BrainCircuit,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -32,8 +33,10 @@ export const SETTINGS_SECTIONS = [
   'fields',
   'deals',
   'leads',
+  'tasks',
   'members',
   'api',
+  'expense_types',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -59,6 +62,8 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Currency', icon: Coins, group: 'workspace' },
   leads: { id: 'leads', label: 'Leads', icon: User, group: 'workspace' },
+  tasks: { id: 'tasks', label: 'Task types', icon: FileText, group: 'workspace' },
+  expense_types: { id: 'expense_types', label: 'Expense policies', icon: Wallet, group: 'workspace' },
   members: { id: 'members', label: 'Team', icon: UsersRound, group: 'workspace' },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
 };

@@ -363,6 +363,7 @@ export interface Deal {
   notes?: string;
   expected_close_date?: string;
   status?: DealStatus;
+  deal_number?: string;
   created_at: string;
   updated_at?: string;
   contact?: Contact;
@@ -631,6 +632,8 @@ export interface Task {
   product?: Product;
   conversation?: Conversation;
   assignee?: Profile;
+  expense_id?: string | null;
+  expense?: any; // To avoid circular ref before it's fully defined, or just use any
 }
 
 export interface TaskComment {
@@ -674,7 +677,8 @@ export interface Quotation {
   id: string;
   account_id: string;
   user_id: string;
-  contact_id: string;
+  contact_id?: string | null;
+  lead_id?: string | null;
   quotation_number: string;
   version: number;
   parent_id?: string | null;
@@ -688,6 +692,7 @@ export interface Quotation {
   created_at: string;
   updated_at: string;
   contact?: Contact;
+  lead?: any;
   creator?: Profile;
   items?: QuotationItem[];
 }
@@ -723,4 +728,50 @@ export interface QuotationCustomValue {
   quotation_id: string;
   custom_field_id: string;
   value?: string;
+}
+
+// ============================================================
+// Expense Management (migration 058)
+// ============================================================
+
+export type AllowanceType = 'REGULAR' | 'TRAVELLING';
+export type IsPerKm = 'NO' | 'SYSTEM' | 'USER';
+export type ExpenseStatus = 'Pending' | 'Approved' | 'Rejected';
+
+export interface ExpenseType {
+  id: string;
+  account_id: string;
+  allowance_type: AllowanceType;
+  expense_name: string;
+  default_amount: number;
+  is_per_km: IsPerKm;
+  rate_per_km: number;
+  amount_changeable: boolean;
+  proof_required: boolean;
+  status: 'Active' | 'Inactive';
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Expense {
+  id: string;
+  account_id: string;
+  employee_id: string;
+  expense_type_id: string;
+  expense_date: string;
+  amount: number;
+  travel_km?: number | null;
+  rate_per_km?: number | null;
+  proof_file?: string | null;
+  remarks?: string | null;
+  status: ExpenseStatus;
+  approved_amount?: number | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  rejection_reason?: string | null;
+  created_at: string;
+  updated_at: string;
+  expense_type?: ExpenseType;
+  employee?: Profile;
 }

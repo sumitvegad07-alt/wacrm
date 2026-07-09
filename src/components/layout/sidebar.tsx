@@ -121,9 +121,8 @@ const navGroups: { label: string; icon: React.ComponentType<{ className?: string
       { href: "/leads", label: "Leads", icon: UserPlus, module: "leads" },
       { href: "/contacts", label: "Contacts", icon: Users, module: "contacts" },
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
-      { href: "/follow-ups", label: "Follow ups", icon: FileText, module: "activities" },
+      { href: "/follow-ups", label: "My Activity", icon: FileText, module: "activities" },
       { href: "/pipelines", label: "Pipelines", icon: GitBranch, module: "deals" },
-      { href: "/tasks", label: "Tasks", icon: CheckSquare, module: "tasks" },
       { href: "/products", label: "Products", icon: Package, module: "products" },
       { href: "/quotations", label: "Quotations", icon: FileText, module: "orders" },
     ],
@@ -159,6 +158,7 @@ const navGroups: { label: string; icon: React.ComponentType<{ className?: string
     items: [
       { href: "/team/employees", label: "Employees", icon: User, module: "team_management" },
       { href: "/team/roles", label: "Employee Roles", icon: Shield, module: "team_management" },
+      { href: "/expenses", label: "Expenses", icon: Coins, module: "expenses" },
     ],
   }
 ];

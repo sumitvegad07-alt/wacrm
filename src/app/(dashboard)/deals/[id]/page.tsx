@@ -139,6 +139,7 @@ export default function DealDetailsPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
+              {deal.deal_number && <span className="text-muted-foreground font-mono text-lg">{deal.deal_number}</span>}
               {deal.title}
               {deal.status === "won" && (
                 <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary border border-primary/20">

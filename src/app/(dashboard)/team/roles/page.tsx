@@ -37,10 +37,20 @@ const PERMISSION_GROUPS = [
       { id: "edit_contacts", label: "Edit Contacts" },
       { id: "delete_contacts", label: "Delete Contacts" },
       { id: "view_deals", label: "View Pipelines / Deals" },
-      { id: "view_tasks", label: "View Tasks" },
-      { id: "view_activities", label: "View Follow-ups" },
       { id: "view_products", label: "View Products" },
       { id: "view_orders", label: "View Quotations / Orders" },
+    ]
+  },
+  {
+    category: "Task Management",
+    permissions: [
+      { id: "view_tasks", label: "View Tasks" },
+      { id: "create_task", label: "Create Task" },
+      { id: "edit_task", label: "Edit Task" },
+      { id: "delete_task", label: "Delete Task" },
+      { id: "assign_tasks_parent", label: "Assign Tasks to Parent User" },
+      { id: "assign_tasks_child", label: "Assign Tasks to Child User" },
+      { id: "assign_tasks_all", label: "Assign Tasks to All Users" },
     ]
   },
   {

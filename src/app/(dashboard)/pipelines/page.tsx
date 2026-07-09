@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings, Upload, LayoutDashboard, List } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { GitBranch, Plus, ChevronDown, Settings, Upload, LayoutDashboard, List, CheckCircle, XCircle, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -75,6 +76,69 @@ export default function PipelinesPage() {
   const [defaultStageId, setDefaultStageId] = useState<string>("");
 
   const [importDealsOpen, setImportDealsOpen] = useState(false);
+  
+  const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
+
+  const handleBulkDelete = async () => {
+    if (!canCreateDeals) return;
+    if (selectedDealIds.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedDealIds.size} deal(s)?`)) return;
+
+    setLoading(true);
+    let successCount = 0;
+    for (const id of Array.from(selectedDealIds)) {
+      const { error } = await supabase.from("deals").delete().eq("id", id);
+      if (!error) successCount++;
+    }
+    if (successCount > 0) {
+      toast.success(`Successfully deleted ${successCount} deal(s)`);
+      setSelectedDealIds(new Set());
+      refreshDeals();
+    } else {
+      toast.error("Failed to delete deals");
+      setLoading(false);
+    }
+  };
+
+  const handleBulkStatus = async (status: string) => {
+    if (!canCreateDeals) return;
+    if (selectedDealIds.size === 0) return;
+    
+    setLoading(true);
+    let successCount = 0;
+    for (const id of Array.from(selectedDealIds)) {
+      const { error } = await supabase.from("deals").update({ status }).eq("id", id);
+      if (!error) successCount++;
+    }
+    if (successCount > 0) {
+      toast.success(`Successfully updated ${successCount} deal(s)`);
+      setSelectedDealIds(new Set());
+      refreshDeals();
+    } else {
+      toast.error("Failed to update deals");
+      setLoading(false);
+    }
+  };
+
+  const handleBulkStage = async (stageId: string) => {
+    if (!canCreateDeals) return;
+    if (selectedDealIds.size === 0) return;
+    
+    setLoading(true);
+    let successCount = 0;
+    for (const id of Array.from(selectedDealIds)) {
+      const { error } = await supabase.from("deals").update({ stage_id: stageId }).eq("id", id);
+      if (!error) successCount++;
+    }
+    if (successCount > 0) {
+      toast.success(`Successfully moved ${successCount} deal(s)`);
+      setSelectedDealIds(new Set());
+      refreshDeals();
+    } else {
+      toast.error("Failed to move deals");
+      setLoading(false);
+    }
+  };
 
   const seedAttempted = useRef(false);
 
@@ -328,6 +392,12 @@ export default function PipelinesPage() {
 
   // Table logic
   const columns: ColumnDef<any>[] = [
+    {
+      id: "deal_number",
+      label: "Deal #",
+      type: "text",
+      render: (deal) => <span className="text-muted-foreground font-mono text-sm">{deal.deal_number || "-"}</span>
+    },
     {
       id: "title",
       label: "Deal Title",
@@ -604,7 +674,50 @@ export default function PipelinesPage() {
               onEditDeal={handleEditDeal}
             />
           ) : (
-            <div className="mt-4">
+            <div className="mt-4 space-y-4">
+              {selectedDealIds.size > 0 && canCreateDeals && (
+                <div className="bg-card border border-border p-4 rounded-xl flex flex-wrap gap-4 items-center justify-between shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                  <div className="flex items-center gap-4">
+                    <Badge variant="secondary" className="px-3 py-1 bg-primary/10 text-primary border-primary/20">
+                      {selectedDealIds.size} selected
+                    </Badge>
+                    <span className="text-sm font-medium text-foreground">
+                      Bulk Actions
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedDealIds(new Set())}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-red-600 border-red-500/30 hover:bg-red-50" onClick={handleBulkDelete}>
+                      <XCircle className="mr-2 h-4 w-4" /> Delete
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-amber-600 border-amber-500/30 hover:bg-amber-50" onClick={() => handleBulkStatus("lost")}>
+                      <XCircle className="mr-2 h-4 w-4" /> Mark Lost
+                    </Button>
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleBulkStatus("won")}>
+                      <CheckCircle className="mr-2 h-4 w-4" /> Mark Won
+                    </Button>
+                    
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={<Button size="sm" variant="outline" className="gap-2" />}>
+                        <MoreHorizontal className="h-4 w-4" /> Move Stage
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48 bg-popover border-border">
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Select Stage</div>
+                        <DropdownMenuSeparator className="bg-border" />
+                        {stages.map(stage => (
+                          <DropdownMenuItem key={stage.id} onClick={() => handleBulkStage(stage.id)} className="cursor-pointer">
+                            <span className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: stage.color }} />
+                            {stage.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              )}
+              
               <DataTable
                 columns={columns}
                 data={filteredDeals}
@@ -613,6 +726,24 @@ export default function PipelinesPage() {
                 storageKey={`wacrm_deals_table_${selectedPipelineId}`}
                 onRowClick={(deal) => handleEditDeal(deal)}
                 rowKey={(deal) => deal.id}
+                selection={{
+                  selectedIds: selectedDealIds,
+                  onSelectAll: (checked) => {
+                    if (checked) {
+                      setSelectedDealIds(new Set(filteredDeals.map(d => d.id)));
+                    } else {
+                      setSelectedDealIds(new Set());
+                    }
+                  },
+                  onSelect: (id, checked) => {
+                    setSelectedDealIds(prev => {
+                      const next = new Set(prev);
+                      if (checked) next.add(id);
+                      else next.delete(id);
+                      return next;
+                    });
+                  }
+                }}
               />
             </div>
           )}

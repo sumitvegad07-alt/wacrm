@@ -48,13 +48,16 @@ export function QuotationForm({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [targetType, setTargetType] = useState<'contact' | 'lead'>('contact');
   const [contacts, setContacts] = useState<any[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [customFields, setCustomFields] = useState<any[]>([]);
 
   // Form State
   const [contactId, setContactId] = useState<string>('');
+  const [leadId, setLeadId] = useState<string>('');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [validUntil, setValidUntil] = useState<string>('');
   const [status, setStatus] = useState('Pending');
@@ -74,17 +77,20 @@ export function QuotationForm({
       // Fetch dependencies
       const [
         { data: contactsData },
+        { data: leadsData },
         { data: productsData },
         { data: templatesData },
         { data: fieldsData }
       ] = await Promise.all([
         supabase.from('contacts').select('id, name').order('name'),
+        supabase.from('leads').select('id, title').order('title'),
         supabase.from('products').select('id, name, sku, price').eq('active', true).order('name'),
         supabase.from('quotation_terms_templates').select('*').order('title'),
         supabase.from('custom_fields').select('*').eq('module_name', 'quotation').order('created_at')
       ]);
 
       setContacts(contactsData || []);
+      setLeads(leadsData || []);
       setProducts(productsData || []);
       setTemplates(templatesData || []);
       setCustomFields(fieldsData || []);
@@ -126,7 +132,13 @@ export function QuotationForm({
         const { data: sourceData } = await supabase.from('quotations').select('*').eq('id', sourceId).single();
         
         if (sourceData) {
-          setContactId(sourceData.contact_id || '');
+          if (sourceData.lead_id) {
+            setTargetType('lead');
+            setLeadId(sourceData.lead_id);
+          } else {
+            setTargetType('contact');
+            setContactId(sourceData.contact_id || '');
+          }
           setDate(new Date().toISOString().split('T')[0]); // Today for cloned/versioned
           setValidUntil(sourceData.valid_until || '');
           setStatus('Draft');
@@ -167,7 +179,13 @@ export function QuotationForm({
       } else if (quotationId) {
         const { data: sourceData } = await supabase.from('quotations').select('*').eq('id', quotationId).single();
         if (sourceData) {
-          setContactId(sourceData.contact_id || '');
+          if (sourceData.lead_id) {
+            setTargetType('lead');
+            setLeadId(sourceData.lead_id);
+          } else {
+            setTargetType('contact');
+            setContactId(sourceData.contact_id || '');
+          }
           setDate(sourceData.date || new Date().toISOString().split('T')[0]);
           setValidUntil(sourceData.valid_until || '');
           setStatus(sourceData.status || 'Draft');
@@ -209,8 +227,12 @@ export function QuotationForm({
   }, [initialData, supabase]);
 
   const handleSave = async () => {
-    if (!contactId) {
+    if (targetType === 'contact' && !contactId) {
       toast.error('Please select a contact');
+      return;
+    }
+    if (targetType === 'lead' && !leadId) {
+      toast.error('Please select a lead');
       return;
     }
     if (items.length === 0) {
@@ -241,7 +263,8 @@ export function QuotationForm({
     const quotationPayload = {
       account_id: accountData.account_id,
       user_id: userData.user.id,
-      contact_id: contactId,
+      contact_id: targetType === 'contact' ? contactId : null,
+      lead_id: targetType === 'lead' ? leadId : null,
       date,
       valid_until: validUntil || null,
       status,
@@ -399,18 +422,50 @@ export function QuotationForm({
           <div className="space-y-8 mt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="space-y-2">
-          <Label className="text-muted-foreground">Quotation For <span className="text-red-400">*</span></Label>
-          <SearchableSelect
-            value={contactId}
-            onChange={setContactId}
-            placeholder="Select a contact"
-            searchPlaceholder="Search contacts..."
-            emptyMessage="No contacts found."
-            options={contacts.map((c) => ({
-              value: c.id,
-              label: c.name,
-            }))}
-          />
+          <Label className="text-muted-foreground flex items-center justify-between">
+            Quotation For <span className="text-red-400">*</span>
+            <div className="flex items-center space-x-2 bg-muted rounded-md p-0.5">
+              <button
+                type="button"
+                className={`px-2 py-1 text-xs rounded-sm transition-colors ${targetType === 'contact' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setTargetType('contact')}
+              >
+                Contact
+              </button>
+              <button
+                type="button"
+                className={`px-2 py-1 text-xs rounded-sm transition-colors ${targetType === 'lead' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setTargetType('lead')}
+              >
+                Lead
+              </button>
+            </div>
+          </Label>
+          {targetType === 'contact' ? (
+            <SearchableSelect
+              value={contactId}
+              onChange={setContactId}
+              placeholder="Select a contact"
+              searchPlaceholder="Search contacts..."
+              emptyMessage="No contacts found."
+              options={contacts.map((c) => ({
+                value: c.id,
+                label: c.name,
+              }))}
+            />
+          ) : (
+            <SearchableSelect
+              value={leadId}
+              onChange={setLeadId}
+              placeholder="Select a lead"
+              searchPlaceholder="Search leads..."
+              emptyMessage="No leads found."
+              options={leads.map((l) => ({
+                value: l.id,
+                label: l.title,
+              }))}
+            />
+          )}
         </div>
 
         <div className="space-y-2">

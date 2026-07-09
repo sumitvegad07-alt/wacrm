@@ -15,9 +15,11 @@ import { TemplateManager } from '@/components/settings/template-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { LeadsSettings } from '@/components/settings/leads-settings';
+import { TasksSettings } from '@/components/settings/tasks-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { AISettingsPanel } from '@/components/settings/ai-settings-panel';
+import { ExpenseTypesSettings } from '@/components/settings/expense-types-settings';
 import {
   resolveSection,
   type SettingsSection,
@@ -117,6 +119,8 @@ function SettingsContent() {
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
     leads: <LeadsSettings />,
+    tasks: <TasksSettings />,
+    expense_types: <ExpenseTypesSettings />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,
   };

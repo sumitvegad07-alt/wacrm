@@ -98,7 +98,7 @@ export default function QuotationsPage() {
     setLoading(true);
 
     const [{ data: quotationsData }, { data: fieldsData }] = await Promise.all([
-      supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), creator:profiles!quotations_user_id_fkey(full_name, email)').eq('is_latest_version', true).order('created_at', { ascending: false }),
+      supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), lead:leads!quotations_lead_id_fkey(title, contact_person), creator:profiles!quotations_user_id_fkey(full_name, email)').eq('is_latest_version', true).order('created_at', { ascending: false }),
       supabase.from('custom_fields').select('*').eq('module_name', 'quotation')
     ]);
 
@@ -203,18 +203,27 @@ export default function QuotationsPage() {
       id: "contact",
       label: "Quotation For",
       type: "text",
-      render: (quotation) => (
-        quotation.contact ? (
-          <div className="flex flex-col">
-            <span className="font-medium text-foreground">{quotation.contact.name}</span>
-            {quotation.contact.company && (
-              <span className="text-xs text-muted-foreground">{quotation.contact.company}</span>
-            )}
-          </div>
-        ) : (
-          <span className="text-muted-foreground italic">Unknown</span>
-        )
-      )
+      render: (quotation) => {
+        if (quotation.lead) {
+          return (
+            <div className="flex flex-col">
+              <span className="font-medium text-foreground">{quotation.lead.title}</span>
+              <span className="text-xs text-muted-foreground">Lead</span>
+            </div>
+          );
+        }
+        if (quotation.contact) {
+          return (
+            <div className="flex flex-col">
+              <span className="font-medium text-foreground">{quotation.contact.name}</span>
+              {quotation.contact.company && (
+                <span className="text-xs text-muted-foreground">{quotation.contact.company}</span>
+              )}
+            </div>
+          );
+        }
+        return <span className="text-muted-foreground italic">Unknown</span>;
+      }
     },
     {
       id: "amount",
@@ -363,8 +372,14 @@ export default function QuotationsPage() {
   const filteredQuotations = useMemo(() => {
     return quotations.filter(quotation => {
       // Global search
-      if (globalSearch && !quotation.quotation_number?.toLowerCase().includes(globalSearch.toLowerCase()) && !quotation.contact?.name?.toLowerCase().includes(globalSearch.toLowerCase())) {
-        return false;
+      if (globalSearch) {
+        const search = globalSearch.toLowerCase();
+        const matchesNumber = quotation.quotation_number?.toLowerCase().includes(search);
+        const matchesContact = quotation.contact?.name?.toLowerCase().includes(search);
+        const matchesLead = quotation.lead?.title?.toLowerCase().includes(search);
+        if (!matchesNumber && !matchesContact && !matchesLead) {
+          return false;
+        }
       }
 
       // Column filters
@@ -376,7 +391,9 @@ export default function QuotationsPage() {
         } else if (colId === "status") {
           if (!(val as string[]).includes(quotation.status)) return false;
         } else if (colId === "contact") {
-          if (!quotation.contact?.name?.toLowerCase().includes((val as string).toLowerCase())) return false;
+          const matchC = quotation.contact?.name?.toLowerCase().includes((val as string).toLowerCase());
+          const matchL = quotation.lead?.title?.toLowerCase().includes((val as string).toLowerCase());
+          if (!matchC && !matchL) return false;
         } else if (colId === "creator") {
           const creatorName = quotation.creator?.full_name || quotation.creator?.email || "";
           if (!creatorName.toLowerCase().includes((val as string).toLowerCase())) return false;
