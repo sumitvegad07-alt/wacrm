@@ -407,7 +407,7 @@ export default function ExpensesPage() {
         } else if (colId === "employee") {
           if (!expense.employee?.full_name?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "expense_type") {
-          if (!(val as string[]).includes(expense.expense_type?.expense_name)) return false;
+          if (!(val as string[]).includes(expense.expense_type?.expense_name || "")) return false;
         } else if (colId === "status") {
           if (!(val as string[]).includes(expense.status)) return false;
         }
