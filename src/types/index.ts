@@ -611,6 +611,7 @@ export interface Task {
   user_id: string;
   title: string;
   description?: string | null;
+  activity_type?: string | null;
   status: TaskStatus;
   priority: TaskPriority;
   assigned_user_id?: string | null;
@@ -746,6 +747,7 @@ export interface ExpenseType {
   default_amount: number;
   is_per_km: IsPerKm;
   rate_per_km: number;
+  enable_rate_tiers?: boolean;
   amount_changeable: boolean;
   proof_required: boolean;
   status: 'Active' | 'Inactive';

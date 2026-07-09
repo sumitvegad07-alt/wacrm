@@ -42,9 +42,7 @@ import { Textarea } from "@/components/ui/textarea";
 // We define a flexible schema since fields change based on expense type
 const expenseSchema = z.object({
   expense_type_id: z.string().min(1, "Expense type is required"),
-  expense_date: z.date({
-    required_error: "Date is required",
-  }),
+  expense_date: z.date(),
   amount: z.number().min(0, "Amount must be positive").optional(),
   travel_km: z.number().min(0, "KM must be positive").optional(),
   remarks: z.string().optional(),
@@ -237,6 +235,7 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
     };
 
     let savedId = expense?.id;
+    let error: any = null;
     if (expense) {
       const { error: err } = await supabase.from("expenses").update(payload).eq("id", expense.id);
       error = err;
@@ -283,7 +282,7 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
                 control={form.control}
                 name="expense_type_id"
                 render={({ field }) => (
-                  <Select key={expenseTypes.length} value={field.value} onValueChange={handleTypeChange}>
+                  <Select key={expenseTypes.length} value={field.value} onValueChange={(val) => handleTypeChange(val || "")}>
                     <SelectTrigger id="expense_type">
                       <SelectValue placeholder="Select type">
                         {expenseTypes.find(t => t.id === field.value)?.expense_name || "Select type"}
@@ -330,7 +329,6 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
                         mode="single"
                         selected={field.value}
                         onSelect={field.onChange}
-                        initialFocus
                       />
                     </PopoverContent>
                   </Popover>

@@ -386,7 +386,7 @@ export default function RolesPage() {
                         </div>
                         <Select 
                           value={(permissions.global_scope as string) || 'own'} 
-                          onValueChange={(val) => setPermissions({...permissions, global_scope: val, leads_scope: val, contacts_scope: val})}
+                          onValueChange={(val) => setPermissions({...permissions, global_scope: val || undefined, leads_scope: val || undefined, contacts_scope: val || undefined})}
                           disabled={!isEditing || isAdminRole}
                         >
                           <SelectTrigger className="w-[200px]">

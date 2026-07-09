@@ -201,7 +201,7 @@ export default function FollowUpsPage() {
     }
   }
 
-  function getTaskIcon(type?: string) {
+  function getTaskIcon(type?: string | null) {
     switch (type?.toLowerCase()) {
       case "call": return <Phone className="size-4 text-blue-500" />;
       case "visit": return <MapPin className="size-4 text-green-500" />;
@@ -350,7 +350,7 @@ export default function FollowUpsPage() {
 
           <div className="w-40">
             <Label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider font-semibold">Type</Label>
-            <Select value={activityType} onValueChange={setActivityType}>
+            <Select value={activityType} onValueChange={(val) => setActivityType(val || "all")}>
               <SelectTrigger className="h-10 bg-background">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
@@ -365,7 +365,7 @@ export default function FollowUpsPage() {
 
           <div className="w-40">
             <Label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider font-semibold">Period</Label>
-            <Select value={period} onValueChange={setPeriod}>
+            <Select value={period} onValueChange={(val) => setPeriod(val || "All")}>
               <SelectTrigger className="h-10 bg-background">
                 <SelectValue placeholder="Period" />
               </SelectTrigger>
@@ -383,7 +383,7 @@ export default function FollowUpsPage() {
 
           <div className="w-36">
             <Label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider font-semibold">Status</Label>
-            <Select value={activityStatus} onValueChange={setActivityStatus}>
+            <Select value={activityStatus} onValueChange={(val) => setActivityStatus(val || "All")}>
               <SelectTrigger className="h-10 bg-background">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>

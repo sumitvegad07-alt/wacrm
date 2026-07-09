@@ -323,7 +323,7 @@ export default function EmployeesPage() {
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
               <div className="space-y-2">
                 <Label>Business Role *</Label>
-                <Select value={addForm.employee_role_id} onValueChange={v => setAddForm({...addForm, employee_role_id: v})}>
+                <Select value={addForm.employee_role_id} onValueChange={v => setAddForm({...addForm, employee_role_id: v || ""})}>
                   <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
                   <SelectContent>
                     {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
@@ -393,7 +393,7 @@ export default function EmployeesPage() {
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label>Business Role</Label>
-                    <Select value={editForm.employee_role_id || ""} onValueChange={v => setEditForm({...editForm, employee_role_id: v})}>
+                    <Select value={editForm.employee_role_id || ""} onValueChange={v => setEditForm({...editForm, employee_role_id: v || undefined})}>
                       <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
                       <SelectContent>
                         {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
@@ -402,7 +402,7 @@ export default function EmployeesPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Account Status</Label>
-                    <Select value={editForm.status || "active"} onValueChange={v => setEditForm({...editForm, status: v})}>
+                    <Select value={editForm.status || "active"} onValueChange={v => setEditForm({...editForm, status: v || undefined})}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="active">Active</SelectItem>
