@@ -757,6 +757,7 @@ export interface ExpenseType {
 export interface Expense {
   id: string;
   account_id: string;
+  expense_number?: string | null;
   employee_id: string;
   expense_type_id: string;
   expense_date: string;
