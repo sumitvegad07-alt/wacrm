@@ -53,9 +53,6 @@ export default function LocationDashboardPage() {
     tracked: true,
     ends: true,
   });
-  const [routeOverlay, setRouteOverlay] = useState<RouteOverlay[]>([]);
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [routeInfo, setRouteInfo] = useState<RouteResult | null>(null);
   const [timelineAddresses, setTimelineAddresses] = useState<
     Record<number, string>
   >({});
@@ -64,6 +61,8 @@ export default function LocationDashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -94,8 +93,13 @@ export default function LocationDashboardPage() {
         battery: 0,
         distance: 0,
         totalVisits: 0,
-        activeDeals: 0,
-        completedTasks: 0,
+        totalCustomers: 0,
+        totalOrders: 0,
+        activityTotal: 0,
+        activityDone: 0,
+        expenseTotal: 0,
+        expenseApproved: 0,
+        expensePending: 0,
       }));
       setUsersData(activeUsers);
       if (activeUsers.length > 0) setSelectedUser(activeUsers[0]);
@@ -109,13 +113,21 @@ export default function LocationDashboardPage() {
         selectedUser.userId,
         selectedUser.startedAt
       );
-      // Reset route when user changes
-      setRouteOverlay([]);
-      setRouteInfo(null);
+      
+      const interval = setInterval(() => {
+        fetchUserPoints(
+          selectedUser.sessionId,
+          selectedUser.userId,
+          selectedUser.startedAt
+        );
+      }, 30000);
+
       setTimelineAddresses({});
       setUserAddress('');
+      
+      return () => clearInterval(interval);
     }
-  }, [selectedUser?.sessionId]);
+  }, [selectedUser?.sessionId, selectedUser?.startedAt, selectedUser?.userId]);
 
   const fetchUserPoints = async (
     sessionId: string,
@@ -134,9 +146,69 @@ export default function LocationDashboardPage() {
       .eq('user_id', userId)
       .gte('check_in_at', startedAt);
 
+    // Fetch daily stats
+    const startOfDay = new Date(startedAt);
+    startOfDay.setHours(0, 0, 0, 0);
+    const startStr = startOfDay.toISOString();
+
+    const [quotationsRes, tasksRes, expensesRes] = await Promise.all([
+      supabase
+        .from('quotations')
+        .select('id')
+        .eq('user_id', userId)
+        .gte('created_at', startStr),
+      supabase
+        .from('tasks')
+        .select('status')
+        .eq('assigned_to', userId)
+        .gte('created_at', startStr),
+      supabase
+        .from('expenses')
+        .select('amount, status')
+        .eq('employee_id', userId)
+        .gte('created_at', startStr), // assuming employee_id maps to user_id or profile_id? Wait, employee_id is profile.id.
+    ]);
+
+    // We need profile ID for expenses since employee_id = profiles.id
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+    let expenseTotal = 0,
+      expenseApproved = 0,
+      expensePending = 0;
+
+    if (profile) {
+      const { data: exp } = await supabase
+        .from('expenses')
+        .select('amount, status')
+        .eq('employee_id', profile.id)
+        .gte('created_at', startStr);
+      if (exp) {
+        exp.forEach((e: any) => {
+          expenseTotal += Number(e.amount) || 0;
+          if (e.status === 'Approved') expenseApproved += Number(e.amount) || 0;
+          if (e.status === 'Pending') expensePending += Number(e.amount) || 0;
+        });
+      }
+    }
+
+    const totalOrders = quotationsRes.data?.length || 0;
+    const activityTotal = tasksRes.data?.length || 0;
+    const activityDone =
+      tasksRes.data?.filter((t) => t.status === 'Completed').length || 0;
+
     let allPoints: any[] = [];
+    let visitCount = 0;
+    let uniqueCustomers = new Set();
 
     if (visits) {
+      visitCount = visits.length;
+      visits.forEach((v) => {
+        if (v.contact_id) uniqueCustomers.add(v.contact_id);
+      });
+
       const visitPoints = visits
         .filter((v: any) => v.check_in_lat && v.check_in_lng)
         .map((v: any) => ({
@@ -152,6 +224,7 @@ export default function LocationDashboardPage() {
             : 'Client Visit',
           battery: null,
           recordedAt: new Date(v.check_in_at).getTime(),
+          checkoutAt: v.check_out_at ? new Date(v.check_out_at).getTime() : null,
         }));
       allPoints = [...allPoints, ...visitPoints];
     }
@@ -188,35 +261,68 @@ export default function LocationDashboardPage() {
     }
 
     allPoints.sort((a, b) => a.recordedAt - b.recordedAt);
+
+    // Set first and last to start and end
+    const pingOnlyPoints = allPoints.filter((p) => p.type === 'ping');
+    if (pingOnlyPoints.length > 0) {
+      pingOnlyPoints[0].type = 'start';
+      pingOnlyPoints[0].label = 'Start Point';
+      pingOnlyPoints[pingOnlyPoints.length - 1].type = 'end';
+      pingOnlyPoints[pingOnlyPoints.length - 1].label = 'Last Known Location';
+    }
+
+    // Add index numbers and durations
+    let index = 1;
+    for (let i = 0; i < allPoints.length; i++) {
+      allPoints[i].index = index++;
+      if (allPoints[i].type === 'visit') {
+        if (allPoints[i].checkoutAt) {
+          const diffMs = allPoints[i].checkoutAt - allPoints[i].recordedAt;
+          const diffMins = Math.round(diffMs / 60000);
+          allPoints[i].duration = `${diffMins} min`;
+        } else {
+          allPoints[i].duration = 'Ongoing';
+        }
+      }
+    }
+
+    // Calculate actual GPS distance travelled
+    let totalDistanceKm = 0;
+    if (allPoints.length > 1) {
+      const toRad = (value: number) => (value * Math.PI) / 180;
+      for (let i = 1; i < allPoints.length; i++) {
+        const p1 = allPoints[i - 1];
+        const p2 = allPoints[i];
+        const R = 6371; // Earth radius km
+        const dLat = toRad(p2.lat - p1.lat);
+        const dLon = toRad(p2.lng - p1.lng);
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(toRad(p1.lat)) *
+            Math.cos(toRad(p2.lat)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        totalDistanceKm += R * c;
+      }
+    }
+
+    setSelectedUser((prev: any) => ({
+      ...prev,
+      distance: totalDistanceKm.toFixed(2),
+      totalVisits: visitCount,
+      totalCustomers: uniqueCustomers.size,
+      totalOrders,
+      activityTotal,
+      activityDone,
+      expenseTotal,
+      expenseApproved,
+      expensePending,
+    }));
+
     setPointsData(allPoints);
   };
 
-  // Fetch route from ORS
-  const handleShowRoute = useCallback(async () => {
-    if (pointsData.length < 2) return;
-    setRouteLoading(true);
-    try {
-      const waypoints = pointsData.map((p) => ({ lat: p.lat, lng: p.lng }));
-      const route = await getMultiPointRoute(waypoints);
-      if (route) {
-        setRouteOverlay([
-          {
-            coordinates: route.coordinates,
-            color: '#6366F1',
-          },
-        ]);
-        setRouteInfo(route);
-        // Update distance for selected user
-        setSelectedUser((prev: any) => ({
-          ...prev,
-          distance: route.distanceKm,
-        }));
-      }
-    } catch (err) {
-      console.error('Route fetch failed:', err);
-    }
-    setRouteLoading(false);
-  }, [pointsData]);
 
   // Load address for timeline entries lazily
   const loadTimelineAddress = useCallback(
@@ -353,30 +459,11 @@ export default function LocationDashboardPage() {
           </div>
         </div>
 
-        {/* Route button */}
-        <div className="pointer-events-auto absolute bottom-4 left-4 z-10">
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-background/95 h-8 gap-1.5 text-xs shadow-sm backdrop-blur-sm"
-            onClick={handleShowRoute}
-            disabled={routeLoading || pointsData.length < 2}
-          >
-            {routeLoading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Route className="h-3.5 w-3.5" />
-            )}
-            {routeInfo ? routeInfo.summary : 'Show Route'}
-          </Button>
-        </div>
-
         <div className="z-0 flex-1">
           <MapView
             points={filteredPoints as any}
             layerType={layerType}
-            routes={routeOverlay}
-            showStraightLine={routeOverlay.length === 0}
+            showStraightLine={true}
           />
         </div>
       </div>
@@ -385,27 +472,35 @@ export default function LocationDashboardPage() {
       <div className="border-border bg-card z-10 flex w-72 shrink-0 flex-col border-l shadow-[0_0_15px_rgba(0,0,0,0.05)]">
         {/* User Summary Header */}
         <div className="border-border bg-muted/10 border-b p-4">
-          <div className="mb-4 flex items-start justify-between">
+          <div className="mb-4 flex items-start justify-between rounded-xl border border-green-500/20 bg-green-500/10 p-3">
             <div className="flex items-center gap-3">
-              <Avatar className="border-border h-10 w-10 border">
-                <AvatarFallback className="bg-primary/10 text-primary">
+              <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
+                <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
                   {selectedUser?.name?.[0] || '?'}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h3 className="text-foreground text-sm font-semibold">
+                <h3 className="text-foreground text-sm font-bold">
                   {selectedUser?.name || 'No user selected'}
                 </h3>
                 {selectedUser && (
-                  <div className="text-muted-foreground flex items-center gap-1 text-[11px]">
-                    <span className="flex items-center gap-1 text-green-600">
-                      <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[10px]">
+                    <span className="flex items-center gap-1 font-medium text-green-600">
+                      <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
                       Active
                     </span>
                     <span>•</span>
                     <span>{selectedUser.battery}% Battery</span>
                   </div>
                 )}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg leading-none font-bold text-green-600">
+                {selectedUser?.distance ?? 0}{' '}
+                <span className="text-muted-foreground text-[10px] font-normal uppercase">
+                  km
+                </span>
               </div>
             </div>
           </div>
@@ -420,58 +515,88 @@ export default function LocationDashboardPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-background border-border flex items-center justify-between rounded-lg border p-2.5">
-              <div>
-                <div className="text-muted-foreground mb-0.5 text-[10px] font-semibold uppercase">
-                  Visits Today
-                </div>
-                <div className="text-lg leading-none font-bold">
-                  {selectedUser?.totalVisits ?? 0}
-                </div>
+          <div className="border-border mb-4 grid grid-cols-3 gap-2 border-b pb-4">
+            <div className="text-center">
+              <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
+                Visit
               </div>
-              <MapPin className="h-4 w-4 text-blue-500/50" />
+              <div className="text-lg font-bold">
+                {selectedUser?.totalVisits ?? 0}
+              </div>
             </div>
-            <div className="bg-background border-border flex items-center justify-between rounded-lg border p-2.5">
-              <div>
-                <div className="text-muted-foreground mb-0.5 text-[10px] font-semibold uppercase">
-                  Distance
-                </div>
-                <div className="text-lg leading-none font-bold">
-                  {selectedUser?.distance ?? 0}{' '}
-                  <span className="text-muted-foreground text-xs font-normal">
-                    km
-                  </span>
-                </div>
+            <div className="border-border border-l text-center">
+              <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
+                Customers
               </div>
-              <Activity className="h-4 w-4 text-green-500/50" />
+              <div className="text-lg font-bold">
+                {selectedUser?.totalCustomers ?? 0}
+              </div>
+            </div>
+            <div className="border-border border-l text-center">
+              <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
+                Orders
+              </div>
+              <div className="text-lg font-bold text-green-600">
+                {selectedUser?.totalOrders ?? 0}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="custom-scrollbar flex-1 overflow-y-auto p-4">
-          {/* CRM Context Stats */}
-          <div className="mb-6 space-y-3">
-            <h4 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-              CRM Activity
+          <div className="mb-4">
+            <h4 className="text-primary mb-2 flex items-center justify-between text-[11px] font-semibold tracking-wide uppercase">
+              Activity
+              <div className="bg-border ml-2 h-px flex-1"></div>
             </h4>
-            <div className="hover:bg-muted/50 flex items-center justify-between rounded-md p-2 transition-colors">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="text-primary/70 h-4 w-4" />
-                <span className="text-foreground text-sm">Tasks Completed</span>
+            <div className="bg-muted/20 border-border/50 flex items-center justify-between rounded-lg border p-2">
+              <div className="flex-1 text-center">
+                <div className="text-muted-foreground text-[9px] font-semibold uppercase">
+                  Total
+                </div>
+                <div className="text-sm font-bold">
+                  {selectedUser?.activityTotal ?? 0}
+                </div>
               </div>
-              <span className="text-sm font-semibold">
-                {selectedUser?.completedTasks ?? 0}
-              </span>
+              <div className="border-border/50 flex-1 border-l text-center">
+                <div className="text-muted-foreground text-[9px] font-semibold uppercase">
+                  Done
+                </div>
+                <div className="text-sm font-bold text-green-600">
+                  {selectedUser?.activityDone ?? 0}
+                </div>
+              </div>
             </div>
-            <div className="hover:bg-muted/50 flex items-center justify-between rounded-md p-2 transition-colors">
-              <div className="flex items-center gap-2">
-                <User className="text-primary/70 h-4 w-4" />
-                <span className="text-foreground text-sm">Active Deals</span>
+          </div>
+
+          <div className="mb-6">
+            <h4 className="mb-2 flex items-center justify-between text-[11px] font-semibold tracking-wide text-blue-500 uppercase">
+              Expense
+              <div className="bg-border ml-2 h-px flex-1"></div>
+            </h4>
+            <div className="bg-muted/20 border-border/50 flex items-center justify-between rounded-lg border p-2">
+              <div className="flex-1 text-center">
+                <div className="text-muted-foreground text-[9px] font-semibold uppercase">
+                  Total
+                </div>
+                <div className="text-xs font-bold">
+                  ₹{selectedUser?.expenseTotal ?? 0}
+                </div>
               </div>
-              <span className="text-sm font-semibold">
-                {selectedUser?.activeDeals ?? 0}
-              </span>
+              <div className="border-border/50 flex-1 border-l text-center">
+                <div className="text-muted-foreground text-[9px] font-semibold uppercase">
+                  Approved
+                </div>
+                <div className="text-xs font-bold text-green-600">
+                  ₹{selectedUser?.expenseApproved ?? 0}
+                </div>
+              </div>
+              <div className="border-border/50 flex-1 border-l text-center">
+                <div className="text-muted-foreground text-[9px] font-semibold uppercase">
+                  Pending
+                </div>
+                <div className="text-xs font-bold text-orange-500">
+                  ₹{selectedUser?.expensePending ?? 0}
+                </div>
+              </div>
             </div>
           </div>
 
