@@ -140,27 +140,25 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
   const handleStatusUpdate = async (newStatus: string, reason?: string) => {
     if (!isAdmin || !expense) return;
     
-    let approved_amount = null;
-    let approved_by = user?.id;
-    let approved_at = new Date().toISOString();
-    
+    const updatePayload: any = {
+      status: newStatus,
+      rejection_reason: reason || null,
+      approved_by: user?.id,
+      approved_at: new Date().toISOString()
+    };
     if (newStatus === "Approved") {
-      approved_amount = expense.amount; // simple auto-approve full amount
+      updatePayload.approved_amount = expense.amount;
     }
     
     const { error } = await supabase
       .from("expenses")
-      .update({ 
-        status: newStatus,
-        rejection_reason: reason || null,
-        approved_amount,
-        approved_by,
-        approved_at
-      })
-      .eq("id", expense.id);
+      .update(updatePayload)
+      .eq("id", expense.id)
+      .eq("account_id", accountId);
       
     if (error) {
-      toast.error("Failed to update status");
+      console.error("Expense status update error:", error);
+      toast.error(`Failed to update status: ${error.message}`);
     } else {
       toast.success(`Expense ${newStatus}`);
       fetchAllData();
@@ -217,10 +215,10 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
         <div className="flex items-center gap-2">
           {isAdmin && isPending && (
             <>
-              <Button size="sm" variant="outline" className="border-green-500/30 text-green-600 hover:bg-green-50" onClick={() => handleStatusUpdate("Approved")}>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleStatusUpdate("Approved")}>
                 <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
               </Button>
-              <Button size="sm" variant="outline" className="border-red-500/30 text-red-600 hover:bg-red-50" onClick={() => {
+              <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" onClick={() => {
                 const reason = prompt("Enter rejection reason:");
                 if (reason !== null) handleStatusUpdate("Rejected", reason);
               }}>
@@ -228,8 +226,13 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
               </Button>
             </>
           )}
-          {(!isAdmin || expense.employee_id === profile?.id) && isPending && (
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+          {isAdmin && (
+            <Button variant="outline" size="sm" className="border-blue-500/30 text-blue-500 hover:bg-blue-900/30 hover:text-blue-400" onClick={() => setEditOpen(true)}>
+              Edit Expense
+            </Button>
+          )}
+          {!isAdmin && expense.employee_id === profile?.id && isPending && (
+            <Button variant="outline" size="sm" className="border-blue-500/30 text-blue-500 hover:bg-blue-900/30 hover:text-blue-400" onClick={() => setEditOpen(true)}>
               Edit Expense
             </Button>
           )}

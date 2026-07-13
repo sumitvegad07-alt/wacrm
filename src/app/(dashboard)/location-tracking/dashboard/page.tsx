@@ -66,43 +66,79 @@ export default function LocationDashboardPage() {
   }, []);
 
   const fetchDashboardData = async () => {
-    // Fetch active tracking sessions (punched in users)
+    // 1. Fetch ALL team profiles for this account
+    const { data: allProfiles } = await supabase
+      .from('profiles')
+      .select('id, user_id, full_name, account_role')
+      .order('full_name');
+
+    // 2. Fetch active tracking sessions (punched in users)
     const { data: sessions } = await supabase
       .from('tracking_sessions')
-      .select(
-        `
-        id, user_id, started_at,
-        profiles ( full_name, role )
-      `
-      )
+      .select('id, user_id, started_at')
       .is('ended_at', null);
 
+    // Build a map of active sessions by user_id (deduplicated — take latest)
+    const activeSessionMap = new Map<string, any>();
     if (sessions) {
-      const activeUsers = sessions.map((s) => ({
-        id: s.user_id,
-        sessionId: s.id,
-        name: (s.profiles as any)?.full_name || 'Unknown',
-        role: (s.profiles as any)?.role || 'Field Staff',
-        status: 'active',
-        userId: s.user_id,
-        startedAt: s.started_at,
-        punchedIn: new Date(s.started_at).toLocaleTimeString('en-IN', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        battery: 0,
-        distance: 0,
-        totalVisits: 0,
-        totalCustomers: 0,
-        totalOrders: 0,
-        activityTotal: 0,
-        activityDone: 0,
-        expenseTotal: 0,
-        expenseApproved: 0,
-        expensePending: 0,
-      }));
-      setUsersData(activeUsers);
-      if (activeUsers.length > 0) setSelectedUser(activeUsers[0]);
+      for (const s of sessions) {
+        const existing = activeSessionMap.get(s.user_id);
+        if (!existing || new Date(s.started_at) > new Date(existing.started_at)) {
+          activeSessionMap.set(s.user_id, s);
+        }
+      }
+    }
+
+    // 3. Build user list: active users first, then offline
+    const allUsers: any[] = [];
+    const seenUserIds = new Set<string>();
+
+    if (allProfiles) {
+      for (const profile of allProfiles) {
+        if (seenUserIds.has(profile.user_id)) continue;
+        seenUserIds.add(profile.user_id);
+
+        const session = activeSessionMap.get(profile.user_id);
+        const isActive = !!session;
+
+        allUsers.push({
+          id: profile.user_id,
+          sessionId: session?.id || null,
+          name: profile.full_name || 'Unknown',
+          role: profile.account_role || 'user',
+          status: isActive ? 'active' : 'offline',
+          userId: profile.user_id,
+          startedAt: session?.started_at || null,
+          punchedIn: isActive
+            ? new Date(session.started_at).toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : null,
+          battery: 0,
+          distance: 0,
+          totalVisits: 0,
+          totalCustomers: 0,
+          totalOrders: 0,
+          activityTotal: 0,
+          activityDone: 0,
+          expenseTotal: 0,
+          expenseApproved: 0,
+          expensePending: 0,
+        });
+      }
+    }
+
+    // Sort: active first, then offline, each alphabetically
+    allUsers.sort((a, b) => {
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (a.status !== 'active' && b.status === 'active') return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    setUsersData(allUsers);
+    if (allUsers.length > 0 && !selectedUser) {
+      setSelectedUser(allUsers[0]);
     }
   };
 
@@ -386,28 +422,31 @@ export default function LocationDashboardPage() {
                   selectedUser?.id === u.id
                     ? 'bg-primary/5 border-primary'
                     : 'hover:bg-muted border-transparent'
-                }`}
+                } ${u.status === 'offline' ? 'opacity-60' : ''}`}
               >
                 <div className="relative shrink-0">
-                  <Avatar className="border-border h-8 w-8 border">
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                  <Avatar className={`h-8 w-8 border ${u.status === 'offline' ? 'border-muted-foreground/30' : 'border-border'}`}>
+                    <AvatarFallback className={`text-xs ${u.status === 'offline' ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'}`}>
                       {u.name[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div
-                    className={`border-card absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 ${u.status === 'active' ? 'bg-green-500' : 'bg-muted-foreground'}`}
+                    className={`border-card absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 ${u.status === 'active' ? 'bg-green-500' : 'bg-zinc-500'}`}
                   />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p
-                    className={`truncate text-sm font-medium ${selectedUser?.id === u.id ? 'text-primary' : 'text-foreground'}`}
+                    className={`truncate text-sm font-medium ${selectedUser?.id === u.id ? 'text-primary' : u.status === 'offline' ? 'text-muted-foreground' : 'text-foreground'}`}
                   >
                     {u.name}
                   </p>
-                  <p className="text-muted-foreground truncate text-xs">
-                    {u.role}
+                  <p className={`truncate text-xs ${u.status === 'offline' ? 'text-zinc-500' : 'text-muted-foreground'}`}>
+                    {u.status === 'active' ? u.role : 'Offline'}
                   </p>
                 </div>
+                {u.status === 'active' && (
+                  <div className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-green-500" />
+                )}
               </button>
             ))
           )}
@@ -472,7 +511,7 @@ export default function LocationDashboardPage() {
       <div className="border-border bg-card z-10 flex w-72 shrink-0 flex-col border-l shadow-[0_0_15px_rgba(0,0,0,0.05)]">
         {/* User Summary Header */}
         <div className="border-border bg-muted/10 border-b p-4">
-          <div className="mb-4 flex items-start justify-between rounded-xl border border-green-500/20 bg-green-500/10 p-3">
+          <div className={`mb-4 flex items-start justify-between rounded-xl border p-3 ${selectedUser?.status === 'active' ? 'border-green-500/20 bg-green-500/10' : 'border-zinc-500/20 bg-zinc-500/10'}`}>
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
                 <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
@@ -485,9 +524,9 @@ export default function LocationDashboardPage() {
                 </h3>
                 {selectedUser && (
                   <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[10px]">
-                    <span className="flex items-center gap-1 font-medium text-green-600">
-                      <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
-                      Active
+                    <span className={`flex items-center gap-1 font-medium ${selectedUser.status === 'active' ? 'text-green-600' : 'text-zinc-500'}`}>
+                      <div className={`h-1.5 w-1.5 rounded-full ${selectedUser.status === 'active' ? 'bg-green-500 animate-pulse' : 'bg-zinc-500'}`} />
+                      {selectedUser.status === 'active' ? 'Active' : 'Offline'}
                     </span>
                     <span>•</span>
                     <span>{selectedUser.battery}% Battery</span>
@@ -496,7 +535,7 @@ export default function LocationDashboardPage() {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-lg leading-none font-bold text-green-600">
+              <div className={`text-lg leading-none font-bold ${selectedUser?.status === 'active' ? 'text-green-600' : 'text-zinc-500'}`}>
                 {selectedUser?.distance ?? 0}{' '}
                 <span className="text-muted-foreground text-[10px] font-normal uppercase">
                   km

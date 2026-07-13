@@ -95,27 +95,33 @@ export default function ExpensesPage() {
     if (!isAdmin) return;
     
     let approved_amount = null;
-    let approved_by = profile?.id;
+    let approved_by = user?.id;
     let approved_at = new Date().toISOString();
     
     if (newStatus === "Approved") {
       const expense = expenses.find(e => e.id === id);
-      approved_amount = expense?.amount; // simple auto-approve full amount
+      approved_amount = expense?.amount;
+    }
+    
+    const updatePayload: any = { 
+      status: newStatus,
+      rejection_reason: reason || null,
+      approved_by,
+      approved_at
+    };
+    if (newStatus === "Approved") {
+      updatePayload.approved_amount = approved_amount;
     }
     
     const { error } = await supabase
       .from("expenses")
-      .update({ 
-        status: newStatus,
-        rejection_reason: reason || null,
-        approved_amount,
-        approved_by,
-        approved_at
-      })
-      .eq("id", id);
+      .update(updatePayload)
+      .eq("id", id)
+      .eq("account_id", accountId);
       
     if (error) {
-      toast.error("Failed to update status");
+      console.error("Expense status update error:", error);
+      toast.error(`Failed to update status: ${error.message}`);
     } else {
       toast.success(`Expense ${newStatus}`);
       loadExpenses();
@@ -329,27 +335,29 @@ export default function ExpensesPage() {
       label: "Actions",
       type: "text",
       render: (expense) => {
-        if (expense.status === "Pending") {
-          return (
-            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <Button size="sm" variant="outline" className="h-8 border-green-500/30 text-green-600 hover:bg-green-50" onClick={() => handleStatusUpdate(expense.id, "Approved")}>
-                <CheckCircle className="h-4 w-4 mr-1" /> Approve
-              </Button>
-              <Button size="sm" variant="outline" className="h-8 border-red-500/30 text-red-600 hover:bg-red-50" onClick={() => {
-                const reason = prompt("Enter rejection reason:");
-                if (reason !== null) handleStatusUpdate(expense.id, "Rejected", reason);
-              }}>
-                <XCircle className="h-4 w-4 mr-1" /> Reject
-              </Button>
-              <Button size="sm" variant="ghost" className="h-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(expense.id)}>
-                Delete
-              </Button>
-            </div>
-          );
-        }
         return (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <span className="text-muted-foreground text-xs">{expense.status === "Approved" ? "Done" : "Rejected"}</span>
+            {expense.status === "Pending" && (
+              <>
+                <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700 text-white" onClick={() => handleStatusUpdate(expense.id, "Approved")}>
+                  <CheckCircle className="h-4 w-4 mr-1" /> Approve
+                </Button>
+                <Button size="sm" className="h-8 bg-red-600 hover:bg-red-700 text-white" onClick={() => {
+                  const reason = prompt("Enter rejection reason:");
+                  if (reason !== null) handleStatusUpdate(expense.id, "Rejected", reason);
+                }}>
+                  <XCircle className="h-4 w-4 mr-1" /> Reject
+                </Button>
+              </>
+            )}
+            <Button size="sm" variant="outline" className="h-8 border-blue-500/30 text-blue-500 hover:bg-blue-900/30 hover:text-blue-400" onClick={() => { setSelectedExpense(expense); setFormOpen(true); }}>
+              Edit
+            </Button>
+            {expense.status === "Pending" && (
+              <Button size="sm" variant="outline" className="h-8 border-red-500/30 text-red-500 hover:bg-red-900/30 hover:text-red-400" onClick={() => handleDelete(expense.id)}>
+                Delete
+              </Button>
+            )}
           </div>
         );
       }
