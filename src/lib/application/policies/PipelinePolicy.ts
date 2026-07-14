@@ -7,7 +7,7 @@ export class PipelinePolicy {
   public getStage(stageId: string): PipelineStageConfig {
     const stage = this.config.stages.find(s => s.id === stageId);
     if (!stage) {
-      throw new ApplicationError('VALIDATION_ERROR', \`Stage '\${stageId}' does not exist in pipeline '\${this.config.name}'.\`);
+      throw new ApplicationError('VALIDATION_ERROR', `Stage '${stageId}' does not exist in pipeline '${this.config.name}'.`);
     }
     return stage;
   }
