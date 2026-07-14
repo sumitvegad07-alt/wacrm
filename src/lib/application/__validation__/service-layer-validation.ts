@@ -35,7 +35,7 @@ async function runValidation() {
   console.log('--- Booting Enterprise Application Service Layer Validation ---');
 
   const unitOfWork = new MockUnitOfWork();
-  const runtimeBus = RuntimeEventBus.getInstance();
+  const runtimeBus = RuntimeEventBus;
   const mockRepos = { contactRepository: new MockContactRepository() };
 
   // 1. Initialize DI Container
