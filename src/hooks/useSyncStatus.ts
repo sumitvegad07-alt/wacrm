@@ -13,7 +13,9 @@ export const useSyncStatus = () => {
     const unsubscribe = ApplicationSyncService.subscribe((state) => {
       setSyncState(state);
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   return syncState;

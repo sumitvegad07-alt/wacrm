@@ -22,7 +22,9 @@ export class ApplicationSyncService {
   public static subscribe(listener: (state: GlobalSyncState) => void) {
     this.listeners.add(listener);
     listener(this.currentState);
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   // Called by a bridge or SyncCenter when state changes
