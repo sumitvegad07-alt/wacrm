@@ -15,6 +15,46 @@ const eslintConfig = defineConfig([
     // Vendored minified opus-recorder encoder worker (served statically).
     "public/opus/**",
   ]),
+  {
+    files: ["src/components/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}", "src/hooks/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@supabase/supabase-js", "@/lib/supabase/*"],
+              message: "UI components must not interact directly with Supabase. Use Application Services via React Hooks instead."
+            },
+            {
+              group: ["@/lib/repositories/*"],
+              message: "UI components must not import Repositories directly. Use Application Services via React Hooks instead."
+            },
+            {
+              group: ["@/lib/runtime/*"],
+              message: "UI components must not interact with the Sync Runtime directly. Use Application Services via React Hooks instead."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    files: ["src/lib/application/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@supabase/supabase-js", "@/lib/supabase/*"],
+              message: "Application Services must not interact directly with Supabase. Use Repositories instead."
+            }
+          ]
+        }
+      ]
+    }
+  }
 ]);
 
 export default eslintConfig;
