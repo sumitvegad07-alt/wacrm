@@ -25,7 +25,7 @@ export class UpdateAccountStatusCommandHandler implements ICommandHandler<Update
       
       if (!typePolicy.isValidType(command.newType)) {
         return ApplicationResult.failure(
-          new ApplicationError('VALIDATION_ERROR', \`Invalid account classification type: \${command.newType}\`)
+          new ApplicationError('VALIDATION_ERROR', 'Invalid account classification type: ' + command.newType)
         );
       }
 

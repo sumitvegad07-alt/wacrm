@@ -25,7 +25,7 @@ export class QualifyLeadCommandHandler implements ICommandHandler<QualifyLeadCom
 
       if (!statusPolicy.isValidTransition(currentStatus, command.newStatus)) {
         return ApplicationResult.failure(
-          new ApplicationError('VALIDATION_ERROR', \`Invalid lead status transition to \${command.newStatus}\`)
+          new ApplicationError('VALIDATION_ERROR', 'Invalid lead status transition to ' + command.newStatus)
         );
       }
 

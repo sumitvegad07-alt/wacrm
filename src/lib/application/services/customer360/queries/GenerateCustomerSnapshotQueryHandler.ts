@@ -2,7 +2,7 @@ import { Customer360Snapshot, AccountSummary, ContactSummary, SalesSummary, Acti
 import { TimelineEvent } from '../../../../domain/read-models/customer360/TimelineEvent';
 import { HealthIndicators } from '../../../../domain/read-models/customer360/HealthIndicators';
 import { Customer360Repository } from '../../../../repositories/implementations/customer360.repository';
-import { ApplicationResult, ApplicationError } from '../../../../core/ApplicationResult';
+import { ApplicationResult, ApplicationError } from '../../../core/ApplicationResult';
 
 export class GenerateCustomerSnapshotQuery {
   constructor(public readonly crmAccountId: string) {}
