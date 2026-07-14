@@ -1,5 +1,5 @@
 import { PipelineConfig, PipelineStageConfig } from './PipelineConfiguration';
-import { ApplicationError } from '../../core/ApplicationResult';
+import { ApplicationError } from '../core/ApplicationResult';
 
 export class PipelinePolicy {
   constructor(private readonly config: PipelineConfig) {}

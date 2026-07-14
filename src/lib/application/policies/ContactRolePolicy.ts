@@ -1,5 +1,5 @@
 import { ContactRoleConfiguration } from './ContactRoleConfiguration';
-import { ApplicationError } from '../../core/ApplicationResult';
+import { ApplicationError } from '../core/ApplicationResult';
 
 export class ContactRolePolicy {
   constructor(private readonly config: ContactRoleConfiguration) {}

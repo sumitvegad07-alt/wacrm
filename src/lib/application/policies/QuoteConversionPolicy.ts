@@ -1,5 +1,5 @@
 import { Quote } from '../../../domain/entities/Quote';
-import { ApplicationError } from '../../core/ApplicationResult';
+import { ApplicationError } from '../core/ApplicationResult';
 
 export class QuoteConversionPolicy {
   public validate(quote: Quote): void {
