@@ -4,7 +4,7 @@ import { RuntimeEventBus, REPOSITORY_EVENT } from '../../runtime/events/runtime-
 export class DomainEventBridge {
   constructor(
     private readonly domainBus: DomainEventBus,
-    private readonly runtimeBus: RuntimeEventBus
+    private readonly runtimeBus: typeof RuntimeEventBus
   ) {
     this.initialize();
   }

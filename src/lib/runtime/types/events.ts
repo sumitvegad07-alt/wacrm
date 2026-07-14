@@ -49,8 +49,19 @@ export interface TelemetryMetrics {
   zombiesRecovered: number;
 }
 
+export interface RepositoryBridgeEvent {
+  type: string; // e.g. 'REPOSITORY_EVENT:ENTITY_CREATED'
+  payload: {
+    entityType: string;
+    entityId: string;
+    data: unknown;
+    timestamp: number;
+  };
+}
+
 export type RuntimeEvent = 
   | ConnectivityEvent
   | SyncStatusEvent
   | QueueStatusEvent
-  | HealthStatusEvent;
+  | HealthStatusEvent
+  | RepositoryBridgeEvent;
