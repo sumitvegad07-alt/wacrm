@@ -1,4 +1,4 @@
-import { OrderCommercialStatus } from '../../../domain/entities/Order';
+import { OrderCommercialStatus } from '../../domain/entities/Order';
 
 export class OrderCommercialPolicy {
   public canTransition(current: OrderCommercialStatus, next: OrderCommercialStatus): boolean {

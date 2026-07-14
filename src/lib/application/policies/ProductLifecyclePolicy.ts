@@ -1,4 +1,4 @@
-import { ProductStatus } from '../../../domain/entities/Product';
+import { ProductStatus } from '../../domain/entities/Product';
 import { ApplicationError } from '../core/ApplicationResult';
 
 export class ProductLifecyclePolicy {

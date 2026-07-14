@@ -1,4 +1,4 @@
-import { PriceBookEntry } from '../../../domain/entities/PriceBookEntry';
+import { PriceBookEntry } from '../../domain/entities/PriceBookEntry';
 import { ApplicationError } from '../core/ApplicationResult';
 
 export class PriceBookPolicy {

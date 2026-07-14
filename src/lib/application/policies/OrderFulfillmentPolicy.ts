@@ -1,4 +1,4 @@
-import { OrderFulfillmentStatus } from '../../../domain/entities/Order';
+import { OrderFulfillmentStatus } from '../../domain/entities/Order';
 
 export class OrderFulfillmentPolicy {
   public canTransition(current: OrderFulfillmentStatus, next: OrderFulfillmentStatus): boolean {
