@@ -35,7 +35,7 @@ export class SupabaseNetworkProvider implements INetworkProvider {
     if (!this.authProvider) throw new Error('AuthProvider not injected');
     
     // As per CTO mandate, explicitly ask the auth provider for a valid session before ANY network request
-    const token = await this.authProvider.getToken();
+    const token = await this.authProvider.getSessionId();
     if (!token) {
       throw new Error('RuntimeAuthError: No valid session available');
     }

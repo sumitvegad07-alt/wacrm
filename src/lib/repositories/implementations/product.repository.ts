@@ -1,4 +1,4 @@
-import { Product } from '../../../domain/entities/Product';
+import { Product } from '../../domain/entities/Product';
 
 export class ProductRepository {
   async create(data: Partial<Product>): Promise<void> {}

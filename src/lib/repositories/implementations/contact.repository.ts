@@ -45,13 +45,14 @@ export class ContactRepository extends BaseRepository<Contact> implements IConta
           action: 'insert' as const,
           collection: this.collectionName,
           id,
-          data: { ...c, ...metadata }
+          data: { id, ...c, ...metadata }
         };
       });
 
       await this.storage.batch(operations);
       
-      this.publishEvent('BATCH_COMPLETED', { inserted: contacts.length });
+      const insertedData = operations.map(op => op.data);
+      this.publishEvent('CREATED', insertedData);
       
       return { success: true, insertedCount: contacts.length, updatedCount: 0, deletedCount: 0 };
     } catch (e: any) {

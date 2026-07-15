@@ -37,9 +37,10 @@ export class CreateActivityCommandHandler implements ICommandHandler<CreateActiv
           relatedEntityId: command.relatedEntityId,
           relatedEntityType: command.relatedEntityType, // Universal polymorphic link
           dueDate: command.dueDate,
+          ownerId: '', // Required field – populated by infrastructure/auth context in production
           status: 'Open',
           isArchived: false,
-          sync_status: 'pending',
+          sync_status: 'pending' as const,
           sync_version: 1,
         };
 

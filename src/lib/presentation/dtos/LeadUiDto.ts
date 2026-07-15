@@ -1,4 +1,4 @@
-import { Lead } from '../../../domain/entities/Lead';
+import { Lead } from '../../domain/entities/Lead';
 
 export type SyncBadgeState = 'pending' | 'uploading' | 'synced' | 'failed' | 'conflict';
 

@@ -20,7 +20,7 @@ async function validateOfflineCRUD() {
   const gpsRepo = new GPSRepository(storage, 'gps_points', context);
 
   let eventFired = false;
-  RuntimeEventBus.subscribe('REPOSITORY_EVENT' as any, (event) => {
+  RuntimeEventBus.subscribe('REPOSITORY_EVENT', (event) => {
     if (event.payload.action === 'CREATED' && event.payload.entityType === 'contacts') {
       eventFired = true;
     }

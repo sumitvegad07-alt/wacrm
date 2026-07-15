@@ -17,7 +17,7 @@ export class UploadEngine {
   public start(intervalMs: number = 5000) {
     if (this.isRunning) return;
     this.isRunning = true;
-    SyncStatusService.updateState('syncing');
+    SyncStatusService.updateState('synchronizing');
     
     this.intervalId = setInterval(() => this.processQueue(), intervalMs);
     // Initial kick
@@ -37,14 +37,14 @@ export class UploadEngine {
       return;
     }
 
-    SyncStatusService.updateState('syncing');
+    SyncStatusService.updateState('synchronizing');
     const startTime = Date.now();
 
     const payloads: SyncOperationPayload[] = batch.map(op => ({
       id: op.id,
-      entityType: op.entityType,
-      entityId: op.entityId,
-      action: op.type,
+      entityType: op.entity,
+      entityId: op.payload?.id || op.id,
+      action: op.type === 'CREATE' ? 'insert' : (op.type === 'UPDATE' ? 'update' : 'delete'),
       data: op.payload,
       timestamp: op.createdAt.getTime()
     }));
@@ -57,8 +57,8 @@ export class UploadEngine {
         await this.storage.batch(
           batch.map(op => ({
             action: 'update',
-            collection: op.entityType,
-            id: op.entityId,
+            collection: op.entity,
+            id: op.payload?.id || op.id,
             data: { sync_status: 'synced', sync_version: (op.payload.sync_version || 0) + 1 }
           }))
         );
@@ -66,7 +66,7 @@ export class UploadEngine {
         batch.forEach(op => SyncQueueService.removeOperation(op.id));
         TelemetryService.logSyncDuration(Date.now() - startTime);
       } else {
-        this.handleFailures(batch, result.errors);
+        this.handleFailures(batch, result.errors ?? []);
       }
     } catch (e) {
       this.handleFailures(batch, [e]);
@@ -77,7 +77,7 @@ export class UploadEngine {
     batch.forEach(op => {
       if (op.retryCount >= 3) {
         SyncQueueService.removeOperation(op.id);
-        DeadLetterQueueService.enqueue({ ...op, error: errors[0]?.message || 'Unknown error' });
+        DeadLetterQueueService.pushToDLQ(op, errors[0]?.message || 'Unknown error');
       } else {
         op.retryCount += 1;
         SyncQueueService.updateOperationStatus(op.id, 'failed', errors[0]?.message);

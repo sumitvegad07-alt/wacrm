@@ -1,5 +1,5 @@
-import { Activity } from '../../../domain/entities/Activity';
-import { TimelineEntry } from '../../../domain/value-objects/TimelineEntry';
+import { Activity } from '../../domain/entities/Activity';
+import { TimelineEntry } from '../../domain/value-objects/TimelineEntry';
 
 export type SyncBadgeState = 'pending' | 'uploading' | 'synced' | 'failed' | 'conflict';
 

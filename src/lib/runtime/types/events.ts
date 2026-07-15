@@ -50,12 +50,12 @@ export interface TelemetryMetrics {
 }
 
 export interface RepositoryBridgeEvent {
-  type: string; // e.g. 'REPOSITORY_EVENT:ENTITY_CREATED'
+  type: 'REPOSITORY_EVENT'; // e.g. 'REPOSITORY_EVENT'
   payload: {
     entityType: string;
-    entityId: string;
-    data: unknown;
-    timestamp: number;
+    action: 'CREATED' | 'UPDATED' | 'DELETED' | 'RESTORED';
+    data: any;
+    timestamp: Date;
   };
 }
 

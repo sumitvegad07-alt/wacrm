@@ -1,4 +1,4 @@
-import { Lead } from '../../../domain/entities/Lead';
+import { Lead } from '../../domain/entities/Lead';
 
 export class LeadRepository {
   // In a real implementation this interacts with WatermelonDB (IStorageManager)

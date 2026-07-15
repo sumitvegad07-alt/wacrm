@@ -1,4 +1,4 @@
-import { Account } from '../../../domain/entities/Account';
+import { Account } from '../../domain/entities/Account';
 
 export class AccountRepository {
   // In a real implementation this interacts with WatermelonDB (IStorageManager)

@@ -1,4 +1,4 @@
-import { Customer360Snapshot } from '../../../domain/read-models/customer360/Customer360Snapshot';
+import { Customer360Snapshot } from '../../domain/read-models/customer360/Customer360Snapshot';
 
 export class Customer360Repository {
   /**

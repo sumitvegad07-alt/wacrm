@@ -1,5 +1,5 @@
-import { Order } from '../../../domain/entities/Order';
-import { OrderItem } from '../../../domain/entities/OrderItem';
+import { Order } from '../../domain/entities/Order';
+import { OrderItem } from '../../domain/entities/OrderItem';
 
 export class OrderRepository {
   /**

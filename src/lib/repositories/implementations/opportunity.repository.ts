@@ -1,4 +1,4 @@
-import { Opportunity } from '../../../domain/entities/Opportunity';
+import { Opportunity } from '../../domain/entities/Opportunity';
 
 export class OpportunityRepository {
   async create(data: Partial<Opportunity>): Promise<void> {}

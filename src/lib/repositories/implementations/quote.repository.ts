@@ -1,5 +1,5 @@
-import { Quote } from '../../../domain/entities/Quote';
-import { QuoteLineItem } from '../../../domain/entities/QuoteLineItem';
+import { Quote } from '../../domain/entities/Quote';
+import { QuoteLineItem } from '../../domain/entities/QuoteLineItem';
 
 export class QuoteRepository {
   async create(quote: Partial<Quote>, lineItems: Partial<QuoteLineItem>[]): Promise<void> {}

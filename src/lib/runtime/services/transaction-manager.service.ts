@@ -33,18 +33,16 @@ export class TransactionManagerServiceImpl {
       // The storage provider is now responsible for translating JSON intents into SQL/Watermelon calls atomically.
       // We will simulate this translation logic passing to the mock storage layer for validation.
       
-      const executableOperations = intents.map(intent => async () => {
-        // This is a bridge. In reality, the StorageProvider's own `executeTransaction` 
-        // would take the raw intents, not closures. But for the sake of not breaking the 
-        // mock storage interface today, we map them here.
-        if (intent.action === 'CREATE' || intent.action === 'UPDATE') {
-          await this.storageManager!.save(intent.entity, intent.data.id, intent.data);
-        } else if (intent.action === 'DELETE') {
-          await this.storageManager!.remove(intent.entity, intent.data.id);
-        }
+      const operations: Array<{ action: 'insert'|'update'|'delete', collection: string, id: string, data?: any }> = intents.map(intent => {
+        return {
+          action: intent.action === 'DELETE' ? 'delete' : (intent.action === 'UPDATE' ? 'update' : 'insert'),
+          collection: intent.entity,
+          id: intent.data.id,
+          data: intent.action === 'DELETE' ? undefined : intent.data
+        };
       });
 
-      await this.storageManager.executeTransaction(executableOperations);
+      await this.storageManager.batch(operations);
       return true;
     } catch (e) {
       console.error('TransactionManager: Atomic transaction failed', e);

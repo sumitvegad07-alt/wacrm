@@ -22,7 +22,8 @@ export const useActivities = (relatedEntityId: string, relatedEntityType: string
     // Optimistic Update
     const optimisticActivity = new ActivityUiDto({
       id: tempId, type, title, relatedEntityId, relatedEntityType,
-      status: 'Open', dueDate, isArchived: false, sync_status: 'pending', sync_version: 1
+      ownerId: '', // Populated by infrastructure/auth context in production
+      status: 'Open', dueDate, isArchived: false, sync_status: 'pending' as const, sync_version: 1
     });
     
     setActivities(prev => [...prev, optimisticActivity]);

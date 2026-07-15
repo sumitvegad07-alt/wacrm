@@ -15,7 +15,7 @@ export const useAccounts = () => {
     
     const optimisticAccount = new AccountUiDto({
       id: tempId, name, code, type: 'Prospect', status: 'Active', 
-      isArchived: false, sync_status: 'pending', sync_version: 1
+      isArchived: false, sync_status: 'pending' as const, sync_version: 1
     });
     setAccounts(prev => [...prev, optimisticAccount]);
 

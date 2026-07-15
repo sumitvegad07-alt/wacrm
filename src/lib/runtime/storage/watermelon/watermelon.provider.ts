@@ -22,7 +22,7 @@ export class WatermelonStorageProvider implements IStorageManager {
         useWebWorker: false, // For validation script sync testing
         useIncrementalIndexedDB: true,
         extraLokiOptions: {
-          env: this.useMemoryOnly ? 'MEMORY' : 'BROWSER'
+          // env removed to satisfy strictly typed LokiAdapterOptions
         }
       });
 

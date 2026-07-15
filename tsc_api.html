@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TS Compiler API</title>
+  <script src="https://unpkg.com/typescript@latest/lib/typescript.js"></script>
+</head>
+<body>
+  <h1>TS Compiler Resolution</h1>
+  <pre id="output"></pre>
+  <script>
+    function log(msg) {
+      document.getElementById('output').textContent += msg + '\n';
+    }
+
+    try {
+      const codeQuoteVersion = `
+export class QuoteVersion {
+  constructor(public readonly versionNumber: number) {
+    if (versionNumber < 1) {
+      throw new Error("Version number must be at least 1");
+    }
+  }
+  public getDisplayString(): string {
+    return \`V\${this.versionNumber}\`;
+  }
+  public getNextVersion(): QuoteVersion {
+    return new QuoteVersion(this.versionNumber + 1);
+  }
+}
+      `;
+
+      const codeConsumer = `
+import { QuoteVersion } from './QuoteVersion';
+declare const oldQuote: { versionNumber: number };
+const version = new QuoteVersion(oldQuote.versionNumber);
+const next = version.getNextVersion();
+      `;
+
+      const compilerOptions = {
+        target: ts.ScriptTarget.ES2017,
+        module: ts.ModuleKind.CommonJS,
+        strict: true
+      };
+
+      const files = {
+        'QuoteVersion.ts': codeQuoteVersion,
+        'Consumer.ts': codeConsumer
+      };
+
+      const host = {
+        fileExists: (path) => !!files[path] || path === 'lib.d.ts',
+        readFile: (path) => files[path] || '',
+        getSourceFile: (path, languageVersion) => {
+          if (files[path]) {
+            return ts.createSourceFile(path, files[path], languageVersion);
+          }
+          if (path === 'lib.d.ts') {
+            return ts.createSourceFile('lib.d.ts', 'declare var console: any;', languageVersion);
+          }
+          return undefined;
+        },
+        getDefaultLibFileName: () => 'lib.d.ts',
+        writeFile: () => {},
+        getCurrentDirectory: () => '/',
+        getDirectories: () => [],
+        getCanonicalFileName: (f) => f,
+        useCaseSensitiveFileNames: () => true,
+        getNewLine: () => '\n'
+      };
+
+      const program = ts.createProgram(['Consumer.ts'], compilerOptions, host);
+      const checker = program.getTypeChecker();
+      const consumerFile = program.getSourceFile('Consumer.ts');
+
+      function visit(node) {
+        if (ts.isVariableDeclaration(node) && node.name.getText() === 'version') {
+          const type = checker.getTypeAtLocation(node);
+          log('Resolved Type of version: ' + checker.typeToString(type));
+          const props = type.getProperties();
+          log('Members:');
+          props.forEach(p => log('- ' + p.getName()));
+          
+          if (!props.find(p => p.getName() === 'getNextVersion')) {
+            log('getNextVersion is MISSING from type!');
+          } else {
+            log('getNextVersion IS PRESENT in type!');
+          }
+        }
+        ts.forEachChild(node, visit);
+      }
+      
+      visit(consumerFile);
+      log('DONE');
+    } catch (e) {
+      log('ERROR: ' + e.message);
+    }
+  </script>
+</body>
+</html>

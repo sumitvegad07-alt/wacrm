@@ -15,36 +15,36 @@ export class DomainEventBridge {
     
     this.domainBus.subscribe('ContactCreated', async (event) => {
       this.runtimeBus.publish({
-        type: REPOSITORY_EVENT.ENTITY_CREATED,
+        type: 'REPOSITORY_EVENT',
         payload: {
           entityType: 'contacts',
-          entityId: event.payload.id,
+          action: 'CREATED',
           data: event.payload,
-          timestamp: event.timestamp
+          timestamp: new Date(event.timestamp)
         }
       });
     });
 
     this.domainBus.subscribe('ContactUpdated', async (event) => {
       this.runtimeBus.publish({
-        type: REPOSITORY_EVENT.ENTITY_UPDATED,
+        type: 'REPOSITORY_EVENT',
         payload: {
           entityType: 'contacts',
-          entityId: event.payload.id,
+          action: 'UPDATED',
           data: event.payload,
-          timestamp: event.timestamp
+          timestamp: new Date(event.timestamp)
         }
       });
     });
 
     this.domainBus.subscribe('ContactDeleted', async (event) => {
       this.runtimeBus.publish({
-        type: REPOSITORY_EVENT.ENTITY_DELETED,
+        type: 'REPOSITORY_EVENT',
         payload: {
           entityType: 'contacts',
-          entityId: event.payload.id,
+          action: 'DELETED',
           data: event.payload,
-          timestamp: event.timestamp
+          timestamp: new Date(event.timestamp)
         }
       });
     });

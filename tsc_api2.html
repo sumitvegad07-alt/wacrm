@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TS Compiler API</title>
+  <script src="https://unpkg.com/typescript@latest/lib/typescript.js"></script>
+</head>
+<body>
+  <h1>TS Compiler Resolution</h1>
+  <pre id="output"></pre>
+  <script>
+    function log(msg) {
+      document.getElementById('output').textContent += msg + '\n';
+    }
+
+    try {
+      const codeQuoteVersion = `export class QuoteVersion {
+  constructor(public readonly versionNumber: number) {
+    if (versionNumber < 1) {
+      throw new Error("Version number must be at least 1");
+    }
+  }
+
+  public getDisplayString(): string {
+    return \`V\${this.versionNumber}\`;
+  }
+
+  public getNextVersion(): QuoteVersion {
+    return new QuoteVersion(this.versionNumber + 1);
+  }
+}
+`;
+
+      const codeConsumer = `import { ICommand, ICommandHandler } from '../../../core/CqrsInterfaces';
+import { ApplicationResult, ApplicationError } from '../../../core/ApplicationResult';
+import { IUnitOfWork } from '../../../core/IUnitOfWork';
+import { DomainEventBus } from '../../../core/DomainEventBus';
+import { QuoteRepository } from '../../../../repositories/implementations/quote.repository';
+import { QuoteVersion } from '../../../../domain/value-objects/QuoteVersion';
+import { CreateQuoteCommand, CreateQuoteCommandHandler } from './CreateQuoteCommandHandler';
+
+export class ReviseQuoteCommand implements ICommand {
+  constructor(
+    public readonly existingQuoteId: string,
+    public readonly newQuoteId: string,
+    public readonly updatedLineItems: any[],
+    public readonly taxConfig: any
+  ) {}
+}
+
+export class ReviseQuoteCommandHandler implements ICommandHandler<ReviseQuoteCommand, string> {
+  constructor(
+    private readonly repository: QuoteRepository,
+    private readonly createQuoteHandler: CreateQuoteCommandHandler,
+    private readonly domainEventBus: DomainEventBus,
+    private readonly unitOfWork: IUnitOfWork
+  ) {}
+
+  public async execute(command: ReviseQuoteCommand): Promise<ApplicationResult<string>> {
+    try {
+      return await this.unitOfWork.execute(async () => {
+        const oldQuote = await this.repository.findById(command.existingQuoteId);
+        if (!oldQuote) throw new ApplicationError('NOT_FOUND', 'Quote not found');
+        if (oldQuote.isHistorical) throw new ApplicationError('VALIDATION_ERROR', 'Cannot revise a historical quote snapshot');
+
+        // 1. Lock existing quote as historical (Immutable)
+        await this.repository.update(oldQuote.id, { isHistorical: true, status: 'Superseded' });
+
+        const version = new QuoteVersion(oldQuote.versionNumber);
+        const nextVersion = version.getNextVersion();
+
+        return ApplicationResult.success(command.newQuoteId);
+      });
+    } catch (e: any) {
+      return ApplicationResult.failure(new ApplicationError('SYSTEM_ERROR', e.message));
+    }
+  }
+}
+`;
+
+      const compilerOptions = {
+        target: ts.ScriptTarget.ES2020,
+        module: ts.ModuleKind.CommonJS,
+        moduleResolution: ts.ModuleResolutionKind.NodeJs,
+        strict: true
+      };
+
+      const files = {
+        '/src/lib/domain/value-objects/QuoteVersion.ts': codeQuoteVersion,
+        '/src/lib/application/services/quotes/management/ReviseQuoteCommandHandler.ts': codeConsumer
+      };
+
+      const host = {
+        fileExists: (path) => !!files[path] || path === 'lib.d.ts',
+        readFile: (path) => files[path] || '',
+        getSourceFile: (path, languageVersion) => {
+          if (files[path]) {
+            return ts.createSourceFile(path, files[path], languageVersion);
+          }
+          if (path === 'lib.d.ts') {
+            return ts.createSourceFile('lib.d.ts', 'declare var console: any;', languageVersion);
+          }
+          return undefined;
+        },
+        getDefaultLibFileName: () => 'lib.d.ts',
+        writeFile: () => {},
+        getCurrentDirectory: () => '/src/lib/application/services/quotes/management',
+        getDirectories: () => [],
+        getCanonicalFileName: (f) => f,
+        useCaseSensitiveFileNames: () => true,
+        getNewLine: () => '\n'
+      };
+
+      const program = ts.createProgram(['/src/lib/application/services/quotes/management/ReviseQuoteCommandHandler.ts'], compilerOptions, host);
+      const checker = program.getTypeChecker();
+      const consumerFile = program.getSourceFile('/src/lib/application/services/quotes/management/ReviseQuoteCommandHandler.ts');
+
+      function visit(node) {
+        if (ts.isVariableDeclaration(node) && node.name.getText() === 'version') {
+          const type = checker.getTypeAtLocation(node);
+          log('Resolved Type of version: ' + checker.typeToString(type));
+          const symbol = type.getSymbol();
+          if (symbol) {
+             const decls = symbol.getDeclarations();
+             if (decls && decls.length > 0) {
+                const srcFile = decls[0].getSourceFile();
+                log('Source file: ' + srcFile.fileName);
+             }
+          }
+          const props = type.getProperties();
+          log('Members:');
+          props.forEach(p => log('- ' + p.getName()));
+          
+          if (!props.find(p => p.getName() === 'getNextVersion')) {
+            log('getNextVersion is MISSING from type!');
+          } else {
+            log('getNextVersion IS PRESENT in type!');
+          }
+        }
+        ts.forEachChild(node, visit);
+      }
+      
+      visit(consumerFile);
+      log('DONE');
+    } catch (e) {
+      log('ERROR: ' + e.message);
+    }
+  </script>
+</body>
+</html>

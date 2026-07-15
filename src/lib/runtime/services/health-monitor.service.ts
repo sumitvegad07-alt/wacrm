@@ -47,7 +47,8 @@ export class HealthMonitorServiceImpl {
     let storageUsage = 0;
     if (this.storageManager) {
       try {
-        storageUsage = await this.storageManager.getStorageUsage();
+        const metrics = await this.storageManager.metrics();
+        storageUsage = metrics.dbSizeBytes || 0;
         if (storageUsage > 50 * 1024 * 1024) { // > 50MB
           issues.push('High storage usage');
         }

@@ -43,12 +43,12 @@ async function runValidation() {
   if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir);
 
   let md = `# CRM-001 Lead Module Integration Validation\n\n`;
-  md += \`| Test | Result |\n|---|---|\n\`;
+  md += `| Test | Result |\n|---|---|\n`;
   results.forEach(r => {
-    md += \`| \${r.test} | \${r.passed ? 'Passed ✅' : 'Failed ❌'} |\n\`;
+    md += `| ${r.test} | ${r.passed ? 'Passed ✅' : 'Failed ❌'} |\n`;
   });
 
-  fs.writeFileSync(path.join(reportsDir, \`CRM001-Validation-\${new Date().toISOString().split('T')[0]}.md\`), md);
+  fs.writeFileSync(path.join(reportsDir, `CRM001-Validation-${new Date().toISOString().split('T')[0]}.md`), md);
   console.log('\nValidation complete. Report generated.');
 }
 

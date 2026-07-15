@@ -15,7 +15,7 @@ class RuntimeEventBusService {
     return RuntimeEventBusService.instance;
   }
 
-  public subscribe<T extends RuntimeEvent>(eventType: T['type'], handler: EventHandler<T>): () => void {
+  public subscribe<K extends RuntimeEvent['type']>(eventType: K, handler: EventHandler<Extract<RuntimeEvent, { type: K }>>): () => void {
     if (!this.listeners.has(eventType)) {
       this.listeners.set(eventType, new Set());
     }

@@ -19,7 +19,7 @@ export class DownloadEngine {
       
       if (deltas.length === 0) return;
 
-      const ops = [];
+      const ops: Array<{ action: 'insert'|'update'|'delete', collection: string, id: string, data?: any }> = [];
       
       for (const delta of deltas) {
         // Fetch local state for conflict check
@@ -29,7 +29,7 @@ export class DownloadEngine {
         
         if (resolution === 'server_wins') {
           ops.push({
-            action: delta.action === 'delete' ? 'delete' : 'upsert',
+            action: delta.action === 'delete' ? 'delete' : (local ? 'update' : 'insert'),
             collection: delta.entityType,
             id: delta.data.id,
             data: { ...delta.data, sync_status: 'synced' } // Mark as fully synced locally

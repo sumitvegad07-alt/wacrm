@@ -43,7 +43,7 @@ export class CreateOpportunityCommandHandler implements ICommandHandler<CreateOp
           currency: 'USD',
           priority: 'Medium',
           isArchived: false,
-          sync_status: 'pending',
+          sync_status: 'pending' as const,
           sync_version: 1,
         };
 

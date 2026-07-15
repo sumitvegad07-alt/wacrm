@@ -32,6 +32,7 @@ export class CreateAccountCommandHandler implements ICommandHandler<CreateAccoun
           id: command.id,
           name: command.name,
           type: typePolicy.getDefaultType(),
+          status: 'Active',
           isArchived: false,
           sync_status: 'pending' as const,
           sync_version: 1,

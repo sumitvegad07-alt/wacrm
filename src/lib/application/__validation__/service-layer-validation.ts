@@ -43,8 +43,10 @@ async function runValidation() {
   const di = CompositionRoot.getInstance();
 
   let bridgedEvents = 0;
-  runtimeBus.subscribe(REPOSITORY_EVENT.ENTITY_CREATED, () => {
-    bridgedEvents++;
+  runtimeBus.subscribe('REPOSITORY_EVENT', (event) => {
+    if (event.payload.action === 'CREATED') {
+      bridgedEvents++;
+    }
   });
 
   console.log('1. Testing Business Validation (Failure)...');

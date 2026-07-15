@@ -1,5 +1,5 @@
-import { Opportunity } from '../../../domain/entities/Opportunity';
-import { WeightedForecast } from '../../../domain/value-objects/WeightedForecast';
+import { Opportunity } from '../../domain/entities/Opportunity';
+import { WeightedForecast } from '../../domain/value-objects/WeightedForecast';
 
 export type SyncBadgeState = 'pending' | 'uploading' | 'synced' | 'failed' | 'conflict';
 

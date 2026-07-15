@@ -33,7 +33,8 @@ export class ReviseQuoteCommandHandler implements ICommandHandler<ReviseQuoteCom
         // 1. Lock existing quote as historical (Immutable)
         await this.repository.update(oldQuote.id, { isHistorical: true, status: 'Superseded' });
 
-        const nextVersion = new QuoteVersion(oldQuote.versionNumber).getNextVersion();
+        const version = new QuoteVersion(oldQuote.versionNumber);
+        const nextVersion = version.getNextVersion();
 
         // 2. Delegate to CreateQuoteHandler to calculate math and persist new version
         const result = await this.createQuoteHandler.execute(new CreateQuoteCommand(

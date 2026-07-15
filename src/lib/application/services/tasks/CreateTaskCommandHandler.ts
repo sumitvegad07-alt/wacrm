@@ -41,7 +41,7 @@ export class CreateTaskCommandHandler implements ICommandHandler<CreateTaskComma
           dueDate: command.dueDate,
           contactId: command.contactId,
           status: 'pending',
-          sync_status: 'pending',
+          sync_status: 'pending' as const,
           sync_version: 1,
           created_at: Date.now(),
           updated_at: Date.now(),

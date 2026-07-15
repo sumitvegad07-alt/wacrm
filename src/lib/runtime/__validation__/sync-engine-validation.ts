@@ -2,7 +2,7 @@ import { SyncCenter } from '../sync-center';
 import { WatermelonStorageProvider } from '../storage/watermelon/watermelon.provider';
 import { ContactRepository } from '../../repositories/implementations/contact.repository';
 import { SyncQueueService } from '../services/sync-queue.service';
-import { SupabaseNetworkProvider } from './sync/supabase/supabase-network.provider';
+import { SupabaseNetworkProvider } from '../sync/supabase/supabase-network.provider';
 import * as fs from 'fs';
 import * as path from 'path';
 

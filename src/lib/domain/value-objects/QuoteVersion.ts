@@ -6,7 +6,7 @@ export class QuoteVersion {
   }
 
   public getDisplayString(): string {
-    return \`V\${this.versionNumber}\`;
+    return `V${this.versionNumber}`;
   }
 
   public getNextVersion(): QuoteVersion {

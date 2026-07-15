@@ -1,5 +1,5 @@
-import { PriceBook } from '../../../domain/entities/PriceBook';
-import { PriceBookEntry } from '../../../domain/entities/PriceBookEntry';
+import { PriceBook } from '../../domain/entities/PriceBook';
+import { PriceBookEntry } from '../../domain/entities/PriceBookEntry';
 
 export class PriceBookRepository {
   async createBook(data: Partial<PriceBook>): Promise<void> {}

@@ -12,7 +12,7 @@ export class BaseModel extends Model {
   @date('deleted_at') deletedAt?: Date;
 
   @field('sync_version') syncVersion!: number;
-  @text('sync_status') syncStatus!: string;
+  @text('sync_status') recordSyncStatus!: string;
 
   @text('tenant_id') tenantId!: string;
   @text('user_id') userId!: string;

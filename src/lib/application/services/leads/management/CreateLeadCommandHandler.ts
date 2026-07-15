@@ -37,7 +37,7 @@ export class CreateLeadCommandHandler implements ICommandHandler<CreateLeadComma
           phone: command.phone,
           status: statusPolicy.getDefaultStatus(),
           isArchived: false,
-          sync_status: 'pending',
+          sync_status: 'pending' as const,
           sync_version: 1,
         };
 

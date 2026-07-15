@@ -18,7 +18,7 @@ export const useLeads = () => {
     
     // Optimistic Update
     const optimisticLead = new LeadUiDto({
-      id: tempId, name, email, phone, status: 'Prospect', isArchived: false, sync_status: 'pending', sync_version: 1
+      id: tempId, name, email, phone, status: 'Prospect', isArchived: false, sync_status: 'pending' as const, sync_version: 1
     });
     setLeads(prev => [...prev, optimisticLead]);
 

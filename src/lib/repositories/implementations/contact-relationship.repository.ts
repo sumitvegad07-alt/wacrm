@@ -1,4 +1,4 @@
-import { ContactAccountRelationship } from '../../../domain/entities/ContactAccountRelationship';
+import { ContactAccountRelationship } from '../../domain/entities/ContactAccountRelationship';
 
 export class ContactRelationshipRepository {
   async create(data: Partial<ContactAccountRelationship>): Promise<void> {}

@@ -71,8 +71,8 @@ export class QuoteConversionService {
           quantity: qi.quantity,
           unitPrice: qi.unitPrice,
           discountPercent: qi.discountPercent,
-          taxPercent: qi.taxPercent || 0,
-          taxAmount: (qi.commercialTotal * (qi.taxPercent || 0)) / 100,
+          taxPercent: 0, // Tax is captured at order level (order.taxTotal); line-item tax not stored on QuoteLineItem
+          taxAmount: 0,  // Same as above – aggregate tax lives on the Order record
           lineTotal: qi.commercialTotal
         }));
 

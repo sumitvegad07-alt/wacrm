@@ -1,4 +1,4 @@
-import { Account } from '../../../domain/entities/Account';
+import { Account } from '../../domain/entities/Account';
 
 export type SyncBadgeState = 'pending' | 'uploading' | 'synced' | 'failed' | 'conflict';
 
@@ -15,7 +15,7 @@ export class AccountUiDto {
   constructor(entity: Account) {
     this.id = entity.id;
     this.formattedName = entity.name;
-    this.codeLabel = entity.code ? \`[\${entity.code}]\` : '';
+    this.codeLabel = entity.code ? `[${entity.code}]` : '';
     this.industryBadge = entity.industry || 'Unknown Industry';
     this.typeBadge = entity.type.toUpperCase();
     this.hasParent = !!entity.parentId;

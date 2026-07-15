@@ -18,7 +18,7 @@ export interface RepositoryBatchResult {
   error?: Error;
 }
 
-export type RepositoryEventAction = 'CREATED' | 'UPDATED' | 'DELETED' | 'RESTORED' | 'BATCH_COMPLETED';
+export type RepositoryEventAction = 'CREATED' | 'UPDATED' | 'DELETED' | 'RESTORED';
 
 export interface RepositoryEvent<T> {
   type: 'REPOSITORY_EVENT';

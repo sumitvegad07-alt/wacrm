@@ -1,6 +1,7 @@
 import { IConnectivityProvider } from '../interfaces/connectivity.provider';
 import { UploadEngine } from './upload-engine';
 import { DownloadEngine } from './download-engine';
+import { RuntimeEventBus } from '../services/runtime-event-bus.service';
 
 export class BackgroundSyncEngine {
   private isOnline: boolean = false;
@@ -16,7 +17,8 @@ export class BackgroundSyncEngine {
     this.isOnline = this.connectivity.getState() === 'online';
 
     // Hook into Network connectivity restorations
-    this.connectivity.subscribe((state) => {
+    RuntimeEventBus.subscribe('CONNECTIVITY_CHANGED', (event) => {
+      const state = event.payload.state;
       const wasOffline = !this.isOnline;
       this.isOnline = state === 'online';
 

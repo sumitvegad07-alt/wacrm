@@ -33,20 +33,12 @@ export class CreateContactCommandHandler implements ICommandHandler<CreateContac
       return await this.unitOfWork.execute(async () => {
         
         // 3. Repository Execution (Storage)
-        // Map single name field to firstName/lastName for domain entity
-        const nameParts = command.name.trim().split(' ');
-        const firstName = nameParts[0];
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-
+        // contactRepository expects Omit<Contact, 'id'> from the repositories/interfaces which is:
+        // { name: string, phone: string, email?: string }
         const contactData = {
-          firstName,
-          lastName,
-          phone: command.phone,
-          email: command.email || '', // Email is required in Contact entity
-          communicationPreferences: {}, // Required by entity
-          isArchived: false,
-          sync_status: 'pending' as const,
-          sync_version: 1
+          name: command.name,
+          phone: command.phone || '', // phone is required by repo interface
+          email: command.email
         };
 
         const result = await this.contactRepository.create(contactData);

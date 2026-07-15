@@ -30,9 +30,9 @@ async function runValidation() {
   // Generate Report
   const reportsDir = path.join(process.cwd(), 'validation-reports');
   if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir);
-  let md = \`# CRM-006 Quote Module Validation\n\n| Test | Result |\n|---|---|\n\`;
-  results.forEach(r => md += \`| \${r.test} | \${r.passed ? 'Passed ✅' : 'Failed ❌'} |\n\`);
-  fs.writeFileSync(path.join(reportsDir, \`CRM006-Validation-\${new Date().toISOString().split('T')[0]}.md\`), md);
+  let md = `# CRM-006 Quote Module Validation\n\n| Test | Result |\n|---|---|\n`;
+  results.forEach(r => md += `| ${r.test} | ${r.passed ? 'Passed ✅' : 'Failed ❌'} |\n`);
+  fs.writeFileSync(path.join(reportsDir, `CRM006-Validation-${new Date().toISOString().split('T')[0]}.md`), md);
   console.log('\nValidation complete. Report generated.');
 }
 

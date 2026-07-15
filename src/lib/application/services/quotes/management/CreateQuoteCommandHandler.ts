@@ -30,7 +30,7 @@ export class CreateQuoteCommandHandler implements ICommandHandler<CreateQuoteCom
       const previewResult = await this.draftService.previewQuote(command.rawLineItems, command.taxConfig);
       if (!previewResult.isSuccess) throw previewResult.getErrorOrThrow();
       
-      const financials = previewResult.getValue();
+      const financials = previewResult.value;
 
       return await this.unitOfWork.execute(async () => {
         const quote = {
