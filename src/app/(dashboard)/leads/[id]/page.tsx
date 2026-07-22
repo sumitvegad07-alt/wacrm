@@ -34,6 +34,11 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [converting, setConverting] = useState(false);
+  // Customer hierarchy config, needed at conversion time.
+  const [hierarchy, setHierarchy] = useState<{
+    enabled: boolean;
+    levels: { position: number; name: string }[];
+  }>({ enabled: false, levels: [] });
 
   const fetchAllData = useCallback(async () => {
     if (!account) return;
@@ -128,16 +133,57 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     fetchAllData();
   }, [fetchAllData]);
 
+  useEffect(() => {
+    if (!account?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from("accounts")
+        .select("settings")
+        .eq("id", account.id)
+        .single();
+      const os = data?.settings?.order_settings ?? {};
+      setHierarchy({
+        enabled: !!os.hierarchy_enabled,
+        levels: Array.isArray(os.levels) ? os.levels : [],
+      });
+    })();
+  }, [account?.id, supabase]);
+
   const handleConvert = async () => {
     if (!lead) return;
+
+    // With hierarchy enabled the new customer needs a level, or the database
+    // rejects the contact (migration 076) and the whole conversion rolls back.
+    let level: number | null = null;
+    if (hierarchy.enabled) {
+      if (hierarchy.levels.length === 0) {
+        toast.error("No customer levels are configured. Add them in Settings → Orders.");
+        return;
+      }
+      const choice = window.prompt(
+        `Customer Level is required.\n\n${hierarchy.levels
+          .map((l) => `${l.position} = ${l.name}`)
+          .join("\n")}\n\nEnter the level number:`,
+        String(hierarchy.levels[0].position),
+      );
+      if (choice === null) return; // cancelled
+      const parsed = Number(choice);
+      if (!hierarchy.levels.some((l) => l.position === parsed)) {
+        toast.error("That is not one of the configured levels.");
+        return;
+      }
+      level = parsed;
+    }
+
     setConverting(true);
 
-    // Single atomic RPC (067_convert_lead_rpc.sql): creates the customer,
-    // migrates custom values / notes / tasks / activities, and flags the
-    // lead as converted (KEPT, not deleted) — all-or-nothing.
+    // Single atomic RPC (076_customer_level_enforcement.sql supersedes 067):
+    // creates the customer, migrates custom values / notes / tasks /
+    // activities, and flags the lead as converted (KEPT, not deleted) —
+    // all-or-nothing.
     const { data: newContactId, error } = await supabase.rpc(
       "convert_lead_to_customer",
-      { p_lead_id: lead.id }
+      { p_lead_id: lead.id, p_hierarchy_level: level }
     );
 
     if (error || !newContactId) {
