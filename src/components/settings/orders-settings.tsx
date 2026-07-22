@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Tag, Layers, GripVertical } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -50,17 +51,29 @@ export function OrdersSettings() {
   const [levels, setLevels] = useState<HierarchyLevel[]>([]);
   const [savingHierarchy, setSavingHierarchy] = useState(false);
 
+  // Customers with no level assigned. Only meaningful while hierarchy is on:
+  // their orders classify as "direct" (meaning "not known yet") until someone
+  // gives them a level.
+  const [levelless, setLevelless] = useState<{ id: string; company: string | null; name: string | null }[]>([]);
+
   useEffect(() => {
     if (accountId) loadData();
   }, [accountId]);
 
   async function loadData() {
     setLoading(true);
-    const [stRes, acctRes] = await Promise.all([
+    const [stRes, acctRes, levellessRes] = await Promise.all([
       supabase.from("order_statuses").select("*").eq("account_id", accountId).order("position"),
       supabase.from("accounts").select("settings").eq("id", accountId).single(),
+      supabase
+        .from("contacts")
+        .select("id, company, name")
+        .eq("account_id", accountId)
+        .is("hierarchy_level", null)
+        .order("company"),
     ]);
     if (stRes.data) setStatuses(stRes.data);
+    setLevelless(levellessRes.data ?? []);
     const os = acctRes.data?.settings?.order_settings;
     setHierarchyEnabled(!!os?.hierarchy_enabled);
     setLevels(
@@ -279,6 +292,31 @@ export function OrdersSettings() {
                   <p className="text-xs text-muted-foreground">
                     Assign each customer their level on the customer page. Orders from a Level 1 customer are tagged Primary; all others Secondary.
                   </p>
+
+                  {levelless.length > 0 && (
+                    <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                      <p className="text-sm font-medium text-amber-700 dark:text-amber-500">
+                        {levelless.length} customer{levelless.length === 1 ? "" : "s"} have no level yet
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Their orders are classified <span className="font-medium">Direct</span>, which here means
+                        &ldquo;not known yet&rdquo; rather than a real position in your chain. Open each one and set
+                        a level to have them counted as Primary or Secondary.
+                      </p>
+                      <ul className="mt-3 space-y-1">
+                        {levelless.map((c) => (
+                          <li key={c.id}>
+                            <Link
+                              href={`/contacts/${c.id}`}
+                              className="text-sm text-primary hover:underline underline-offset-2"
+                            >
+                              {c.company || c.name || "Unnamed customer"}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 

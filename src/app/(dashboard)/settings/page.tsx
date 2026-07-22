@@ -17,6 +17,7 @@ import { DealsSettings } from '@/components/settings/deals-settings';
 import { LeadsSettings } from '@/components/settings/leads-settings';
 import { TasksSettings } from '@/components/settings/tasks-settings';
 import { OrdersSettings } from '@/components/settings/orders-settings';
+import { PricingSchemesSettings } from '@/components/settings/pricing-schemes-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { AISettingsPanel } from '@/components/settings/ai-settings-panel';
@@ -122,6 +123,7 @@ function SettingsContent() {
     leads: <LeadsSettings />,
     tasks: <TasksSettings />,
     orders: <OrdersSettings />,
+    pricing: <PricingSchemesSettings />,
     expense_types: <ExpenseTypesSettings />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,

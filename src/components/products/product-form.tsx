@@ -54,6 +54,12 @@ export function ProductForm({
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
+  // Tax slab + price floor. The slab supplies the rate an order line will
+  // snapshot; min_price is the hard floor no stack of discounts may cross.
+  const [taxSlabId, setTaxSlabId] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [taxSlabs, setTaxSlabs] = useState<{ id: string; name: string; rate: number }[]>([]);
+
   useEffect(() => {
     if (open && accountId) {
       setConfirmDelete(false);
@@ -65,11 +71,25 @@ export function ProductForm({
       setCategory(product?.category ?? '');
       setUnit(product?.unit ?? '');
       setStock(product?.stock?.toString() ?? '');
+      setTaxSlabId((product as { tax_slab_id?: string | null })?.tax_slab_id ?? '');
+      setMinPrice((product as { min_price?: number | null })?.min_price?.toString() ?? '');
       setImageFile(null);
       setActive(product?.active ?? true);
       fetchCustomFields();
+      fetchTaxSlabs();
     }
   }, [open, product, accountId]);
+
+  async function fetchTaxSlabs() {
+    if (!accountId) return;
+    const { data } = await supabase
+      .from('tax_slabs')
+      .select('id, name, rate')
+      .eq('account_id', accountId)
+      .order('position')
+      .order('rate');
+    setTaxSlabs(data ?? []);
+  }
 
   async function fetchCustomFields() {
     if (!accountId) return;
@@ -138,6 +158,9 @@ export function ProductForm({
         category: category.trim() || null,
         unit: unit.trim() || null,
         stock: stock !== '' ? parseFloat(stock) : null,
+        // Empty string must become null, never '' — a uuid column rejects ''.
+        tax_slab_id: taxSlabId || null,
+        min_price: minPrice !== '' ? parseFloat(minPrice) : null,
         active,
       };
 
@@ -277,6 +300,44 @@ export function ProductForm({
                   placeholder="0.00"
                   className="border-border bg-muted text-foreground"
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 md:col-span-2">
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">Tax slab</Label>
+                <select
+                  value={taxSlabId}
+                  onChange={(e) => setTaxSlabId(e.target.value)}
+                  className="h-9 rounded-md border border-border bg-muted px-3 text-sm text-foreground"
+                >
+                  <option value="">No tax (0%)</option>
+                  {taxSlabs.map((slab) => (
+                    <option key={slab.id} value={slab.id}>
+                      {slab.name} — {Number(slab.rate)}%
+                    </option>
+                  ))}
+                </select>
+                {taxSlabs.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    No slabs defined yet. Add them in Settings → Pricing &amp; Schemes.
+                  </p>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">Minimum price</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  placeholder="No floor"
+                  className="border-border bg-muted text-foreground"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Discounts can never take this product below this price.
+                </p>
               </div>
             </div>
 
