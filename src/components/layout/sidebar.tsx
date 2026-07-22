@@ -26,6 +26,7 @@ import {
   Building2,
   Plus,
   Package,
+  ShoppingCart,
   FileText,
   MapPin,
   Bot,
@@ -119,12 +120,13 @@ const navGroups: { label: string; icon: React.ComponentType<{ className?: string
     icon: Briefcase,
     items: [
       { href: "/leads", label: "Leads", icon: UserPlus, module: "leads" },
-      { href: "/contacts", label: "Contacts", icon: Users, module: "contacts" },
+      { href: "/contacts", label: "Customers", icon: Users, module: "contacts" },
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
       { href: "/follow-ups", label: "My Activity", icon: FileText, module: "activities" },
       { href: "/pipelines", label: "Pipelines", icon: GitBranch, module: "deals" },
       { href: "/products", label: "Products", icon: Package, module: "products" },
       { href: "/quotations", label: "Quotations", icon: FileText, module: "orders" },
+      { href: "/orders", label: "Orders", icon: ShoppingCart, module: "orders" },
     ],
   },
   {

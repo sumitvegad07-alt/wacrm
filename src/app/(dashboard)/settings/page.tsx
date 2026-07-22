@@ -16,6 +16,7 @@ import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel'
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { LeadsSettings } from '@/components/settings/leads-settings';
 import { TasksSettings } from '@/components/settings/tasks-settings';
+import { OrdersSettings } from '@/components/settings/orders-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { AISettingsPanel } from '@/components/settings/ai-settings-panel';
@@ -120,6 +121,7 @@ function SettingsContent() {
     deals: <DealsSettings />,
     leads: <LeadsSettings />,
     tasks: <TasksSettings />,
+    orders: <OrdersSettings />,
     expense_types: <ExpenseTypesSettings />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,

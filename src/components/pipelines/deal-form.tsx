@@ -365,7 +365,7 @@ export function DealForm({
                 </div>
 
                 <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Contact</Label>
+                  <Label className="text-muted-foreground">Customer</Label>
                   <SearchableSelect
                     value={contactId}
                     onChange={setContactId}

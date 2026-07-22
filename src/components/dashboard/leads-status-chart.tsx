@@ -33,7 +33,7 @@ export function LeadsStatusChart({ data, loading }: LeadsStatusChartProps) {
             No status data available
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minHeight={300} minWidth={0}>
             <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="opacity-10" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />

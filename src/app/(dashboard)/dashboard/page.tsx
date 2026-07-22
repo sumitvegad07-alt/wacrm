@@ -84,7 +84,7 @@ export default function DashboardPage() {
   const journeyData = metrics ? [
     { name: 'Total Leads', value: metrics.newLeadsToday.current * 3 + 10, fill: '#3b82f6' }, // Mocking scale for visual
     { name: 'Qualified', value: metrics.newLeadsToday.current * 2 + 5, fill: '#8b5cf6' },
-    { name: 'Converted Contacts', value: metrics.convertedContacts + metrics.newContactsToday.current, fill: '#10b981' },
+    { name: 'Converted Customers', value: metrics.convertedContacts + metrics.newContactsToday.current, fill: '#10b981' },
     { name: 'Won Deals', value: metrics.openDealsCount > 0 ? metrics.openDealsCount : 1, fill: '#f59e0b' }
   ] : []
 
@@ -111,7 +111,7 @@ export default function DashboardPage() {
               delta={{ sign: metrics.newLeadsToday.current - metrics.newLeadsToday.previous, label: deltaLabel(metrics.newLeadsToday.current - metrics.newLeadsToday.previous, 'vs yesterday') }}
             />
             <MetricCard
-              title="Converted Contacts"
+              title="Converted Customers"
               value={metrics.convertedContacts.toLocaleString()}
               icon={Users}
             />
@@ -122,7 +122,7 @@ export default function DashboardPage() {
               delta={{ sign: metrics.newPipelinesToday.current - metrics.newPipelinesToday.previous, label: deltaLabel(metrics.newPipelinesToday.current - metrics.newPipelinesToday.previous, 'vs yesterday') }}
             />
             <MetricCard
-              title="Neglected Contacts/Leads"
+              title="Neglected Customers/Leads"
               value={metrics.neglectedLeadsOrContacts.toLocaleString()}
               icon={UserX}
               className="border-red-500/20"

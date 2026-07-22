@@ -199,7 +199,7 @@ export default function BroadcastDetailPage() {
   function handleExport() {
     if (!broadcast) return;
     const header = [
-      'Contact',
+      'Customer',
       'Phone',
       'Status',
       'Sent At',
@@ -470,7 +470,7 @@ export default function BroadcastDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-muted-foreground">Contact</TableHead>
+                  <TableHead className="text-muted-foreground">Customer</TableHead>
                   <TableHead className="text-muted-foreground">Phone</TableHead>
                   <TableHead className="text-muted-foreground">Status</TableHead>
                   <TableHead className="text-muted-foreground">Sent</TableHead>

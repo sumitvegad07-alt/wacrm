@@ -41,17 +41,37 @@ export default function CustomerVisitsPage() {
         feedback_type,
         feedback_text,
         visit_photo_url,
+        target_type,
+        target_id,
         contacts ( name ),
         profiles ( full_name )
       `)
       .gte('check_in_at', startOfDay.toISOString())
       .lte('check_in_at', endOfDay.toISOString())
       .order('check_in_at', { ascending: false });
-    
+
     if (data) {
+      // Visits are polymorphic (target_type 'Customer' | 'Lead'). The
+      // contacts embed only resolves legacy contact_id rows, and PostgREST
+      // can't join polymorphically — so lead names need a second lookup.
+      const leadIds = data
+        .filter(v => (v as any).target_type === 'Lead' && (v as any).target_id)
+        .map(v => (v as any).target_id);
+      const leadNames: Record<string, string> = {};
+      if (leadIds.length > 0) {
+        const { data: leadRows } = await supabase
+          .from('leads')
+          .select('id, name')
+          .in('id', leadIds);
+        leadRows?.forEach(l => { leadNames[l.id] = l.name; });
+      }
+
       const formatted = data.map(v => ({
         id: v.id,
-        name: (v.contacts as any)?.name ? `[${(v.contacts as any).name}]` : "Unknown",
+        name: (v as any).target_type === 'Lead'
+          ? (leadNames[(v as any).target_id] ? `[${leadNames[(v as any).target_id]}]` : "Unknown")
+          : ((v.contacts as any)?.name ? `[${(v.contacts as any).name}]` : "Unknown"),
+        targetType: (v as any).target_type === 'Lead' ? 'Lead' : 'Customer',
         rawCheckIn: v.check_in_at,
         rawCheckOut: v.check_out_at,
         checkIn: new Date(v.check_in_at).toLocaleString('en-IN'),
@@ -72,9 +92,23 @@ export default function CustomerVisitsPage() {
   const columns: ColumnDef<any>[] = [
     {
       id: "name",
-      label: "Customer",
+      label: "Name",
       type: "text",
-      render: (row) => <span className="font-medium whitespace-nowrap">{row.name}</span>
+      render: (row) => (
+        <span className="font-medium whitespace-nowrap inline-flex items-center gap-2">
+          {row.name}
+          <Badge
+            variant="outline"
+            className={
+              row.targetType === 'Lead'
+                ? 'bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] px-1.5'
+                : 'bg-blue-500/10 text-blue-600 border-blue-500/20 text-[10px] px-1.5'
+            }
+          >
+            {row.targetType}
+          </Badge>
+        </span>
+      )
     },
     {
       id: "checkIn",

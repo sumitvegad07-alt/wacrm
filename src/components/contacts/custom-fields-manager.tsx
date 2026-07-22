@@ -216,7 +216,7 @@ export function CustomFieldsPanel() {
             onChange={(e) => setNewModule(e.target.value as 'contact'|'deal'|'task'|'product'|'lead')}
             className="h-9 rounded-md border border-border bg-background px-2.5 text-sm outline-none w-28 text-muted-foreground"
           >
-            <option value="contact">Contact</option>
+            <option value="contact">Customer</option>
             <option value="lead">Lead</option>
             <option value="deal">Deal</option>
             <option value="task">Task</option>
@@ -320,7 +320,7 @@ export function CustomFieldsPanel() {
                 >
                   <option value="product">Products</option>
                   <option value="user">Users (Team)</option>
-                  <option value="contact">Contacts</option>
+                  <option value="contact">Customers</option>
                   <option value="lead">Leads</option>
                   <option value="deal">Deals</option>
                 </select>

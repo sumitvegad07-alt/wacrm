@@ -292,7 +292,7 @@ export default function EmployeesPage() {
 
       {/* Add Employee Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="sm:max-w-2xl w-[95vw]">
           <DialogHeader>
             <DialogTitle>Add New Employee</DialogTitle>
             <DialogDescription>

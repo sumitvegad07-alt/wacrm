@@ -44,6 +44,7 @@ export function ProductForm({
   const [image, setImage] = useState('');
   const [category, setCategory] = useState('');
   const [unit, setUnit] = useState('');
+  const [stock, setStock] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,6 +64,7 @@ export function ProductForm({
       setImage(product?.image ?? '');
       setCategory(product?.category ?? '');
       setUnit(product?.unit ?? '');
+      setStock(product?.stock?.toString() ?? '');
       setImageFile(null);
       setActive(product?.active ?? true);
       fetchCustomFields();
@@ -135,6 +137,7 @@ export function ProductForm({
         image: finalImageUrl,
         category: category.trim() || null,
         unit: unit.trim() || null,
+        stock: stock !== '' ? parseFloat(stock) : null,
         active,
       };
 
@@ -297,6 +300,20 @@ export function ProductForm({
                   className="border-border bg-muted text-foreground"
                 />
               </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">Stock</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={stock}
+                  onChange={(e) => setStock(e.target.value)}
+                  placeholder="Leave blank if not tracked"
+                  className="border-border bg-muted text-foreground"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 md:col-span-2">
               <div className="grid gap-2">
                 <Label className="text-muted-foreground">Product Image</Label>
                 <div className="flex items-center gap-4">

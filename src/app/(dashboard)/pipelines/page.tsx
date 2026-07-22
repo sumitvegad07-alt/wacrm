@@ -422,7 +422,7 @@ export default function PipelinesPage() {
     },
     {
       id: "contact",
-      label: "Contact",
+      label: "Customer",
       type: "text",
       render: (deal) => <span>{deal.contact?.name || "-"}</span>
     },

@@ -32,10 +32,10 @@ const PERMISSION_GROUPS = [
       { id: "add_leads", label: "Add Leads" },
       { id: "edit_leads", label: "Edit Leads" },
       { id: "delete_leads", label: "Delete Leads" },
-      { id: "view_contacts", label: "View Contacts" },
-      { id: "add_contacts", label: "Add Contacts" },
-      { id: "edit_contacts", label: "Edit Contacts" },
-      { id: "delete_contacts", label: "Delete Contacts" },
+      { id: "view_contacts", label: "View Customers" },
+      { id: "add_contacts", label: "Add Customers" },
+      { id: "edit_contacts", label: "Edit Customers" },
+      { id: "delete_contacts", label: "Delete Customers" },
       { id: "view_deals", label: "View Pipelines / Deals" },
       { id: "view_products", label: "View Products" },
       { id: "view_orders", label: "View Quotations / Orders" },
@@ -61,6 +61,7 @@ const PERMISSION_GROUPS = [
       { id: "allow_logout", label: "Allow Mobile Logout" },
       { id: "mobile_offline_mode", label: "Allow Offline Sync" },
       { id: "mobile_visit_checkin", label: "Allow Manual Check-ins" },
+      { id: "edit_geotag", label: "Edit Customer Geo-tag (Coordinates)" },
     ]
   },
   {
@@ -382,7 +383,7 @@ export default function RolesPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-semibold text-foreground">Global Data Visibility Scope</h3>
-                          <p className="text-sm text-muted-foreground mt-1">Determine what records (Leads, Contacts, etc.) this role can see across the CRM.</p>
+                          <p className="text-sm text-muted-foreground mt-1">Determine what records (Leads, Customers, etc.) this role can see across the CRM.</p>
                         </div>
                         <Select 
                           value={(permissions.global_scope as string) || 'own'} 

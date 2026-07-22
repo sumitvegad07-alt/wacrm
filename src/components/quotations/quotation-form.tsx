@@ -430,7 +430,7 @@ export function QuotationForm({
                 className={`px-2 py-1 text-xs rounded-sm transition-colors ${targetType === 'contact' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                 onClick={() => setTargetType('contact')}
               >
-                Contact
+                Customer
               </button>
               <button
                 type="button"

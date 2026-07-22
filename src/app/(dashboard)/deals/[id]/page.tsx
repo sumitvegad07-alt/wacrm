@@ -174,7 +174,7 @@ export default function DealDetailsPage() {
           {deal.contact && (
             <Button onClick={() => router.push(`/inbox?phone=${deal.contact?.phone}`)} variant="outline" className="gap-2">
               <MessageSquare className="size-4" />
-              Message Contact
+              Message Customer
             </Button>
           )}
           <Button onClick={() => setEditOpen(true)} className="gap-2">

@@ -129,77 +129,26 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   }, [fetchAllData]);
 
   const handleConvert = async () => {
-    if (!lead || !account || !user) return;
+    if (!lead) return;
     setConverting(true);
-    
-    try {
-      // 1. Create Contact
-      const { data: contact, error: contactError } = await supabase
-        .from("contacts")
-        .insert({
-          account_id: account.id,
-          user_id: lead.user_id || user.id,
-          name: lead.name,
-          phone: lead.whatsapp || "Unknown",
-          email: lead.email,
-          company: lead.industry,
-        })
-        .select()
-        .single();
-        
-      if (contactError || !contact) throw contactError;
 
-      const newContactId = contact.id;
+    // Single atomic RPC (067_convert_lead_rpc.sql): creates the customer,
+    // migrates custom values / notes / tasks / activities, and flags the
+    // lead as converted (KEPT, not deleted) — all-or-nothing.
+    const { data: newContactId, error } = await supabase.rpc(
+      "convert_lead_to_customer",
+      { p_lead_id: lead.id }
+    );
 
-      // 2. Migrate Custom Fields
-      const cfEntries = Object.keys(customValues).filter(k => customValues[k]).map(fieldId => ({
-        contact_id: newContactId,
-        custom_field_id: fieldId,
-        value: customValues[fieldId]
-      }));
-      if (cfEntries.length > 0) {
-        await supabase.from("contact_custom_values").insert(cfEntries);
-      }
-
-      // 3. Migrate Notes
-      if (notes.length > 0) {
-        await supabase.from("contact_notes").insert(
-          notes.map(n => ({ contact_id: newContactId, user_id: n.user_id, note_text: n.note_text, created_at: n.created_at }))
-        );
-      }
-
-      // 4. Migrate Tasks (unlink lead, link contact)
-      if (tasks.length > 0) {
-        for (const task of tasks) {
-          await supabase.from("tasks").update({ lead_id: null, contact_id: newContactId }).eq("id", task.id);
-        }
-      }
-
-      // 5. Migrate Module Activities (rename module to 'contact', point record_id to newContactId)
-      if (activities.length > 0) {
-        for (const act of activities) {
-          await supabase.from("module_activities").update({ module_name: 'contact', record_id: newContactId }).eq("id", act.id);
-        }
-      }
-
-      // 6. Add conversion log to the new contact
-      await logModuleActivity(supabase, {
-        moduleName: "contact",
-        recordId: newContactId,
-        action: "created",
-        message: "Contact created from converted Lead",
-      });
-
-      // 7. Delete Lead entirely
-      await supabase.from("leads").delete().eq("id", lead.id);
-
-      toast.success("Lead successfully converted to Contact!");
-      router.push(`/contacts/${newContactId}`);
-    } catch (error) {
+    if (error || !newContactId) {
       console.error("Conversion failed", error);
-      toast.error("Failed to convert lead.");
+      toast.error(error?.message || "Failed to convert lead.");
       setConverting(false);
+      return;
     }
+
+    toast.success("Lead successfully converted to Customer!");
+    router.push(`/contacts/${newContactId}`);
   };
 
   const handleCollaboratorChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -268,10 +217,21 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={handleConvert} disabled={converting} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm">
-            {converting ? <Loader2 className="size-4 animate-spin" /> : <UserCheck className="size-4" />}
-            Convert to Contact
-          </Button>
+          {lead.is_converted ? (
+            <Button
+              onClick={() => lead.converted_contact_id && router.push(`/contacts/${lead.converted_contact_id}`)}
+              variant="outline"
+              className="gap-2 border-green-500/30 text-green-600 shadow-sm"
+            >
+              <UserCheck className="size-4" />
+              Converted — View Customer
+            </Button>
+          ) : (
+            <Button onClick={handleConvert} disabled={converting} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm">
+              {converting ? <Loader2 className="size-4 animate-spin" /> : <UserCheck className="size-4" />}
+              Convert to Customer
+            </Button>
+          )}
           {lead.whatsapp && (
             <Button onClick={() => router.push(`/inbox?phone=${lead.whatsapp}`)} variant="outline" className="gap-2 shadow-sm">
               <MessageSquare className="size-4" />

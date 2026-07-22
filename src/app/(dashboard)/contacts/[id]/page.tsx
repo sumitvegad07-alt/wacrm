@@ -18,9 +18,10 @@ export default function ContactDetailsPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const supabase = createClient();
-  const { defaultCurrency } = useAuth();
+  const { defaultCurrency, accountId } = useAuth();
 
   const [contact, setContact] = useState<Contact | null>(null);
+  const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string }[] }>({ enabled: false, levels: [] });
   const [tags, setTags] = useState<Tag[]>([]);
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -43,11 +44,18 @@ export default function ContactDetailsPage() {
       .maybeSingle();
 
     if (contactError || !contactData) {
-      toast.error("Contact not found");
+      toast.error("Customer not found");
       router.push("/contacts");
       return;
     }
     setContact(contactData);
+
+    // Order hierarchy config (drives the Customer Level field visibility)
+    if (accountId) {
+      const { data: acct } = await supabase.from("accounts").select("settings").eq("id", accountId).single();
+      const os = acct?.settings?.order_settings;
+      setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? os.levels : [] });
+    }
 
     // 2. Fetch everything else in parallel
     const [
@@ -153,7 +161,7 @@ export default function ContactDetailsPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-              {contact.name || "Unnamed Contact"}
+              {contact.company || contact.name || "Unnamed Customer"}
               {tags.map(t => (
                 <Badge key={t.id} style={{ backgroundColor: t.color + '20', color: t.color, borderColor: t.color + '40' }} variant="outline">
                   {t.name}
@@ -161,9 +169,9 @@ export default function ContactDetailsPage() {
               ))}
             </h1>
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-4">
+              {contact.name && <span className="flex items-center gap-1"><Building2 className="size-3" /> {contact.name}</span>}
               <span className="flex items-center gap-1"><Phone className="size-3" /> {contact.phone}</span>
               {contact.email && <span className="flex items-center gap-1"><Mail className="size-3" /> {contact.email}</span>}
-              {contact.company && <span className="flex items-center gap-1"><Building2 className="size-3" /> {contact.company}</span>}
             </p>
           </div>
         </div>
@@ -183,11 +191,15 @@ export default function ContactDetailsPage() {
         {/* Left Column: Details & Custom Fields */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-card border border-border rounded-lg p-5">
-            <h3 className="text-lg font-semibold mb-4">Contact Details</h3>
+            <h3 className="text-lg font-semibold mb-4">Customer Details</h3>
             
             <div className="grid grid-cols-2 gap-y-6 gap-x-4">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Name</p>
+                <p className="text-sm text-muted-foreground mb-1">Company Name</p>
+                <p className="font-medium">{contact.company || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Contact Person</p>
                 <p className="font-medium">{contact.name || '-'}</p>
               </div>
               <div>
@@ -198,11 +210,52 @@ export default function ContactDetailsPage() {
                 <p className="text-sm text-muted-foreground mb-1">Email</p>
                 <p className="font-medium">{contact.email || '-'}</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Company</p>
-                <p className="font-medium">{contact.company || '-'}</p>
-              </div>
+              {hierarchy.enabled && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Customer Level</p>
+                  <select
+                    value={(contact as any).hierarchy_level ?? ""}
+                    onChange={async (e) => {
+                      const val = e.target.value === "" ? null : parseInt(e.target.value);
+                      setContact({ ...contact, hierarchy_level: val } as any);
+                      const { error } = await supabase.from("contacts").update({ hierarchy_level: val }).eq("id", id);
+                      if (error) toast.error("Failed to update level");
+                      else toast.success("Customer level updated");
+                    }}
+                    className="text-sm bg-muted border border-border rounded-md px-2 py-1.5 font-medium w-full"
+                  >
+                    <option value="">Not set</option>
+                    {hierarchy.levels.map((lvl) => (
+                      <option key={lvl.position} value={lvl.position}>
+                        {lvl.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
+
+            {/* Address & Location */}
+            {(contact.address || contact.area || contact.city || contact.state || contact.country || contact.pincode || contact.latitude != null) && (
+              <>
+                <div className="my-6 border-t border-border/50" />
+                <h3 className="text-lg font-semibold mb-4">Address &amp; Location</h3>
+                <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                  {contact.address && <div className="col-span-2"><p className="text-sm text-muted-foreground mb-1">Full Address</p><p className="font-medium">{contact.address}</p></div>}
+                  {contact.area && <div><p className="text-sm text-muted-foreground mb-1">Area</p><p className="font-medium">{contact.area}</p></div>}
+                  {contact.city && <div><p className="text-sm text-muted-foreground mb-1">City</p><p className="font-medium">{contact.city}</p></div>}
+                  {contact.state && <div><p className="text-sm text-muted-foreground mb-1">State</p><p className="font-medium">{contact.state}</p></div>}
+                  {contact.country && <div><p className="text-sm text-muted-foreground mb-1">Country</p><p className="font-medium">{contact.country}</p></div>}
+                  {contact.pincode && <div><p className="text-sm text-muted-foreground mb-1">Pincode</p><p className="font-medium">{contact.pincode}</p></div>}
+                  {contact.latitude != null && contact.longitude != null && (
+                    <div className="col-span-2">
+                      <p className="text-sm text-muted-foreground mb-1">Coordinates (geo-tagged)</p>
+                      <p className="font-medium font-mono text-sm">{contact.latitude}, {contact.longitude}</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             {customFields.length > 0 && (
               <>

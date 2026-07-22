@@ -131,7 +131,7 @@ export default function TaskDetailsPage() {
               <div className="grid grid-cols-2 gap-y-4 gap-x-4">
                 {task.contact && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">Contact</p>
+                    <p className="text-sm text-muted-foreground mb-1">Customer</p>
                     <Link href={`/contacts/${task.contact.id}`} className="font-medium text-primary hover:underline flex items-center gap-1">
                       <Users className="size-4" /> {task.contact.name || task.contact.phone}
                     </Link>

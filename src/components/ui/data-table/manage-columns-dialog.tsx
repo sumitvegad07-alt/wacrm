@@ -158,7 +158,10 @@ export function ManageColumnsDialog<T>({
             >
               {items.map((id) => {
                 const col = columns.find(c => c.id === id);
-                if (!col) return null;
+                // Skip system columns with no label (e.g. the row-actions
+                // column) — they shouldn't be toggleable, and rendering
+                // them produced a blank, nameless row.
+                if (!col || !col.label) return null;
                 return (
                   <SortableColumnItem
                     key={id}

@@ -29,6 +29,7 @@ import { ContactForm } from '@/components/contacts/contact-form';
 import { ImportModal } from '@/components/contacts/import-modal';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { useCan } from '@/hooks/use-can';
+import { useAuth } from '@/hooks/use-auth';
 import { GatedButton } from '@/components/ui/gated-button';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
@@ -52,8 +53,10 @@ export default function ContactsPage() {
   const searchParams = useSearchParams();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
+  const { accountId } = useAuth();
 
   const [contacts, setContacts] = useState<ContactWithData[]>([]);
+  const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string; color?: string }[] }>({ enabled: false, levels: [] });
   const [loading, setLoading] = useState(true);
   
   // Modals
@@ -88,6 +91,13 @@ export default function ContactsPage() {
 
     setAllTags(tagsData || []);
     setCustomFields(fieldsData || []);
+
+    // Order-hierarchy config → drives the optional Customer Level column.
+    if (accountId) {
+      const { data: acct } = await supabase.from('accounts').select('settings').eq('id', accountId).single();
+      const os = acct?.settings?.order_settings;
+      setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? os.levels : [] });
+    }
 
     let enhancedContacts = contactsData || [];
 
@@ -124,7 +134,7 @@ export default function ContactsPage() {
 
     setContacts(enhancedContacts);
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, accountId]);
 
   useEffect(() => {
     fetchData();
@@ -170,7 +180,7 @@ export default function ContactsPage() {
     if (error) {
       toast.error('Failed to delete contact');
     } else {
-      toast.success('Contact deleted');
+      toast.success('Customer deleted');
       fetchData();
     }
 
@@ -201,11 +211,18 @@ export default function ContactsPage() {
   const columns: ColumnDef<ContactWithData>[] = [
     {
       id: "name",
-      label: "Name",
+      label: "Company Name",
       type: "text",
       render: (contact) => (
-        <span className="font-medium">{contact.name || <span className="text-muted-foreground italic">Unnamed</span>}</span>
+        <span className="font-medium">{contact.company || contact.name || <span className="text-muted-foreground italic">Unnamed</span>}</span>
       )
+    },
+    {
+      id: "contact_person",
+      label: "Contact Person",
+      type: "text",
+      visibleByDefault: false,
+      render: (contact) => <span>{contact.name || "-"}</span>
     },
     {
       id: "phone",
@@ -220,33 +237,46 @@ export default function ContactsPage() {
       render: (contact) => <span>{contact.email || "-"}</span>
     },
     {
-      id: "company",
-      label: "Company",
+      id: "address",
+      label: "Address",
       type: "text",
-      render: (contact) => <span>{contact.company || "-"}</span>
+      visibleByDefault: false,
+      render: (contact) => <span className="text-sm">{contact.address || "-"}</span>
     },
     {
-      id: "tags",
-      label: "Tags",
-      type: "select",
-      options: allTags.map(t => ({ label: t.name, value: t.id })),
-      render: (contact) => (
-        <div className="flex flex-wrap gap-1">
-          {contact.tags && contact.tags.length > 0 ? (
-            contact.tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium whitespace-nowrap"
-                style={{ backgroundColor: tag.color + '20', color: tag.color }}
-              >
-                {tag.name}
-              </span>
-            ))
-          ) : (
-            <span className="text-muted-foreground text-xs">-</span>
-          )}
-        </div>
-      )
+      id: "area",
+      label: "Area",
+      type: "text",
+      visibleByDefault: false,
+      render: (contact) => <span className="text-sm">{contact.area || "-"}</span>
+    },
+    {
+      id: "city",
+      label: "City",
+      type: "text",
+      visibleByDefault: false,
+      render: (contact) => <span className="text-sm">{contact.city || "-"}</span>
+    },
+    {
+      id: "state",
+      label: "State",
+      type: "text",
+      visibleByDefault: false,
+      render: (contact) => <span className="text-sm">{contact.state || "-"}</span>
+    },
+    {
+      id: "country",
+      label: "Country",
+      type: "text",
+      visibleByDefault: false,
+      render: (contact) => <span className="text-sm">{contact.country || "-"}</span>
+    },
+    {
+      id: "pincode",
+      label: "Pincode",
+      type: "text",
+      visibleByDefault: false,
+      render: (contact) => <span className="text-sm">{contact.pincode || "-"}</span>
     },
     {
       id: "created_at",
@@ -284,6 +314,28 @@ export default function ContactsPage() {
     }
   ];
 
+  // Customer Level column — only when the account uses order hierarchy.
+  // Inserted before the trailing actions column.
+  if (hierarchy.enabled) {
+    columns.splice(columns.length - 1, 0, {
+      id: "hierarchy_level",
+      label: "Customer Level",
+      type: "select",
+      options: hierarchy.levels.map((lvl) => ({ label: `Level ${lvl.position} — ${lvl.name}`, value: String(lvl.position) })),
+      visibleByDefault: true,
+      render: (contact) => {
+        const lvl = hierarchy.levels.find((l) => l.position === contact.hierarchy_level);
+        if (!lvl) return <span className="text-muted-foreground">-</span>;
+        const color = lvl.color || "#6b7280";
+        return (
+          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap" style={{ backgroundColor: color + '22', color }}>
+            {lvl.name}
+          </span>
+        );
+      }
+    });
+  }
+
   // Append custom fields to columns
   customFields.forEach(cf => {
     let type: any = "text";
@@ -320,9 +372,15 @@ export default function ContactsPage() {
 
   const filteredContacts = useMemo(() => {
     return contacts.filter(contact => {
-      // Global search
-      if (globalSearch && !contact.name?.toLowerCase().includes(globalSearch.toLowerCase()) && !contact.phone?.includes(globalSearch) && !contact.email?.toLowerCase().includes(globalSearch.toLowerCase())) {
-        return false;
+      // Global search (company name is primary, then person, phone, email)
+      if (globalSearch) {
+        const q = globalSearch.toLowerCase();
+        const hit =
+          contact.company?.toLowerCase().includes(q) ||
+          contact.name?.toLowerCase().includes(q) ||
+          contact.phone?.includes(globalSearch) ||
+          contact.email?.toLowerCase().includes(q);
+        if (!hit) return false;
       }
 
       // Column filters
@@ -330,6 +388,9 @@ export default function ContactsPage() {
         if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
 
         if (colId === "name") {
+          // "Company Name" column filters on the company field.
+          if (!contact.company?.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "contact_person") {
           if (!contact.name?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "phone") {
           if (!contact.phone?.includes(val as string)) return false;
@@ -337,12 +398,9 @@ export default function ContactsPage() {
           if (!contact.email?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "company") {
           if (!contact.company?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "tags") {
-           // Tag filtering (OR logic - if contact has ANY of the selected tags, include them)
-           const selectedTagIds = val as string[];
-           const contactTagIds = (contact.tags || []).map(t => t.id);
-           const hasMatchingTag = selectedTagIds.some(id => contactTagIds.includes(id));
-           if (!hasMatchingTag) return false;
+        } else if (["address", "area", "city", "state", "country", "pincode"].includes(colId)) {
+          const field = (contact as Record<string, unknown>)[colId];
+          if (typeof field !== "string" || !field.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "created_at") {
           if (!isDateInFilter(contact.created_at, val as string | string[])) return false;
         } else if (colId.startsWith("cf_")) {
@@ -366,7 +424,7 @@ export default function ContactsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Contacts</h1>
+          <h1 className="text-2xl font-bold text-foreground">Customers</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Manage your contact list.
           </p>
@@ -381,7 +439,7 @@ export default function ContactsPage() {
             <Upload className="size-4 mr-2" /> Import
           </GatedButton>
           <GatedButton canAct={canEdit} gateReason="add or import contacts" onClick={openAddForm} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Plus className="size-4 mr-2" /> Add Contact
+            <Plus className="size-4 mr-2" /> Add Customer
           </GatedButton>
         </div>
       </div>
@@ -433,7 +491,7 @@ export default function ContactsPage() {
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Contact</DialogTitle>
+            <DialogTitle>Delete Customer</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete <span className="font-medium text-popover-foreground">{deleteTarget?.name || deleteTarget?.phone}</span>? This action cannot be undone.
             </DialogDescription>
@@ -450,7 +508,7 @@ export default function ContactsPage() {
       <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
         <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete {selectedContacts.size} Contacts</DialogTitle>
+            <DialogTitle>Delete {selectedContacts.size} Customers</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete {selectedContacts.size} contacts? This action cannot be undone.
             </DialogDescription>

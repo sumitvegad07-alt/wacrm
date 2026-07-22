@@ -446,7 +446,7 @@ export function TaskForm({
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary"
                   >
                     <option value="None">None</option>
-                    <option value="Contact">Contact</option>
+                    <option value="Contact">Customer</option>
                     <option value="Lead">Lead</option>
                     <option value="Deal">Deal</option>
                     <option value="Quotation">Quotation</option>
@@ -463,7 +463,7 @@ export function TaskForm({
                       <SearchableSelect
                         value={contactId}
                         onChange={setContactId}
-                        placeholder="Select Contact..."
+                        placeholder="Select Customer..."
                         searchPlaceholder="Search contacts..."
                         options={contacts.map((c) => ({ value: c.id, label: c.name || c.phone }))}
                         className="h-10 bg-background"

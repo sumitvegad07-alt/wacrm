@@ -218,7 +218,7 @@ export function ContactDetailView({
     if (error) {
       toast.error('Failed to update contact');
     } else {
-      toast.success('Contact updated');
+      toast.success('Customer updated');
       fetchContact();
       onUpdated();
     }
@@ -409,7 +409,7 @@ export function ContactDetailView({
                     {contact.name || 'Unknown'}
                   </SheetTitle>
                   <SheetDescription className="text-muted-foreground text-xs mt-0.5">
-                    Contact details
+                    Customer details
                   </SheetDescription>
                   <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                     <button

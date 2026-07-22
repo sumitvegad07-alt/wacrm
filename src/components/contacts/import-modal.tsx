@@ -475,7 +475,7 @@ export function ImportModal({
         <div className="shrink-0 space-y-4 border-b border-border/80 px-6 pt-6 pb-5">
           <DialogHeader className="gap-1.5">
             <DialogTitle className="text-lg text-popover-foreground">
-              Import Contacts
+              Import Customers
             </DialogTitle>
             <DialogDescription>
               Upload a CSV. We match <code className="rounded bg-muted px-1 text-[11px]">phone</code> to avoid duplicates within the file and against your existing contacts.
