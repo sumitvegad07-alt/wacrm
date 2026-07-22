@@ -165,3 +165,35 @@ timelines), `products`, `quotations`, `expenses`, `geofences`, `tracking_session
   the actual output.
 - **Commit working states promptly.** The real Order module sat uncommitted and untracked for
   days, one accidental delete away from being lost.
+
+## STANDING RULES — do these automatically, without being asked
+
+### 1. Commit and push whenever work is verified clean
+
+As soon as a piece of work is complete AND verified (`npm run typecheck` passes with no NEW
+errors, or `npm run build` succeeds), commit it immediately with a clear message. Do not wait to
+be told. Then push.
+
+- This repo's remote is `origin` → `github.com/sumitvegad07-alt/wacrm` (branch `main`).
+  Verified 22 Jul 2026 — two commits had been sitting unpushed and laptop-only.
+- If no remote is configured, say so plainly and ask the founder to set one up. Never let
+  "committed" imply "backed up" when the work exists only on one machine.
+- Never use `git push --force` or rewrite history without explicit permission.
+- If the working tree contains unrelated uncommitted changes, commit ONLY your own files and say
+  clearly what you left untouched — unless the founder explicitly asks for a bulk checkpoint.
+- Before a first push to any new remote, check that no secrets are tracked (`.env*` must be
+  ignored; only `.env.local.example` is intentionally committed here).
+
+### 2. Keep this CLAUDE.md up to date yourself
+
+This file is a living document and you own it. Update it as part of your work, not as a separate
+request:
+
+- When you discover a schema fact, a broken assumption, a dead code path, or a gotcha that would
+  mislead a future session — add it.
+- When something documented here turns out to be **wrong or stale**, correct it.
+- When you fix something listed as known debt, update or remove that entry.
+- Only record things you have **actually verified** — from real code, a real query, or real
+  command output. Never add a claim you inferred or assumed.
+- At the end of a session, briefly tell the founder what you changed here and why.
+- Commit CLAUDE.md changes along with the work (see rule 1).
