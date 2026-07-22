@@ -132,6 +132,39 @@ capitalised strings `'Customer'` and `'Lead'`.
 `.select('*, leads(name)')` fails. Resolve lead targets with a **separate query** keyed by
 `target_id`. `src/app/(dashboard)/location-tracking/visits/page.tsx` does this correctly; copy it.
 
+### Pricing (Orders Phase 1, applied 22 Jul 2026 — verified against production)
+
+- **`tax_slabs`** (`id`, `account_id`, `name`, `rate`, `is_default`, `position`) — account-scoped
+  configurable rates, same lookup pattern as `order_statuses`. Call it **tax**, never GST.
+- **`products` has NO `tax_rate` column** and never did. The rate comes from
+  `products.tax_slab_id → tax_slabs.rate`. FK `products_tax_slab_id_fkey` exists, so PostgREST
+  can embed `tax_slabs(rate)`.
+- `products.min_price` — hard floor; no stack of discounts may cross it. NULL = no floor.
+- `order_items` gained `catalogue_price`, `price_list_price`, `scheme_discount_amount`,
+  `discount_type`, `discount_value`, `discount_amount`, `order_discount_share`,
+  `is_scheme_goods`, `scheme_id`. `orders` gained `order_discount_type/value`,
+  `discount_total`, `pricing_status`, `expected_total`, `pricing_variance`, `locked_at`.
+- **`price_lists`, `price_list_items`, `schemes`, `scheme_slabs`, `scheme_products`,
+  `scheme_customers` exist but nothing reads them yet** (Phases 3 and 4).
+- **`calculate_order_pricing()` is the single source of truth for order money.** Sequence is
+  FIXED, not configurable: catalogue → price list → scheme → salesman discount → price floor.
+  A configurable order would mean every order must store the whole active configuration or its
+  price could never be explained later. Do not reintroduce configurable ordering.
+- **Quoted price wins.** When the server disagrees with what a salesman promised, it records its
+  own figure in `expected_total`/`pricing_variance` and sets `pricing_status='review'` for an
+  admin to judge. It never overwrites the promised price.
+- Whole-order discounts are allocated **pro-rata across lines** (`order_discount_share`), not
+  held at the header, so each line's tax reduces correctly.
+- `src/lib/pricing/` holds an **advisory** TypeScript mirror for live totals and offline entry.
+  It is not authoritative. `fixtures.ts` pins it to the SQL; `sql-parity.md` records the last
+  verified run. Change one side and you must change and re-verify the other.
+
+**NOT YET APPLIED — `076_customer_level_enforcement.sql`.** Blocks saving a contact with no
+`hierarchy_level` while hierarchy is on, and replaces `convert_lead_to_customer` with a
+two-argument version. Held until the level pickers exist on both platforms: 6 of 7 live
+customers have no level and would become un-editable. The trigger and the RPC replacement must
+ship together — the current RPC inserts a contact with no level and would fail immediately.
+
 ### Other tables
 
 `leads` (+ `lead_sources`, `lead_statuses`, `lead_industries`, `lead_notes`, `lead_custom_values`),
