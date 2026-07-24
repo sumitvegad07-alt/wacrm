@@ -5,13 +5,15 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
+import { OrderForm } from '@/components/orders/order-form';
 
 interface OrderRow {
   id: string;
@@ -37,13 +39,15 @@ const CLASS_BADGE: Record<string, string> = {
 export default function OrdersPage() {
   const supabase = createClient();
   const router = useRouter();
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, hasPermission } = useAuth();
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [statuses, setStatuses] = useState<{ id: string; name: string; color: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterState, setFilterState] = useState<FilterState>({});
   const [globalSearch, setGlobalSearch] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const canCreateOrder = hasPermission('add_orders');
 
   const fetchData = useCallback(async () => {
     if (!accountId) return;
@@ -208,6 +212,11 @@ export default function OrdersPage() {
             Orders placed by your field team. Update status and create dispatches here.
           </p>
         </div>
+        {canCreateOrder && (
+          <Button onClick={() => setCreateOpen(true)} className="gap-2">
+            <Plus className="size-4" /> Create Order
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl border border-border">
@@ -232,6 +241,8 @@ export default function OrdersPage() {
         rowKey={(o) => o.id}
         onRowClick={(o) => router.push(`/orders/${o.id}`)}
       />
+
+      <OrderForm open={createOpen} onOpenChange={setCreateOpen} onSaved={fetchData} />
     </div>
   );
 }

@@ -39,6 +39,9 @@ const PERMISSION_GROUPS = [
       { id: "view_deals", label: "View Pipelines / Deals" },
       { id: "view_products", label: "View Products" },
       { id: "view_orders", label: "View Quotations / Orders" },
+      { id: "add_orders", label: "Create Orders" },
+      { id: "edit_orders", label: "Edit Orders" },
+      { id: "apply_order_discount", label: "Apply Discounts on Orders" },
     ]
   },
   {
