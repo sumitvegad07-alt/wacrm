@@ -91,6 +91,21 @@ const newLine = (): LineInput => ({
   discount_value: '',
 });
 
+/**
+ * Supabase/PostgREST errors are plain objects ({message, details, hint,
+ * code}), NOT Error instances — so `err instanceof Error` is false and
+ * `err.message` gets silently discarded. Pull the real reason out.
+ */
+function supaErr(e: unknown): string {
+  if (!e) return 'Unknown error';
+  if (e instanceof Error) return e.message;
+  const o = e as { message?: string; details?: string; hint?: string; code?: string };
+  return (
+    [o.message, o.details, o.hint, o.code ? `(${o.code})` : null].filter(Boolean).join(' — ') ||
+    'Unknown error'
+  );
+}
+
 export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefillSiteVisitId }: OrderFormProps) {
   const supabase = createClient();
   const { accountId, defaultCurrency, hasPermission } = useAuth();
@@ -123,6 +138,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
 
   const [pricing, setPricing] = useState<PricingResult | null>(null);
   const [pricingBusy, setPricingBusy] = useState(false);
+  const [pricingError, setPricingError] = useState<string | null>(null);
 
   const itemDiscountAllowed = canDiscount && (discountMode === 'item' || discountMode === 'both');
   const orderDiscountAllowed = canDiscount && (discountMode === 'order' || discountMode === 'both');
@@ -188,7 +204,14 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
         p_as_of: new Date().toISOString(),
       });
       setPricingBusy(false);
-      if (error) { console.error('pricing failed', error); return; }
+      if (error) {
+        // Surface the real reason instead of a silent "—".
+        console.error('pricing failed', error);
+        setPricingError(supaErr(error));
+        setPricing(null);
+        return;
+      }
+      setPricingError(null);
       setPricing(data as PricingResult);
     }, 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -251,7 +274,8 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       onOpenChange(false);
       onSaved();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create order');
+      // Show the actual reason, not a generic message (see supaErr).
+      toast.error(`Couldn't create order: ${supaErr(err)}`);
     } finally {
       setSaving(false);
     }
@@ -354,7 +378,10 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => updateLine(line.key, { discount_type: line.discount_type === 'percent' ? 'amount' : 'percent' })}
+                                  onClick={() => updateLine(line.key, {
+                                    discount_type: line.discount_type === 'percent' ? 'amount' : 'percent',
+                                    discount_value: '',  // switching type clears the value: % and amount are mutually exclusive
+                                  })}
                                   className="h-8 w-8 shrink-0 rounded-md border border-border text-xs font-medium hover:bg-muted"
                                   title="Toggle percentage or amount"
                                 >
@@ -403,7 +430,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                 <Label className="text-sm">Whole-order discount</Label>
                 <button
                   type="button"
-                  onClick={() => setOrderDiscountType((t) => (t === 'percent' ? 'amount' : 'percent'))}
+                  onClick={() => { setOrderDiscountType((t) => (t === 'percent' ? 'amount' : 'percent')); setOrderDiscountValue(''); }}
                   className="h-9 w-9 rounded-md border border-border text-sm font-medium hover:bg-muted"
                   title="Toggle % or amount"
                 >
@@ -423,6 +450,14 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
               <Label>Notes</Label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
             </div>
+
+            {/* Pricing error — never fail silently to a "—" */}
+            {pricingError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+                <AlertTriangle className="size-4 mt-0.5 shrink-0" />
+                <span>Couldn&apos;t price this order: {pricingError}</span>
+              </div>
+            )}
 
             {/* Totals */}
             <div className="rounded-lg bg-muted/40 border border-border p-4 space-y-1.5 text-sm">
