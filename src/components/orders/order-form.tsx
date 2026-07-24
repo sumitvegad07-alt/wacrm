@@ -11,7 +11,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
-import { Loader2, Plus, Trash2, Package, AlertTriangle } from 'lucide-react';
+import { Loader2, Plus, Trash2, AlertTriangle } from 'lucide-react';
 
 /**
  * Web order creation. The ONE pricing authority is the SQL function
@@ -38,6 +38,7 @@ interface ProductOption {
   name: string;
   sku: string | null;
   price: number | null;
+  unit: string | null;
 }
 
 type DiscountType = 'percent' | 'amount';
@@ -134,7 +135,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       setLoading(true);
       const [{ data: contactData }, { data: productData }, { data: acct }] = await Promise.all([
         supabase.from('contacts').select('id, company, name').eq('account_id', accountId).order('company'),
-        supabase.from('products').select('id, name, sku, price').eq('account_id', accountId).eq('active', true).order('name'),
+        supabase.from('products').select('id, name, sku, price, unit').eq('account_id', accountId).eq('active', true).order('name'),
         supabase.from('accounts').select('settings').eq('id', accountId).single(),
       ]);
       if (!alive) return;
@@ -214,6 +215,11 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
     [products],
   );
 
+  const unitOf = useCallback(
+    (pid: string) => products.find((p) => p.id === pid)?.unit || '',
+    [products],
+  );
+
   async function handleSave() {
     if (!accountId) return;
     if (!contactId) { toast.error('Select a customer'); return; }
@@ -290,77 +296,100 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                 {pricingBusy && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> pricing…</span>}
               </div>
 
-              <div className="space-y-2">
-                {lines.map((line) => {
-                  const priced = pricedByKey.get(line.key);
-                  const discounted = priced ? priced.effective_unit_price < priced.catalogue_price - 0.001 : false;
-                  return (
-                    <div key={line.key} className="rounded-lg border border-border p-3 space-y-2">
-                      <div className="flex gap-2 items-start">
-                        <div className="flex-1">
-                          <SearchableSelect
-                            options={productOptions}
-                            value={line.product_id}
-                            onChange={(v) => updateLine(line.key, { product_id: v })}
-                            placeholder="Select a product"
-                          />
-                        </div>
-                        <div className="w-20">
-                          <Input
-                            type="number" min="0" step="1" value={line.quantity}
-                            onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
-                            placeholder="Qty" aria-label="Quantity"
-                          />
-                        </div>
-                        {itemDiscountAllowed && (
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => updateLine(line.key, { discount_type: line.discount_type === 'percent' ? 'amount' : 'percent' })}
-                              className="h-9 w-9 rounded-md border border-border text-sm font-medium hover:bg-muted"
-                              title="Toggle % or amount"
-                            >
-                              {line.discount_type === 'percent' ? '%' : defaultCurrency}
-                            </button>
-                            <Input
-                              type="number" min="0" step="0.01" value={line.discount_value}
-                              onChange={(e) => updateLine(line.key, { discount_value: e.target.value })}
-                              placeholder="Disc." className="w-20" aria-label="Discount"
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="text-left font-medium px-3 py-2 min-w-[190px]">Product</th>
+                      <th className="text-left font-medium px-2 py-2">Unit</th>
+                      <th className="text-right font-medium px-2 py-2">Qty</th>
+                      <th className="text-right font-medium px-2 py-2">Price</th>
+                      {itemDiscountAllowed && <th className="text-left font-medium px-2 py-2">Discount</th>}
+                      <th className="text-right font-medium px-2 py-2">Tax</th>
+                      <th className="text-right font-medium px-3 py-2">Line Total</th>
+                      <th className="w-8 px-1 py-2" aria-label="Remove" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line) => {
+                      const priced = pricedByKey.get(line.key);
+                      // Standard struck through when the rate actually charged is below catalogue
+                      // (a discount now; a price list once Phase 3 lands).
+                      const discounted = priced ? priced.effective_unit_price < priced.catalogue_price - 0.001 : false;
+                      const unit = unitOf(line.product_id);
+                      return (
+                        <tr key={line.key} className="border-b border-border/60 last:border-0 align-top">
+                          <td className="px-3 py-2">
+                            <SearchableSelect
+                              options={productOptions}
+                              value={line.product_id}
+                              onChange={(v) => updateLine(line.key, { product_id: v })}
+                              placeholder="Select a product"
                             />
-                          </div>
-                        )}
-                        <Button variant="ghost" size="icon" onClick={() => removeLine(line.key)} className="text-muted-foreground hover:text-red-500">
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-
-                      {/* Transparency row: standard struck through, your rate, discount */}
-                      {priced && (
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm pl-1">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Package className="size-3.5" /> Standard
-                            <span className={discounted ? 'line-through' : 'font-medium text-foreground'}>
-                              {money(priced.catalogue_price)}
-                            </span>
-                          </span>
-                          {discounted && (
-                            <span className="font-semibold text-foreground">Your rate {money(priced.effective_unit_price)}</span>
+                          </td>
+                          <td className="px-2 py-2 text-muted-foreground whitespace-nowrap">{unit || '—'}</td>
+                          <td className="px-2 py-2">
+                            <Input
+                              type="number" min="0" step="1" value={line.quantity}
+                              onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
+                              className="w-16 text-right ml-auto" aria-label="Quantity"
+                            />
+                          </td>
+                          <td className="px-2 py-2 text-right whitespace-nowrap">
+                            {priced ? (
+                              discounted ? (
+                                <div className="flex flex-col items-end leading-tight">
+                                  <span className="line-through text-muted-foreground text-xs">{money(priced.catalogue_price)}</span>
+                                  <span className="font-medium">{money(priced.effective_unit_price)}</span>
+                                </div>
+                              ) : (
+                                <span>{money(priced.catalogue_price)}</span>
+                              )
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          {itemDiscountAllowed && (
+                            <td className="px-2 py-2">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => updateLine(line.key, { discount_type: line.discount_type === 'percent' ? 'amount' : 'percent' })}
+                                  className="h-8 w-8 shrink-0 rounded-md border border-border text-xs font-medium hover:bg-muted"
+                                  title="Toggle percentage or amount"
+                                >
+                                  {line.discount_type === 'percent' ? '%' : defaultCurrency}
+                                </button>
+                                <Input
+                                  type="number" min="0" step="0.01" value={line.discount_value}
+                                  onChange={(e) => updateLine(line.key, { discount_value: e.target.value })}
+                                  placeholder="0" className="w-16 h-8" aria-label="Discount"
+                                />
+                              </div>
+                            </td>
                           )}
-                          {priced.discount_amount > 0 && (
-                            <span className="text-emerald-600 dark:text-emerald-500">− {money(priced.discount_amount)} off</span>
-                          )}
-                          <span className="text-muted-foreground">Tax {priced.tax_rate}%</span>
-                          <span className="ml-auto font-medium">{money(priced.total)}</span>
-                          {priced.floor_breached && (
-                            <span className="w-full flex items-center gap-1 text-xs text-red-500">
-                              <AlertTriangle className="size-3" /> Below the minimum price for this product
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                          {/* Tax is READ-ONLY, resolved from the product's tax slab. Never editable. */}
+                          <td className="px-2 py-2 text-right text-muted-foreground whitespace-nowrap">
+                            {priced ? `${Number(priced.tax_rate)}%` : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium whitespace-nowrap">
+                            {priced ? money(priced.total) : '—'}
+                            {priced?.floor_breached && (
+                              <div className="text-[11px] text-red-500 font-normal flex items-center justify-end gap-0.5">
+                                <AlertTriangle className="size-3" /> below floor
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-1 py-2">
+                            <Button variant="ghost" size="icon" onClick={() => removeLine(line.key)} className="size-8 text-muted-foreground hover:text-red-500">
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
 
               <Button variant="outline" size="sm" onClick={() => setLines((p) => [...p, newLine()])} className="gap-1">
