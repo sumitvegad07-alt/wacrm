@@ -199,16 +199,25 @@ capitalised strings `'Customer'` and `'Lead'`.
 - **Classification** (computed in `calculate_order_pricing`, stored on `orders.classification`):
   hierarchy off → direct; on + level 1 → primary; on + level >1 → secondary; on + NO level →
   direct ("not known yet", deliberately not secondary).
-- **The TS mirror is behind on inclusive mode** (the per-unit amount rule IS mirrored; inclusive
-  is not). It MUST gain the inclusive branch + `rate_incl_unit` + engine v2 + inclusive fixtures
-  BEFORE mobile offline pricing is built — hard prerequisite. Web is unaffected (it uses the SQL
-  RPC live, not the mirror).
+- **The TS mirror is now at engine v2 (done 26 Jul 2026 — prerequisite satisfied).**
+  `src/lib/pricing/calculateOrderPricing.ts` now has the inclusive-tax branch + `rate_incl_unit`
+  + per-line `taxMode`, matching the SQL (083/084) exactly, and `engine_version` is 2. Five
+  inclusive fixtures were added and the whole 20-case suite was re-verified against production
+  (rolled back) — SQL and TS agree field-for-field; see `src/lib/pricing/sql-parity.md`
+  (26 Jul 2026 section). The inclusive floor check compares against the **inclusive** per-unit
+  price (effective unit derived from the native amount, not the net) — mirror that if you touch
+  it. Web is unaffected either way (it calls the SQL RPC live, not the mirror).
 
-**NOT YET APPLIED — `076_customer_level_enforcement.sql`.** Blocks saving a contact with no
-`hierarchy_level` while hierarchy is on, and replaces `convert_lead_to_customer` with a
-two-argument version. Held until the level pickers exist on both platforms: 6 of 7 live
-customers have no level and would become un-editable. The trigger and the RPC replacement must
-ship together — the current RPC inserts a contact with no level and would fail immediately.
+**APPLIED IN PRODUCTION — `076_customer_level_enforcement.sql` (verified live 26 Jul 2026,
+correcting the earlier "NOT YET APPLIED" note).** Live now: trigger
+`trg_enforce_contact_hierarchy_level` (BEFORE INSERT OR UPDATE on `contacts`) raises
+`check_violation` when `order_settings.hierarchy_enabled = true` AND `hierarchy_level IS NULL`,
+and `convert_lead_to_customer` is the two-arg `(p_lead_id uuid, p_hierarchy_level integer DEFAULT
+NULL)`. ⚠️ **The warned trap is now LIVE:** on the primary account hierarchy is ON and 6 of 8
+contacts have a NULL level, so those 6 are **un-editable from either app** until a customer-level
+picker exists on the contact forms (web AND mobile). That picker is a product decision, not yet
+made — do not add it silently. Reads/pricing don't trip the trigger; only saving a null-level
+contact does.
 
 ### Other tables
 
