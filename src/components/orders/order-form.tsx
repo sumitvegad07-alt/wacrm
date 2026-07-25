@@ -82,6 +82,7 @@ interface PricingResult {
 }
 
 type DiscountMode = 'off' | 'item' | 'order' | 'both';
+type DiscountValueType = 'percent' | 'amount' | 'both';
 
 const newLine = (): LineInput => ({
   key: crypto.randomUUID(),
@@ -128,6 +129,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
   const [contacts, setContacts] = useState<{ id: string; label: string }[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('off');
+  const [discountValueType, setDiscountValueType] = useState<DiscountValueType>('both');
 
   const [contactId, setContactId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -142,6 +144,13 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
 
   const itemDiscountAllowed = canDiscount && (discountMode === 'item' || discountMode === 'both');
   const orderDiscountAllowed = canDiscount && (discountMode === 'order' || discountMode === 'both');
+
+  // Discount TYPE: when the admin restricts to percent- or amount-only, the
+  // discount is forced to that type and the %/₹ toggle is hidden. 'both' keeps
+  // the toggle (mutually exclusive — one clears the other). Not stored per
+  // order; it only governs what may be entered now.
+  const forcedDiscountType: DiscountType | null =
+    discountValueType === 'percent' ? 'percent' : discountValueType === 'amount' ? 'amount' : null;
 
   // ---- load dependencies ----
   useEffect(() => {
@@ -161,6 +170,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       })));
       setProducts((productData ?? []) as ProductOption[]);
       setDiscountMode(((acct?.settings?.order_settings?.discount_mode as DiscountMode) ?? 'off'));
+      setDiscountValueType(((acct?.settings?.order_settings?.discount_value_type as DiscountValueType) ?? 'both'));
       setContactId(prefillContactId ?? '');
       setDate(new Date().toISOString().split('T')[0]);
       setNotes('');
@@ -179,14 +189,14 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       .map((l) => ({
         product_id: l.product_id,
         quantity: Number(l.quantity) || 0,
-        discount_type: itemDiscountAllowed && Number(l.discount_value) > 0 ? l.discount_type : null,
+        discount_type: itemDiscountAllowed && Number(l.discount_value) > 0 ? (forcedDiscountType ?? l.discount_type) : null,
         discount_value: itemDiscountAllowed ? (Number(l.discount_value) || 0) : 0,
       }));
     const orderDiscount = orderDiscountAllowed && Number(orderDiscountValue) > 0
-      ? { type: orderDiscountType, value: Number(orderDiscountValue) }
+      ? { type: forcedDiscountType ?? orderDiscountType, value: Number(orderDiscountValue) }
       : null;
     return { priced, orderDiscount };
-  }, [lines, itemDiscountAllowed, orderDiscountAllowed, orderDiscountType, orderDiscountValue]);
+  }, [lines, itemDiscountAllowed, orderDiscountAllowed, orderDiscountType, orderDiscountValue, forcedDiscountType]);
 
   // ---- debounced live pricing via the ONE authority ----
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -392,17 +402,23 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                           {itemDiscountAllowed && (
                             <td className="px-2 py-2">
                               <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => updateLine(line.key, {
-                                    discount_type: line.discount_type === 'percent' ? 'amount' : 'percent',
-                                    discount_value: '',  // switching type clears the value: % and amount are mutually exclusive
-                                  })}
-                                  className="h-8 w-8 shrink-0 rounded-md border border-border text-xs font-medium hover:bg-muted"
-                                  title="Toggle percentage or amount"
-                                >
-                                  {line.discount_type === 'percent' ? '%' : defaultCurrency}
-                                </button>
+                                {forcedDiscountType ? (
+                                  <span className="h-8 w-8 shrink-0 rounded-md border border-border text-xs font-medium flex items-center justify-center text-muted-foreground">
+                                    {forcedDiscountType === 'percent' ? '%' : defaultCurrency}
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => updateLine(line.key, {
+                                      discount_type: line.discount_type === 'percent' ? 'amount' : 'percent',
+                                      discount_value: '',  // switching type clears the value: % and amount are mutually exclusive
+                                    })}
+                                    className="h-8 w-8 shrink-0 rounded-md border border-border text-xs font-medium hover:bg-muted"
+                                    title="Toggle percentage or amount"
+                                  >
+                                    {line.discount_type === 'percent' ? '%' : defaultCurrency}
+                                  </button>
+                                )}
                                 <Input
                                   type="number" min="0" step="0.01" value={line.discount_value}
                                   onChange={(e) => updateLine(line.key, { discount_value: e.target.value })}
@@ -444,14 +460,20 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
             {orderDiscountAllowed && (
               <div className="flex items-center gap-2">
                 <Label className="text-sm">Whole-order discount</Label>
-                <button
-                  type="button"
-                  onClick={() => { setOrderDiscountType((t) => (t === 'percent' ? 'amount' : 'percent')); setOrderDiscountValue(''); }}
-                  className="h-9 w-9 rounded-md border border-border text-sm font-medium hover:bg-muted"
-                  title="Toggle % or amount"
-                >
-                  {orderDiscountType === 'percent' ? '%' : defaultCurrency}
-                </button>
+                {forcedDiscountType ? (
+                  <span className="h-9 w-9 rounded-md border border-border text-sm font-medium flex items-center justify-center text-muted-foreground">
+                    {forcedDiscountType === 'percent' ? '%' : defaultCurrency}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setOrderDiscountType((t) => (t === 'percent' ? 'amount' : 'percent')); setOrderDiscountValue(''); }}
+                    className="h-9 w-9 rounded-md border border-border text-sm font-medium hover:bg-muted"
+                    title="Toggle % or amount"
+                  >
+                    {orderDiscountType === 'percent' ? '%' : defaultCurrency}
+                  </button>
+                )}
                 <Input
                   type="number" min="0" step="0.01" value={orderDiscountValue}
                   onChange={(e) => setOrderDiscountValue(e.target.value)}

@@ -40,6 +40,16 @@ const DISCOUNT_MODES: { value: DiscountMode; label: string; help: string }[] = [
   { value: "both", label: "Both", help: "Line discounts and a whole-order discount." },
 ];
 
+// How a discount is entered — independent of scope. Unlike tax mode this is
+// NOT locked or stored per order: changing it only governs what a salesman may
+// enter on FUTURE orders; past orders already stored a fixed discount value.
+type DiscountValueType = "percent" | "amount" | "both";
+const DISCOUNT_VALUE_TYPES: { value: DiscountValueType; label: string; help: string }[] = [
+  { value: "percent", label: "Percentage", help: "Discounts entered as a %." },
+  { value: "amount", label: "Amount", help: "Discounts entered as a fixed amount." },
+  { value: "both", label: "Both", help: "Salesman picks % or amount (one at a time)." },
+];
+
 export function PricingSchemesSettings() {
   const supabase = createClient();
   const { accountId, canEditSettings } = useAuth();
@@ -53,6 +63,7 @@ export function PricingSchemesSettings() {
   const [productsWithoutSlab, setProductsWithoutSlab] = useState(0);
 
   const [discountMode, setDiscountMode] = useState<DiscountMode>("off");
+  const [discountValueType, setDiscountValueType] = useState<DiscountValueType>("both");
   const [enforceFloor, setEnforceFloor] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -71,6 +82,7 @@ export function PricingSchemesSettings() {
 
     const os = acctRes.data?.settings?.order_settings ?? {};
     setDiscountMode((os.discount_mode as DiscountMode) ?? "off");
+    setDiscountValueType((os.discount_value_type as DiscountValueType) ?? "both");
     setEnforceFloor(os.enforce_price_floor !== false); // default on
     setLoading(false);
   }, [accountId, supabase]);
@@ -254,25 +266,54 @@ export function PricingSchemesSettings() {
         </div>
 
         {discountMode !== "off" && (
-          <div className="space-y-3 pl-1">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {DISCOUNT_MODES.filter((m) => m.value !== "off").map((mode) => (
-                <button
-                  key={mode.value}
-                  type="button"
-                  disabled={!canEditSettings || saving}
-                  onClick={() => { setDiscountMode(mode.value); patchOrderSettings({ discount_mode: mode.value }); }}
-                  className={`text-left p-3 rounded-lg border transition-colors ${
-                    discountMode === mode.value
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-muted-foreground/40"
-                  }`}
-                >
-                  <p className="text-sm font-medium">{mode.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{mode.help}</p>
-                </button>
-              ))}
+          <div className="space-y-4 pl-1">
+            {/* Scope: WHERE a discount can be applied */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Scope</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {DISCOUNT_MODES.filter((m) => m.value !== "off").map((mode) => (
+                  <button
+                    key={mode.value}
+                    type="button"
+                    disabled={!canEditSettings || saving}
+                    onClick={() => { setDiscountMode(mode.value); patchOrderSettings({ discount_mode: mode.value }); }}
+                    className={`text-left p-3 rounded-lg border transition-colors ${
+                      discountMode === mode.value
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <p className="text-sm font-medium">{mode.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{mode.help}</p>
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Type: HOW a discount is entered. One choice, applied to whichever
+                scope is enabled. Changeable anytime — not locked, not per-order. */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Type</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {DISCOUNT_VALUE_TYPES.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    disabled={!canEditSettings || saving}
+                    onClick={() => { setDiscountValueType(t.value); patchOrderSettings({ discount_value_type: t.value }); }}
+                    className={`text-left p-3 rounded-lg border transition-colors ${
+                      discountValueType === t.value
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <p className="text-sm font-medium">{t.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t.help}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <p className="text-xs text-muted-foreground">
               Who may actually discount is controlled per role by the{" "}
               <span className="font-mono text-[11px] bg-muted px-1 py-0.5 rounded">apply_order_discount</span>{" "}
