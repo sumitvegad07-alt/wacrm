@@ -328,6 +328,8 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                       <th className="text-left font-medium px-2 py-2">Unit</th>
                       <th className="text-right font-medium px-2 py-2">Qty</th>
                       <th className="text-right font-medium px-2 py-2">Price</th>
+                      <th className="text-right font-medium px-2 py-2">Rate incl. tax</th>
+                      <th className="text-right font-medium px-2 py-2">Line total incl.</th>
                       {itemDiscountAllowed && <th className="text-left font-medium px-2 py-2">Discount</th>}
                       <th className="text-right font-medium px-2 py-2">Tax</th>
                       <th className="text-right font-medium px-3 py-2">Line Total</th>
@@ -341,6 +343,14 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                       // (a discount now; a price list once Phase 3 lands).
                       const discounted = priced ? priced.effective_unit_price < priced.catalogue_price - 0.001 : false;
                       const unit = unitOf(line.product_id);
+                      // Display-only. Current mode is tax-EXCLUSIVE (price is pre-tax), so the
+                      // per-unit rate WITH tax is price*(1+rate), and the line total WITH tax
+                      // before any line discount is that × qty. Derived from figures the pricing
+                      // function already returns — no new calculation.
+                      // NOTE: when tax inclusive/exclusive mode ships (planned), these must read
+                      // explicit incl/excl fields from the function so they stay correct in both modes.
+                      const rateInclUnit = priced ? priced.catalogue_price * (1 + Number(priced.tax_rate) / 100) : null;
+                      const lineInclPreDiscount = priced && rateInclUnit != null ? rateInclUnit * priced.quantity : null;
                       return (
                         <tr key={line.key} className="border-b border-border/60 last:border-0 align-top">
                           <td className="px-3 py-2">
@@ -372,6 +382,12 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
+                          </td>
+                          <td className="px-2 py-2 text-right whitespace-nowrap">
+                            {rateInclUnit != null ? money(rateInclUnit) : <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-2 py-2 text-right whitespace-nowrap text-muted-foreground">
+                            {lineInclPreDiscount != null ? money(lineInclPreDiscount) : '—'}
                           </td>
                           {itemDiscountAllowed && (
                             <td className="px-2 py-2">
