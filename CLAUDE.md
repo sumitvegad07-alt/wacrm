@@ -159,6 +159,51 @@ capitalised strings `'Customer'` and `'Lead'`.
   It is not authoritative. `fixtures.ts` pins it to the SQL; `sql-parity.md` records the last
   verified run. Change one side and you must change and re-verify the other.
 
+### Pricing (Orders Phase 2, applied 24 Jul 2026 — verified against production + REST)
+
+- **⚠️ pg_safeupdate landmine — read before writing any RPC that mutates.** Supabase runs
+  `pg_safeupdate` on the PostgREST/`authenticated` connection: **any UPDATE or DELETE without a
+  WHERE clause is rejected** (`"DELETE requires a WHERE clause"`, SQLSTATE 21000). It is NOT active
+  for the superuser/service role, so a function with an unqualified DELETE/UPDATE passes every SQL
+  and dry-run test yet fails the moment a real browser calls it via REST. `calculate_order_pricing`
+  hit exactly this (unqualified `DELETE`/`UPDATE` on its temp table) — invisible until the order
+  form became its first REST caller. Fix: qualify with `WHERE true`. **Always test a mutating RPC
+  through the real endpoint (`curl .../rest/v1/rpc/<fn>` with the anon key → expect 200, not 400),
+  not just SQL.** Audit any new function for unqualified writes.
+- **`create_order` / `update_order` RPCs** write header + items in one transaction, priced through
+  `calculate_order_pricing`. `create_order` is idempotent via an EXPLICIT existence check — NOT
+  `ON CONFLICT` (that fires the order-number trigger and burns a number on every retry). Deleted
+  customer/product on an offline sync are DETACHED (ref→NULL) + `pricing_status='review'`, never
+  rejected. `update_order` is blocked once `orders.locked_at` is set (first dispatch, via trigger
+  `trg_lock_order_on_dispatch`).
+- **Tax inclusive/exclusive is stored PER LINE:** `order_items.tax_mode` ('exclusive' default |
+  'inclusive'), carried on each line in `p_lines` like `locked_price`. An edited order keeps old
+  lines on their original basis and prices only new lines on the current one — a single
+  order-level value can't represent a mixed order. Account default: `order_settings.tax_mode`.
+  Exclusive: price is pre-tax, tax added on top. Inclusive: price contains the tax, backed out as
+  `net = price/(1+rate)`, `tax = total − net` (penny-perfect so it reconciles to the displayed
+  inclusive price). In both, stored `sub_total`=net, `tax_amount`=tax, `total`=tax-inclusive total.
+  `engine_version` is now 2. Each line's output also carries `rate_incl_unit` (per-unit rate with
+  tax, in the price's own basis) for the order-form display columns.
+- **Per-line amount discount is PER UNIT** (`value × quantity`, capped at the line), consistent
+  with percentage. The **whole-order** amount discount stays ONE amount across the order (not per
+  unit).
+- **Two independent discount settings, both freely changeable, NOT locked or stored per order**
+  (unlike tax mode): `order_settings.discount_mode` = off|item|order|both (SCOPE — where a discount
+  applies) and `order_settings.discount_value_type` = percent|amount|both (TYPE — how it's
+  entered). The order form renders only the enabled input(s); 'both' shows a %/₹ toggle that's
+  mutually exclusive (picking one clears the other), per-line and whole-order. Changing these only
+  governs FUTURE orders — past orders already stored fixed values.
+- **Order permissions:** flat keys `add_orders`, `edit_orders`, `apply_order_discount` in the roles
+  editor. Creation is UI-gated + RLS-tenancy, not RPC-permission-gated (consistent with the app).
+- **Classification** (computed in `calculate_order_pricing`, stored on `orders.classification`):
+  hierarchy off → direct; on + level 1 → primary; on + level >1 → secondary; on + NO level →
+  direct ("not known yet", deliberately not secondary).
+- **The TS mirror is behind on inclusive mode** (the per-unit amount rule IS mirrored; inclusive
+  is not). It MUST gain the inclusive branch + `rate_incl_unit` + engine v2 + inclusive fixtures
+  BEFORE mobile offline pricing is built — hard prerequisite. Web is unaffected (it uses the SQL
+  RPC live, not the mirror).
+
 **NOT YET APPLIED — `076_customer_level_enforcement.sql`.** Blocks saving a contact with no
 `hierarchy_level` while hierarchy is on, and replaces `convert_lead_to_customer` with a
 two-argument version. Held until the level pickers exist on both platforms: 6 of 7 live
