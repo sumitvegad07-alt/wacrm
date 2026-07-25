@@ -64,6 +64,7 @@ export function PricingSchemesSettings() {
 
   const [discountMode, setDiscountMode] = useState<DiscountMode>("off");
   const [discountValueType, setDiscountValueType] = useState<DiscountValueType>("both");
+  const [taxMode, setTaxMode] = useState<"exclusive" | "inclusive">("exclusive");
   const [enforceFloor, setEnforceFloor] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -83,6 +84,7 @@ export function PricingSchemesSettings() {
     const os = acctRes.data?.settings?.order_settings ?? {};
     setDiscountMode((os.discount_mode as DiscountMode) ?? "off");
     setDiscountValueType((os.discount_value_type as DiscountValueType) ?? "both");
+    setTaxMode((os.tax_mode as "exclusive" | "inclusive") ?? "exclusive");
     setEnforceFloor(os.enforce_price_floor !== false); // default on
     setLoading(false);
   }, [accountId, supabase]);
@@ -243,6 +245,36 @@ export function PricingSchemesSettings() {
             )}
           </div>
         )}
+      </div>
+
+      {/* ---------------- Tax mode ---------------- */}
+      <div className="space-y-3 pt-6 border-t border-border">
+        <div>
+          <h3 className="text-sm font-semibold">Product prices are</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Whether the price you set on a product already includes tax, or tax is added on top at
+            order time. Each order records the mode it used, so changing this never alters past orders.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-md">
+          {([
+            { value: "exclusive", label: "Exclusive of tax", help: "Price is pre-tax; tax is added on top." },
+            { value: "inclusive", label: "Inclusive of tax", help: "Price already contains the tax." },
+          ] as const).map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              disabled={!canEditSettings || saving}
+              onClick={() => { setTaxMode(m.value); patchOrderSettings({ tax_mode: m.value }); }}
+              className={`text-left p-3 rounded-lg border transition-colors ${
+                taxMode === m.value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
+              }`}
+            >
+              <p className="text-sm font-medium">{m.label}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{m.help}</p>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ---------------- Discounts ---------------- */}

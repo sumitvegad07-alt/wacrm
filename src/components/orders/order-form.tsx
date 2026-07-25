@@ -66,6 +66,8 @@ interface PricedLine {
   total: number;
   effective_unit_price: number;
   floor_breached: boolean;
+  rate_incl_unit: number;
+  tax_mode: string;
 }
 
 interface PricingResult {
@@ -130,6 +132,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('off');
   const [discountValueType, setDiscountValueType] = useState<DiscountValueType>('both');
+  const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive');
 
   const [contactId, setContactId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -171,6 +174,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       setProducts((productData ?? []) as ProductOption[]);
       setDiscountMode(((acct?.settings?.order_settings?.discount_mode as DiscountMode) ?? 'off'));
       setDiscountValueType(((acct?.settings?.order_settings?.discount_value_type as DiscountValueType) ?? 'both'));
+      setTaxMode(((acct?.settings?.order_settings?.tax_mode as 'exclusive' | 'inclusive') ?? 'exclusive'));
       setContactId(prefillContactId ?? '');
       setDate(new Date().toISOString().split('T')[0]);
       setNotes('');
@@ -191,12 +195,15 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
         quantity: Number(l.quantity) || 0,
         discount_type: itemDiscountAllowed && Number(l.discount_value) > 0 ? (forcedDiscountType ?? l.discount_type) : null,
         discount_value: itemDiscountAllowed ? (Number(l.discount_value) || 0) : 0,
+        // New lines use the account's current tax basis. (Edit will carry each
+        // existing line's stored basis instead — a later step.)
+        tax_mode: taxMode,
       }));
     const orderDiscount = orderDiscountAllowed && Number(orderDiscountValue) > 0
       ? { type: forcedDiscountType ?? orderDiscountType, value: Number(orderDiscountValue) }
       : null;
     return { priced, orderDiscount };
-  }, [lines, itemDiscountAllowed, orderDiscountAllowed, orderDiscountType, orderDiscountValue, forcedDiscountType]);
+  }, [lines, itemDiscountAllowed, orderDiscountAllowed, orderDiscountType, orderDiscountValue, forcedDiscountType, taxMode]);
 
   // ---- debounced live pricing via the ONE authority ----
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -353,13 +360,10 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                       // (a discount now; a price list once Phase 3 lands).
                       const discounted = priced ? priced.effective_unit_price < priced.catalogue_price - 0.001 : false;
                       const unit = unitOf(line.product_id);
-                      // Display-only. Current mode is tax-EXCLUSIVE (price is pre-tax), so the
-                      // per-unit rate WITH tax is price*(1+rate), and the line total WITH tax
-                      // before any line discount is that × qty. Derived from figures the pricing
-                      // function already returns — no new calculation.
-                      // NOTE: when tax inclusive/exclusive mode ships (planned), these must read
-                      // explicit incl/excl fields from the function so they stay correct in both modes.
-                      const rateInclUnit = priced ? priced.catalogue_price * (1 + Number(priced.tax_rate) / 100) : null;
+                      // Per-unit rate WITH tax comes straight from the pricing function
+                      // (rate_incl_unit), so it's correct in both exclusive and inclusive
+                      // modes. Line total incl. (before line discount) = that × qty.
+                      const rateInclUnit = priced ? priced.rate_incl_unit : null;
                       const lineInclPreDiscount = priced && rateInclUnit != null ? rateInclUnit * priced.quantity : null;
                       return (
                         <tr key={line.key} className="border-b border-border/60 last:border-0 align-top">
