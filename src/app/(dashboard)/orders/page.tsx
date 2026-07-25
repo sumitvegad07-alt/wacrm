@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
@@ -39,7 +39,7 @@ const CLASS_BADGE: Record<string, string> = {
 export default function OrdersPage() {
   const supabase = createClient();
   const router = useRouter();
-  const { accountId, defaultCurrency, hasPermission } = useAuth();
+  const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner } = useAuth();
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [statuses, setStatuses] = useState<{ id: string; name: string; color: string }[]>([]);
@@ -212,11 +212,18 @@ export default function OrdersPage() {
             Orders placed by your field team. Update status and create dispatches here.
           </p>
         </div>
-        {canCreateOrder && (
-          <Button onClick={() => setCreateOpen(true)} className="gap-2">
-            <Plus className="size-4" /> Create Order
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {(isAdmin || isOwner) && (
+            <Button variant="outline" className="gap-2" onClick={() => router.push('/orders/sync-health')}>
+              <TrendingUp className="size-4" /> Sync Health
+            </Button>
+          )}
+          {canCreateOrder && (
+            <Button onClick={() => setCreateOpen(true)} className="gap-2">
+              <Plus className="size-4" /> Create Order
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl border border-border">

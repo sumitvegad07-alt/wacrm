@@ -207,6 +207,13 @@ capitalised strings `'Customer'` and `'Lead'`.
   (26 Jul 2026 section). The inclusive floor check compares against the **inclusive** per-unit
   price (effective unit derived from the native amount, not the net) — mirror that if you touch
   it. Web is unaffected either way (it calls the SQL RPC live, not the mirror).
+- **Order Sync Health page (built 26 Jul 2026):** `src/app/(dashboard)/orders/sync-health/page.tsx`
+  — a read-only, **admin/owner-only** monitor reached from a "Sync Health" button on the Orders
+  page header (shown only to admins). It lists orders flagged `pricing_status='review'` (with their
+  `pricing_variance` reasons) and the `pricing_drift_log`. **It only shows SERVER-SIDE signals** —
+  orders that reached the DB. Orders permanently stuck unsynced on a rep's phone live in that
+  device's local queue and are NOT visible here; reporting those up to the server is a logged
+  follow-up ("Report mobile dead-letters to server"), which will need a new table + prod migration.
 
 **APPLIED IN PRODUCTION — `076_customer_level_enforcement.sql` (verified live 26 Jul 2026,
 correcting the earlier "NOT YET APPLIED" note).** Live now: trigger
