@@ -68,6 +68,11 @@ export interface PricingFixture {
     valid: boolean;
     /** Per-line effective unit price, in line order. */
     effective_unit_prices: number[];
+    /**
+     * Per-line rate WITH tax (rate_incl_unit), in line order. Optional — only
+     * the inclusive/exclusive display cases assert it.
+     */
+    rate_incl_unit_prices?: number[];
   };
 }
 
@@ -350,6 +355,128 @@ export const PRICING_FIXTURES: PricingFixture[] = [
       classification: 'direct',
       valid: true,
       effective_unit_prices: [33.33],
+      // exclusive: 33.33 grossed up by 12.5% = 37.49625 -> 37.50
+      rate_incl_unit_prices: [37.5],
+    },
+  },
+
+  // ── Inclusive tax (engine v2, migration 083) ──────────────────────────────
+  // The price already CONTAINS the tax. net = price / (1 + rate); tax = the
+  // remainder (penny-perfect), so the total equals the shown inclusive price.
+  {
+    name: 'inclusive tax, no discount',
+    proves: 'an inclusive price is split into net + tax that add back to the same total',
+    lines: [
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000002', quantity: 10, taxMode: 'inclusive' },
+    ],
+    context: CTX_PLAIN,
+    expect: {
+      // 100 incl × 10 = 1000 total ; net = 1000/1.18 = 847.4576 -> 847.46 ;
+      // tax = 1000 - 847.46 = 152.54 ; floor check uses the inclusive 100 (>= 80)
+      sub_total: 847.46,
+      tax_total: 152.54,
+      total_amount: 1000,
+      discount_total: 0,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [100],
+      rate_incl_unit_prices: [100], // inclusive: the catalogue price itself
+    },
+  },
+  {
+    name: 'inclusive tax with a per-unit amount discount',
+    proves: 'discount is applied in the inclusive basis, then net/tax are backed out',
+    lines: [
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000002',
+        quantity: 5,
+        taxMode: 'inclusive',
+        discountType: 'amount',
+        discountValue: 10, // ₹10 off each × 5 = ₹50 off the (inclusive) line
+      },
+    ],
+    context: CTX_PLAIN,
+    expect: {
+      // gross 500 incl - 50 = 450 incl ; net = 450/1.18 = 381.3559 -> 381.36 ;
+      // tax = 450 - 381.36 = 68.64 ; effective unit (incl) = 90 (>= floor 80)
+      sub_total: 381.36,
+      tax_total: 68.64,
+      total_amount: 450,
+      discount_total: 50,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [90],
+      rate_incl_unit_prices: [100],
+    },
+  },
+  {
+    name: 'inclusive tax breaching the floor',
+    proves: 'the floor compares against the inclusive per-unit price and still blocks',
+    lines: [
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000002', // floor 80
+        quantity: 10,
+        taxMode: 'inclusive',
+        discountType: 'percent',
+        discountValue: 30, // -> 70 incl/unit, under the floor
+      },
+    ],
+    context: CTX_PLAIN,
+    expect: {
+      // gross 1000 incl - 300 = 700 incl ; net = 700/1.18 = 593.2203 -> 593.22 ;
+      // tax = 700 - 593.22 = 106.78 ; effective unit (incl) = 70 < 80 -> blocked
+      sub_total: 593.22,
+      tax_total: 106.78,
+      total_amount: 700,
+      discount_total: 300,
+      classification: 'direct',
+      valid: false,
+      effective_unit_prices: [70],
+      rate_incl_unit_prices: [100],
+    },
+  },
+  {
+    name: 'mixed basis: one exclusive line + one inclusive line, whole-order discount',
+    proves: 'each line keeps its own basis while the order discount is split pro-rata',
+    lines: [
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000001', quantity: 10, taxMode: 'exclusive' }, // 1000, 0% tax
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000002', quantity: 10, taxMode: 'inclusive' }, // 1000 incl, 18% tax
+    ],
+    context: CTX_PLAIN,
+    orderDiscount: { type: 'percent', value: 10 },
+    expect: {
+      // base 2000, 10% = 200, split 100/100 -> each line 900 in its own basis.
+      // exclusive line: net 900, tax 0.   inclusive line: net 900/1.18 = 762.71,
+      // tax = 900 - 762.71 = 137.29. sub = 900 + 762.71 = 1662.71 ;
+      // total = 900 + 900 = 1800.
+      sub_total: 1662.71,
+      tax_total: 137.29,
+      total_amount: 1800,
+      discount_total: 200,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [90, 90],
+      rate_incl_unit_prices: [100, 100], // excl: 100×(1+0)=100 ; incl: 100
+    },
+  },
+  {
+    name: 'inclusive tax, awkward rate, rounding',
+    proves: 'inclusive net/tax rounding matches Postgres NUMERIC on an unclean divide',
+    lines: [
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000003', quantity: 3, taxMode: 'inclusive' },
+    ],
+    context: CTX_PLAIN,
+    expect: {
+      // 33.33 incl × 3 = 99.99 total ; net = 99.99/1.125 = 88.88 ;
+      // tax = 99.99 - 88.88 = 11.11
+      sub_total: 88.88,
+      tax_total: 11.11,
+      total_amount: 99.99,
+      discount_total: 0,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [33.33],
+      rate_incl_unit_prices: [33.33],
     },
   },
 ];

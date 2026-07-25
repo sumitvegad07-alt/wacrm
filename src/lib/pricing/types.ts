@@ -2,9 +2,10 @@
  * Shared pricing types.
  *
  * These mirror the input and output shapes of the `calculate_order_pricing`
- * Postgres function (migration 077). Output keys are deliberately snake_case
- * so a TypeScript result can be compared field-for-field against the JSON the
- * database returns, with no translation layer in between.
+ * Postgres function (migrations 077 → 083 tax_mode → 084 per-unit amount;
+ * engine_version 2). Output keys are deliberately snake_case so a TypeScript
+ * result can be compared field-for-field against the JSON the database returns,
+ * with no translation layer in between.
  */
 
 /** A product as the pricing engine needs to see it. */
@@ -31,6 +32,14 @@ export interface PricingLineInput {
    * at today's rates.
    */
   lockedPrice?: number | null;
+  /**
+   * Tax basis for THIS line, stored per line (order_items.tax_mode) exactly as
+   * in the SQL. 'exclusive' (default): the price is pre-tax and tax is added on
+   * top. 'inclusive': the price already contains the tax, which is backed out.
+   * A new line takes the account's current default; an edited line keeps its
+   * own original basis — a single order can therefore mix both.
+   */
+  taxMode?: 'inclusive' | 'exclusive';
 }
 
 export interface OrderDiscountInput {
@@ -52,8 +61,16 @@ export interface PricingLineResult {
   product_name: string;
   unit: string | null;
   quantity: number;
+  /** The line's tax basis, echoed back so it can be stored on order_items. */
+  tax_mode: 'inclusive' | 'exclusive';
   catalogue_price: number;
   price_list_price: number;
+  /**
+   * Per-unit rate WITH tax, in the price's own basis, for the order-form
+   * display columns. Inclusive: the catalogue price itself (tax already in it).
+   * Exclusive: catalogue price grossed up by the tax rate.
+   */
+  rate_incl_unit: number;
   scheme_discount_amount: number;
   discount_type: string | null;
   discount_value: number;

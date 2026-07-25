@@ -36,6 +36,12 @@ import type {
  * PRICING SEQUENCE (fixed, not configurable — matches SQL):
  *   catalogue -> price list [Phase 3] -> scheme [Phase 4]
  *     -> salesman discount -> pro-rata order discount -> price floor
+ *
+ * TAX BASIS is per line (migration 083). Passes 1 (discounts) and the pro-rata
+ * order-discount allocation happen in the line's NATIVE basis — pre-tax for an
+ * exclusive line, tax-inclusive for an inclusive one — so no branching is
+ * needed there. Only the final net/tax split differs by basis (see pass 2).
+ * engine_version is 2.
  */
 
 /**
@@ -88,6 +94,9 @@ export function calculateOrderPricing(
     const priceListPrice = Number(line.lockedPrice ?? product?.price ?? 0);
     const discountValue = Math.max(Number(line.discountValue) || 0, 0);
     const discountType = line.discountType ?? null;
+    // Per-line tax basis, defaulting to exclusive exactly like the SQL's
+    // COALESCE(q.tax_mode, 'exclusive').
+    const taxMode: 'inclusive' | 'exclusive' = line.taxMode === 'inclusive' ? 'inclusive' : 'exclusive';
 
     const gross = round2(priceListPrice * quantity);
     // Phase 4 applies schemes here.
@@ -106,6 +115,7 @@ export function calculateOrderPricing(
       position: index + 1,
       product,
       quantity,
+      taxMode,
       cataloguePrice,
       priceListPrice,
       discountType,
@@ -134,10 +144,33 @@ export function calculateOrderPricing(
     // Allocated per line rather than held at the header so each line's tax
     // reduces correctly — invoice discounts must apply at line level.
     const share = baseSum > 0 ? round2((orderDiscountTotal * s.afterItem) / baseSum) : 0;
-    const net = s.afterItem - share;
+    // The line amount, in its NATIVE basis, after both discounts. This is what
+    // the floor check and effective unit price work from — for an inclusive
+    // line that is the tax-inclusive amount, matching the SQL (which divides
+    // native_after by quantity, not net).
+    const nativeAfter = s.afterItem - share;
     const taxRate = Number(s.product?.taxRate ?? 0);
-    const taxAmount = round2((net * taxRate) / 100);
-    const effectiveUnit = s.quantity > 0 ? round4(net / s.quantity) : 0;
+
+    // Net / tax split by basis, mirroring SQL 083/084 exactly:
+    //   exclusive: price is pre-tax; tax added on top.
+    //   inclusive: price contains the tax; net = price / (1 + rate), and
+    //     tax = price − net (penny-perfect, so it reconciles to the shown
+    //     inclusive amount rather than being recomputed and drifting a paise).
+    let net: number;
+    let taxAmount: number;
+    if (s.taxMode === 'inclusive') {
+      net = round2(nativeAfter / (1 + taxRate / 100));
+      taxAmount = nativeAfter - net;
+    } else {
+      net = nativeAfter;
+      taxAmount = round2((nativeAfter * taxRate) / 100);
+    }
+
+    // Per-unit rate with tax, in the price's own basis (display only).
+    const rateInclUnit =
+      s.taxMode === 'inclusive' ? s.cataloguePrice : round2(s.cataloguePrice * (1 + taxRate / 100));
+
+    const effectiveUnit = s.quantity > 0 ? round4(nativeAfter / s.quantity) : 0;
     const minPrice = s.product?.minPrice ?? null;
     const floorBreached = minPrice !== null && effectiveUnit < minPrice;
 
@@ -156,8 +189,10 @@ export function calculateOrderPricing(
       product_name: s.product?.name ?? 'Unknown product',
       unit: s.product?.unit ?? null,
       quantity: s.quantity,
+      tax_mode: s.taxMode,
       catalogue_price: s.cataloguePrice,
       price_list_price: s.priceListPrice,
+      rate_incl_unit: rateInclUnit,
       scheme_discount_amount: s.schemeDiscountAmount,
       discount_type: s.discountType,
       discount_value: s.discountValue,
@@ -190,6 +225,6 @@ export function calculateOrderPricing(
     floor_violations: floorViolations,
     enforce_floor: ctx.enforcePriceFloor,
     valid: !(ctx.enforcePriceFloor && floorViolations.length > 0),
-    engine_version: 1,
+    engine_version: 2,
   };
 }

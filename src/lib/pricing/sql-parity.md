@@ -65,6 +65,40 @@ Case 15 is the one that catches floating-point drift: 12.5% of 99.99 is
 `round()` helper agrees. A naive `Math.round` implementation does not
 reliably, which is why that helper exists.
 
+## Recorded results — 26 July 2026 (engine_version 2: inclusive tax)
+
+Re-run against production (rolled back) after upgrading the mirror to
+engine_version 2 — the per-line tax basis (migrations 083/084). The whole 20-case
+suite matched field-for-field, SQL vs TypeScript. The five inclusive cases below
+are new; the 15 above were re-confirmed unchanged and every one still returned
+`engine_version = 2`.
+
+The harness sets `order_settings.hierarchy_enabled` / `enforce_price_floor` per
+case and inserts the fixture catalogue under a real account, then ends in a
+`RAISE EXCEPTION E'PARITY_RESULTS_BEGIN … END'` that carries the results in the
+error text and guarantees rollback. Verified afterwards: zero fixture products /
+slabs / contacts remain and the account's settings are unchanged.
+
+Note for the harness: production has the migration-076 trigger
+`trg_enforce_contact_hierarchy_level` live (BEFORE INSERT OR UPDATE on
+`contacts`), so the block must disable hierarchy before inserting the NULL-level
+fixture contact, then re-enable it per case.
+
+| Case | tax_mode | sub_total | tax_total | total | disc | eff. unit | rate_incl_unit | valid |
+|---|---|---|---|---|---|---|---|---|
+| INC1 inclusive, no discount | inclusive | 847.46 | 152.54 | 1000.00 | 0 | 100 | 100.00 | true |
+| INC2 inclusive, per-unit ₹10 off ×5 | inclusive | 381.36 | 68.64 | 450.00 | 50 | 90 | 100.00 | true |
+| INC3 inclusive, 30% → below floor 80 | inclusive | 593.22 | 106.78 | 700.00 | 300 | 70 | 100.00 | **false** |
+| INC4 mixed (excl + incl) + 10% order disc | mixed | 1662.71 | 137.29 | 1800.00 | 200 | 90 / 90 | 100.00 / 100.00 | true |
+| INC5 inclusive, awkward (33.33 ×3 @ 12.5%) | inclusive | 88.88 | 11.11 | 99.99 | 0 | 33.33 | 33.33 | true |
+
+INC1 proves the inclusive split reconciles: 1000 inclusive → net 1000/1.18 =
+847.46, tax = 1000 − 847.46 = 152.54, which add back to exactly 1000. INC3 proves
+the floor is checked against the **inclusive** per-unit price (70 < 80) — the
+effective unit price is derived from the native (inclusive) amount, not the net.
+INC4 proves each line keeps its own basis while the whole-order discount is still
+split pro-rata across both.
+
 ## What is NOT covered yet
 
 - Price lists (Phase 3) and schemes (Phase 4). Both steps exist in the SQL as

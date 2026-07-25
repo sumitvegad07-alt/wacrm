@@ -30,6 +30,13 @@ describe('calculateOrderPricing (advisory mirror)', () => {
       fixture.expect.effective_unit_prices.forEach((expected, i) => {
         expect(result.lines[i].effective_unit_price).toBeCloseTo(expected, 4);
       });
+
+      // rate_incl_unit is only asserted by the inclusive/exclusive display cases.
+      if (fixture.expect.rate_incl_unit_prices) {
+        fixture.expect.rate_incl_unit_prices.forEach((expected, i) => {
+          expect(result.lines[i].rate_incl_unit).toBeCloseTo(expected, 2);
+        });
+      }
     });
   }
 
