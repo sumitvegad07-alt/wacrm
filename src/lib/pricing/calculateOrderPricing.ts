@@ -94,8 +94,11 @@ export function calculateOrderPricing(
     const schemeDiscountAmount = 0;
 
     let discountAmount = 0;
+    // 'amount' is PER UNIT (× quantity) — a field discount is spoken per unit
+    // ("5 off each"), consistent with percentage. The whole-order amount
+    // discount (below) stays one amount across the order.
     if (discountType === 'percent') discountAmount = round2((gross * discountValue) / 100);
-    else if (discountType === 'amount') discountAmount = round2(discountValue);
+    else if (discountType === 'amount') discountAmount = round2(discountValue * quantity);
     // A discount can never exceed the line it is discounting.
     discountAmount = Math.min(discountAmount, gross);
 

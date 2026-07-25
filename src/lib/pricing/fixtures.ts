@@ -131,14 +131,14 @@ export const PRICING_FIXTURES: PricingFixture[] = [
     },
   },
   {
-    name: 'line flat-amount discount',
-    proves: "an 'amount' discount is a total off the line, not per unit",
+    name: 'line flat-amount discount (per unit)',
+    proves: "an 'amount' discount is PER UNIT: ₹15 off each × 10 = ₹150 off the line",
     lines: [
       {
         productId: 'aaaaaaaa-0000-4000-8000-000000000001',
         quantity: 10,
         discountType: 'amount',
-        discountValue: 150,
+        discountValue: 15,
       },
     ],
     context: CTX_PLAIN,
