@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, TrendingUp } from 'lucide-react';
+import { Search, Plus, TrendingUp, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
@@ -47,7 +47,9 @@ export default function OrdersPage() {
   const [filterState, setFilterState] = useState<FilterState>({});
   const [globalSearch, setGlobalSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const canCreateOrder = hasPermission('add_orders');
+  const canEditOrder = hasPermission('edit_orders');
 
   const fetchData = useCallback(async () => {
     if (!accountId) return;
@@ -182,6 +184,21 @@ export default function OrdersPage() {
       visibleByDefault: false,
       render: (o) => <span className="text-sm">{o.salesmanName}</span>,
     },
+    ...(canEditOrder ? [{
+      id: 'actions',
+      label: '',
+      type: 'text' as const,
+      render: (o: OrderRow) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1"
+          onClick={(e) => { e.stopPropagation(); setEditOrderId(o.id); }}
+        >
+          <Pencil className="size-3.5" /> Edit
+        </Button>
+      ),
+    }] : []),
   ];
 
   const filtered = useMemo(() => {
@@ -250,6 +267,12 @@ export default function OrdersPage() {
       />
 
       <OrderForm open={createOpen} onOpenChange={setCreateOpen} onSaved={fetchData} />
+      <OrderForm
+        open={!!editOrderId}
+        orderId={editOrderId}
+        onOpenChange={(o) => { if (!o) setEditOrderId(null); }}
+        onSaved={fetchData}
+      />
     </div>
   );
 }

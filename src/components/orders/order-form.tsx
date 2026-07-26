@@ -31,6 +31,12 @@ interface OrderFormProps {
   /** Optional prefill when an order is started from a customer site visit. */
   prefillContactId?: string | null;
   prefillSiteVisitId?: string | null;
+  /**
+   * When set, the form is in EDIT mode: it loads this order, prices existing
+   * lines at their agreed (locked) price, and saves via update_order. Omit for
+   * create mode (create_order). Editing is online-only.
+   */
+  orderId?: string | null;
 }
 
 interface ProductOption {
@@ -49,6 +55,19 @@ interface LineInput {
   quantity: string;
   discount_type: DiscountType;
   discount_value: string;
+  /**
+   * Set for an EXISTING line being edited: its originally-agreed unit price,
+   * sent as locked_price so re-pricing keeps that price. New lines (and
+   * re-attached products, per the founder's decision) leave this null so they
+   * price at the current catalogue rate.
+   */
+  locked_price?: number | null;
+  /** Set for an existing line: its stored tax basis. New lines use the account default. */
+  tax_mode?: 'exclusive' | 'inclusive';
+  /** True when this existing line's product was deleted (product_id null) and needs re-attaching. */
+  detached?: boolean;
+  /** Snapshot name of a detached line's original product, shown so the user knows what to replace. */
+  detached_name?: string;
 }
 
 interface PricedLine {
@@ -109,9 +128,10 @@ function supaErr(e: unknown): string {
   );
 }
 
-export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefillSiteVisitId }: OrderFormProps) {
+export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefillSiteVisitId, orderId }: OrderFormProps) {
   const supabase = createClient();
   const { accountId, defaultCurrency, hasPermission } = useAuth();
+  const isEdit = !!orderId;
 
   const money = useMemo(() => {
     const code = (defaultCurrency || 'USD').trim();
@@ -145,6 +165,12 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
   const [pricingBusy, setPricingBusy] = useState(false);
   const [pricingError, setPricingError] = useState<string | null>(null);
 
+  // Edit-mode: the loaded order's original customer (to detect a customer change
+  // on save), whether it's locked (dispatched → read-only), and any load error.
+  const [locked, setLocked] = useState(false);
+  const [originalContactId, setOriginalContactId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const itemDiscountAllowed = canDiscount && (discountMode === 'item' || discountMode === 'both');
   const orderDiscountAllowed = canDiscount && (discountMode === 'order' || discountMode === 'both');
 
@@ -155,12 +181,14 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
   const forcedDiscountType: DiscountType | null =
     discountValueType === 'percent' ? 'percent' : discountValueType === 'amount' ? 'amount' : null;
 
-  // ---- load dependencies ----
+  // ---- load dependencies (+ the order itself in edit mode) ----
   useEffect(() => {
     if (!open || !accountId) return;
     let alive = true;
     (async () => {
       setLoading(true);
+      setLocked(false);
+      setLoadError(null);
       const [{ data: contactData }, { data: productData }, { data: acct }] = await Promise.all([
         supabase.from('contacts').select('id, company, name').eq('account_id', accountId).order('company'),
         supabase.from('products').select('id, name, sku, price, unit').eq('account_id', accountId).eq('active', true).order('name'),
@@ -175,6 +203,57 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       setDiscountMode(((acct?.settings?.order_settings?.discount_mode as DiscountMode) ?? 'off'));
       setDiscountValueType(((acct?.settings?.order_settings?.discount_value_type as DiscountValueType) ?? 'both'));
       setTaxMode(((acct?.settings?.order_settings?.tax_mode as 'exclusive' | 'inclusive') ?? 'exclusive'));
+
+      if (isEdit && orderId) {
+        // ---- EDIT: load the order + its line items ----
+        const { data: order, error: orderErr } = await supabase
+          .from('orders')
+          .select('id, contact_id, date, notes, locked_at, order_discount_type, order_discount_value, order_items(*)')
+          .eq('id', orderId)
+          .single();
+        if (!alive) return;
+        if (orderErr || !order) {
+          setLoadError(supaErr(orderErr) || 'Order not found.');
+          setLoading(false);
+          return;
+        }
+        // Dispatched → read-only. update_order rejects a locked order (23514), so
+        // we never show an edit form the user would only discover is blocked.
+        if (order.locked_at) {
+          setLocked(true);
+          setLoading(false);
+          return;
+        }
+        setOriginalContactId(order.contact_id ?? null);
+        setContactId(order.contact_id ?? '');
+        setDate(order.date ?? new Date().toISOString().split('T')[0]);
+        setNotes(order.notes ?? '');
+        setOrderDiscountType((order.order_discount_type as DiscountType) || 'percent');
+        setOrderDiscountValue(order.order_discount_value ? String(order.order_discount_value) : '');
+
+        const items = ((order.order_items ?? []) as Record<string, unknown>[])
+          .slice()
+          .sort((a, b) => ((a.position as number) ?? 0) - ((b.position as number) ?? 0));
+        const editLines: LineInput[] = items.map((it) => ({
+          key: crypto.randomUUID(),
+          product_id: (it.product_id as string) ?? '',
+          quantity: String((it.quantity as number) ?? 0),
+          discount_type: ((it.discount_type as DiscountType) || 'percent'),
+          discount_value: it.discount_value ? String(it.discount_value) : '',
+          // Existing lines keep their agreed unit price + original tax basis.
+          locked_price: (it.price_list_price as number) ?? null,
+          tax_mode: ((it.tax_mode as 'exclusive' | 'inclusive') ?? 'exclusive'),
+          detached: !it.product_id,
+          detached_name: (it.product_name as string) ?? undefined,
+        }));
+        setLines(editLines.length > 0 ? editLines : [newLine()]);
+        setPricing(null);
+        setLoading(false);
+        return;
+      }
+
+      // ---- CREATE ----
+      setOriginalContactId(null);
       setContactId(prefillContactId ?? '');
       setDate(new Date().toISOString().split('T')[0]);
       setNotes('');
@@ -184,7 +263,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, [open, accountId, supabase, prefillContactId]);
+  }, [open, accountId, supabase, prefillContactId, isEdit, orderId]);
 
   // ---- inputs the pricing function needs ----
   const pricingInputs = useMemo(() => {
@@ -195,9 +274,12 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
         quantity: Number(l.quantity) || 0,
         discount_type: itemDiscountAllowed && Number(l.discount_value) > 0 ? (forcedDiscountType ?? l.discount_type) : null,
         discount_value: itemDiscountAllowed ? (Number(l.discount_value) || 0) : 0,
-        // New lines use the account's current tax basis. (Edit will carry each
-        // existing line's stored basis instead — a later step.)
-        tax_mode: taxMode,
+        // Existing edited lines carry their own stored basis; new lines (and
+        // re-attached products, which clear locked_price) use the account default.
+        tax_mode: l.tax_mode ?? taxMode,
+        // Existing lines keep their agreed unit price. Omitted for new/re-attached
+        // lines so they price at the current catalogue rate.
+        ...(l.locked_price != null ? { locked_price: l.locked_price } : {}),
       }));
     const orderDiscount = orderDiscountAllowed && Number(orderDiscountValue) > 0
       ? { type: forcedDiscountType ?? orderDiscountType, value: Number(orderDiscountValue) }
@@ -264,6 +346,12 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
     if (!accountId) return;
     if (!contactId) { toast.error('Select a customer'); return; }
     if (pricingInputs.priced.length === 0) { toast.error('Add at least one product'); return; }
+    // A detached (deleted-product) line that hasn't been re-attached would be
+    // silently dropped by the product_id filter — stop and make the user resolve it.
+    if (lines.some((l) => l.detached && !l.product_id)) {
+      toast.error('Re-attach or remove the deleted-product line before saving.');
+      return;
+    }
     if (pricing && !pricing.valid) {
       const names = pricing.floor_violations.map((v) => v.product_name).join(', ');
       toast.error(`Below the price floor: ${names}. Reduce the discount to save.`);
@@ -271,28 +359,48 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
     }
     setSaving(true);
     try {
-      const { data, error } = await supabase.rpc('create_order', {
-        p_order_id: crypto.randomUUID(),
-        p_account_id: accountId,
-        p_contact_id: contactId,
-        p_site_visit_id: prefillSiteVisitId ?? null,
-        p_date: date,
-        p_lines: pricingInputs.priced,
-        p_order_discount: pricingInputs.orderDiscount,
-        p_client_breakdown: null,  // web is online; server compute is authoritative
-        p_source: 'online',
-        p_notes: notes.trim() || null,
-        p_platform: 'web',
-        p_app_version: null,
-      });
-      if (error) throw error;
-      const num = (data as Record<string, unknown>)?.order_number as string | undefined;
-      toast.success(num ? `Order ${num} created` : 'Order created');
+      if (isEdit && orderId) {
+        // update_order has no p_contact_id, so a customer change/re-attach is
+        // written directly first; update_order then re-reads contact_id and
+        // recomputes classification. (Consistent with the Orders page's direct
+        // status update — no money is computed client-side.)
+        if (contactId !== originalContactId) {
+          const { error: cErr } = await supabase.from('orders').update({ contact_id: contactId }).eq('id', orderId);
+          if (cErr) throw cErr;
+        }
+        const { data, error } = await supabase.rpc('update_order', {
+          p_order_id: orderId,
+          p_lines: pricingInputs.priced,
+          p_order_discount: pricingInputs.orderDiscount,
+          p_notes: notes.trim() || null,
+        });
+        if (error) throw error;
+        const status = (data as Record<string, unknown>)?.pricing_status as string | undefined;
+        toast.success(status === 'review' ? 'Order saved — flagged for review' : 'Order updated');
+      } else {
+        const { data, error } = await supabase.rpc('create_order', {
+          p_order_id: crypto.randomUUID(),
+          p_account_id: accountId,
+          p_contact_id: contactId,
+          p_site_visit_id: prefillSiteVisitId ?? null,
+          p_date: date,
+          p_lines: pricingInputs.priced,
+          p_order_discount: pricingInputs.orderDiscount,
+          p_client_breakdown: null,  // web is online; server compute is authoritative
+          p_source: 'online',
+          p_notes: notes.trim() || null,
+          p_platform: 'web',
+          p_app_version: null,
+        });
+        if (error) throw error;
+        const num = (data as Record<string, unknown>)?.order_number as string | undefined;
+        toast.success(num ? `Order ${num} created` : 'Order created');
+      }
       onOpenChange(false);
       onSaved();
     } catch (err: unknown) {
       // Show the actual reason, not a generic message (see supaErr).
-      toast.error(`Couldn't create order: ${supaErr(err)}`);
+      toast.error(`Couldn't ${isEdit ? 'update' : 'create'} order: ${supaErr(err)}`);
     } finally {
       setSaving(false);
     }
@@ -302,7 +410,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>New Order</DialogTitle>
+          <DialogTitle>{isEdit ? 'Edit Order' : 'New Order'}</DialogTitle>
           <DialogDescription>
             Prices are calculated live by the server. The standard price is struck through when a
             discount applies, so you can show the customer exactly what they&apos;re getting.
@@ -311,6 +419,15 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
 
         {loading ? (
           <div className="flex items-center justify-center py-16"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+        ) : loadError ? (
+          <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-3 text-sm text-red-600 dark:text-red-400">
+            <AlertTriangle className="size-4 mt-0.5 shrink-0" /><span>{loadError}</span>
+          </div>
+        ) : locked ? (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="size-4 mt-0.5 shrink-0" />
+            <span>This order has been dispatched and can no longer be edited. Create a return or a new order instead.</span>
+          </div>
         ) : (
           <div className="space-y-5">
             {/* Customer + date */}
@@ -323,6 +440,11 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                   onChange={setContactId}
                   placeholder="Select a customer"
                 />
+                {isEdit && !originalContactId && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    The original customer was removed — pick a replacement to fix this order.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Date</Label>
@@ -371,9 +493,16 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                             <SearchableSelect
                               options={productOptions}
                               value={line.product_id}
-                              onChange={(v) => updateLine(line.key, { product_id: v })}
-                              placeholder="Select a product"
+                              // Changing/re-attaching a product clears the locked price so the
+                              // line prices at the new product's current rate (founder's decision).
+                              onChange={(v) => updateLine(line.key, { product_id: v, detached: false, locked_price: null })}
+                              placeholder={line.detached ? 'Re-attach a product' : 'Select a product'}
                             />
+                            {line.detached && !line.product_id && (
+                              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                                Was &ldquo;{line.detached_name || 'a deleted product'}&rdquo; (removed) — pick a replacement.
+                              </p>
+                            )}
                           </td>
                           <td className="px-2 py-2 text-muted-foreground whitespace-nowrap">{unit || '—'}</td>
                           <td className="px-2 py-2">
@@ -521,10 +650,16 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || loading || (pricing != null && !pricing.valid)}>
-            {saving && <Loader2 className="size-4 mr-1 animate-spin" />} Create Order
-          </Button>
+          {locked || loadError ? (
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving || loading || (pricing != null && !pricing.valid)}>
+                {saving && <Loader2 className="size-4 mr-1 animate-spin" />} {isEdit ? 'Save Changes' : 'Create Order'}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
