@@ -214,6 +214,25 @@ capitalised strings `'Customer'` and `'Lead'`.
   orders that reached the DB. Orders permanently stuck unsynced on a rep's phone live in that
   device's local queue and are NOT visible here; reporting those up to the server is a logged
   follow-up ("Report mobile dead-letters to server"), which will need a new table + prod migration.
+- **Order editing (Phase 3 Step 1, built 26 Jul 2026):** `order-form.tsx` gained an edit mode
+  (`orderId` prop) reached from an **Edit** action on the Orders list, gated on `edit_orders`
+  (create still gates `add_orders`; discounts `apply_order_discount`). Key `update_order` facts
+  (verified from the SQL, migration 083):
+  - `update_order(p_order_id, p_lines, p_order_discount, p_notes)` has **no `p_contact_id`** — it
+    re-reads `contact_id` from the stored order. So a customer change/re-attach can't go through
+    the RPC; the form writes `orders.contact_id` **directly** first, then calls `update_order`
+    (which recomputes classification). Consistent with the page's direct status update; no money is
+    computed client-side.
+  - It does **not** auto-preserve existing line prices — it passes `p_lines` to
+    `calculate_order_pricing`, which honors a per-line `locked_price` only if the client sends one.
+    So the edit form loads each existing line and sends its stored `price_list_price` as
+    `locked_price` + its stored `tax_mode`; new/re-attached lines omit `locked_price` → current
+    catalogue price (founder's re-attach decision).
+  - `locked_at` (set on first dispatch) makes `update_order` reject the WHOLE edit
+    (`RAISE … ERRCODE 'check_violation'` = 23514) — no partial post-dispatch edit. The form shows a
+    read-only "dispatched" message instead of a form.
+  - Only one review path: a floor-breaching edit sets `pricing_status='review'`. The form blocks
+    save on a floor breach (like create), so from the UI an online edit is succeed-or-reject.
 
 **APPLIED IN PRODUCTION — `076_customer_level_enforcement.sql` (verified live 26 Jul 2026,
 correcting the earlier "NOT YET APPLIED" note).** Live now: trigger
