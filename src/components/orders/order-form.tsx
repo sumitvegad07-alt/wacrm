@@ -360,19 +360,16 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
     setSaving(true);
     try {
       if (isEdit && orderId) {
-        // update_order has no p_contact_id, so a customer change/re-attach is
-        // written directly first; update_order then re-reads contact_id and
-        // recomputes classification. (Consistent with the Orders page's direct
-        // status update — no money is computed client-side.)
-        if (contactId !== originalContactId) {
-          const { error: cErr } = await supabase.from('orders').update({ contact_id: contactId }).eq('id', orderId);
-          if (cErr) throw cErr;
-        }
+        // Customer change/re-attach goes through update_order's validated
+        // p_contact_id (migration 085): it runs the same dispatch-lock check and
+        // verifies the customer belongs to the account, all in one transaction —
+        // no separate direct write to orders.
         const { data, error } = await supabase.rpc('update_order', {
           p_order_id: orderId,
           p_lines: pricingInputs.priced,
           p_order_discount: pricingInputs.orderDiscount,
           p_notes: notes.trim() || null,
+          p_contact_id: contactId,
         });
         if (error) throw error;
         const status = (data as Record<string, unknown>)?.pricing_status as string | undefined;

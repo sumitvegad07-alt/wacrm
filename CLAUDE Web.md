@@ -218,11 +218,15 @@ capitalised strings `'Customer'` and `'Lead'`.
   (`orderId` prop) reached from an **Edit** action on the Orders list, gated on `edit_orders`
   (create still gates `add_orders`; discounts `apply_order_discount`). Key `update_order` facts
   (verified from the SQL, migration 083):
-  - `update_order(p_order_id, p_lines, p_order_discount, p_notes)` has **no `p_contact_id`** — it
-    re-reads `contact_id` from the stored order. So a customer change/re-attach can't go through
-    the RPC; the form writes `orders.contact_id` **directly** first, then calls `update_order`
-    (which recomputes classification). Consistent with the page's direct status update; no money is
-    computed client-side.
+  - `update_order` now takes an optional **`p_contact_id`** (migration 085, applied 26 Jul 2026).
+    Passing it changes/re-attaches the customer through the RPC: it runs the **same dispatch-lock
+    check** AND **validates the customer belongs to the order's account**, inside the one
+    transaction, before pricing recomputes classification. NULL = leave the customer unchanged. The
+    edit UIs pass the selected `contactId` on every save — one audited path, no direct write.
+    ⚠️ **Why the migration existed:** the earlier direct `orders.contact_id` write bypassed the
+    lock (RLS `orders_update` is only `is_account_member(account_id)` — no `locked_at` check, no
+    trigger) and didn't validate the new contact's account. Do NOT reintroduce a direct write.
+    Migration 085 also DROPs the old 4-arg `update_order` (overloads make PostgREST ambiguous).
   - It does **not** auto-preserve existing line prices — it passes `p_lines` to
     `calculate_order_pricing`, which honors a per-line `locked_price` only if the client sends one.
     So the edit form loads each existing line and sends its stored `price_list_price` as
