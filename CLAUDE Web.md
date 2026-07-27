@@ -108,8 +108,9 @@ Tables: `orders`, `order_items`, `order_statuses`, `order_dispatches`, `dispatch
   `account_sequences`. **Never generate these client-side.** Insert without the number field and
   let the trigger fill it.
 - **`orders.status` is free TEXT holding the status *name*, not a foreign key** to
-  `order_statuses.id`. Renaming or deleting a status therefore orphans existing orders. Keep this
-  in mind before changing status handling.
+  `order_statuses.id`. As of migration 086 it is governed by a **state machine** (see "Order
+  status lifecycle" below), not the `order_statuses` config rows — those still drive the list
+  filter options but not the legal transitions. Keep this in mind before changing status handling.
 - **`orders.classification`** (`'direct' | 'primary' | 'secondary'`, CHECK-constrained, defaults
   to `'direct'`) is currently **written by nothing** — no application code and no trigger sets it.
   Every order is `'direct'` today. The hierarchy feature is configured in Settings and rendered as
@@ -119,8 +120,31 @@ Tables: `orders`, `order_items`, `order_statuses`, `order_dispatches`, `dispatch
   visit-originated orders display as "Unknown".
 - `order_items` carries `tax_rate`, `tax_amount`, `sub_total` and `total`. The current detail page
   ignores tax.
-- There is **no order creation UI** anywhere in this repo. Orders are intended to be created by
-  the mobile field app, which has not built the module yet.
+- **Order creation/editing UI exists**: `src/components/orders/order-form.tsx` (create + edit,
+  edit via `update_order`), the list at `orders/page.tsx`, and the detail view at
+  `orders/[id]/page.tsx`. Orders are also created from the mobile field app.
+
+### Order status lifecycle (migration 086, applied to prod)
+
+- **State machine** (defined in SQL, enforced two ways): `Pending → Approved | Rejected |
+  Cancelled`; `Approved → Dispatched (auto only) | Rejected | Cancelled`; `Dispatched`,
+  `Rejected`, `Cancelled` are terminal. Legacy `'Placed'` rows were migrated to `'Pending'`.
+- **`update_order_status(p_order_id, p_new_status)`** (SECURITY INVOKER) is the only supported
+  path from the app: it checks `has_permission(..., 'manage_order_status')` (→ 42501), validates
+  the transition (→ 23514 check_violation), updates, and logs `module_activities` with action
+  `'order_status_changed'` + a message. The web detail view calls this RPC; **never write
+  `orders.status` directly** (the list page's old direct-write dropdown was removed).
+- **Trigger backstop** `enforce_order_status_transition` rejects illegal *and* unpermitted raw
+  writes too, so a client that bypasses the RPC still can't cheat. System transitions set
+  `app.order_status_system='1'` (transaction-scoped) to exempt themselves.
+- **Dispatch auto-advances status**: `lock_order_on_dispatch` sets `status='Dispatched'` +
+  `locked_at` on the first dispatch (exempt via the system flag). So "Create Dispatch" is the only
+  way to reach Dispatched — the detail view shows that button only when `status='Approved'`, and
+  there is no manual "Dispatched" transition button.
+- **`has_permission(p_user_id, p_account_id, p_key)`** (SECURITY DEFINER) is the SQL mirror of the
+  client `hasPermission`: owner/admin/superadmin bypass, else `employee_roles.permissions->>key`,
+  with `action_*` wildcard support. Reuse it for any server-side permission gate.
+- **`manage_order_status`** is a permission key in the roles editor (`team/roles/page.tsx`).
 
 ### Site visits are polymorphic
 

@@ -11,9 +11,40 @@ import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { ChevronLeft, Truck, Loader2, Package } from 'lucide-react';
+import { ChevronLeft, Truck, Loader2, Package, AlertTriangle, CheckCircle2, XCircle, Ban } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
+import { Timeline } from '@/components/shared/timeline';
+
+/** PostgREST errors are plain objects — pull the real reason out. */
+function supaErr(e: unknown): string {
+  if (!e) return 'Unknown error';
+  if (e instanceof Error) return e.message;
+  const o = e as { message?: string; details?: string; hint?: string; code?: string };
+  return [o.message, o.details, o.hint].filter(Boolean).join(' — ') || 'Unknown error';
+}
+
+// Legal next transitions per the SQL state machine (migration 086). Dispatched
+// is reached only via Create Dispatch (auto-advance), so it's not a button here.
+const NEXT_STATUS: Record<string, { to: string; label: string; icon: typeof CheckCircle2; variant: 'default' | 'outline' | 'destructive' }[]> = {
+  Pending: [
+    { to: 'Approved', label: 'Approve', icon: CheckCircle2, variant: 'default' },
+    { to: 'Rejected', label: 'Reject', icon: XCircle, variant: 'destructive' },
+    { to: 'Cancelled', label: 'Cancel', icon: Ban, variant: 'outline' },
+  ],
+  Approved: [
+    { to: 'Rejected', label: 'Reject', icon: XCircle, variant: 'destructive' },
+    { to: 'Cancelled', label: 'Cancel', icon: Ban, variant: 'outline' },
+  ],
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  Pending: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+  Approved: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+  Dispatched: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
+  Rejected: 'bg-red-500/10 text-red-600 border-red-500/30',
+  Cancelled: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
+};
 
 interface OrderItem {
   id: string;
@@ -44,13 +75,15 @@ export default function OrderDetailPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const supabase = createClient();
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, hasPermission } = useAuth();
+  const canManageStatus = hasPermission('manage_order_status');
 
   const [order, setOrder] = useState<Record<string, any> | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [customValues, setCustomValues] = useState<{ label: string; value: string }[]>([]);
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
-  const [statuses, setStatuses] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [activities, setActivities] = useState<Record<string, any>[]>([]);
+  const [statusSaving, setStatusSaving] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Dispatch dialog
@@ -72,17 +105,17 @@ export default function OrderDetailPage() {
     if (error || !o) { toast.error('Order not found'); router.push('/orders'); return; }
     setOrder(o);
 
-    const [{ data: itemData }, { data: cvData }, { data: dispatchData }, { data: statusData }] = await Promise.all([
+    const [{ data: itemData }, { data: cvData }, { data: dispatchData }, { data: activityData }] = await Promise.all([
       supabase.from('order_items').select('*').eq('order_id', id).order('position'),
       supabase.from('order_custom_values').select('value, custom_fields(field_name)').eq('order_id', id),
       supabase.from('order_dispatches').select('*, dispatch_items(*)').eq('order_id', id).order('created_at', { ascending: false }),
-      supabase.from('order_statuses').select('id, name, color').eq('account_id', o.account_id).order('position'),
+      supabase.from('module_activities').select('*, user:profiles!module_activities_user_id_fkey(full_name)').eq('module_name', 'order').eq('record_id', id).order('created_at', { ascending: false }),
     ]);
 
     setItems((itemData || []) as OrderItem[]);
     setCustomValues((cvData || []).map((c: Record<string, any>) => ({ label: c.custom_fields?.field_name || 'Field', value: c.value })).filter((c) => c.value));
     setDispatches((dispatchData || []).map((d: Record<string, any>) => ({ ...d, items: d.dispatch_items || [] })) as Dispatch[]);
-    setStatuses(statusData || []);
+    setActivities((activityData || []) as Record<string, any>[]);
     setLoading(false);
   }, [id, supabase, router]);
 
@@ -107,17 +140,17 @@ export default function OrderDetailPage() {
     setDispatchOpen(true);
   }
 
+  // Status changes go through the RPC only — it validates the transition,
+  // checks manage_order_status, writes, and logs. (No direct update; the DB
+  // trigger backstop would reject an illegal or unpermitted raw write anyway.)
   async function updateStatus(newStatus: string) {
     if (!order) return;
-    setOrder({ ...order, status: newStatus });
-    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id);
-    if (error) { toast.error('Failed to update status'); return; }
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from('module_activities').insert({
-      account_id: order.account_id, user_id: userData?.user?.id, module_name: 'order',
-      record_id: id, action: 'status_changed', message: `Order status changed to ${newStatus}`,
-    });
+    setStatusSaving(newStatus);
+    const { error } = await supabase.rpc('update_order_status', { p_order_id: id, p_new_status: newStatus });
+    setStatusSaving(null);
+    if (error) { toast.error(supaErr(error)); return; }
     toast.success(`Status updated to ${newStatus}`);
+    fetchOrder();
   }
 
   async function saveDispatch() {
@@ -155,18 +188,9 @@ export default function OrderDetailPage() {
 
       toast.success(`Dispatch ${dispatch.dispatch_number} created`);
       setDispatchOpen(false);
-
-      // Offer to mark the order Dispatched if everything is now shipped.
-      const fullyDispatched = items.every((it) => {
-        const nowSent = dispatchedSoFar(it.id) + (parseFloat(dispatchQty[it.id] || '0'));
-        return nowSent >= Number(it.quantity) - 0.0001;
-      });
-      const dispatchedStatus = statuses.find((s) => s.name.toLowerCase() === 'dispatched');
-      if (fullyDispatched && dispatchedStatus && order.status !== dispatchedStatus.name) {
-        if (confirm('All items are now dispatched. Mark this order as "Dispatched"?')) {
-          await updateStatus(dispatchedStatus.name);
-        }
-      }
+      // The DB trigger (lock_order_on_dispatch) auto-advances the order to
+      // "Dispatched" and locks it once the first dispatch is recorded — no
+      // client-side status update needed.
       fetchOrder();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to create dispatch');
@@ -180,7 +204,6 @@ export default function OrderDetailPage() {
   }
 
   const customerName = order.contacts?.company || order.contacts?.name || order.leads?.name || 'Unknown';
-  const statusColor = statuses.find((s) => s.name === order.status)?.color || '#6b7280';
   const anyRemaining = items.some((it) => remaining(it) > 0.0001);
 
   return (
@@ -199,21 +222,60 @@ export default function OrderDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={order.status}
-            onChange={(e) => updateStatus(e.target.value)}
-            className="text-sm rounded-md border px-3 py-2 font-medium cursor-pointer bg-transparent"
-            style={{ color: statusColor, borderColor: statusColor + '55' }}
-          >
-            {statuses.length === 0 && <option>{order.status}</option>}
-            {statuses.map((s) => <option key={s.id} value={s.name} className="text-foreground bg-background">{s.name}</option>)}
-          </select>
-          {anyRemaining && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className={`text-sm px-3 py-1.5 ${STATUS_BADGE[order.status] || ''}`}>
+            {order.status}
+          </Badge>
+          {canManageStatus && (NEXT_STATUS[order.status] || []).map((t) => {
+            const Icon = t.icon;
+            return (
+              <Button
+                key={t.to}
+                variant={t.variant}
+                size="sm"
+                className="gap-1.5"
+                disabled={statusSaving !== null}
+                onClick={() => updateStatus(t.to)}
+              >
+                {statusSaving === t.to ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />}
+                {t.label}
+              </Button>
+            );
+          })}
+          {order.status === 'Approved' && anyRemaining && (
             <Button onClick={openDispatch} className="gap-2"><Truck className="size-4" /> Create Dispatch</Button>
           )}
         </div>
       </div>
+
+      {/* Pricing review banner — set by create_order when the quoted price the
+          field team submitted drifted from the server-calculated price. */}
+      {order.pricing_status === 'review' && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <AlertTriangle className="size-5 shrink-0 text-amber-600 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-amber-700">Pricing needs review</p>
+            <p className="text-amber-700/90 mt-0.5">
+              The price submitted for this order differs from the current catalog price. Review before approving.
+            </p>
+            {(() => {
+              const v = order.pricing_variance;
+              const reasons: string[] = Array.isArray(v)
+                ? v.map((x) => (typeof x === 'string' ? x : JSON.stringify(x)))
+                : v && typeof v === 'object'
+                ? Object.entries(v).map(([k, val]) => `${k}: ${typeof val === 'object' ? JSON.stringify(val) : val}`)
+                : v
+                ? [String(v)]
+                : [];
+              return reasons.length > 0 ? (
+                <ul className="list-disc list-inside mt-2 space-y-0.5 text-amber-700/90">
+                  {reasons.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              ) : null;
+            })()}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Items + custom fields */}
@@ -298,6 +360,12 @@ export default function OrderDetailPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Activity timeline (status changes, edits, creation) */}
+      <div className="bg-card border border-border rounded-lg p-5">
+        <h3 className="text-lg font-semibold mb-4">Activity</h3>
+        <Timeline moduleName="order" recordId={id} tasks={[]} activities={activities} onRefresh={fetchOrder} />
       </div>
 
       {/* Create Dispatch dialog */}

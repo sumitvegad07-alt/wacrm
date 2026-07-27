@@ -22,7 +22,7 @@ export interface TimelineEvent {
 }
 
 interface TimelineProps {
-  moduleName: 'contact' | 'deal' | 'quotation' | 'product' | 'lead' | 'expense';
+  moduleName: 'contact' | 'deal' | 'quotation' | 'product' | 'lead' | 'expense' | 'order';
   recordId: string;
   tasks: any[];
   notes?: any[];

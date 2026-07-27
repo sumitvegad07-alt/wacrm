@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Plus, TrendingUp, Pencil } from 'lucide-react';
@@ -34,6 +33,16 @@ const CLASS_BADGE: Record<string, string> = {
   direct: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
   primary: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
   secondary: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+};
+
+// Status is managed through the order detail view (manage_order_status +
+// update_order_status RPC). The list shows a read-only badge.
+const STATUS_BADGE: Record<string, string> = {
+  Pending: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+  Approved: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+  Dispatched: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
+  Rejected: 'bg-red-500/10 text-red-600 border-red-500/30',
+  Cancelled: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
 };
 
 export default function OrdersPage() {
@@ -89,28 +98,6 @@ export default function OrdersPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  async function updateStatus(orderId: string, newStatus: string) {
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)));
-    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
-    if (error) { toast.error('Failed to update status'); fetchData(); return; }
-    if (accountId) {
-      const { data: userData } = await supabase.auth.getUser();
-      await supabase.from('module_activities').insert({
-        account_id: accountId,
-        user_id: userData?.user?.id,
-        module_name: 'order',
-        record_id: orderId,
-        action: 'status_changed',
-        message: `Order status changed to ${newStatus}`,
-      });
-    }
-    toast.success(`Status updated to ${newStatus}`);
-  }
-
-  function statusColor(name: string) {
-    return statuses.find((s) => s.name === name)?.color || '#6b7280';
-  }
-
   const columns: ColumnDef<OrderRow>[] = [
     {
       id: 'order_number',
@@ -163,18 +150,9 @@ export default function OrdersPage() {
       type: 'select',
       options: statuses.map((s) => ({ label: s.name, value: s.name })),
       render: (o) => (
-        <select
-          value={o.status}
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => { e.stopPropagation(); updateStatus(o.id, e.target.value); }}
-          className="text-xs rounded-md border px-2 py-1 font-medium cursor-pointer bg-transparent"
-          style={{ color: statusColor(o.status), borderColor: statusColor(o.status) + '55' }}
-        >
-          {statuses.length === 0 && <option>{o.status}</option>}
-          {statuses.map((s) => (
-            <option key={s.id} value={s.name} className="text-foreground bg-background">{s.name}</option>
-          ))}
-        </select>
+        <Badge variant="outline" className={`text-xs ${STATUS_BADGE[o.status] || 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}>
+          {o.status}
+        </Badge>
       ),
     },
     {
