@@ -172,10 +172,15 @@ Tables: `orders`, `order_items`, `order_statuses`, `order_dispatches`, `dispatch
   as a link to the dispatch **view** (`/dispatches/<id>`).
 - **Mobile parity**: the mobile order detail has Details/Dispatches/Summary tabs; a read-only
   mobile dispatch detail (`app/dispatch/[id].tsx`) with PDF share exists.
-- **TODO (Phase 2, not built yet)**: a "Pending Dispatch" page (approved/part-dispatch orders with
-  ordered/delivered/difference + search/filter) and removing the vestigial configurable
-  order-status settings. **Also unresolved: mobile PDF share still points at the stale
-  `wacrm.vercel.app`** — needs the real production domain (make it a config value).
+- **Pending Dispatch** (`/pending-dispatch`, own menu item): lists orders whose status is
+  `Approved` or `Part Dispatch` (status is the source of truth for "not fully dispatched") with
+  Ordered/Delivered/Difference totals, search/filter, a per-row Dispatch action, and row-click to
+  the order.
+- **Order statuses are no longer configurable**: the Statuses tab was removed from Order Settings
+  (only Hierarchy remains) and the orders-list status filter uses a fixed status list. The
+  `order_statuses` table still exists but nothing reads it for the lifecycle.
+- **Still unresolved: mobile PDF share (order + dispatch) points at the stale `wacrm.vercel.app`**
+  — needs the real production domain wired as a config value.
 
 ### Order status lifecycle (migration 086, applied to prod)
 
