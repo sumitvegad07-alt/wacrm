@@ -142,6 +142,27 @@ Tables: `orders`, `order_items`, `order_statuses`, `order_dispatches`, `dispatch
   migration 087). `TaskForm` exposes it via the "Order" option in "Linked To"; the order detail's
   `<Timeline>` pre-selects the current order and shows tasks linked to it.
 
+### Dispatch module (migration 088)
+
+- **First-class module** (not just an order sub-panel): list `/dispatches`, detail
+  `/dispatches/[id]`, create/edit via `<DispatchForm>` at `/dispatches/new` (accepts
+  `?orderId=`) and `/dispatches/[id]/edit`, print at `/print/dispatch/[id]`, sidebar entry under
+  CRM. The order detail's "Create Dispatch" routes to `/dispatches/new?orderId=` (the old inline
+  dialog is gone) and dispatch rows link to the dispatch detail.
+- **A dispatch belongs to ONE order.** Lines are that order's items **capped at remaining qty**;
+  **prices are inherited from the order line, read-only** (dispatch_items has no pricing columns).
+  `order_dispatches` gained `dispatch_code/invoice_no/invoice_date/lr_no/lr_date/
+  transport_contact_no` (migration 088).
+- **Timeline/tasks/logs**: `'dispatch'` is in the `<Timeline>` union; `tasks.dispatch_id` links
+  tasks to a dispatch (TaskForm "Dispatch" option); create/edit log `dispatch_created` /
+  `dispatch_edited` to `module_activities` (module_name `'dispatch'`). Same auth.users-embed
+  gotcha applies — enrich activities via a separate profiles query.
+- The `order_dispatches` insert still fires `lock_order_on_dispatch` (locks the order + sets
+  status Dispatched on first dispatch). Multiple partial dispatches per order are allowed.
+- **TODO (Phase 2, not built yet)**: a "Pending Dispatch" page (approved orders not yet
+  dispatched, with ordered/delivered/difference + search/filter) and removing the vestigial
+  configurable order-status settings.
+
 ### Order status lifecycle (migration 086, applied to prod)
 
 - **State machine** (defined in SQL, enforced two ways): `Pending → Approved | Rejected |
