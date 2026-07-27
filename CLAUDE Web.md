@@ -157,11 +157,25 @@ Tables: `orders`, `order_items`, `order_statuses`, `order_dispatches`, `dispatch
   tasks to a dispatch (TaskForm "Dispatch" option); create/edit log `dispatch_created` /
   `dispatch_edited` to `module_activities` (module_name `'dispatch'`). Same auth.users-embed
   gotcha applies — enrich activities via a separate profiles query.
-- The `order_dispatches` insert still fires `lock_order_on_dispatch` (locks the order + sets
-  status Dispatched on first dispatch). Multiple partial dispatches per order are allowed.
-- **TODO (Phase 2, not built yet)**: a "Pending Dispatch" page (approved orders not yet
-  dispatched, with ordered/delivered/difference + search/filter) and removing the vestigial
-  configurable order-status settings.
+- **Status is derived from delivered-vs-ordered** (migration 089): a trigger
+  `sync_order_dispatch_status` on **`dispatch_items`** (INSERT/UPDATE/DELETE) recomputes the order
+  — none delivered → `Approved`, some but not all items fully shipped → **`Part Dispatch`**, all
+  fully shipped → `Dispatched`. It runs under `app.order_status_system` (permission-exempt) but the
+  enforce trigger still validates the transition, so `order_status_transition_allowed` whitelists
+  the new pairs (Approved→Part Dispatch, Part Dispatch→Dispatched/Approved/Cancelled/Rejected,
+  Dispatched→Part Dispatch/Approved). The old `trg_lock_order_on_dispatch` on `order_dispatches`
+  was dropped (it fired before line items existed). `locked_at` is still set once anything ships.
+  `'Part Dispatch'` is a first-class status string (badge maps on web + mobile).
+- **Dispatch events are mirrored onto the order timeline**: create/edit log to both
+  `module_name='dispatch'` and `module_name='order'` (with `details.dispatch_id` +
+  `dispatch_number`); the shared `<Timeline>` renders any activity carrying `details.dispatch_id`
+  as a link to the dispatch **view** (`/dispatches/<id>`).
+- **Mobile parity**: the mobile order detail has Details/Dispatches/Summary tabs; a read-only
+  mobile dispatch detail (`app/dispatch/[id].tsx`) with PDF share exists.
+- **TODO (Phase 2, not built yet)**: a "Pending Dispatch" page (approved/part-dispatch orders with
+  ordered/delivered/difference + search/filter) and removing the vestigial configurable
+  order-status settings. **Also unresolved: mobile PDF share still points at the stale
+  `wacrm.vercel.app`** — needs the real production domain (make it a config value).
 
 ### Order status lifecycle (migration 086, applied to prod)
 
