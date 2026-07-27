@@ -117,7 +117,10 @@ export default function OrderDetailPage() {
       supabase.from('order_items').select('*').eq('order_id', id).order('position'),
       supabase.from('order_custom_values').select('value, custom_fields(field_name)').eq('order_id', id),
       supabase.from('order_dispatches').select('*, dispatch_items(*)').eq('order_id', id).order('created_at', { ascending: false }),
-      supabase.from('module_activities').select('*, user:profiles!module_activities_user_id_fkey(full_name)').eq('module_name', 'order').eq('record_id', id).order('created_at', { ascending: false }),
+      // NOTE: module_activities.user_id FKs auth.users, not profiles, so it can't
+      // be embedded. Fetch plainly and enrich with profiles below (same pattern
+      // as the lead detail page).
+      supabase.from('module_activities').select('*').eq('module_name', 'order').eq('record_id', id).order('created_at', { ascending: false }),
       o.user_id
         ? supabase.from('profiles').select('full_name, email').eq('user_id', o.user_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -126,7 +129,17 @@ export default function OrderDetailPage() {
     setItems((itemData || []) as OrderItem[]);
     setCustomValues((cvData || []).map((c: Record<string, any>) => ({ label: c.custom_fields?.field_name || 'Field', value: c.value })).filter((c) => c.value));
     setDispatches((dispatchData || []).map((d: Record<string, any>) => ({ ...d, items: d.dispatch_items || [] })) as Dispatch[]);
-    setActivities((activityData || []) as Record<string, any>[]);
+
+    // Enrich activities with the acting user's name via a separate profiles query.
+    const acts = (activityData || []) as Record<string, any>[];
+    const userIds = Array.from(new Set(acts.map((a) => a.user_id).filter(Boolean)));
+    if (userIds.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, full_name, email').in('user_id', userIds);
+      const pmap = (profs || []).reduce((m: Record<string, any>, p: any) => { m[p.user_id] = p; return m; }, {});
+      setActivities(acts.map((a) => ({ ...a, user: pmap[a.user_id] || null })));
+    } else {
+      setActivities(acts);
+    }
     const owner = ownerRes?.data as { full_name?: string; email?: string } | null;
     setCreatedBy(owner?.full_name || owner?.email || 'Unknown');
     setLoading(false);
@@ -226,7 +239,6 @@ export default function OrderDetailPage() {
   const customerName = cust.company || cust.name || order.leads?.name || 'Unknown';
   const custPhone = cust.phone || cust.whatsapp || '';
   const custEmail = cust.email || '';
-  const custGst = cust.gst_number || cust.gstin || '';
   const custAddress = [cust.address, cust.city, cust.state, cust.country].filter(Boolean).join(', ');
   const anyRemaining = items.some((it) => remaining(it) > 0.0001);
 
@@ -259,7 +271,6 @@ export default function OrderDetailPage() {
               <div className="text-sm text-muted-foreground mt-1.5 flex items-center gap-4 flex-wrap">
                 {custPhone && <span className="flex items-center gap-1.5"><Phone className="size-3 text-primary/70" /> {custPhone}</span>}
                 {custEmail && <span className="flex items-center gap-1.5"><Mail className="size-3 text-primary/70" /> {custEmail}</span>}
-                <span className="flex items-center gap-1.5">GST No : {custGst || '—'}</span>
               </div>
             </div>
           </div>

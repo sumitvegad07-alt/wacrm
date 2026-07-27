@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, TrendingUp, Pencil } from 'lucide-react';
+import { Search, Plus, TrendingUp, Pencil, CheckCircle2, XCircle, Ban, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
@@ -35,8 +36,8 @@ const CLASS_BADGE: Record<string, string> = {
   secondary: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
 };
 
-// Status is managed through the order detail view (manage_order_status +
-// update_order_status RPC). The list shows a read-only badge.
+// Per-row status is a read-only badge; changes go through update_order_status
+// (single via detail view, or the bulk bar below), never a direct write.
 const STATUS_BADGE: Record<string, string> = {
   Pending: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
   Approved: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
@@ -44,6 +45,19 @@ const STATUS_BADGE: Record<string, string> = {
   Rejected: 'bg-red-500/10 text-red-600 border-red-500/30',
   Cancelled: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
 };
+
+// Legal transitions per the SQL state machine (migration 086) — a bulk action
+// only applies to rows where the transition is legal from their current status.
+const LEGAL_TO: Record<string, string[]> = {
+  Pending: ['Approved', 'Rejected', 'Cancelled'],
+  Approved: ['Rejected', 'Cancelled'],
+};
+// Bulk status actions (deliberately no bulk Dispatch — that's per-order).
+const BULK_ACTIONS: { to: string; label: string; icon: typeof CheckCircle2; variant: 'default' | 'outline' | 'destructive' }[] = [
+  { to: 'Approved', label: 'Approve', icon: CheckCircle2, variant: 'default' },
+  { to: 'Rejected', label: 'Reject', icon: XCircle, variant: 'destructive' },
+  { to: 'Cancelled', label: 'Cancel', icon: Ban, variant: 'outline' },
+];
 
 export default function OrdersPage() {
   const supabase = createClient();
@@ -57,8 +71,11 @@ export default function OrdersPage() {
   const [globalSearch, setGlobalSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
   const canCreateOrder = hasPermission('add_orders');
   const canEditOrder = hasPermission('edit_orders');
+  const canManageStatus = hasPermission('manage_order_status');
 
   const fetchData = useCallback(async () => {
     if (!accountId) return;
@@ -93,10 +110,36 @@ export default function OrdersPage() {
       salesmanName: profileMap[o.user_id] || 'Unknown',
     }));
     setOrders(rows);
+    setSelectedIds(new Set());
     setLoading(false);
   }, [accountId, supabase]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Bulk status change over the selected rows. Each order goes through the
+  // update_order_status RPC (validates transition + manage_order_status +
+  // logs), so we only attempt rows where the transition is legal from their
+  // current status and report a summary. No bulk dispatch — that's per-order.
+  async function handleBulkStatus(newStatus: string) {
+    const targets = orders.filter((o) => selectedIds.has(o.id) && (LEGAL_TO[o.status] || []).includes(newStatus));
+    const skipped = selectedIds.size - targets.length;
+    if (targets.length === 0) {
+      toast.error(`None of the selected orders can be moved to ${newStatus}.`);
+      return;
+    }
+    setBulkLoading(true);
+    let ok = 0, failed = 0;
+    for (const o of targets) {
+      const { error } = await supabase.rpc('update_order_status', { p_order_id: o.id, p_new_status: newStatus });
+      if (error) failed++; else ok++;
+    }
+    setBulkLoading(false);
+    const parts = [`${ok} ${newStatus.toLowerCase()}`];
+    if (skipped) parts.push(`${skipped} skipped (not eligible)`);
+    if (failed) parts.push(`${failed} failed`);
+    if (failed) toast.error(parts.join(', ')); else toast.success(parts.join(', '));
+    fetchData();
+  }
 
   const columns: ColumnDef<OrderRow>[] = [
     {
@@ -221,7 +264,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl border border-border">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-card p-4 rounded-xl border border-border">
         <div className="relative w-full max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -231,6 +274,21 @@ export default function OrdersPage() {
             onChange={(e) => setGlobalSearch(e.target.value)}
           />
         </div>
+
+        {/* Bulk status bar — appears when rows are selected (needs manage_order_status) */}
+        {canManageStatus && selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto shrink-0 bg-primary/10 border border-primary/20 rounded-md p-1.5 px-3">
+            <span className="text-sm font-medium text-primary mr-1">{selectedIds.size} selected</span>
+            {BULK_ACTIONS.map((a) => {
+              const Icon = a.icon;
+              return (
+                <Button key={a.to} variant={a.variant} size="sm" className="h-8 gap-1.5" disabled={bulkLoading} onClick={() => handleBulkStatus(a.to)}>
+                  {bulkLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Icon className="size-3.5" />} {a.label}
+                </Button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <DataTable
@@ -242,6 +300,15 @@ export default function OrdersPage() {
         isLoading={loading}
         rowKey={(o) => o.id}
         onRowClick={(o) => router.push(`/orders/${o.id}`)}
+        selection={canManageStatus ? {
+          selectedIds,
+          onSelectAll: (checked: boolean) => setSelectedIds(checked ? new Set(filtered.map((o) => o.id)) : new Set()),
+          onSelect: (id: string, checked: boolean) => setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (checked) next.add(id); else next.delete(id);
+            return next;
+          }),
+        } : undefined}
       />
 
       <OrderForm open={createOpen} onOpenChange={setCreateOpen} onSaved={fetchData} />
