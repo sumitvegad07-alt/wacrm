@@ -78,6 +78,20 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
   };
 
   const getActionMessage = (activity: any) => {
+    // Dispatch events (mirrored onto the order timeline) link to the dispatch view.
+    if (activity.details?.dispatch_id) {
+      const num = activity.details.dispatch_number || 'dispatch';
+      const verb = activity.action === 'dispatch_edited' ? 'updated' : 'generated';
+      return (
+        <span>
+          Dispatch{' '}
+          <Link href={`/dispatches/${activity.details.dispatch_id}`} className="text-primary hover:underline font-medium" onClick={(e) => e.stopPropagation()}>
+            {num}
+          </Link>{' '}
+          {verb}.
+        </span>
+      );
+    }
     if (activity.message) {
       return <span>{activity.message}</span>;
     }

@@ -34,15 +34,22 @@ const NEXT_STATUS: Record<string, { to: string; label: string; icon: typeof Chec
     { to: 'Rejected', label: 'Reject', icon: XCircle, variant: 'destructive' },
     { to: 'Cancelled', label: 'Cancel', icon: Ban, variant: 'outline' },
   ],
+  'Part Dispatch': [
+    { to: 'Cancelled', label: 'Cancel', icon: Ban, variant: 'outline' },
+  ],
 };
 
 const STATUS_BADGE: Record<string, string> = {
   Pending: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
   Approved: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+  'Part Dispatch': 'bg-orange-500/10 text-orange-600 border-orange-500/30',
   Dispatched: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
   Rejected: 'bg-red-500/10 text-red-600 border-red-500/30',
   Cancelled: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
 };
+
+// Statuses from which more items can still be dispatched.
+const DISPATCHABLE = new Set(['Approved', 'Part Dispatch']);
 
 interface OrderItem {
   id: string;
@@ -236,7 +243,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Status actions */}
-        {(canManageStatus && (NEXT_STATUS[order.status]?.length || (order.status === 'Approved' && anyRemaining))) ? (
+        {((canManageStatus && NEXT_STATUS[order.status]?.length) || (DISPATCHABLE.has(order.status) && anyRemaining)) ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
             {canManageStatus && (NEXT_STATUS[order.status] || []).map((t) => {
               const Icon = t.icon;
@@ -247,7 +254,7 @@ export default function OrderDetailPage() {
                 </Button>
               );
             })}
-            {order.status === 'Approved' && anyRemaining && (
+            {DISPATCHABLE.has(order.status) && anyRemaining && (
               <Button onClick={goCreateDispatch} className="gap-2" size="sm"><Truck className="size-4" /> Create Dispatch</Button>
             )}
           </div>
@@ -355,7 +362,7 @@ export default function OrderDetailPage() {
               <div className="p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2"><Truck className="size-4" /> Dispatches</h3>
-                  {order.status === 'Approved' && anyRemaining && (
+                  {DISPATCHABLE.has(order.status) && anyRemaining && (
                     <Button onClick={goCreateDispatch} size="sm" className="gap-2"><Plus className="size-4" /> Add</Button>
                   )}
                 </div>

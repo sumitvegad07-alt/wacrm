@@ -101,7 +101,7 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
       const [{ data: contactData }, { data: orderData }] = await Promise.all([
         supabase.from('contacts').select('id, company, name, address, city, state, country').eq('account_id', accountId).order('company'),
         // Dispatchable orders: approved or partially dispatched.
-        supabase.from('orders').select('id, order_number, contact_id, status').eq('account_id', accountId).in('status', ['Approved', 'Dispatched']).order('created_at', { ascending: false }),
+        supabase.from('orders').select('id, order_number, contact_id, status').eq('account_id', accountId).in('status', ['Approved', 'Part Dispatch', 'Dispatched']).order('created_at', { ascending: false }),
       ]);
       if (!alive) return;
       setCustomers(((contactData ?? []) as any[]).map((c) => ({
@@ -189,6 +189,8 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
         );
         if (diErr) throw diErr;
         await logModuleActivity(supabase, { moduleName: 'dispatch', recordId: dispatchId, action: 'dispatch_edited', message: `Dispatch ${savedNumber} updated` });
+        // Mirror onto the order timeline, linked back to this dispatch.
+        await logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: 'dispatch_edited', message: `Dispatch ${savedNumber} updated`, details: { dispatch_id: dispatchId, dispatch_number: savedNumber } });
       } else {
         const { data: created, error } = await supabase.from('order_dispatches').insert({ account_id: accountId, order_id: orderId, ...header }).select().single();
         if (error || !created) throw error;
@@ -198,6 +200,8 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
         );
         if (diErr) throw diErr;
         await logModuleActivity(supabase, { moduleName: 'dispatch', recordId: created.id, action: 'dispatch_created', message: `Dispatch ${created.dispatch_number} generated.` });
+        // Mirror onto the order timeline, linked back to this dispatch.
+        await logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: 'dispatch_created', message: `Dispatch ${created.dispatch_number} generated.`, details: { dispatch_id: created.id, dispatch_number: created.dispatch_number } });
       }
       toast.success(isEdit ? 'Dispatch updated' : `Dispatch ${savedNumber} created`);
       router.push(`/dispatches/${savedId}`);
