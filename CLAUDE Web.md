@@ -123,6 +123,17 @@ Tables: `orders`, `order_items`, `order_statuses`, `order_dispatches`, `dispatch
 - **Order creation/editing UI exists**: `src/components/orders/order-form.tsx` (create + edit,
   edit via `update_order`), the list at `orders/page.tsx`, and the detail view at
   `orders/[id]/page.tsx`. Orders are also created from the mobile field app.
+- **Order detail layout** follows the house module pattern (see the lead detail page): a header
+  card + a two-column body with **Details / Dispatches / Summary tabs on the left** and the shared
+  `<Timeline>` on the **right** (never stack the timeline full-width at the bottom). There is no
+  reusable `Tabs` component; the order page uses a small inline tab switcher.
+- **`/print/order/[id]`** is the print/PDF template, mirroring `/print/quotation/[id]`. It is also
+  the source the **mobile** app renders to a PDF for sharing (`PdfService`). Its header pulls
+  `accounts.business_name/phone/gst_number` if those columns exist (blank otherwise).
+- **Order activity logging**: `create_order`/`update_order` do NOT log, so the client logs
+  `order_created` / `order_edited` via `logModuleActivity` (`order-form.tsx`); the detail view logs
+  `order_dispatched` when a dispatch is recorded; `update_order_status` logs `order_status_changed`
+  server-side. Orders created before this logging existed have no backfilled history.
 
 ### Order status lifecycle (migration 086, applied to prod)
 
