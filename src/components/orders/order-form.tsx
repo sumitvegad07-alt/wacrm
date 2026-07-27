@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
+import { logModuleActivity } from '@/lib/activities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -373,10 +374,15 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
         });
         if (error) throw error;
         const status = (data as Record<string, unknown>)?.pricing_status as string | undefined;
+        // Log the edit on the order timeline (the RPC doesn't log this).
+        await logModuleActivity(supabase, {
+          moduleName: 'order', recordId: orderId, action: 'order_edited', message: 'Order updated',
+        });
         toast.success(status === 'review' ? 'Order saved — flagged for review' : 'Order updated');
       } else {
+        const newOrderId = crypto.randomUUID();
         const { data, error } = await supabase.rpc('create_order', {
-          p_order_id: crypto.randomUUID(),
+          p_order_id: newOrderId,
           p_account_id: accountId,
           p_contact_id: contactId,
           p_site_visit_id: prefillSiteVisitId ?? null,
@@ -391,6 +397,11 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
         });
         if (error) throw error;
         const num = (data as Record<string, unknown>)?.order_number as string | undefined;
+        // Log creation on the order timeline (create_order doesn't log this).
+        await logModuleActivity(supabase, {
+          moduleName: 'order', recordId: newOrderId, action: 'order_created',
+          message: num ? `Order ${num} created` : 'Order created',
+        });
         toast.success(num ? `Order ${num} created` : 'Order created');
       }
       onOpenChange(false);

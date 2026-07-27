@@ -11,10 +11,14 @@ import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { ChevronLeft, Truck, Loader2, Package, AlertTriangle, CheckCircle2, XCircle, Ban } from 'lucide-react';
+import {
+  ChevronLeft, Truck, Loader2, Package, AlertTriangle, CheckCircle2, XCircle, Ban,
+  Printer, Phone, Mail, User as UserIcon, Plus,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { Timeline } from '@/components/shared/timeline';
+import { logModuleActivity } from '@/lib/activities';
 
 /** PostgREST errors are plain objects — pull the real reason out. */
 function supaErr(e: unknown): string {
@@ -71,6 +75,8 @@ const CLASS_BADGE: Record<string, string> = {
   secondary: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
 };
 
+type Tab = 'details' | 'dispatches' | 'summary';
+
 export default function OrderDetailPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
@@ -83,8 +89,10 @@ export default function OrderDetailPage() {
   const [customValues, setCustomValues] = useState<{ label: string; value: string }[]>([]);
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [activities, setActivities] = useState<Record<string, any>[]>([]);
+  const [createdBy, setCreatedBy] = useState('Unknown');
   const [statusSaving, setStatusSaving] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>('details');
 
   // Dispatch dialog
   const [dispatchOpen, setDispatchOpen] = useState(false);
@@ -99,23 +107,28 @@ export default function OrderDetailPage() {
     setLoading(true);
     const { data: o, error } = await supabase
       .from('orders')
-      .select('*, contacts(company, name, phone), leads(name)')
+      .select('*, contacts(*), leads(name)')
       .eq('id', id)
       .maybeSingle();
     if (error || !o) { toast.error('Order not found'); router.push('/orders'); return; }
     setOrder(o);
 
-    const [{ data: itemData }, { data: cvData }, { data: dispatchData }, { data: activityData }] = await Promise.all([
+    const [{ data: itemData }, { data: cvData }, { data: dispatchData }, { data: activityData }, ownerRes] = await Promise.all([
       supabase.from('order_items').select('*').eq('order_id', id).order('position'),
       supabase.from('order_custom_values').select('value, custom_fields(field_name)').eq('order_id', id),
       supabase.from('order_dispatches').select('*, dispatch_items(*)').eq('order_id', id).order('created_at', { ascending: false }),
       supabase.from('module_activities').select('*, user:profiles!module_activities_user_id_fkey(full_name)').eq('module_name', 'order').eq('record_id', id).order('created_at', { ascending: false }),
+      o.user_id
+        ? supabase.from('profiles').select('full_name, email').eq('user_id', o.user_id).maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
 
     setItems((itemData || []) as OrderItem[]);
     setCustomValues((cvData || []).map((c: Record<string, any>) => ({ label: c.custom_fields?.field_name || 'Field', value: c.value })).filter((c) => c.value));
     setDispatches((dispatchData || []).map((d: Record<string, any>) => ({ ...d, items: d.dispatch_items || [] })) as Dispatch[]);
     setActivities((activityData || []) as Record<string, any>[]);
+    const owner = ownerRes?.data as { full_name?: string; email?: string } | null;
+    setCreatedBy(owner?.full_name || owner?.email || 'Unknown');
     setLoading(false);
   }, [id, supabase, router]);
 
@@ -186,11 +199,17 @@ export default function OrderDetailPage() {
       );
       if (diErr) throw diErr;
 
+      // Log the dispatch on the order timeline. The DB trigger
+      // (lock_order_on_dispatch) also auto-advances the order to "Dispatched"
+      // and locks it, but that trigger doesn't write an activity, so we do.
+      await logModuleActivity(supabase, {
+        moduleName: 'order', recordId: id, action: 'order_dispatched',
+        message: `Dispatch ${dispatch.dispatch_number} created`,
+        details: { dispatch_number: dispatch.dispatch_number },
+      });
+
       toast.success(`Dispatch ${dispatch.dispatch_number} created`);
       setDispatchOpen(false);
-      // The DB trigger (lock_order_on_dispatch) auto-advances the order to
-      // "Dispatched" and locks it once the first dispatch is recorded — no
-      // client-side status update needed.
       fetchOrder();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to create dispatch');
@@ -203,49 +222,93 @@ export default function OrderDetailPage() {
     return <div className="flex items-center justify-center py-20"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const customerName = order.contacts?.company || order.contacts?.name || order.leads?.name || 'Unknown';
+  const cust = order.contacts || {};
+  const customerName = cust.company || cust.name || order.leads?.name || 'Unknown';
+  const custPhone = cust.phone || cust.whatsapp || '';
+  const custEmail = cust.email || '';
+  const custGst = cust.gst_number || cust.gstin || '';
+  const custAddress = [cust.address, cust.city, cust.state, cust.country].filter(Boolean).join(', ');
   const anyRemaining = items.some((it) => remaining(it) > 0.0001);
 
+  const TabBtn = ({ value, label }: { value: Tab; label: string }) => (
+    <button
+      onClick={() => setTab(value)}
+      className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+        tab === value
+          ? 'text-primary border-b-2 border-primary bg-primary/5'
+          : 'text-muted-foreground border-b-2 border-transparent hover:text-foreground hover:bg-muted/40'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/orders')}><ChevronLeft className="size-5" /></Button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-              {order.order_number}
-              <Badge variant="outline" className={`capitalize text-xs ${CLASS_BADGE[order.classification]}`}>{order.classification}</Badge>
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {customerName} · {new Date(order.date).toLocaleDateString('en-IN')}
-            </p>
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Header card */}
+      <div className="bg-card border border-border rounded-lg shadow-sm">
+        <div className="flex items-start justify-between gap-4 p-5">
+          <div className="flex items-start gap-3">
+            <Button variant="ghost" size="icon" onClick={() => router.push('/orders')} className="text-muted-foreground hover:text-foreground shrink-0"><ChevronLeft className="size-5" /></Button>
+            <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-xl font-bold text-foreground">{customerName}</h1>
+                <Badge variant="outline" className={`text-xs px-2.5 py-1 ${STATUS_BADGE[order.status] || ''}`}>{order.status}</Badge>
+                <Badge variant="outline" className={`capitalize text-xs ${CLASS_BADGE[order.classification]}`}>{order.classification}</Badge>
+              </div>
+              <div className="text-sm text-muted-foreground mt-1.5 flex items-center gap-4 flex-wrap">
+                {custPhone && <span className="flex items-center gap-1.5"><Phone className="size-3 text-primary/70" /> {custPhone}</span>}
+                {custEmail && <span className="flex items-center gap-1.5"><Mail className="size-3 text-primary/70" /> {custEmail}</span>}
+                <span className="flex items-center gap-1.5">GST No : {custGst || '—'}</span>
+              </div>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-2xl font-bold tracking-wide">ORDER <span className="text-primary">#{(order.order_number || '').split('-').pop() || order.order_number}</span></div>
+            <Button variant="outline" size="sm" className="gap-2 mt-2" onClick={() => window.open(`/print/order/${id}`, '_blank')}>
+              <Printer className="size-4" /> Print
+            </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className={`text-sm px-3 py-1.5 ${STATUS_BADGE[order.status] || ''}`}>
-            {order.status}
-          </Badge>
-          {canManageStatus && (NEXT_STATUS[order.status] || []).map((t) => {
-            const Icon = t.icon;
-            return (
-              <Button
-                key={t.to}
-                variant={t.variant}
-                size="sm"
-                className="gap-1.5"
-                disabled={statusSaving !== null}
-                onClick={() => updateStatus(t.to)}
-              >
-                {statusSaving === t.to ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />}
-                {t.label}
-              </Button>
-            );
-          })}
-          {order.status === 'Approved' && anyRemaining && (
-            <Button onClick={openDispatch} className="gap-2"><Truck className="size-4" /> Create Dispatch</Button>
-          )}
+
+        {/* Meta strip */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-border px-5 py-4 text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground italic mb-1">Order From</p>
+            <p className="font-semibold text-primary">{customerName}</p>
+            {custAddress && <p className="text-xs text-muted-foreground mt-0.5">{custAddress}</p>}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Order Date</p>
+            <p className="font-medium">{new Date(order.date).toLocaleDateString('en-IN')}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Order Status</p>
+            <p className="font-medium capitalize">{order.status}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Created By</p>
+            <p className="font-medium flex items-center gap-1.5"><UserIcon className="size-3.5 text-muted-foreground" /> {createdBy}</p>
+          </div>
         </div>
+
+        {/* Status actions */}
+        {(canManageStatus && (NEXT_STATUS[order.status]?.length || (order.status === 'Approved' && anyRemaining))) ? (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
+            {canManageStatus && (NEXT_STATUS[order.status] || []).map((t) => {
+              const Icon = t.icon;
+              return (
+                <Button key={t.to} variant={t.variant} size="sm" className="gap-1.5" disabled={statusSaving !== null} onClick={() => updateStatus(t.to)}>
+                  {statusSaving === t.to ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />}
+                  {t.label}
+                </Button>
+              );
+            })}
+            {order.status === 'Approved' && anyRemaining && (
+              <Button onClick={openDispatch} className="gap-2" size="sm"><Truck className="size-4" /> Create Dispatch</Button>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* Pricing review banner — set by create_order when the quoted price the
@@ -278,94 +341,176 @@ export default function OrderDetailPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Items + custom fields */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-card border border-border rounded-lg p-5">
-            <h3 className="text-lg font-semibold mb-4">Order Items</h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-muted-foreground border-b border-border">
-                  <th className="text-left font-medium pb-2">Product</th>
-                  <th className="text-right font-medium pb-2">Qty</th>
-                  <th className="text-right font-medium pb-2">Dispatched</th>
-                  <th className="text-right font-medium pb-2">Price</th>
-                  <th className="text-right font-medium pb-2">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it) => (
-                  <tr key={it.id} className="border-b border-border/50">
-                    <td className="py-2">{it.product_name}{it.unit ? <span className="text-muted-foreground"> / {it.unit}</span> : null}</td>
-                    <td className="py-2 text-right">{it.quantity}</td>
-                    <td className="py-2 text-right text-muted-foreground">{dispatchedSoFar(it.id)}</td>
-                    <td className="py-2 text-right">{formatCurrency(it.price, defaultCurrency)}</td>
-                    <td className="py-2 text-right font-medium">{formatCurrency(it.total, defaultCurrency)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="flex justify-end mt-4 pt-3 border-t border-border">
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Total</p>
-                <p className="text-xl font-bold">{formatCurrency(order.total_amount, defaultCurrency)}</p>
-              </div>
+        {/* Left: tabbed content */}
+        <div className="lg:col-span-2">
+          <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
+            {/* Tab bar */}
+            <div className="flex border-b border-border">
+              <TabBtn value="details" label="Details" />
+              <TabBtn value="dispatches" label={`Dispatches${dispatches.length ? ` (${dispatches.length})` : ''}`} />
+              <TabBtn value="summary" label="Summary" />
             </div>
-          </div>
 
-          {customValues.length > 0 && (
-            <div className="bg-card border border-border rounded-lg p-5">
-              <h3 className="text-lg font-semibold mb-4">Additional Details</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {customValues.map((cv, i) => (
-                  <div key={i}>
-                    <p className="text-sm text-muted-foreground mb-1">{cv.label}</p>
-                    <p className="font-medium">{cv.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Dispatches */}
-        <div className="space-y-4">
-          <div className="bg-card border border-border rounded-lg p-5">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><Truck className="size-4" /> Dispatches</h3>
-            {dispatches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Not dispatched yet.</p>
-            ) : (
-              <div className="space-y-4">
-                {dispatches.map((d) => (
-                  <div key={d.id} className="border border-border rounded-md p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-mono text-sm font-medium">{d.dispatch_number}</span>
-                      <span className="text-xs text-muted-foreground">{new Date(d.dispatched_at).toLocaleDateString('en-IN')}</span>
+            {/* DETAILS TAB */}
+            {tab === 'details' && (
+              <div className="p-5 space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Order Items</h3>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-muted-foreground border-b border-border">
+                        <th className="text-left font-medium pb-2">Product</th>
+                        <th className="text-right font-medium pb-2">Qty</th>
+                        <th className="text-right font-medium pb-2">Price</th>
+                        <th className="text-right font-medium pb-2">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((it) => (
+                        <tr key={it.id} className="border-b border-border/50">
+                          <td className="py-2">{it.product_name}{it.unit ? <span className="text-muted-foreground"> / {it.unit}</span> : null}</td>
+                          <td className="py-2 text-right">{it.quantity}</td>
+                          <td className="py-2 text-right">{formatCurrency(it.price, defaultCurrency)}</td>
+                          <td className="py-2 text-right font-medium">{formatCurrency(it.total, defaultCurrency)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="flex justify-end mt-4 pt-3 border-t border-border">
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Total</p>
+                      <p className="text-xl font-bold">{formatCurrency(order.total_amount, defaultCurrency)}</p>
                     </div>
-                    {(d.transport_name || d.tracking_number) && (
-                      <p className="text-xs text-muted-foreground mb-2">
-                        {d.transport_name}{d.transport_name && d.tracking_number ? ' · ' : ''}{d.tracking_number ? `Tracking: ${d.tracking_number}` : ''}
-                      </p>
-                    )}
-                    <div className="space-y-1">
-                      {d.items.map((di) => (
-                        <div key={di.id} className="flex justify-between text-xs">
-                          <span className="flex items-center gap-1"><Package className="size-3 text-muted-foreground" /> {di.product_name}</span>
-                          <span className="font-medium">{di.quantity}{di.unit ? ` ${di.unit}` : ''}</span>
+                  </div>
+                </div>
+
+                {customValues.length > 0 && (
+                  <div className="border-t border-border pt-5">
+                    <h3 className="text-lg font-semibold mb-4">Additional Details</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {customValues.map((cv, i) => (
+                        <div key={i}>
+                          <p className="text-sm text-muted-foreground mb-1">{cv.label}</p>
+                          <p className="font-medium">{cv.value}</p>
                         </div>
                       ))}
                     </div>
                   </div>
-                ))}
+                )}
+
+                {order.notes && (
+                  <div className="border-t border-border pt-5">
+                    <h3 className="text-lg font-semibold mb-2">Notes</h3>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{order.notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* DISPATCHES TAB */}
+            {tab === 'dispatches' && (
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2"><Truck className="size-4" /> Dispatches</h3>
+                  {order.status === 'Approved' && anyRemaining && (
+                    <Button onClick={openDispatch} size="sm" className="gap-2"><Plus className="size-4" /> Add</Button>
+                  )}
+                </div>
+                {dispatches.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">Not dispatched yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-muted-foreground border-b border-border">
+                          <th className="text-left font-medium pb-2">Dispatch #</th>
+                          <th className="text-left font-medium pb-2">Date</th>
+                          <th className="text-left font-medium pb-2">Items</th>
+                          <th className="text-left font-medium pb-2">Transport / Tracking</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dispatches.map((d) => (
+                          <tr key={d.id} className="border-b border-border/50 align-top">
+                            <td className="py-3 font-mono font-medium">{d.dispatch_number}</td>
+                            <td className="py-3 text-muted-foreground">{new Date(d.dispatched_at).toLocaleDateString('en-IN')}</td>
+                            <td className="py-3">
+                              <div className="space-y-1">
+                                {d.items.map((di) => (
+                                  <div key={di.id} className="flex items-center gap-1 text-xs">
+                                    <Package className="size-3 text-muted-foreground" /> {di.product_name}
+                                    <span className="font-medium">· {di.quantity}{di.unit ? ` ${di.unit}` : ''}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="py-3 text-xs text-muted-foreground">
+                              {d.transport_name || '—'}{d.tracking_number ? <><br />Tracking: {d.tracking_number}</> : null}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SUMMARY TAB */}
+            {tab === 'summary' && (
+              <div className="p-5 space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Basic Details</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div><p className="text-muted-foreground mb-1">Order #</p><p className="font-medium">{order.order_number}</p></div>
+                    <div><p className="text-muted-foreground mb-1">Customer</p><p className="font-medium text-primary">{customerName}</p></div>
+                    <div><p className="text-muted-foreground mb-1">Date</p><p className="font-medium">{new Date(order.date).toLocaleDateString('en-IN')}</p></div>
+                    <div><p className="text-muted-foreground mb-1">Status</p><p className="font-medium capitalize">{order.status}</p></div>
+                  </div>
+                </div>
+                <div className="border-t border-border pt-5">
+                  <h3 className="text-lg font-semibold mb-4">Product Details</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-muted-foreground border-b border-border">
+                          <th className="text-left font-medium pb-2">Name</th>
+                          <th className="text-right font-medium pb-2">Ordered</th>
+                          <th className="text-right font-medium pb-2">Delivered</th>
+                          <th className="text-right font-medium pb-2">Difference</th>
+                          <th className="text-right font-medium pb-2">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((it) => (
+                          <tr key={it.id} className="border-b border-border/50">
+                            <td className="py-2">{it.product_name}</td>
+                            <td className="py-2 text-right">{it.quantity}{it.unit ? ` ${it.unit}` : ''}</td>
+                            <td className="py-2 text-right text-emerald-600">{dispatchedSoFar(it.id)}</td>
+                            <td className="py-2 text-right text-amber-600">{remaining(it)}</td>
+                            <td className="py-2 text-right font-medium">{formatCurrency(it.total, defaultCurrency)}</td>
+                          </tr>
+                        ))}
+                        <tr className="font-semibold">
+                          <td className="py-2 text-right" colSpan={1}>Total</td>
+                          <td className="py-2 text-right">{items.reduce((s, it) => s + Number(it.quantity), 0)}</td>
+                          <td className="py-2 text-right text-emerald-600">{items.reduce((s, it) => s + dispatchedSoFar(it.id), 0)}</td>
+                          <td className="py-2 text-right text-amber-600">{items.reduce((s, it) => s + remaining(it), 0)}</td>
+                          <td className="py-2 text-right">{formatCurrency(order.total_amount, defaultCurrency)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Activity timeline (status changes, edits, creation) */}
-      <div className="bg-card border border-border rounded-lg p-5">
-        <h3 className="text-lg font-semibold mb-4">Activity</h3>
-        <Timeline moduleName="order" recordId={id} tasks={[]} activities={activities} onRefresh={fetchOrder} />
+        {/* Right: Timeline */}
+        <div className="w-full">
+          <Timeline moduleName="order" recordId={id} tasks={[]} activities={activities} onRefresh={fetchOrder} />
+        </div>
       </div>
 
       {/* Create Dispatch dialog */}
