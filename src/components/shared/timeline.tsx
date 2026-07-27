@@ -323,6 +323,7 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
         defaultQuotationId={moduleName === 'quotation' ? recordId : undefined}
         defaultLeadId={moduleName === 'lead' ? recordId : undefined}
         defaultExpenseId={moduleName === 'expense' ? recordId : undefined}
+        defaultOrderId={moduleName === 'order' ? recordId : undefined}
         onSaved={onRefresh}
       />
     </div>

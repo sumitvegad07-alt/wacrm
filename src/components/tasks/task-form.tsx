@@ -44,6 +44,7 @@ interface TaskFormProps {
   defaultQuotationId?: string;
   defaultLeadId?: string;
   defaultExpenseId?: string;
+  defaultOrderId?: string;
   onSaved: () => void;
 }
 
@@ -61,6 +62,7 @@ export function TaskForm({
   defaultQuotationId,
   defaultLeadId,
   defaultExpenseId,
+  defaultOrderId,
   onSaved,
 }: TaskFormProps) {
   const supabase = createClient();
@@ -81,8 +83,9 @@ export function TaskForm({
   const [quotationId, setQuotationId] = useState("");
   const [leadId, setLeadId] = useState("");
   const [expenseId, setExpenseId] = useState("");
-  
-  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead"|"Expense">("None");
+  const [orderId, setOrderId] = useState("");
+
+  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead"|"Expense"|"Order">("None");
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -92,6 +95,7 @@ export function TaskForm({
   const [quotations, setQuotations] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
 
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -135,6 +139,7 @@ export function TaskForm({
         setQuotationId(task.quotation_id || "");
         setLeadId(task.lead_id || "");
         setExpenseId(task.expense_id || "");
+        setOrderId(task.order_id || "");
         if (task.contact_id) setLinkedModule("Contact");
         else if (task.lead_id) setLinkedModule("Lead");
         else if (task.expense_id) setLinkedModule("Expense");
@@ -142,6 +147,7 @@ export function TaskForm({
         else if (task.quotation_id) setLinkedModule("Quotation");
         else if (task.product_id) setLinkedModule("Product");
         else if (task.conversation_id) setLinkedModule("Conversation");
+        else if (task.order_id) setLinkedModule("Order");
         else setLinkedModule("None");
       } else {
         setDescription("");
@@ -158,7 +164,8 @@ export function TaskForm({
         setQuotationId(defaultQuotationId || "");
         setLeadId(defaultLeadId || "");
         setExpenseId(defaultExpenseId || "");
-        
+        setOrderId(defaultOrderId || "");
+
         if (defaultContactId) setLinkedModule("Contact");
         else if (defaultLeadId) setLinkedModule("Lead");
         else if (defaultExpenseId) setLinkedModule("Expense");
@@ -166,6 +173,7 @@ export function TaskForm({
         else if (defaultQuotationId) setLinkedModule("Quotation");
         else if (defaultProductId) setLinkedModule("Product");
         else if (defaultConversationId) setLinkedModule("Conversation");
+        else if (defaultOrderId) setLinkedModule("Order");
         else setLinkedModule("None");
       }
     }
@@ -176,7 +184,7 @@ export function TaskForm({
     if (!open) return;
     let cancelled = false;
     (async () => {
-      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes, expRes] = await Promise.all([
+      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes, expRes, oRes] = await Promise.all([
         supabase.from("profiles").select("*").order("full_name"),
         supabase.from("contacts").select("*").order("name"),
         supabase.from("deals").select("*").order("title"),
@@ -185,7 +193,8 @@ export function TaskForm({
         supabase.from("custom_fields").select("*").eq("module_name", "task").order("field_name"),
         supabase.from("quotations").select("*, contact:contacts(name)").order("quotation_number", { ascending: false }),
         supabase.from("leads").select("*").order("name"),
-        supabase.from("expenses").select("*, expense_type:expense_types(expense_name)").order("created_at", { ascending: false })
+        supabase.from("expenses").select("*, expense_type:expense_types(expense_name)").order("created_at", { ascending: false }),
+        supabase.from("orders").select("id, order_number, contact:contacts(company, name)").order("created_at", { ascending: false }),
       ]);
       if (cancelled) return;
       setProfiles((pRes.data ?? []) as Profile[]);
@@ -196,6 +205,7 @@ export function TaskForm({
       setQuotations((qRes.data ?? []) as any[]);
       setLeads((lRes.data ?? []) as any[]);
       setExpenses((expRes.data ?? []) as any[]);
+      setOrders((oRes.data ?? []) as any[]);
       
       const fields = cfRes.data as CustomField[] ?? [];
       setCustomFields(fields);
@@ -249,6 +259,7 @@ export function TaskForm({
       quotation_id: linkedModule === "Quotation" ? quotationId : null,
       lead_id: linkedModule === "Lead" ? leadId : null,
       expense_id: linkedModule === "Expense" ? expenseId : null,
+      order_id: linkedModule === "Order" ? orderId : null,
     };
 
     let savedTaskId = task?.id;
@@ -305,6 +316,7 @@ export function TaskForm({
       if (productId) logPromises.push(logModuleActivity(supabase, { moduleName: 'product', recordId: productId, action: task ? 'updated' : 'created', message: msg }));
       if (leadId) logPromises.push(logModuleActivity(supabase, { moduleName: 'lead', recordId: leadId, action: task ? 'updated' : 'created', message: msg }));
       if (expenseId) logPromises.push(logModuleActivity(supabase, { moduleName: 'expense', recordId: expenseId, action: task ? 'updated' : 'created', message: msg }));
+      if (linkedModule === "Order" && orderId) logPromises.push(logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: task ? 'updated' : 'created', message: msg }));
       await Promise.all(logPromises);
     }
 
@@ -453,6 +465,7 @@ export function TaskForm({
                     <option value="Product">Product</option>
                     <option value="Conversation">Conversation</option>
                     <option value="Expense">Expense</option>
+                    <option value="Order">Order</option>
                   </select>
                 </div>
 
@@ -520,6 +533,16 @@ export function TaskForm({
                         onChange={setExpenseId}
                         placeholder="Select Expense..."
                         options={expenses.map((e) => ({ value: e.id, label: `${e.expense_type?.expense_name} - ₹${e.amount}` }))}
+                        className="h-10 bg-background"
+                      />
+                    )}
+                    {linkedModule === "Order" && (
+                      <SearchableSelect
+                        value={orderId}
+                        onChange={setOrderId}
+                        placeholder="Select Order..."
+                        searchPlaceholder="Search orders..."
+                        options={orders.map((o) => ({ value: o.id, label: `${o.order_number || 'Order'} - ${o.contact?.company || o.contact?.name || 'Unknown'}` }))}
                         className="h-10 bg-background"
                       />
                     )}

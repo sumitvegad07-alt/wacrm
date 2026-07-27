@@ -89,6 +89,7 @@ export default function OrderDetailPage() {
   const [customValues, setCustomValues] = useState<{ label: string; value: string }[]>([]);
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [activities, setActivities] = useState<Record<string, any>[]>([]);
+  const [tasks, setTasks] = useState<Record<string, any>[]>([]);
   const [createdBy, setCreatedBy] = useState('Unknown');
   const [statusSaving, setStatusSaving] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,7 +114,7 @@ export default function OrderDetailPage() {
     if (error || !o) { toast.error('Order not found'); router.push('/orders'); return; }
     setOrder(o);
 
-    const [{ data: itemData }, { data: cvData }, { data: dispatchData }, { data: activityData }, ownerRes] = await Promise.all([
+    const [{ data: itemData }, { data: cvData }, { data: dispatchData }, { data: activityData }, { data: taskData }, ownerRes] = await Promise.all([
       supabase.from('order_items').select('*').eq('order_id', id).order('position'),
       supabase.from('order_custom_values').select('value, custom_fields(field_name)').eq('order_id', id),
       supabase.from('order_dispatches').select('*, dispatch_items(*)').eq('order_id', id).order('created_at', { ascending: false }),
@@ -121,6 +122,7 @@ export default function OrderDetailPage() {
       // be embedded. Fetch plainly and enrich with profiles below (same pattern
       // as the lead detail page).
       supabase.from('module_activities').select('*').eq('module_name', 'order').eq('record_id', id).order('created_at', { ascending: false }),
+      supabase.from('tasks').select('*').eq('order_id', id).order('created_at', { ascending: false }),
       o.user_id
         ? supabase.from('profiles').select('full_name, email').eq('user_id', o.user_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -129,6 +131,7 @@ export default function OrderDetailPage() {
     setItems((itemData || []) as OrderItem[]);
     setCustomValues((cvData || []).map((c: Record<string, any>) => ({ label: c.custom_fields?.field_name || 'Field', value: c.value })).filter((c) => c.value));
     setDispatches((dispatchData || []).map((d: Record<string, any>) => ({ ...d, items: d.dispatch_items || [] })) as Dispatch[]);
+    setTasks((taskData || []) as Record<string, any>[]);
 
     // Enrich activities with the acting user's name via a separate profiles query.
     const acts = (activityData || []) as Record<string, any>[];
@@ -520,7 +523,7 @@ export default function OrderDetailPage() {
 
         {/* Right: Timeline */}
         <div className="w-full">
-          <Timeline moduleName="order" recordId={id} tasks={[]} activities={activities} onRefresh={fetchOrder} />
+          <Timeline moduleName="order" recordId={id} tasks={tasks} activities={activities} onRefresh={fetchOrder} />
         </div>
       </div>
 
