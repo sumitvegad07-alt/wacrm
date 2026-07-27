@@ -54,6 +54,9 @@ const LEGAL_TO: Record<string, string[]> = {
   Approved: ['Rejected', 'Cancelled'],
   'Part Dispatch': ['Cancelled'],
 };
+// Fixed order statuses (the configurable order_statuses table is retired).
+const ALL_STATUSES = ['Pending', 'Approved', 'Part Dispatch', 'Dispatched', 'Rejected', 'Cancelled'];
+
 // Bulk status actions (deliberately no bulk Dispatch — that's per-order).
 const BULK_ACTIONS: { to: string; label: string; icon: typeof CheckCircle2; variant: 'default' | 'outline' | 'destructive' }[] = [
   { to: 'Approved', label: 'Approve', icon: CheckCircle2, variant: 'default' },
@@ -67,7 +70,6 @@ export default function OrdersPage() {
   const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner } = useAuth();
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [statuses, setStatuses] = useState<{ id: string; name: string; color: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterState, setFilterState] = useState<FilterState>({});
   const [globalSearch, setGlobalSearch] = useState('');
@@ -83,17 +85,15 @@ export default function OrdersPage() {
     if (!accountId) return;
     setLoading(true);
 
-    const [{ data: orderData }, { data: statusData }, { data: profiles }] = await Promise.all([
+    const [{ data: orderData }, { data: profiles }] = await Promise.all([
       supabase
         .from('orders')
         .select('*, order_items(count), contacts(company, name), leads(name)')
         .eq('account_id', accountId)
         .order('created_at', { ascending: false }),
-      supabase.from('order_statuses').select('id, name, color').eq('account_id', accountId).order('position'),
       supabase.from('profiles').select('id, full_name').eq('account_id', accountId),
     ]);
 
-    setStatuses(statusData || []);
     const profileMap: Record<string, string> = {};
     profiles?.forEach((p: { id: string; full_name: string }) => { profileMap[p.id] = p.full_name; });
 
@@ -193,7 +193,7 @@ export default function OrdersPage() {
       id: 'status',
       label: 'Status',
       type: 'select',
-      options: statuses.map((s) => ({ label: s.name, value: s.name })),
+      options: ALL_STATUSES.map((s) => ({ label: s, value: s })),
       render: (o) => (
         <Badge variant="outline" className={`text-xs ${STATUS_BADGE[o.status] || 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}>
           {o.status}
