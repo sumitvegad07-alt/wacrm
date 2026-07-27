@@ -134,6 +134,13 @@ Tables: `orders`, `order_items`, `order_statuses`, `order_dispatches`, `dispatch
   `order_created` / `order_edited` via `logModuleActivity` (`order-form.tsx`); the detail view logs
   `order_dispatched` when a dispatch is recorded; `update_order_status` logs `order_status_changed`
   server-side. Orders created before this logging existed have no backfilled history.
+- **GOTCHA — never embed the acting user on `module_activities`.** `module_activities.user_id` FKs
+  **`auth.users`, not `profiles`**, so `select('*, user:profiles!module_activities_user_id_fkey(...)')`
+  fails and returns NO rows — silently hiding the whole timeline. Fetch activities plainly, then
+  enrich with a separate `profiles` query keyed by `user_id` (see the lead + order detail pages).
+- **Tasks can link to an order**: `tasks.order_id` (nullable FK → orders, ON DELETE SET NULL;
+  migration 087). `TaskForm` exposes it via the "Order" option in "Linked To"; the order detail's
+  `<Timeline>` pre-selects the current order and shows tasks linked to it.
 
 ### Order status lifecycle (migration 086, applied to prod)
 
