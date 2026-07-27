@@ -27,6 +27,7 @@ import {
   Plus,
   Package,
   ShoppingCart,
+  Truck,
   FileText,
   MapPin,
   Bot,
@@ -127,6 +128,7 @@ const navGroups: { label: string; icon: React.ComponentType<{ className?: string
       { href: "/products", label: "Products", icon: Package, module: "products" },
       { href: "/quotations", label: "Quotations", icon: FileText, module: "orders" },
       { href: "/orders", label: "Orders", icon: ShoppingCart, module: "orders" },
+      { href: "/dispatches", label: "Dispatches", icon: Truck, module: "orders" },
     ],
   },
   {

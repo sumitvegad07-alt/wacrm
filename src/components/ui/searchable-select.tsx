@@ -18,6 +18,7 @@ interface SearchableSelectProps {
   searchPlaceholder?: string;
   emptyMessage?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function SearchableSelect({
@@ -28,6 +29,7 @@ export function SearchableSelect({
   searchPlaceholder = "Search...",
   emptyMessage = "No results found.",
   className,
+  disabled = false,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -39,6 +41,7 @@ export function SearchableSelect({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        disabled={disabled}
         className={cn("flex w-full items-center justify-between rounded-md bg-muted border border-border px-3 py-2 text-sm font-normal text-foreground hover:bg-muted outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:cursor-not-allowed disabled:opacity-50", className)}
       >
         <span className="truncate">

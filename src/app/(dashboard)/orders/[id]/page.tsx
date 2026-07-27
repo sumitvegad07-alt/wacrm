@@ -5,12 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from '@/components/ui/dialog';
 import {
   ChevronLeft, Truck, Loader2, Package, AlertTriangle, CheckCircle2, XCircle, Ban,
   Printer, Phone, Mail, User as UserIcon, Plus,
@@ -18,7 +13,6 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { Timeline } from '@/components/shared/timeline';
-import { logModuleActivity } from '@/lib/activities';
 
 /** PostgREST errors are plain objects — pull the real reason out. */
 function supaErr(e: unknown): string {
@@ -81,7 +75,7 @@ export default function OrderDetailPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const supabase = createClient();
-  const { accountId, defaultCurrency, hasPermission } = useAuth();
+  const { defaultCurrency, hasPermission } = useAuth();
   const canManageStatus = hasPermission('manage_order_status');
 
   const [order, setOrder] = useState<Record<string, any> | null>(null);
@@ -94,15 +88,6 @@ export default function OrderDetailPage() {
   const [statusSaving, setStatusSaving] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('details');
-
-  // Dispatch dialog
-  const [dispatchOpen, setDispatchOpen] = useState(false);
-  const [dispatchQty, setDispatchQty] = useState<Record<string, string>>({});
-  const [transport, setTransport] = useState('');
-  const [tracking, setTracking] = useState('');
-  const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split('T')[0]);
-  const [dispatchNotes, setDispatchNotes] = useState('');
-  const [savingDispatch, setSavingDispatch] = useState(false);
 
   const fetchOrder = useCallback(async () => {
     setLoading(true);
@@ -160,13 +145,9 @@ export default function OrderDetailPage() {
     return Number(item.quantity) - dispatchedSoFar(item.id);
   }
 
-  function openDispatch() {
-    const init: Record<string, string> = {};
-    items.forEach((it) => { init[it.id] = String(Math.max(0, remaining(it))); });
-    setDispatchQty(init);
-    setTransport(''); setTracking(''); setDispatchNotes('');
-    setDispatchDate(new Date().toISOString().split('T')[0]);
-    setDispatchOpen(true);
+  // Dispatch creation now lives in the standalone Dispatch module.
+  function goCreateDispatch() {
+    router.push(`/dispatches/new?orderId=${id}`);
   }
 
   // Status changes go through the RPC only — it validates the transition,
@@ -180,58 +161,6 @@ export default function OrderDetailPage() {
     if (error) { toast.error(supaErr(error)); return; }
     toast.success(`Status updated to ${newStatus}`);
     fetchOrder();
-  }
-
-  async function saveDispatch() {
-    if (!order || !accountId) return;
-    const rows = items
-      .map((it) => ({ it, qty: parseFloat(dispatchQty[it.id] || '0') }))
-      .filter((r) => r.qty > 0);
-    if (rows.length === 0) { toast.error('Enter a quantity for at least one item'); return; }
-    for (const r of rows) {
-      if (r.qty > remaining(r.it) + 0.0001) { toast.error(`${r.it.product_name}: cannot dispatch more than remaining (${remaining(r.it)})`); return; }
-    }
-
-    setSavingDispatch(true);
-    try {
-      const { data: dispatch, error: dErr } = await supabase
-        .from('order_dispatches')
-        .insert({
-          account_id: accountId, order_id: id,
-          dispatched_at: dispatchDate,
-          transport_name: transport.trim() || null,
-          tracking_number: tracking.trim() || null,
-          notes: dispatchNotes.trim() || null,
-        })
-        .select()
-        .single();
-      if (dErr || !dispatch) throw dErr;
-
-      const { error: diErr } = await supabase.from('dispatch_items').insert(
-        rows.map((r) => ({
-          dispatch_id: dispatch.id, order_item_id: r.it.id,
-          product_name: r.it.product_name, unit: r.it.unit, quantity: r.qty,
-        }))
-      );
-      if (diErr) throw diErr;
-
-      // Log the dispatch on the order timeline. The DB trigger
-      // (lock_order_on_dispatch) also auto-advances the order to "Dispatched"
-      // and locks it, but that trigger doesn't write an activity, so we do.
-      await logModuleActivity(supabase, {
-        moduleName: 'order', recordId: id, action: 'order_dispatched',
-        message: `Dispatch ${dispatch.dispatch_number} created`,
-        details: { dispatch_number: dispatch.dispatch_number },
-      });
-
-      toast.success(`Dispatch ${dispatch.dispatch_number} created`);
-      setDispatchOpen(false);
-      fetchOrder();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create dispatch');
-    } finally {
-      setSavingDispatch(false);
-    }
   }
 
   if (loading || !order) {
@@ -319,7 +248,7 @@ export default function OrderDetailPage() {
               );
             })}
             {order.status === 'Approved' && anyRemaining && (
-              <Button onClick={openDispatch} className="gap-2" size="sm"><Truck className="size-4" /> Create Dispatch</Button>
+              <Button onClick={goCreateDispatch} className="gap-2" size="sm"><Truck className="size-4" /> Create Dispatch</Button>
             )}
           </div>
         ) : null}
@@ -427,7 +356,7 @@ export default function OrderDetailPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2"><Truck className="size-4" /> Dispatches</h3>
                   {order.status === 'Approved' && anyRemaining && (
-                    <Button onClick={openDispatch} size="sm" className="gap-2"><Plus className="size-4" /> Add</Button>
+                    <Button onClick={goCreateDispatch} size="sm" className="gap-2"><Plus className="size-4" /> Add</Button>
                   )}
                 </div>
                 {dispatches.length === 0 ? (
@@ -445,8 +374,8 @@ export default function OrderDetailPage() {
                       </thead>
                       <tbody>
                         {dispatches.map((d) => (
-                          <tr key={d.id} className="border-b border-border/50 align-top">
-                            <td className="py-3 font-mono font-medium">{d.dispatch_number}</td>
+                          <tr key={d.id} className="border-b border-border/50 align-top cursor-pointer hover:bg-muted/40" onClick={() => router.push(`/dispatches/${d.id}`)}>
+                            <td className="py-3 font-mono font-medium text-primary">{d.dispatch_number}</td>
                             <td className="py-3 text-muted-foreground">{new Date(d.dispatched_at).toLocaleDateString('en-IN')}</td>
                             <td className="py-3">
                               <div className="space-y-1">
@@ -526,47 +455,6 @@ export default function OrderDetailPage() {
           <Timeline moduleName="order" recordId={id} tasks={tasks} activities={activities} onRefresh={fetchOrder} />
         </div>
       </div>
-
-      {/* Create Dispatch dialog */}
-      <Dialog open={dispatchOpen} onOpenChange={setDispatchOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>Create Dispatch</DialogTitle></DialogHeader>
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-            <div className="space-y-2">
-              {items.map((it) => {
-                const rem = remaining(it);
-                return (
-                  <div key={it.id} className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{it.product_name}</p>
-                      <p className="text-xs text-muted-foreground">Remaining: {rem}{it.unit ? ` ${it.unit}` : ''}</p>
-                    </div>
-                    <Input
-                      type="number"
-                      value={dispatchQty[it.id] ?? ''}
-                      onChange={(e) => setDispatchQty((p) => ({ ...p, [it.id]: e.target.value }))}
-                      className="w-24 h-8"
-                      disabled={rem <= 0}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
-              <div className="space-y-1"><Label>Transport</Label><Input value={transport} onChange={(e) => setTransport(e.target.value)} placeholder="Transport / courier" /></div>
-              <div className="space-y-1"><Label>Tracking / LR No.</Label><Input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking number" /></div>
-              <div className="space-y-1"><Label>Date</Label><Input type="date" value={dispatchDate} onChange={(e) => setDispatchDate(e.target.value)} /></div>
-              <div className="space-y-1"><Label>Notes</Label><Input value={dispatchNotes} onChange={(e) => setDispatchNotes(e.target.value)} placeholder="Optional" /></div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDispatchOpen(false)}>Cancel</Button>
-            <Button onClick={saveDispatch} disabled={savingDispatch}>
-              {savingDispatch ? <Loader2 className="size-4 mr-1 animate-spin" /> : null} Save Dispatch
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

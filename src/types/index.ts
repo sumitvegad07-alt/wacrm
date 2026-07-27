@@ -653,6 +653,7 @@ export interface Task {
   expense_id?: string | null;
   expense?: any; // To avoid circular ref before it's fully defined, or just use any
   order_id?: string | null;
+  dispatch_id?: string | null;
 }
 
 export interface TaskComment {
