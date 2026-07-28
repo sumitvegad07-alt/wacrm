@@ -40,6 +40,7 @@ describe('parseContactCsv', () => {
           email: undefined,
           company: undefined,
           tagNames: ['VIP', 'Lead'],
+          customValues: {},
         },
         {
           phone: '+15559876543',
@@ -47,6 +48,7 @@ describe('parseContactCsv', () => {
           email: undefined,
           company: undefined,
           tagNames: ['Customer'],
+          customValues: {},
         },
       ],
     });
@@ -66,6 +68,7 @@ describe('parseContactCsv', () => {
           email: undefined,
           company: undefined,
           tagNames: [],
+          customValues: {},
         },
       ],
     });

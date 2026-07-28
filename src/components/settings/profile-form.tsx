@@ -205,12 +205,12 @@ export function ProfileForm() {
     : '—';
 
   return (
-    <section className="max-w-2xl animate-in fade-in-50 duration-200">
+    <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
-        title="Your profile"
-        description="How you show up across the app. Your avatar and name appear in the header, sidebar, and anywhere your teammates see you."
+        title="Profile Settings"
+        description="Manage your personal information, display appearance, and default account currency."
       />
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="mt-6 space-y-6">
         <Card>
           <CardContent className="space-y-6">
           {/* Avatar row */}
@@ -259,45 +259,47 @@ export function ProfileForm() {
             </div>
           </div>
 
-          {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor="profile-full-name" className="text-foreground">
-              Display name
-            </Label>
-            <Input
-              id="profile-full-name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Ada Lovelace"
-              maxLength={120}
-              disabled={saving}
-              required
-            />
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Name */}
+            <div className="space-y-2">
+              <Label htmlFor="profile-full-name" className="text-foreground">
+                Display name
+              </Label>
+              <Input
+                id="profile-full-name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Ada Lovelace"
+                maxLength={120}
+                disabled={saving}
+                required
+              />
+            </div>
 
-          {/* Email */}
-          <div className="space-y-2">
-            <Label htmlFor="profile-email" className="text-foreground">
-              Email
-            </Label>
-            <Input
-              id="profile-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={saving}
-              required
-            />
-            {emailChangePending && (
-              <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                <Mail className="mt-0.5 size-3.5 shrink-0" />
-                <span>
-                  Check the inbox for <strong>{profile?.email}</strong> and{' '}
-                  <strong>{email}</strong> — both need to confirm before the
-                  change takes effect.
-                </span>
-              </p>
-            )}
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor="profile-email" className="text-foreground">
+                Email
+              </Label>
+              <Input
+                id="profile-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={saving}
+                required
+              />
+              {emailChangePending && (
+                <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  <Mail className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    Check the inbox for <strong>{profile?.email}</strong> and{' '}
+                    <strong>{email}</strong> — both need to confirm before the
+                    change takes effect.
+                  </span>
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Read-only block */}

@@ -15,16 +15,37 @@
 
 ### 1.2 The Dashboard `/(dashboard)`
 *Protected by Next.js Middleware. Requires valid Supabase JWT.*
-- `/` -> Main Analytics Dashboard.
-- `/contacts` -> CRM List View.
-  - `/contacts/[id]` -> Contact Detail (Drawer/Sheet).
-- `/inbox` -> WhatsApp Shared Inbox (Full height, hide standard sidebar).
-- `/sales` -> Pipelines and Deals board.
-- `/location-tracking/dashboard` -> Map View and Realtime Sidebar.
-- `/expenses` -> Approvals Table.
-  - `/expenses/[id]` -> Expense verification view (Odometer photos).
-- `/settings` -> (Gated to Admin/Owner).
-  - `/settings/team` -> Employee Role management.
+- **CRM:**
+  - `/` -> Main Analytics Dashboard.
+  - `/contacts` -> CRM List View.
+    - `/contacts/[id]` -> Contact Detail (Drawer/Sheet).
+  - `/leads` -> Leads management.
+  - `/orders`, `/quotations`, `/products`, `/dispatches`, `/pending-dispatch` -> Order and Product workflows.
+- **WhatsApp:**
+  - `/inbox` -> WhatsApp Shared Inbox.
+  - `/broadcasts`, `/automations`, `/flows` -> WhatsApp campaigns and flows.
+  - `/settings?tab=templates`, `/settings?tab=ai` -> Templates and Knowledge Base.
+- **Location Tracking:**
+  - `/location-tracking/overview`, `/location-tracking/dashboard`, `/location-tracking/all-locations`, `/location-tracking/visits`, `/location-tracking/track-report`, `/location-tracking/attendance` -> Map and attendance views.
+- **Team:**
+  - `/team/employees` -> Employees management.
+  - `/team/roles` -> Employee Roles management.
+  - `/expenses` -> Approvals and expense claims.
+- **Account (Collapsible Sub-Menu):**
+  - `/settings?tab=profile` -> User Profile settings.
+  - `/settings?tab=security` -> Login & security settings.
+- **Settings (Collapsible Sub-Menu):**
+  - `/settings?tab=whatsapp` -> WhatsApp Settings.
+  - `/settings?tab=fields` -> Fields & tags.
+  - `/settings?tab=deals` -> Currency.
+  - `/settings?tab=leads` -> Leads settings.
+  - `/settings?tab=tasks` -> Task types.
+  - `/settings?tab=orders` -> Orders settings.
+  - `/settings?tab=pricing` -> Pricing & Schemes.
+  - `/settings?tab=members` -> Team members settings (kept separate from main Team module).
+  - `/settings?tab=api` -> API keys.
+  - `/settings?tab=expense_types` -> Expense policies.
+  - `/settings?tab=appearance` -> Appearance & Theme settings.
 
 ### 1.3 Superadmin `/(superadmin)`
 *Protected by `is_superadmin` flag in the `profiles` table.*

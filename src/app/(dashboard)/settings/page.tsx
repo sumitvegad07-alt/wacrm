@@ -1,11 +1,9 @@
 'use client';
 
-import { useMemo, Suspense, useState, useEffect, type ReactNode } from 'react';
+import { Suspense, useState, useEffect, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/hooks/use-auth';
-import { useTheme } from '@/hooks/use-theme';
-import { SettingsRail } from '@/components/settings/settings-rail';
 import { SettingsOverview } from '@/components/settings/settings-overview';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
@@ -22,8 +20,10 @@ import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { AISettingsPanel } from '@/components/settings/ai-settings-panel';
 import { ExpenseTypesSettings } from '@/components/settings/expense-types-settings';
+import { ModuleSettingsPanel } from '@/components/settings/module-settings';
 import {
   resolveSection,
+  SECTION_META,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
 import { BrainCircuit, Zap, Sparkles, AlertTriangle, ArrowRight, MapPin } from 'lucide-react';
@@ -41,16 +41,19 @@ import { Button } from "@/components/ui/button";
 function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { defaultCurrency, hasWhatsApp, hasAdvancedAI } = useAuth();
-  const { mode } = useTheme();
+  const { hasWhatsApp, hasAdvancedAI } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<SettingsSection>(resolveSection(searchParams.get('tab')));
+  const [activeTab, setActiveTab] = useState<SettingsSection>(
+    resolveSection(searchParams.get('tab') || searchParams.get('section'))
+  );
 
   const [manageState, setManageState] = useState<'overview' | 'downgrade'>('overview');
 
   // Sync if URL changes externally (e.g. back button)
   useEffect(() => {
-    setActiveTab(resolveSection(searchParams.get('tab')));
+    setActiveTab(
+      resolveSection(searchParams.get('tab') || searchParams.get('section'))
+    );
   }, [searchParams]);
 
   const section = activeTab;
@@ -59,20 +62,20 @@ function SettingsContent() {
     setActiveTab(next);
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', next);
+    params.delete('section');
     router.replace(`/settings?${params.toString()}`, { scroll: false });
   };
 
-  const hints: Partial<Record<SettingsSection, ReactNode>> = useMemo(
-    () => ({
-      appearance: mode.charAt(0).toUpperCase() + mode.slice(1),
-      deals: defaultCurrency,
-    }),
-    [mode, defaultCurrency],
-  );
 
   const panel: Record<SettingsSection, ReactNode> = {
     overview: <SettingsOverview onSelect={go} />,
-    profile: <ProfileForm />,
+    profile: (
+      <div className="space-y-6">
+        <ProfileForm />
+        <AppearancePanel />
+        <DealsSettings />
+      </div>
+    ),
     security: <SecurityPanel />,
     appearance: <AppearancePanel />,
     whatsapp: hasWhatsApp ? <WhatsAppConfig /> : (
@@ -127,19 +130,35 @@ function SettingsContent() {
     expense_types: <ExpenseTypesSettings />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,
+    module_settings: <ModuleSettingsPanel />,
   };
 
   return (
-    <div>
+    <div className="w-full space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Settings
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Everything in one place — your account and your workspace. Pick a
-            section to manage it.
-          </p>
+        <div className="flex items-center gap-4">
+          {section !== 'overview' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => go('overview')}
+              className="shrink-0"
+            >
+              ← All Settings
+            </Button>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {section === 'overview'
+                ? 'Settings'
+                : SECTION_META[section]?.label || 'Settings'}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {section === 'overview'
+                ? 'Everything in one place — your account and your workspace. Pick a section to manage it.'
+                : 'Manage your workspace and account configuration.'}
+            </p>
+          </div>
         </div>
 
         {/* Downgrade/Cancel Modal */}
@@ -229,9 +248,8 @@ function SettingsContent() {
         </Dialog>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
-        <SettingsRail active={section} onSelect={go} hints={hints} />
-        <div className="min-w-0">{panel[section]}</div>
+      <div className="mt-6 min-w-0">
+        {panel[section]}
       </div>
     </div>
   );

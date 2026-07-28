@@ -17,13 +17,24 @@ export function FieldsAndTagsPanel() {
   const canEditSettings = useCan('edit-settings');
 
   return (
-    <section className="max-w-3xl animate-in fade-in-50 space-y-4 duration-200">
+    <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
-        title="Fields & tags"
+        title="Custom fields & tags"
         description="Two ways to organize contacts: colour-coded tags for quick grouping, and custom fields for structured data."
       />
-      <TagManager />
-      {canEditSettings ? <CustomFieldsSettings /> : null}
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <TagManager />
+        {canEditSettings ? (
+          <CustomFieldsSettings />
+        ) : (
+          <div className="p-5 border border-border rounded-lg bg-card space-y-3">
+            <h3 className="font-semibold text-sm text-foreground">Custom Fields</h3>
+            <p className="text-xs text-muted-foreground">
+              Custom fields allow structured data collection across contacts and leads. Only workspace admins can add or modify custom fields.
+            </p>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

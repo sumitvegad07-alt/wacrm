@@ -46,7 +46,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -279,7 +279,7 @@ export function MembersTab() {
   }
 
   return (
-    <section className="animate-in fade-in-50 space-y-6 duration-200">
+    <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
         title="Team members"
         description="People with access to this account. Roles control what each teammate can do."
@@ -293,273 +293,236 @@ export function MembersTab() {
         }
       />
 
-      {/* Live presence summary across the roster. Updates without a
-          full refresh as heartbeats and the local re-derive tick land. */}
-      {members.length > 0 &&
-        (() => {
-          const counts = summarize(members.map((m) => getPresence(m.user_id)));
-          return (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <PresenceDot status="online" />
-                {counts.online} online
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <PresenceDot status="away" />
-                {counts.away} away
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <PresenceDot status="offline" />
-                {counts.offline} offline
-              </span>
-              <span className="text-muted-foreground/70">
-                · {members.length} member{members.length === 1 ? '' : 's'}
-              </span>
-            </div>
-          );
-        })()}
-
-      {/* Roster */}
-      <Card>
-        <CardContent className="p-0">
-          <ul className="divide-y divide-border">
-            {members.map((member) => {
-              const roleMeta = ROLE_META[member.role];
-              const RoleIcon = roleMeta.icon;
-              const isSelf = member.user_id === user?.id;
-              const isOwnerRow = member.role === 'owner';
-              const isBusy = pendingMemberAction === member.user_id;
-              const presence = getPresence(member.user_id);
-              const presenceRow = getRow(member.user_id);
-              const presenceText = presenceLabel(
-                presence,
-                presenceRow?.last_seen_at ?? null,
-                now,
-              );
-
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        {/* LEFT COLUMN: ROSTER & PRESENCE */}
+        <div className="xl:col-span-7 space-y-4">
+          {members.length > 0 &&
+            (() => {
+              const counts = summarize(members.map((m) => getPresence(m.user_id)));
               return (
-                <li
-                  key={member.user_id}
-                  // Mobile: stack identity (avatar+name+email) above the
-                  // role/remove actions so the role dropdown's fixed
-                  // 128px width doesn't force the name into a 50-pixel
-                  // truncation. Desktop (sm+): everything inline as
-                  // before.
-                  className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
-                >
-                  <div className="flex min-w-0 flex-1 items-center gap-4">
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Avatar className="size-9 shrink-0">
-                            {member.avatar_url ? (
-                              <AvatarImage
-                                src={member.avatar_url}
-                                alt={member.full_name || 'Member'}
-                              />
-                            ) : null}
-                            <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
-                              {(member.full_name || member.email || 'U')
-                                .charAt(0)
-                                .toUpperCase()}
-                            </AvatarFallback>
-                            {/* role+label so screen readers announce
-                                presence — the hover tooltip alone isn't
-                                reachable by keyboard/AT on a non-focusable
-                                avatar. */}
-                            <AvatarBadge
-                              role="img"
-                              aria-label={presenceText}
-                              className={PRESENCE_DOT_CLASS[presence]}
-                            />
-                          </Avatar>
-                        }
-                      />
-                      <TooltipContent>{presenceText}</TooltipContent>
-                    </Tooltip>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <PresenceDot status="online" />
+                    {counts.online} online
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <PresenceDot status="away" />
+                    {counts.away} away
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <PresenceDot status="offline" />
+                    {counts.offline} offline
+                  </span>
+                  <span className="text-muted-foreground/70">
+                    · {members.length} member{members.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+              );
+            })()}
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-foreground">
-                          {member.full_name || 'Unnamed'}
-                        </span>
-                        {isSelf && (
-                          <Badge className="bg-muted text-muted-foreground border-border text-[10px] uppercase tracking-wide">
-                            You
-                          </Badge>
+          {/* Roster */}
+          <Card>
+            <CardContent className="p-0">
+              <ul className="divide-y divide-border">
+                {members.map((member) => {
+                  const roleMeta = ROLE_META[member.role];
+                  const RoleIcon = roleMeta.icon;
+                  const isSelf = member.user_id === user?.id;
+                  const isOwnerRow = member.role === 'owner';
+                  const isBusy = pendingMemberAction === member.user_id;
+                  const presence = getPresence(member.user_id);
+                  const presenceRow = getRow(member.user_id);
+                  const presenceText = presenceLabel(
+                    presence,
+                    presenceRow?.last_seen_at ?? null,
+                    now,
+                  );
+
+                  return (
+                    <li
+                      key={member.user_id}
+                      className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-4">
+                        <Avatar className="size-9">
+                          <AvatarImage
+                            src={member.avatar_url || undefined}
+                            alt={member.full_name || member.email || undefined}
+                          />
+                          <AvatarFallback>
+                            {member.full_name
+                              ? member.full_name.charAt(0).toUpperCase()
+                              : member.email?.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {member.full_name || member.email}
+                            {isSelf && (
+                              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                (you)
+                              </span>
+                            )}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {member.email}
+                          </p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <PresenceDot status={presence} />
+                              {presenceText}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2">
+                        {canManageMembers && !isOwnerRow && !isSelf ? (
+                          <Select
+                            value={member.role}
+                            onValueChange={(val) =>
+                              handleRoleChange(member, val as AccountRole)
+                            }
+                            disabled={isBusy}
+                          >
+                            <SelectTrigger className="h-8 w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {EDITABLE_ROLES.map((r) => (
+                                <SelectItem key={r.value} value={r.value}>
+                                  <div className="flex items-center gap-2">
+                                    <span>{r.label}</span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${roleMeta.className}`}
+                          >
+                            <RoleIcon className="size-3.5" />
+                            {roleMeta.label}
+                          </span>
+                        )}
+
+                        {canManageMembers && !isOwnerRow && !isSelf && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setRemovingMember(member)}
+                            disabled={isBusy}
+                            className="border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
                         )}
                       </div>
-                      {member.email && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {member.email}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Joined date stays desktop-only. The mobile row's
-                      vertical density makes the joined date noise. */}
-                  <div className="hidden sm:block text-right text-xs text-muted-foreground">
-                    Joined {fmtDate(member.joined_at)}
-                  </div>
-
-                  {/* Actions cluster. On mobile this is its own row
-                      below the identity block; on desktop it sits
-                      inline. Items align to the start on mobile so the
-                      role dropdown lines up under the avatar. */}
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    {/* Role display / editor. Inline Select is admin+
-                        only AND not allowed on the owner row (owner
-                        changes go through transfer, which lands later). */}
-                    {canManageMembers && !isOwnerRow && !isSelf ? (
-                      <Select
-                        value={member.role}
-                        onValueChange={(v) =>
-                          // Base UI Select can emit null on clear. We
-                          // don't expose a clear affordance, so the
-                          // guard is defensive — but the typed
-                          // signature requires it.
-                          v && handleRoleChange(member, v as AccountRole)
-                        }
-                      >
-                        <SelectTrigger
-                          className="w-32 bg-muted border-border text-foreground"
-                          disabled={isBusy}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {EDITABLE_ROLES.map((r) => (
-                            <SelectItem key={r.value} value={r.value}>
-                              {r.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${roleMeta.className}`}
-                      >
-                        <RoleIcon className="size-3.5" />
-                        {roleMeta.label}
-                      </span>
-                    )}
-
-                    {/* Remove. Admin+ only; never on the owner row;
-                        never on yourself. Pre-polish styling was
-                        neutral-default + red-on-hover — the
-                        destructive intent was invisible until the
-                        user moused over. Now red is the default
-                        state with a darker shade on hover so the
-                        affordance reads at-a-glance. */}
-                    {canManageMembers && !isOwnerRow && !isSelf && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setRemovingMember(member)}
-                        disabled={isBusy}
-                        className="border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </CardContent>
-      </Card>
-
-      {/* Pending invitations — admin+ only */}
-      <RequireRole min="admin">
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <UsersRound className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-foreground">
-              Pending invitations
-            </h3>
-            <Badge className="bg-muted text-muted-foreground border-border">
-              {invitations.length}
-            </Badge>
-          </div>
-          {/* P10 — make the no-resend design explicit. Admins were
-              confused why the pending list shows roles + expiry but
-              no "copy link again" button. Stating the constraint up
-              front (rather than letting the user discover it by
-              looking for a button) keeps it from feeling like a bug. */}
-          {invitations.length > 0 ? (
-            <p className="mb-3 text-xs text-muted-foreground">
-              The plaintext invite URL is only shown once at creation
-              for security — to re-share, revoke the invite below and
-              create a new one.
-            </p>
-          ) : null}
-
-          {invitations.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-                <Mail className="size-6 text-muted-foreground" />
-                <p className="mt-2 text-sm text-muted-foreground">
-                  No pending invitations.
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Click <span className="text-muted-foreground">Invite member</span>{' '}
-                  above to generate a shareable link.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-0">
-                <ul className="divide-y divide-border">
-                  {invitations.map((inv) => {
-                    const inviteRoleMeta = ROLE_META[inv.role];
-                    const InviteRoleIcon = inviteRoleMeta.icon;
-                    return (
-                    <li
-                      key={inv.id}
-                      className="flex items-center gap-4 px-4 py-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-foreground">
-                            {inv.label || 'Untitled invite'}
-                          </span>
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${inviteRoleMeta.className}`}
-                          >
-                            <InviteRoleIcon className="size-3" />
-                            {inviteRoleMeta.label}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          Created {fmtDate(inv.created_at)} · {fmtExpiresIn(inv.expires_at)}
-                        </p>
-                      </div>
-
-                      {/* Revoke: red default state, mirrors the
-                          members-tab Remove button. Pre-polish version
-                          read as a neutral secondary button until
-                          hover. */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleRevoke(inv)}
-                        className="border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
-                      >
-                        <MailX className="size-4" />
-                        Revoke
-                      </Button>
                     </li>
-                    );
-                  })}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
         </div>
-      </RequireRole>
+
+        {/* RIGHT COLUMN: INVITATIONS & ROLE GUIDANCE */}
+        <div className="xl:col-span-5 space-y-6">
+          <RequireRole min="admin">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <UsersRound className="size-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-foreground">
+                  Pending invitations
+                </h3>
+                <Badge className="bg-muted text-muted-foreground border-border">
+                  {invitations.length}
+                </Badge>
+              </div>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Invitations cannot be resent. Copy the link below or revoke and recreate if it expired.
+              </p>
+
+              {invitations.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-xs text-muted-foreground">
+                    No pending invitations.
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <ul className="divide-y divide-border">
+                      {invitations.map((inv) => {
+                        const inviteRoleMeta = ROLE_META[inv.role];
+                        const InviteRoleIcon = inviteRoleMeta.icon;
+                        return (
+                          <li
+                            key={inv.id}
+                            className="flex items-center gap-4 px-4 py-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-foreground">
+                                  {inv.label || 'Untitled invite'}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${inviteRoleMeta.className}`}
+                                >
+                                  <InviteRoleIcon className="size-3" />
+                                  {inviteRoleMeta.label}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                Created {fmtDate(inv.created_at)} · {fmtExpiresIn(inv.expires_at)}
+                              </p>
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRevoke(inv)}
+                              className="border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
+                            >
+                              <MailX className="size-4" />
+                              Revoke
+                            </Button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </RequireRole>
+
+          {/* Role reference card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold">Role Capabilities</CardTitle>
+              <CardDescription className="text-xs">
+                Overview of default permissions and workspace access by role.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs text-muted-foreground">
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <p className="font-medium text-foreground mb-1">Owner &amp; Admin</p>
+                <p>Full administrative rights: manage billing, invite or remove members, configure WhatsApp &amp; AI settings, and oversee all CRM data.</p>
+              </div>
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <p className="font-medium text-foreground mb-1">Manager &amp; Sales Agent</p>
+                <p>Manage contacts, leads, deals, orders, and daily activities. Managers can reassign deals and access team reporting.</p>
+              </div>
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <p className="font-medium text-foreground mb-1">Logistics &amp; Finance</p>
+                <p>Specialized access: Logistics manages dispatch and fulfillment; Finance oversees order pricing, tax schemes, and invoicing.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <InviteMemberDialog
         open={inviteOpen}

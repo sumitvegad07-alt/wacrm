@@ -39,39 +39,29 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#020617",
-  colorScheme: "dark light",
+  themeColor: "#0f172a",
 };
 
-// Inline boot script — runs before React hydrates so the user's
-// chosen accent (data-theme) AND mode (data-mode) are on the <html>
-// element before first paint. Without this every page load flashes
-// the server-rendered defaults for a frame before the React tree
-// mounts and applies the picked values.
-//
-// Kept dependency-free (no imports, no JSX) — must be a string the
-// browser can run as a single <script>. Knowledge of valid ids is
-// sourced from the THEME_IDS / MODES constants so adding one doesn't
-// silently break the boot path.
+// Minimal inline script executed synchronously in <head> before React
+// hydrates. Reads `wacrm.theme` and `wacrm.mode` from localStorage and
+// sets `data-theme` / `data-mode` on document.documentElement. Prevents
+// the flash of default theme on first paint.
 const THEME_BOOT_SCRIPT = `
-(function(){
-  var d = document.documentElement;
+(function() {
   try {
-    var THEME_KEY = ${JSON.stringify(STORAGE_KEY)};
-    var THEME_DEFAULT = ${JSON.stringify(DEFAULT_THEME)};
-    var THEMES = ${JSON.stringify(THEME_IDS)};
-    var savedTheme = localStorage.getItem(THEME_KEY);
-    d.dataset.theme = THEMES.indexOf(savedTheme) !== -1 ? savedTheme : THEME_DEFAULT;
-
-    var MODE_KEY = ${JSON.stringify(MODE_STORAGE_KEY)};
-    var MODE_DEFAULT = ${JSON.stringify(DEFAULT_MODE)};
-    var MODES = ${JSON.stringify(MODES)};
-    var savedMode = localStorage.getItem(MODE_KEY);
-    d.dataset.mode = MODES.indexOf(savedMode) !== -1 ? savedMode : MODE_DEFAULT;
-  } catch (_e) {
-    d.dataset.theme = ${JSON.stringify(DEFAULT_THEME)};
-    d.dataset.mode = ${JSON.stringify(DEFAULT_MODE)};
-  }
+    var key = '${STORAGE_KEY}';
+    var modeKey = '${MODE_STORAGE_KEY}';
+    var theme = localStorage.getItem(key) || '${DEFAULT_THEME}';
+    var mode = localStorage.getItem(modeKey) || '${DEFAULT_MODE}';
+    var root = document.documentElement;
+    root.setAttribute('data-theme', theme);
+    root.setAttribute('data-mode', mode);
+    if (mode === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  } catch (e) {}
 })();
 `;
 
@@ -86,17 +76,10 @@ export default function RootLayout({
       data-theme={DEFAULT_THEME}
       data-mode={DEFAULT_MODE}
       className={`${inter.variable} h-full antialiased`}
-      // The `theme-boot` script below rewrites `data-theme` and
-      // `data-mode` on <html> from localStorage before React hydrates,
-      // so for any non-default choice the client DOM intentionally
-      // differs from the server-rendered defaults. suppressHydration-
-      // Warning silences the expected mismatch — it only applies to
-      // this element's own attributes, so genuine mismatches in
-      // children still surface.
       suppressHydrationWarning
     >
       <head>
-        <Script id="theme-boot" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        <script id="theme-boot" dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">
         <ThemeProvider>

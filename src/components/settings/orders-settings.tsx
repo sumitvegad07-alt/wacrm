@@ -103,9 +103,9 @@ export function OrdersSettings() {
   }
 
   return (
-    <section className="max-w-3xl animate-in fade-in-50 duration-200">
+    <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
-        title="Order Settings"
+        title="Orders Settings"
         description="Configure your distribution hierarchy for primary/secondary order classification. Order statuses are fixed (Pending → Approved → Part Dispatch → Dispatched)."
       />
 
@@ -114,97 +114,115 @@ export function OrdersSettings() {
           <Loader2 className="h-4 w-4 animate-spin" /> Loading...
         </div>
       ) : (
-        <div className="mt-6 space-y-6">
-          <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-card">
-            <div>
-              <p className="font-medium text-sm">Enable distribution hierarchy</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Off: every order is a simple direct order. On: orders are classified primary/secondary from the customer&apos;s level.
-              </p>
+        <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-card">
+              <div>
+                <p className="font-medium text-sm">Enable distribution hierarchy</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Off: every order is a simple direct order. On: orders are classified primary/secondary from the customer&apos;s level.
+                </p>
+              </div>
+              <Switch
+                checked={hierarchyEnabled}
+                onCheckedChange={(v) => setHierarchyEnabled(v)}
+                disabled={!canEditSettings || savingHierarchy}
+              />
             </div>
-            <Switch
-              checked={hierarchyEnabled}
-              onCheckedChange={(v) => setHierarchyEnabled(v)}
-              disabled={!canEditSettings || savingHierarchy}
-            />
+
+            {hierarchyEnabled && (
+              <div className="space-y-3 p-4 border border-border rounded-lg bg-card">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm font-medium">Levels (Level 1 = top of chain → orders from Level 1 count as Primary)</p>
+                </div>
+                {levels.map((lvl, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-background p-1 pr-2 border border-border rounded-md">
+                    <div className="p-2 text-muted-foreground/50"><GripVertical className="size-4" /></div>
+                    <span className="text-xs text-muted-foreground w-14">Level {i + 1}</span>
+                    <Input
+                      type="color"
+                      value={lvl.color || LEVEL_COLORS[i % LEVEL_COLORS.length]}
+                      onChange={(e) => updateLevelColor(i, e.target.value)}
+                      disabled={!canEditSettings}
+                      className="h-8 w-10 p-1 shrink-0"
+                      title="Badge color"
+                    />
+                    <Input
+                      value={lvl.name}
+                      onChange={(e) => updateLevel(i, e.target.value)}
+                      placeholder="e.g. Super Stockist"
+                      disabled={!canEditSettings}
+                      className="h-8 flex-1"
+                    />
+                    {canEditSettings && (
+                      <Button variant="ghost" size="sm" onClick={() => removeLevel(i)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
+                        <Trash2 className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {canEditSettings && levels.length < 5 && (
+                  <Button variant="outline" size="sm" onClick={addLevel}>
+                    <Plus className="size-4 mr-1" /> Add level
+                  </Button>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Assign each customer their level on the customer page. Orders from a Level 1 customer are tagged Primary; all others Secondary.
+                </p>
+              </div>
+            )}
+
+            {canEditSettings && (
+              <div className="flex justify-end pt-2 border-t border-border/50">
+                <Button onClick={() => saveHierarchy(hierarchyEnabled, levels)} disabled={savingHierarchy}>
+                  {savingHierarchy ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+                  Save changes
+                </Button>
+              </div>
+            )}
           </div>
 
-          {hierarchyEnabled && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Layers className="h-4 w-4 text-muted-foreground" />
-                <p className="text-sm font-medium">Levels (Level 1 = top of chain → orders from Level 1 count as Primary)</p>
+          <div className="space-y-6">
+            {hierarchyEnabled && levelless.length > 0 && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-500">
+                  {levelless.length} customer{levelless.length === 1 ? "" : "s"} have no level yet
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Their orders are classified <span className="font-medium">Direct</span>, which here means
+                  &ldquo;not known yet&rdquo; rather than a real position in your chain. Open each one and set
+                  a level to have them counted as Primary or Secondary.
+                </p>
+                <ul className="mt-3 space-y-1">
+                  {levelless.map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        href={`/contacts/${c.id}`}
+                        className="text-sm text-primary hover:underline underline-offset-2"
+                      >
+                        {c.company || c.name || "Unnamed customer"}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              {levels.map((lvl, i) => (
-                <div key={i} className="flex items-center gap-2 bg-card p-1 pr-2 border border-border rounded-md">
-                  <div className="p-2 text-muted-foreground/50"><GripVertical className="size-4" /></div>
-                  <span className="text-xs text-muted-foreground w-14">Level {i + 1}</span>
-                  <Input
-                    type="color"
-                    value={lvl.color || LEVEL_COLORS[i % LEVEL_COLORS.length]}
-                    onChange={(e) => updateLevelColor(i, e.target.value)}
-                    disabled={!canEditSettings}
-                    className="h-8 w-10 p-1 shrink-0"
-                    title="Badge color"
-                  />
-                  <Input
-                    value={lvl.name}
-                    onChange={(e) => updateLevel(i, e.target.value)}
-                    placeholder="e.g. Super Stockist"
-                    disabled={!canEditSettings}
-                    className="h-8 flex-1"
-                  />
-                  {canEditSettings && (
-                    <Button variant="ghost" size="sm" onClick={() => removeLevel(i)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
-                      <Trash2 className="size-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-              {canEditSettings && levels.length < 5 && (
-                <Button variant="outline" size="sm" onClick={addLevel}>
-                  <Plus className="size-4 mr-1" /> Add level
-                </Button>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Assign each customer their level on the customer page. Orders from a Level 1 customer are tagged Primary; all others Secondary.
-              </p>
+            )}
 
-              {levelless.length > 0 && (
-                <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-                  <p className="text-sm font-medium text-amber-700 dark:text-amber-500">
-                    {levelless.length} customer{levelless.length === 1 ? "" : "s"} have no level yet
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Their orders are classified <span className="font-medium">Direct</span>, which here means
-                    &ldquo;not known yet&rdquo; rather than a real position in your chain. Open each one and set
-                    a level to have them counted as Primary or Secondary.
-                  </p>
-                  <ul className="mt-3 space-y-1">
-                    {levelless.map((c) => (
-                      <li key={c.id}>
-                        <Link
-                          href={`/contacts/${c.id}`}
-                          className="text-sm text-primary hover:underline underline-offset-2"
-                        >
-                          {c.company || c.name || "Unnamed customer"}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+            <div className="p-5 border border-border rounded-lg bg-card space-y-4">
+              <h3 className="font-semibold text-sm text-foreground">Order Lifecycle &amp; Classification Guide</h3>
+              <div className="space-y-3 text-xs text-muted-foreground">
+                <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                  <p className="font-medium text-foreground mb-1">Fixed Status Machine</p>
+                  <p>All orders follow an enforced lifecycle: <strong>Pending → Approved → Part Dispatch → Dispatched</strong> (plus Rejected/Cancelled).</p>
                 </div>
-              )}
+                <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                  <p className="font-medium text-foreground mb-1">Primary vs. Secondary Orders</p>
+                  <p>When hierarchy is enabled, orders placed by <strong>Level 1</strong> customers are recorded as Primary Sales. Orders from downstream levels are recorded as Secondary Sales.</p>
+                </div>
+              </div>
             </div>
-          )}
-
-          {canEditSettings && (
-            <div className="flex justify-end pt-2 border-t border-border/50">
-              <Button onClick={() => saveHierarchy(hierarchyEnabled, levels)} disabled={savingHierarchy}>
-                {savingHierarchy ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
-                Save changes
-              </Button>
-            </div>
-          )}
+          </div>
         </div>
       )}
     </section>

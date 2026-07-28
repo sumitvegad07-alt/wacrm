@@ -501,7 +501,7 @@ export function TemplateManager() {
   }
 
   return (
-    <section className="animate-in fade-in-50 space-y-4 duration-200">
+    <section className="w-full animate-in fade-in-50 space-y-6 duration-200">
       <SettingsPanelHead
         title="Message templates"
         description={
@@ -536,7 +536,7 @@ export function TemplateManager() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 xl:grid-cols-2">
+        <div className="grid gap-6 grid-cols-1 xl:grid-cols-2 items-start">
           {templates.map((template) => {
             const statusKey = template.status || 'DRAFT';
             const status = templateStatusConfig[statusKey];

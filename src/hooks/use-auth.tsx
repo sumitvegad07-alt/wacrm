@@ -65,6 +65,36 @@ interface AccountSummary {
   is_provisioned: boolean;
 }
 
+export interface ModuleSettings {
+  whatsapp: boolean;
+  quotation: boolean;
+  expense: boolean;
+  dispatch: boolean;
+  pending_dispatch: boolean;
+}
+
+const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
+  whatsapp: true,
+  quotation: true,
+  expense: true,
+  dispatch: true,
+  pending_dispatch: true,
+};
+
+function normalizeModuleSettings(raw: unknown): ModuleSettings {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ...DEFAULT_MODULE_SETTINGS };
+  }
+  const src = raw as Record<string, unknown>;
+  return {
+    whatsapp: typeof src.whatsapp === 'boolean' ? src.whatsapp : true,
+    quotation: typeof src.quotation === 'boolean' ? src.quotation : true,
+    expense: typeof src.expense === 'boolean' ? src.expense : true,
+    dispatch: typeof src.dispatch === 'boolean' ? src.dispatch : true,
+    pending_dispatch: typeof src.pending_dispatch === 'boolean' ? src.pending_dispatch : true,
+  };
+}
+
 interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
@@ -128,7 +158,14 @@ interface AuthContextValue {
   hasBroadcasts: boolean;
   hasAdvancedAI: boolean;
   hasLocationTracking: boolean;
-  
+
+  /** Admin-configurable module toggles. All true while loading. */
+  moduleSettings: ModuleSettings;
+  /** Returns true if the given module key is enabled for this account. */
+  isModuleEnabled: (key: keyof ModuleSettings) => boolean;
+  /** Re-fetches module settings (call after admin saves changes). */
+  refreshModuleSettings: () => Promise<void>;
+
   // RBAC Evaluators
   permissions: RolePermissions | null;
   hasPermission: (key: string) => boolean;
@@ -146,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [account, setAccount] = useState<AccountSummary | null>(null);
+  const [moduleSettings, setModuleSettings] = useState<ModuleSettings>({ ...DEFAULT_MODULE_SETTINGS });
   const [loading, setLoading] = useState(true);
   // Tracked separately from `loading`. The session settles fast (one
   // local cookie read); the profile fetch crosses the network and
@@ -215,6 +253,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               industry: account.industry ?? 'Other',
               is_provisioned: account.is_provisioned ?? false,
             };
+
+            // Fetch module_settings separately — added in migration 090.
+            // If the migration hasn't been applied yet, this query may error;
+            // we silently fall back to all-enabled defaults so the rest of
+            // the app continues to work normally pre-migration.
+            const { data: modData, error: modErr } = await supabase
+              .from("accounts")
+              .select("module_settings")
+              .eq("id", data.account_id)
+              .maybeSingle();
+            if (!modErr && modData) {
+              setModuleSettings(normalizeModuleSettings((modData as any).module_settings));
+            }
           }
         }
 
@@ -322,6 +373,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (currentUser) {
         fetchProfile(currentUser.id);
       } else {
+        setModuleSettings({ ...DEFAULT_MODULE_SETTINGS });
         setProfile(null);
         setAccount(null);
         setProfileLoading(false);
@@ -350,6 +402,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user?.id) return;
     await fetchProfile(user.id);
   }, [user?.id, fetchProfile]);
+
+  const refreshModuleSettings = useCallback(async () => {
+    if (!profile?.account_id) return;
+    try {
+      const res = await fetch('/api/account/module-settings');
+      if (res.ok) {
+        const json = await res.json();
+        setModuleSettings(normalizeModuleSettings(json.module_settings));
+      }
+    } catch (err) {
+      console.error('[AuthProvider] refreshModuleSettings error:', err);
+    }
+  }, [profile?.account_id]);
 
   // Derive the role booleans once per profile change rather than on
   // every consumer render. Cheap regardless, but the memo also gives
@@ -392,6 +457,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         account,
         defaultCurrency: account?.default_currency ?? DEFAULT_CURRENCY,
         ...derived,
+        moduleSettings,
+        isModuleEnabled: (key: keyof ModuleSettings) => moduleSettings[key] ?? true,
+        refreshModuleSettings,
         hasPermission: (key: string) => hasPermission(derived.permissions, key),
         getDataScope: (module: string) => getDataScope(derived.permissions, module),
       }}
@@ -438,6 +506,9 @@ export function useAuth(): AuthContextValue {
       hasBroadcasts: false,
       hasAdvancedAI: false,
       hasLocationTracking: false,
+      moduleSettings: { ...DEFAULT_MODULE_SETTINGS },
+      isModuleEnabled: () => true,
+      refreshModuleSettings: async () => {},
       permissions: null,
       hasPermission: () => false,
       getDataScope: () => "own",

@@ -68,63 +68,86 @@ export function DealsSettings() {
   }
 
   return (
-    <section className="max-w-2xl animate-in fade-in-50 duration-200">
+    <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
-        title="Deals & currency"
+        title="Default currency"
         description="The currency used for new deals and for pipeline and dashboard totals."
       />
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Coins className="size-4 text-primary" />
-            Default currency
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            New deals default to this currency, and pipeline and
-            dashboard totals are shown in it. Existing deals keep the
-            currency they were saved with.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-2 sm:max-w-xs">
-            <Label className="text-muted-foreground">Currency</Label>
-            <select
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-              disabled={!canEditSettings || profileLoading}
-              className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.code} — {c.label}
-                </option>
-              ))}
-            </select>
-            {!canEditSettings && (
-              <p className="text-xs text-muted-foreground">
-                Only account admins can change the default currency.
-              </p>
-            )}
-          </div>
-
-          {canEditSettings && (
-            <Button
-              onClick={handleSave}
-              disabled={saving || !dirty}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save"
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <Coins className="size-4 text-primary" />
+              Default currency
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">
+              New deals default to this currency, and pipeline and
+              dashboard totals are shown in it. Existing deals keep the
+              currency they were saved with.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2 sm:max-w-xs">
+              <Label className="text-muted-foreground">Currency</Label>
+              <select
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+                disabled={!canEditSettings || profileLoading}
+                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} — {c.label}
+                  </option>
+                ))}
+              </select>
+              {!canEditSettings && (
+                <p className="text-xs text-muted-foreground">
+                  Only account admins can change the default currency.
+                </p>
               )}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+            </div>
+
+            {canEditSettings && (
+              <Button
+                onClick={handleSave}
+                disabled={saving || !dirty}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold text-foreground">
+              Currency Formatting &amp; Pipeline Behavior
+            </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
+              How currency settings impact your deals, reporting, and financial documents.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-xs text-muted-foreground">
+            <div className="p-3 rounded-md bg-muted/50 border border-border/50 space-y-1">
+              <p className="font-medium text-foreground">New Deals &amp; Quotes</p>
+              <p>Whenever a team member creates a new deal or quotation, the default currency selected here is automatically applied.</p>
+            </div>
+            <div className="p-3 rounded-md bg-muted/50 border border-border/50 space-y-1">
+              <p className="font-medium text-foreground">Historical Data Preservation</p>
+              <p>Changing the workspace currency will not alter existing deal values. Historical deals and invoices remain in their original currency.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </section>
   );
 }

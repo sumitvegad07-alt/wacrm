@@ -22,52 +22,54 @@ import { SettingsPanelHead } from "./settings-panel-head";
 export function AppearancePanel() {
   const { theme, setTheme, mode, setMode } = useTheme();
   return (
-    <section className="max-w-3xl animate-in fade-in-50 duration-200">
+    <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
         title="Appearance"
         description="Set the mode and accent colour used across the app. Saved to this device — try it, it changes live."
       />
 
-      <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <SunMoon className="size-4 text-muted-foreground" />
-          Mode
-        </h3>
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        <div className="xl:col-span-4 space-y-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <SunMoon className="size-4 text-muted-foreground" />
+            Mode
+          </h3>
 
-        <div
-          role="radiogroup"
-          aria-label="Color mode"
-          className="grid max-w-md grid-cols-2 gap-3"
-        >
-          {MODES.map((m) => (
-            <ModeCard
-              key={m}
-              mode={m}
-              isActive={m === mode}
-              onPick={() => setMode(m)}
-            />
-          ))}
+          <div
+            role="radiogroup"
+            aria-label="Color mode"
+            className="grid grid-cols-2 gap-3 w-full"
+          >
+            {MODES.map((m) => (
+              <ModeCard
+                key={m}
+                mode={m}
+                isActive={m === mode}
+                onPick={() => setMode(m)}
+              />
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div className="mt-8 space-y-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Palette className="size-4 text-muted-foreground" />
-          Accent color
-        </h3>
+        <div className="xl:col-span-8 space-y-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Palette className="size-4 text-muted-foreground" />
+            Accent color
+          </h3>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {THEMES.map((t) => (
-            <ThemeCard
-              key={t.id}
-              id={t.id}
-              name={t.name}
-              tagline={t.tagline}
-              swatch={t.swatch}
-              isActive={t.id === theme}
-              onPick={() => setTheme(t.id)}
-            />
-          ))}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {THEMES.map((t) => (
+              <ThemeCard
+                key={t.id}
+                id={t.id}
+                name={t.name}
+                tagline={t.tagline}
+                swatch={t.swatch}
+                isActive={t.id === theme}
+                onPick={() => setTheme(t.id)}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </section>

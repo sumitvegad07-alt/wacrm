@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Edit2, Wallet } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Plus, Trash2, Edit2, Wallet, Car, FileCheck, Info } from "lucide-react";
 import { toast } from "sonner";
 import { ExpenseType, AllowanceType, IsPerKm } from "@/types";
 import {
@@ -212,154 +213,138 @@ export function ExpenseTypesSettings() {
   };
 
   if (loading) {
-    return <div className="text-sm text-muted-foreground">Loading expense policies...</div>;
+    return <div className="text-sm text-muted-foreground">Loading expense settings...</div>;
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between bg-muted/20 p-4 rounded-lg border">
-        <div>
-          <h3 className="text-sm font-medium">Require Odometer Photo</h3>
-          <p className="text-sm text-muted-foreground">
-            Force field staff to take a live photo of their vehicle odometer during Punch In/Out.
-          </p>
-        </div>
-        <Switch checked={requireOdometer} onCheckedChange={handleToggleOdometer} disabled={savingOdometer} />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium">Expense Policies</h3>
-          <p className="text-sm text-muted-foreground">
-            Configure the types of expenses and allowances your employees can claim.
-          </p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (open) {
-            resetForm();
-          }
-        }}>
-          <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" /> Add Expense Type
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit" : "New"} Expense Type</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Allowance Type</Label>
-                  <Select value={allowanceType} onValueChange={(val: any) => setAllowanceType(val)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="REGULAR">Regular Expense</SelectItem>
-                      <SelectItem value="TRAVELLING">Travelling Expense</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={status} onValueChange={(val: any) => setStatus(val)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Expense Name</Label>
-                <Input 
-                  placeholder="e.g. Food, Hotel Stay, Taxi" 
-                  value={expenseName} 
-                  onChange={(e) => setExpenseName(e.target.value)} 
-                />
-              </div>
-
-              {allowanceType === "TRAVELLING" && (
-                <div className="space-y-2 p-4 border rounded-md bg-muted/20">
-                  <Label className="mb-2 block font-semibold text-primary">Travel Settings</Label>
-                  <div className="grid gap-4">
+    <div className="w-full space-y-6 animate-in fade-in-50 duration-200">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        {/* LEFT COLUMN: EXPENSE POLICIES LIST */}
+        <div className="xl:col-span-7 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium">Expense Settings</h3>
+              <p className="text-sm text-muted-foreground">
+                Configure the types of expenses and allowances your employees can claim.
+              </p>
+            </div>
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (open) {
+                resetForm();
+              }
+            }}>
+              <DialogTrigger render={<Button />}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Expense Type
+              </DialogTrigger>
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{editingId ? "Edit Expense Type" : "Add Expense Type"}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Is Per KM?</Label>
-                      <Select value={isPerKm} onValueChange={(val: any) => setIsPerKm(val)}>
+                      <Label>Allowance Type</Label>
+                      <Select value={allowanceType} onValueChange={(val: any) => setAllowanceType(val)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="NO">No (Flat rate / user entry)</SelectItem>
-                          <SelectItem value="SYSTEM">As Per System (GPS Tracking)</SelectItem>
-                          <SelectItem value="USER">As Per User (Manual KM Entry)</SelectItem>
+                          <SelectItem value="REGULAR">Regular Expense</SelectItem>
+                          <SelectItem value="TRAVELLING">Travelling Expense</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    {isPerKm !== "NO" && (
-                      <div className="space-y-2">
-                        <Label>Rate Per KM (₹)</Label>
-                        <Input 
-                          type="number" 
-                          value={ratePerKm} 
-                          onChange={(e) => setRatePerKm(e.target.value)} 
-                        />
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select value={status} onValueChange={(val: any) => setStatus(val)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Active">Active</SelectItem>
+                          <SelectItem value="Inactive">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Expense Name</Label>
+                    <Input 
+                      placeholder="e.g. Food, Hotel Stay, Taxi" 
+                      value={expenseName} 
+                      onChange={(e) => setExpenseName(e.target.value)} 
+                    />
+                  </div>
+
+                  {allowanceType === "TRAVELLING" && (
+                    <div className="space-y-2 p-4 border rounded-md bg-muted/20">
+                      <Label className="mb-2 block font-semibold text-primary">Travel Settings</Label>
+                      <div className="grid gap-4">
+                        <div className="space-y-2">
+                          <Label>Is Per KM?</Label>
+                          <Select value={isPerKm} onValueChange={(val: any) => setIsPerKm(val)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="NO">No (Flat rate / user entry)</SelectItem>
+                              <SelectItem value="SYSTEM">As Per System (GPS Tracking)</SelectItem>
+                              <SelectItem value="USER">As Per User (Manual KM Entry)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {isPerKm !== "NO" && (
+                          <div className="space-y-2">
+                            <Label>Rate Per KM (₹)</Label>
+                            <Input 
+                              type="number" 
+                              value={ratePerKm} 
+                              onChange={(e) => setRatePerKm(e.target.value)} 
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Default Amount (₹)</Label>
-                  <Input 
-                    type="number" 
-                    value={defaultAmount} 
-                    onChange={(e) => setDefaultAmount(e.target.value)} 
-                    disabled={allowanceType === "TRAVELLING" && isPerKm !== "NO"}
-                  />
-                  {allowanceType === "TRAVELLING" && isPerKm !== "NO" && (
-                    <p className="text-xs text-muted-foreground">Amount calculated automatically via KM * Rate.</p>
+                    </div>
                   )}
-                </div>
-                
-                <div className="space-y-3 pt-6">
-                  <div className="flex items-center space-x-2">
-                    <Switch 
-                      id="changeable" 
-                      checked={amountChangeable} 
-                      onCheckedChange={setAmountChangeable} 
-                    />
-                    <Label htmlFor="changeable" className="font-normal cursor-pointer">Employee can edit amount/rate</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch 
-                      id="proof" 
-                      checked={proofRequired} 
-                      onCheckedChange={setProofRequired} 
-                    />
-                    <Label htmlFor="proof" className="font-normal cursor-pointer">Image proof is mandatory</Label>
-                  </div>
-                </div>
-              </div>
 
-              <div className="border-t pt-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base font-medium">Enable Rate Tiers</Label>
-                    <p className="text-sm text-muted-foreground">Override the default rate for specific designations (e.g. Sales Executive vs ASM)</p>
+                  {allowanceType === "REGULAR" && (
+                    <div className="space-y-2">
+                      <Label>Default Amount (₹)</Label>
+                      <Input 
+                        type="number" 
+                        value={defaultAmount} 
+                        onChange={(e) => setDefaultAmount(e.target.value)} 
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Switch 
+                        id="amount-changeable" 
+                        checked={amountChangeable} 
+                        onCheckedChange={setAmountChangeable} 
+                      />
+                      <Label htmlFor="amount-changeable" className="text-sm">Editable by User</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch 
+                        id="proof-required" 
+                        checked={proofRequired} 
+                        onCheckedChange={setProofRequired} 
+                      />
+                      <Label htmlFor="proof-required" className="text-sm">Proof Required</Label>
+                    </div>
                   </div>
-                  <Switch checked={enableRateTiers} onCheckedChange={setEnableRateTiers} />
-                </div>
-                
-                {enableRateTiers && (
-                  <div className="space-y-4 bg-muted/20 p-4 rounded-lg border">
-                    {rateTiers.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-2">No rate tiers configured.</p>
-                    ) : (
-                      <div className="space-y-3">
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold">Designation-wise Rate Tiers (Optional)</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={addRateTier}>
+                        <Plus className="h-3 w-3 mr-1" /> Add Tier
+                      </Button>
+                    </div>
+                    {rateTiers.length > 0 && (
+                      <div className="space-y-2 border p-2 rounded-md bg-muted/10 max-h-40 overflow-y-auto">
                         {rateTiers.map((tier, index) => (
-                          <div key={index} className="flex gap-2 items-start">
+                          <div key={index} className="flex gap-2 items-center">
                             <div className="flex-1 space-y-1">
                               <Label className="text-xs">Designation</Label>
                               <Select 
@@ -405,7 +390,7 @@ export function ExpenseTypesSettings() {
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="mt-5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              className="mt-5 text-destructive"
                               onClick={() => {
                                 const nt = [...rateTiers];
                                 nt.splice(index, 1);
@@ -418,67 +403,119 @@ export function ExpenseTypesSettings() {
                         ))}
                       </div>
                     )}
-                    <Button variant="outline" size="sm" onClick={addRateTier} className="w-full mt-2 border-dashed">
-                      <Plus className="h-4 w-4 mr-2" /> Add Rate Tier
-                    </Button>
                   </div>
-                )}
-              </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Expense Type"}</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="rounded-md border bg-card overflow-hidden">
-        {expenseTypes.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground flex flex-col items-center">
-            <Wallet className="h-10 w-10 mb-2 opacity-50" />
-            <p>No expense types configured.</p>
-          </div>
-        ) : (
-          <div className="divide-y">
-            {expenseTypes.map((et) => (
-              <div key={et.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium">{et.expense_name}</h4>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${et.status === 'Active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'}`}>
-                      {et.status}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                      {et.allowance_type}
-                    </span>
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-1 flex gap-4">
-                    <span>
-                      {et.is_per_km !== 'NO' 
-                        ? `Rate: ₹${et.rate_per_km}/km (${et.is_per_km})`
-                        : `Default: ₹${et.default_amount}`
-                      }
-                    </span>
-                    <span>•</span>
-                    <span>{et.amount_changeable ? "Editable" : "Fixed"}</span>
-                    <span>•</span>
-                    <span>{et.proof_required ? "Proof Required" : "No Proof Req."}</span>
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Expense Type"}</Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => handleEdit(et)}>
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(et.id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              </DialogContent>
+            </Dialog>
           </div>
-        )}
+
+          <div className="rounded-md border bg-card overflow-hidden">
+            {expenseTypes.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground flex flex-col items-center">
+                <Wallet className="h-10 w-10 mb-2 opacity-50" />
+                <p>No expense types configured.</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {expenseTypes.map((et) => (
+                  <div key={et.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium">{et.expense_name}</h4>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${et.status === 'Active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'}`}>
+                          {et.status}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                          {et.allowance_type}
+                        </span>
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-1 flex gap-4">
+                        <span>
+                          {et.is_per_km !== 'NO' 
+                            ? `Rate: ₹${et.rate_per_km}/km (${et.is_per_km})`
+                            : `Default: ₹${et.default_amount}`
+                          }
+                        </span>
+                        <span>•</span>
+                        <span>{et.amount_changeable ? "Editable" : "Fixed"}</span>
+                        <span>•</span>
+                        <span>{et.proof_required ? "Proof Required" : "No Proof Req."}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(et)}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(et.id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: ODOMETER POLICY & GUIDANCE */}
+        <div className="xl:col-span-5 space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold">Odometer Verification</CardTitle>
+              <CardDescription className="text-xs">
+                Attendance and mileage verification setting for mobile field users.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between bg-muted/30 p-3.5 rounded-lg border">
+                <div className="space-y-0.5 pr-4">
+                  <h4 className="text-sm font-medium">Require Odometer Photo</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Force field staff to upload a vehicle odometer photo during Punch In/Out.
+                  </p>
+                </div>
+                <Switch checked={requireOdometer} onCheckedChange={handleToggleOdometer} disabled={savingOdometer} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold">Expense Policy Guidance</CardTitle>
+              <CardDescription className="text-xs">
+                Best practices for configuring allowances and travel claims.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs text-muted-foreground">
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <Car className="size-3.5 text-foreground" />
+                  <p className="font-medium text-foreground">Travel Allowances &amp; GPS</p>
+                </div>
+                <p>Use &quot;As Per System (GPS Tracking)&quot; to automatically calculate traveling claims based on verified coordinates, or allow manual KM entry for flexible claims.</p>
+              </div>
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <FileCheck className="size-3.5 text-foreground" />
+                  <p className="font-medium text-foreground">Receipts &amp; Proofs</p>
+                </div>
+                <p>Enable &quot;Proof Required&quot; for high-value regular expenses (like Hotels or Client Meals) to mandate receipt image attachments before manager approval.</p>
+              </div>
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <Info className="size-3.5 text-foreground" />
+                  <p className="font-medium text-foreground">Designation Tiers</p>
+                </div>
+                <p>Configure custom per-km rates or default amounts per employee designation (e.g. Executive vs Manager travel allowances).</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

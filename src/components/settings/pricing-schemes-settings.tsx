@@ -170,232 +170,206 @@ export function PricingSchemesSettings() {
   }
 
   return (
-    <section className="max-w-3xl space-y-8 animate-in fade-in-50 duration-200">
+    <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
-        title="Pricing & Schemes"
+        title="Catalogue Settings"
         description="Tax slabs, salesman discounts and price protection. Assign a slab to a product on the product itself, and a price list to a customer on the customer's page."
       />
 
-      {/* ---------------- Tax slabs ---------------- */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Percent className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Tax slabs</h3>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Define the rates you charge. Each product picks one. An order line stores the
-          rate it was sold at, so changing a slab never rewrites past orders.
-        </p>
-
-        {canEditSettings && (
-          <form onSubmit={handleAddSlab} className="flex items-end gap-3 p-4 border border-border rounded-lg bg-muted/30">
-            <div className="grid gap-2 flex-1">
-              <Label>Name</Label>
-              <Input required value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Standard 18%" />
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+        <div className="space-y-8">
+          {/* ---------------- Tax slabs ---------------- */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Percent className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Tax slabs</h3>
             </div>
-            <div className="grid gap-2 w-28">
-              <Label>Rate %</Label>
-              <Input required type="number" step="0.01" min="0" max="100" value={newRate} onChange={(e) => setNewRate(e.target.value)} placeholder="18" />
-            </div>
-            <Button type="submit" disabled={isAdding}>
-              {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />} Add
-            </Button>
-          </form>
-        )}
+            <p className="text-xs text-muted-foreground">
+              Define the rates you charge. Each product picks one. An order line stores the
+              rate it was sold at, so changing a slab never rewrites past orders.
+            </p>
 
-        {slabs.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
-            No tax slabs yet. Add one above — products will show a tax dropdown once at least one exists.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {slabs.map((slab) => (
-              <div key={slab.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card">
-                <span className="font-medium text-sm flex items-center gap-2">
-                  <Tag className="h-3 w-3 text-muted-foreground" />
-                  {slab.name}
-                  <span className="text-muted-foreground font-normal tabular-nums">{Number(slab.rate)}%</span>
-                </span>
-                {canEditSettings && (
-                  <div className="flex items-center gap-2">
-                    {productsWithoutSlab > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => assignSlabToAllProducts(slab)}
-                        disabled={assigning}
-                        title={`Apply to the ${productsWithoutSlab} product(s) that have no slab yet`}
-                      >
-                        {assigning ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Wand2 className="h-3 w-3 mr-1" />}
-                        Apply to {productsWithoutSlab} unset
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteSlab(slab)} className="text-red-400 hover:text-red-500 hover:bg-red-500/10">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+            {canEditSettings && (
+              <form onSubmit={handleAddSlab} className="flex items-end gap-3 p-4 border border-border rounded-lg bg-muted/30">
+                <div className="grid gap-2 flex-1">
+                  <Label>Name</Label>
+                  <Input required value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Standard 18%" />
+                </div>
+                <div className="grid gap-2 w-28">
+                  <Label>Rate %</Label>
+                  <Input required type="number" step="0.01" min="0" max="100" value={newRate} onChange={(e) => setNewRate(e.target.value)} placeholder="18" />
+                </div>
+                <Button type="submit" disabled={isAdding}>
+                  {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />} Add
+                </Button>
+              </form>
+            )}
+
+            {slabs.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
+                No tax slabs yet. Add one above — products will show a tax dropdown once at least one exists.
               </div>
-            ))}
-            {productsWithoutSlab > 0 && (
-              <p className="text-xs text-amber-600 dark:text-amber-500">
-                {productsWithoutSlab} product{productsWithoutSlab === 1 ? " has" : "s have"} no tax slab and will be taxed at 0%.
-                Set them individually on each product, or use “Apply to unset” above.
+            ) : (
+              <div className="space-y-2">
+                {slabs.map((slab) => (
+                  <div key={slab.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card">
+                    <span className="font-medium text-sm flex items-center gap-2">
+                      <Tag className="h-3 w-3 text-muted-foreground" />
+                      {slab.name}
+                      <span className="text-muted-foreground font-normal tabular-nums">{Number(slab.rate)}%</span>
+                    </span>
+                    {canEditSettings && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={assigning}
+                          onClick={() => assignSlabToAllProducts(slab)}
+                          title="Assign this slab to all products that currently have no tax slab"
+                          className="h-8 text-xs"
+                        >
+                          Apply to all untaxed
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteSlab(slab)}
+                          className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ---------------- Tax mode ---------------- */}
+          <div className="space-y-3 pt-6 border-t border-border">
+            <div>
+              <h3 className="text-sm font-semibold">Product prices are</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Whether the price you set on a product already includes tax, or tax is added on top at
+                order time. Each order records the mode it used, so changing this never alters past orders.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+              {([
+                { value: "exclusive", label: "Exclusive of tax", help: "Price is pre-tax; tax is added on top." },
+                { value: "inclusive", label: "Inclusive of tax", help: "Price already contains the tax." },
+              ] as const).map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  disabled={!canEditSettings || saving}
+                  onClick={() => { setTaxMode(m.value); patchOrderSettings({ tax_mode: m.value }); }}
+                  className={`text-left p-3 rounded-lg border transition-colors ${
+                    taxMode === m.value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
+                  }`}
+                >
+                  <p className="text-sm font-medium">{m.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{m.help}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-8">
+          {/* ---------------- Discounts ---------------- */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Salesman discounts</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Off means the discount field never appears in either app.
+                </p>
+              </div>
+              <Switch
+                checked={discountMode !== "off"}
+                disabled={!canEditSettings || saving}
+                onCheckedChange={(on) => {
+                  const next: DiscountMode = on ? "item" : "off";
+                  setDiscountMode(next);
+                  patchOrderSettings({ discount_mode: next });
+                }}
+              />
+            </div>
+
+            {discountMode !== "off" && (
+              <div className="space-y-3 pl-6 border-l-2 border-primary/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Order-level discount</p>
+                    <p className="text-xs text-muted-foreground">
+                      Allow a flat or percentage discount across the whole order, in addition to line discounts.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={discountMode === "both"}
+                    disabled={!canEditSettings || saving}
+                    onCheckedChange={(on) => {
+                      const next: DiscountMode = on ? "both" : "item";
+                      setDiscountMode(next);
+                      patchOrderSettings({ discount_mode: next });
+                    }}
+                  />
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Who may actually discount is controlled per role by the{" "}
+                  <span className="font-mono text-[11px] bg-muted px-1 py-0.5 rounded">apply_order_discount</span>{" "}
+                  permission under Team → Roles. Without it the field stays hidden even when this is on.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* ---------------- Price floor ---------------- */}
+          <div className="space-y-3 pt-6 border-t border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-semibold">Enforce price floor</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Blocks any order that would sell a product below its minimum price, however
+                    the discounts stack up. Set the minimum on each product.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={enforceFloor}
+                disabled={!canEditSettings || saving}
+                onCheckedChange={(on) => { setEnforceFloor(on); patchOrderSettings({ enforce_price_floor: on }); }}
+              />
+            </div>
+            {!enforceFloor && (
+              <p className="text-xs text-amber-600 dark:text-amber-500 pl-6">
+                With this off, stacked discounts can take a price below cost and the order will still save.
               </p>
             )}
           </div>
-        )}
-      </div>
 
-      {/* ---------------- Tax mode ---------------- */}
-      <div className="space-y-3 pt-6 border-t border-border">
-        <div>
-          <h3 className="text-sm font-semibold">Product prices are</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Whether the price you set on a product already includes tax, or tax is added on top at
-            order time. Each order records the mode it used, so changing this never alters past orders.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-md">
-          {([
-            { value: "exclusive", label: "Exclusive of tax", help: "Price is pre-tax; tax is added on top." },
-            { value: "inclusive", label: "Inclusive of tax", help: "Price already contains the tax." },
-          ] as const).map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              disabled={!canEditSettings || saving}
-              onClick={() => { setTaxMode(m.value); patchOrderSettings({ tax_mode: m.value }); }}
-              className={`text-left p-3 rounded-lg border transition-colors ${
-                taxMode === m.value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
-              }`}
-            >
-              <p className="text-sm font-medium">{m.label}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{m.help}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ---------------- Discounts ---------------- */}
-      <div className="space-y-3 pt-6 border-t border-border">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">Salesman discounts</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Off means the discount field never appears in either app.
-            </p>
-          </div>
-          <Switch
-            checked={discountMode !== "off"}
-            disabled={!canEditSettings || saving}
-            onCheckedChange={(on) => {
-              const next: DiscountMode = on ? "item" : "off";
-              setDiscountMode(next);
-              patchOrderSettings({ discount_mode: next });
-            }}
-          />
-        </div>
-
-        {discountMode !== "off" && (
-          <div className="space-y-4 pl-1">
-            {/* Scope: WHERE a discount can be applied */}
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Scope</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {DISCOUNT_MODES.filter((m) => m.value !== "off").map((mode) => (
-                  <button
-                    key={mode.value}
-                    type="button"
-                    disabled={!canEditSettings || saving}
-                    onClick={() => { setDiscountMode(mode.value); patchOrderSettings({ discount_mode: mode.value }); }}
-                    className={`text-left p-3 rounded-lg border transition-colors ${
-                      discountMode === mode.value
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-muted-foreground/40"
-                    }`}
-                  >
-                    <p className="text-sm font-medium">{mode.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{mode.help}</p>
-                  </button>
-                ))}
+          {/* ---------------- Schemes (not built yet) ---------------- */}
+          <div className="space-y-2 pt-6 border-t border-border opacity-60">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Schemes</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Quantity slabs, free goods and value slabs.
+                </p>
               </div>
+              <Switch checked={false} disabled />
             </div>
-
-            {/* Type: HOW a discount is entered. One choice, applied to whichever
-                scope is enabled. Changeable anytime — not locked, not per-order. */}
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Type</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {DISCOUNT_VALUE_TYPES.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    disabled={!canEditSettings || saving}
-                    onClick={() => { setDiscountValueType(t.value); patchOrderSettings({ discount_value_type: t.value }); }}
-                    className={`text-left p-3 rounded-lg border transition-colors ${
-                      discountValueType === t.value
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-muted-foreground/40"
-                    }`}
-                  >
-                    <p className="text-sm font-medium">{t.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{t.help}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <p className="text-xs text-muted-foreground">
-              Who may actually discount is controlled per role by the{" "}
-              <span className="font-mono text-[11px] bg-muted px-1 py-0.5 rounded">apply_order_discount</span>{" "}
-              permission under Team → Roles. Without it the field stays hidden even when this is on.
+              Not built yet — the database is ready but there is no scheme configuration or
+              calculation behind this switch, so it stays off rather than pretending to work.
             </p>
           </div>
-        )}
-      </div>
-
-      {/* ---------------- Price floor ---------------- */}
-      <div className="space-y-3 pt-6 border-t border-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-start gap-2">
-            <ShieldCheck className="h-4 w-4 text-muted-foreground mt-0.5" />
-            <div>
-              <h3 className="text-sm font-semibold">Enforce price floor</h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Blocks any order that would sell a product below its minimum price, however
-                the discounts stack up. Set the minimum on each product.
-              </p>
-            </div>
-          </div>
-          <Switch
-            checked={enforceFloor}
-            disabled={!canEditSettings || saving}
-            onCheckedChange={(on) => { setEnforceFloor(on); patchOrderSettings({ enforce_price_floor: on }); }}
-          />
         </div>
-        {!enforceFloor && (
-          <p className="text-xs text-amber-600 dark:text-amber-500 pl-6">
-            With this off, stacked discounts can take a price below cost and the order will still save.
-          </p>
-        )}
-      </div>
-
-      {/* ---------------- Schemes (not built yet) ---------------- */}
-      <div className="space-y-2 pt-6 border-t border-border opacity-60">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">Schemes</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Quantity slabs, free goods and value slabs.
-            </p>
-          </div>
-          <Switch checked={false} disabled />
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Not built yet — the database is ready but there is no scheme configuration or
-          calculation behind this switch, so it stays off rather than pretending to work.
-        </p>
       </div>
     </section>
   );

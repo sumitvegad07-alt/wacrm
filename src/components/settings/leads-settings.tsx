@@ -121,45 +121,69 @@ export function LeadsSettings() {
   }
 
   return (
-    <section className="max-w-3xl animate-in fade-in-50 duration-200">
+    <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
-        title="Lead Customizations"
+        title="Leads Settings"
         description="Manage the dropdown options available when creating or editing a lead."
       />
       
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="statuses">Statuses</TabsTrigger>
-          <TabsTrigger value="sources">Sources</TabsTrigger>
-          <TabsTrigger value="industries">Industries</TabsTrigger>
-        </TabsList>
-        
-        {canEditSettings && (
-          <form onSubmit={handleAdd} className="mt-6 flex items-end gap-4 p-4 border border-border rounded-lg bg-muted/30">
-            <div className="grid gap-2 flex-1">
-              <Label>New {activeTab.slice(0, -1)} name</Label>
-              <Input required value={newName} onChange={e => setNewName(e.target.value)} placeholder={`e.g. ${activeTab === 'statuses' ? 'Hot Lead' : activeTab === 'sources' ? 'Facebook Ads' : 'Technology'}`} />
-            </div>
-            <div className="grid gap-2 w-24">
-              <Label>Color</Label>
-              <Input type="color" value={newColor} onChange={e => setNewColor(e.target.value)} className="p-1 h-9" />
-            </div>
-            <Button type="submit" disabled={isAdding}>
-              {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />} Add
-            </Button>
-          </form>
-        )}
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        <div className="xl:col-span-8">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 max-w-md">
+              <TabsTrigger value="statuses">Statuses</TabsTrigger>
+              <TabsTrigger value="sources">Sources</TabsTrigger>
+              <TabsTrigger value="industries">Industries</TabsTrigger>
+            </TabsList>
+            
+            {canEditSettings && (
+              <form onSubmit={handleAdd} className="mt-6 flex items-end gap-4 p-4 border border-border rounded-lg bg-muted/30">
+                <div className="grid gap-2 flex-1">
+                  <Label>New {activeTab.slice(0, -1)} name</Label>
+                  <Input required value={newName} onChange={e => setNewName(e.target.value)} placeholder={`e.g. ${activeTab === 'statuses' ? 'Hot Lead' : activeTab === 'sources' ? 'Facebook Ads' : 'Technology'}`} />
+                </div>
+                <div className="grid gap-2 w-24">
+                  <Label>Color</Label>
+                  <Input type="color" value={newColor} onChange={e => setNewColor(e.target.value)} className="p-1 h-9" />
+                </div>
+                <Button type="submit" disabled={isAdding}>
+                  {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />} Add
+                </Button>
+              </form>
+            )}
 
-        <TabsContent value="statuses">
-          {renderList(statuses, <Tag className="h-3 w-3 text-muted-foreground" />, "No custom statuses defined. Leads will use a generic text input.")}
-        </TabsContent>
-        <TabsContent value="sources">
-          {renderList(sources, <Globe2 className="h-3 w-3 text-muted-foreground" />, "No custom sources defined.")}
-        </TabsContent>
-        <TabsContent value="industries">
-          {renderList(industries, <Building2 className="h-3 w-3 text-muted-foreground" />, "No custom industries defined.")}
-        </TabsContent>
-      </Tabs>
+            <TabsContent value="statuses">
+              {renderList(statuses, <Tag className="h-3 w-3 text-muted-foreground" />, "No custom statuses defined. Leads will use a generic text input.")}
+            </TabsContent>
+            <TabsContent value="sources">
+              {renderList(sources, <Globe2 className="h-3 w-3 text-muted-foreground" />, "No custom sources defined.")}
+            </TabsContent>
+            <TabsContent value="industries">
+              {renderList(industries, <Building2 className="h-3 w-3 text-muted-foreground" />, "No custom industries defined.")}
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        <div className="xl:col-span-4 space-y-4">
+          <div className="p-5 border border-border rounded-lg bg-card space-y-4">
+            <h3 className="font-semibold text-sm text-foreground">Lead Taxonomy &amp; CRM Integration</h3>
+            <div className="space-y-3 text-xs text-muted-foreground">
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <p className="font-medium text-foreground mb-1">Status Lifecycle</p>
+                <p>Define custom lead stages (e.g. New, Qualified, Follow-up, Converted) to track leads through your sales funnel accurately.</p>
+              </div>
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <p className="font-medium text-foreground mb-1">Attribution &amp; ROI (Sources)</p>
+                <p>Categorize where your leads originate (e.g. Meta Ads, Referrals, Website Form) to measure marketing performance.</p>
+              </div>
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <p className="font-medium text-foreground mb-1">Industry Segments</p>
+                <p>Tag leads by industry sector to enable targeted WhatsApp broadcasts and specialized follow-up campaigns.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }

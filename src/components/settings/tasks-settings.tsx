@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, Plus, GripVertical } from "lucide-react";
 import { toast } from "sonner";
+import { SettingsPanelHead } from "./settings-panel-head";
 
 export function TasksSettings() {
   const supabase = createClient();
@@ -20,71 +21,69 @@ export function TasksSettings() {
     if (accountId) fetchSettings();
   }, [accountId]);
 
-  async function fetchSettings() {
+  const fetchSettings = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("accounts")
       .select("settings")
       .eq("id", accountId)
       .single();
 
-    if (error) {
-      console.warn("Could not load task types from settings. The migration may not be applied yet.", error);
-      setTaskTypes(["Task", "Call", "Visit", "Meeting", "Follow up", "Note"]);
-    } else if (data?.settings?.task_types) {
-      setTaskTypes(data.settings.task_types);
+    if (data?.settings && typeof data.settings === 'object' && !Array.isArray(data.settings) && 'task_types' in data.settings && Array.isArray((data.settings as Record<string, unknown>).task_types)) {
+      setTaskTypes((data.settings as Record<string, unknown>).task_types as string[]);
     } else {
-      setTaskTypes(["Task", "Call", "Visit", "Meeting", "Follow up", "Note"]);
+      setTaskTypes(["Call", "Meeting", "WhatsApp", "Email", "Demo"]);
     }
     setLoading(false);
-  }
+  };
 
-  async function saveTypes(newTypes: string[]) {
+  const saveTypes = async (types: string[]) => {
     setSaving(true);
-    const { data: currentAccount } = await supabase.from("accounts").select("settings").eq("id", accountId).single();
-    const currentSettings = currentAccount?.settings || {};
-    
+    const { data: acc } = await supabase
+      .from("accounts")
+      .select("settings")
+      .eq("id", accountId)
+      .single();
+
+    const currentSettings = acc?.settings && typeof acc.settings === 'object' && !Array.isArray(acc.settings) ? acc.settings : {};
+    const newSettings = { ...currentSettings, task_types: types };
+
     const { error } = await supabase
       .from("accounts")
-      .update({ settings: { ...currentSettings, task_types: newTypes } })
+      .update({ settings: newSettings })
       .eq("id", accountId);
 
+    setSaving(false);
     if (error) {
       toast.error("Failed to save task types");
     } else {
-      setTaskTypes(newTypes);
       toast.success("Task types updated");
     }
-    setSaving(false);
-  }
+  };
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = newType.trim();
-    if (!trimmed) return;
-    if (taskTypes.map(t => t.toLowerCase()).includes(trimmed.toLowerCase())) {
-      toast.error("This type already exists");
-      return;
-    }
-    saveTypes([...taskTypes, trimmed]);
+    if (!newType.trim()) return;
+    const updated = [...taskTypes, newType.trim()];
+    setTaskTypes(updated);
     setNewType("");
+    saveTypes(updated);
   };
 
   const handleDelete = (index: number) => {
-    const newTypes = [...taskTypes];
-    newTypes.splice(index, 1);
-    saveTypes(newTypes);
+    const updated = taskTypes.filter((_, i) => i !== index);
+    setTaskTypes(updated);
+    saveTypes(updated);
   };
 
   const handleUpdate = (index: number, val: string) => {
-    const newTypes = [...taskTypes];
-    newTypes[index] = val;
-    setTaskTypes(newTypes);
+    const updated = [...taskTypes];
+    updated[index] = val;
+    setTaskTypes(updated);
   };
 
   const handleBlur = (index: number, val: string) => {
-    const trimmed = val.trim();
-    if (!trimmed) {
+    if (!val.trim()) {
       handleDelete(index);
     } else {
       saveTypes(taskTypes);
@@ -96,55 +95,71 @@ export function TasksSettings() {
   }
 
   return (
-    <div className="space-y-6 max-w-xl">
-      <div>
-        <h3 className="text-lg font-medium">Task Types</h3>
-        <p className="text-sm text-muted-foreground">
-          Configure the activity types available when creating tasks and notes.
-        </p>
-      </div>
-
-      <div className="space-y-3">
-        {taskTypes.map((type, i) => (
-          <div key={i} className="flex items-center gap-2 bg-card p-1 pr-2 border border-border rounded-md">
-            <div className="p-2 text-muted-foreground/50 cursor-grab active:cursor-grabbing hover:text-foreground">
-              <GripVertical className="size-4" />
-            </div>
-            <Input
-              value={type}
-              onChange={(e) => handleUpdate(i, e.target.value)}
-              onBlur={(e) => handleBlur(i, e.target.value)}
-              className="h-8 border-transparent hover:border-border focus-visible:ring-1 bg-transparent"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDelete(i)}
-              className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
-              disabled={saving}
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          </div>
-        ))}
-      </div>
-
-      <form onSubmit={handleAdd} className="flex items-center gap-2 mt-4">
-        <Input
-          value={newType}
-          onChange={(e) => setNewType(e.target.value)}
-          placeholder="New task type..."
-          className="flex-1"
-          disabled={saving}
-        />
-        <Button type="submit" disabled={!newType.trim() || saving}>
-          <Plus className="size-4 mr-2" /> Add
-        </Button>
-      </form>
+    <section className="w-full animate-in fade-in-50 duration-200">
+      <SettingsPanelHead
+        title="Task Settings"
+        description="Configure the activity types available when creating tasks and notes."
+      />
       
-      <p className="text-xs text-muted-foreground mt-4">
-        Note: Deleting a type here won't delete existing tasks, but it will remove it from the creation dropdowns.
-      </p>
-    </div>
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <div className="space-y-4">
+          <div className="space-y-3">
+            {taskTypes.map((type, i) => (
+              <div key={i} className="flex items-center gap-2 bg-card p-1 pr-2 border border-border rounded-md">
+                <div className="p-2 text-muted-foreground/50 cursor-grab active:cursor-grabbing hover:text-foreground">
+                  <GripVertical className="size-4" />
+                </div>
+                <Input
+                  value={type}
+                  onChange={(e) => handleUpdate(i, e.target.value)}
+                  onBlur={(e) => handleBlur(i, e.target.value)}
+                  className="h-8 border-transparent hover:border-border focus-visible:ring-1 bg-transparent"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDelete(i)}
+                  className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
+                  disabled={saving}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <form onSubmit={handleAdd} className="flex items-center gap-2 mt-4">
+            <Input
+              value={newType}
+              onChange={(e) => setNewType(e.target.value)}
+              placeholder="New task type..."
+              className="flex-1"
+              disabled={saving}
+            />
+            <Button type="submit" disabled={!newType.trim() || saving}>
+              <Plus className="size-4 mr-2" /> Add
+            </Button>
+          </form>
+          
+          <p className="text-xs text-muted-foreground mt-2">
+            Note: Deleting a type here won&apos;t delete existing tasks, but it will remove it from the creation dropdowns.
+          </p>
+        </div>
+
+        <div className="p-5 border border-border rounded-lg bg-card space-y-4">
+          <h3 className="font-semibold text-sm text-foreground">Activity Tracking &amp; CRM Workflow</h3>
+          <div className="space-y-3 text-xs text-muted-foreground">
+            <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+              <p className="font-medium text-foreground mb-1">Standardizing Team Activities</p>
+              <p>When team members log activities or follow-ups with leads and customers, they select from these task types (e.g. Call, Meeting, WhatsApp, Demo).</p>
+            </div>
+            <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+              <p className="font-medium text-foreground mb-1">Activity Reporting &amp; Filters</p>
+              <p>Consistent activity types enable accurate filtering in your tasks list and activity timelines across the workspace.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

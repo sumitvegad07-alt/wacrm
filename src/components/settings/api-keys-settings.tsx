@@ -17,11 +17,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Copy, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Copy, KeyRound, Loader2, Plus, Trash2, BookOpen, ShieldCheck, Zap, AlertCircle } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -133,9 +133,9 @@ export function ApiKeysSettings() {
   }
 
   return (
-    <section className="animate-in fade-in-50 space-y-6 duration-200">
+    <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
-        title="API keys"
+        title="API Settings"
         description={
           <>
             Keys authenticate the public REST API (
@@ -154,115 +154,156 @@ export function ApiKeysSettings() {
         }
       />
 
-      {keys.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-10 text-center">
-            <KeyRound className="text-muted-foreground size-6" />
-            <p className="text-muted-foreground mt-2 text-sm">
-              No API keys yet.
-            </p>
-            {canEditSettings ? (
-              <p className="text-muted-foreground mt-1 text-xs">
-                Click <span className="text-foreground">New API key</span> to
-                create one.
-              </p>
-            ) : (
-              <p className="text-muted-foreground mt-1 text-xs">
-                Ask an admin to create one.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <ul className="divide-border divide-y">
-              {keys.map((k) => {
-                const status = keyStatus(k);
-                const inactive = status !== 'active';
-                return (
-                  <li
-                    key={k.id}
-                    className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`truncate text-sm font-medium ${
-                            inactive
-                              ? 'text-muted-foreground line-through'
-                              : 'text-foreground'
-                          }`}
-                        >
-                          {k.name}
-                        </span>
-                        {status === 'revoked' && (
-                          <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
-                            Revoked
-                          </Badge>
-                        )}
-                        {status === 'expired' && (
-                          <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
-                            Expired
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-muted-foreground mt-0.5 font-mono text-xs">
-                        {k.key_prefix}…
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {k.scopes.length === 0 ? (
-                          <span className="text-muted-foreground text-xs">
-                            No scopes
-                          </span>
-                        ) : (
-                          k.scopes.map((s) => (
-                            <Badge
-                              key={s}
-                              className="border-border bg-muted text-muted-foreground text-[10px]"
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        <div className="xl:col-span-7 space-y-4">
+          {keys.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+                <KeyRound className="text-muted-foreground size-6" />
+                <p className="text-muted-foreground mt-2 text-sm">
+                  No API keys yet.
+                </p>
+                {canEditSettings ? (
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Click <span className="text-foreground">New API key</span> to
+                    create one.
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Ask an admin to create one.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <ul className="divide-border divide-y">
+                  {keys.map((k) => {
+                    const status = keyStatus(k);
+                    const inactive = status !== 'active';
+                    return (
+                      <li
+                        key={k.id}
+                        className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`truncate text-sm font-medium ${
+                                inactive
+                                  ? 'text-muted-foreground line-through'
+                                  : 'text-foreground'
+                              }`}
                             >
-                              {s}
-                            </Badge>
-                          ))
-                        )}
-                      </div>
-                      <p className="text-muted-foreground mt-1.5 text-xs">
-                        Created {fmtDate(k.created_at)}
-                        {' · '}
-                        {k.last_used_at
-                          ? `last used ${fmtDate(k.last_used_at)}`
-                          : 'never used'}
-                        {k.expires_at && status !== 'expired'
-                          ? ` · expires ${fmtDate(k.expires_at)}`
-                          : ''}
-                      </p>
-                    </div>
+                              {k.name}
+                            </span>
+                            {status === 'revoked' && (
+                              <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
+                                Revoked
+                              </Badge>
+                            )}
+                            {status === 'expired' && (
+                              <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
+                                Expired
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-muted-foreground mt-0.5 font-mono text-xs">
+                            {k.key_prefix}…
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {k.scopes.length === 0 ? (
+                              <span className="text-muted-foreground text-xs">
+                                No scopes
+                              </span>
+                            ) : (
+                              k.scopes.map((s) => (
+                                <Badge
+                                  key={s}
+                                  className="border-border bg-muted text-muted-foreground text-[10px]"
+                                >
+                                  {s}
+                                </Badge>
+                              ))
+                            )}
+                          </div>
+                          <p className="text-muted-foreground mt-1.5 text-xs">
+                            Created {fmtDate(k.created_at)}
+                            {' · '}
+                            {k.last_used_at
+                              ? `last used ${fmtDate(k.last_used_at)}`
+                              : 'never used'}
+                            {k.expires_at && status !== 'expired'
+                              ? ` · expires ${fmtDate(k.expires_at)}`
+                              : ''}
+                          </p>
+                        </div>
 
-                    {status === 'active' && (
-                      <RequireRole min="admin">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRevoke(k)}
-                          disabled={revoking === k.id}
-                          className="self-start border-red-500/40 bg-red-500/10 text-red-300 hover:border-red-500/60 hover:bg-red-500/20 hover:text-red-200 sm:self-auto"
-                        >
-                          {revoking === k.id ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-4" />
-                          )}
-                          Revoke
-                        </Button>
-                      </RequireRole>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
+                        {status === 'active' && (
+                          <RequireRole min="admin">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRevoke(k)}
+                              disabled={revoking === k.id}
+                              className="self-start border-red-500/40 bg-red-500/10 text-red-300 hover:border-red-500/60 hover:bg-red-500/20 hover:text-red-200 sm:self-auto"
+                            >
+                              {revoking === k.id ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="size-4" />
+                              )}
+                              Revoke
+                            </Button>
+                          </RequireRole>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        <div className="xl:col-span-5 space-y-6">
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <BookOpen className="size-4 text-primary" />
+                <h3 className="font-semibold text-sm text-foreground">Integration Guide</h3>
+              </div>
+              <div className="space-y-3 text-xs text-muted-foreground">
+                <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="size-3.5 text-foreground" />
+                    <p className="font-medium text-foreground">Authentication</p>
+                  </div>
+                  <p>All requests to the API must include your secret API key in the HTTP authorization header:</p>
+                  <code className="block mt-2 p-2 bg-card rounded border font-mono text-[11px] text-foreground">
+                    Authorization: Bearer &lt;key&gt;
+                  </code>
+                </div>
+                <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap className="size-3.5 text-foreground" />
+                    <p className="font-medium text-foreground">Least Privilege</p>
+                  </div>
+                  <p>Assign only the specific scopes required for your integration to minimize risk if a key is compromised.</p>
+                </div>
+                <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertCircle className="size-3.5 text-foreground" />
+                    <p className="font-medium text-foreground">Revocation</p>
+                  </div>
+                  <p>Revoking an active API key immediately invalidates access across all connected services.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <CreateKeyDialog
         open={createOpen}

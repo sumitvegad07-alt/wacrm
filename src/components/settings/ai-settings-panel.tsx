@@ -96,7 +96,7 @@ export function AISettingsPanel() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">AI Assistant Settings</h1>
         <p className="text-muted-foreground mt-2">
@@ -104,9 +104,9 @@ export function AISettingsPanel() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 xl:grid-cols-12 items-start">
         {/* SETTINGS CARD */}
-        <Card className="md:col-span-2">
+        <Card className="xl:col-span-5">
           <CardHeader>
             <CardTitle>Assistant Configuration</CardTitle>
             <CardDescription>Adjust how the AI behaves and when it hands off to a human.</CardDescription>
@@ -170,159 +170,162 @@ export function AISettingsPanel() {
           </form>
         </Card>
 
-        {/* DOCUMENTS LIST */}
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Knowledge Base</CardTitle>
-            <CardDescription>Your uploaded documents.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {documents?.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No documents uploaded yet.</p>
-            ) : (
-              <ul className="space-y-3">
-                {documents?.map((doc) => (
-                  <li key={doc.id} className="flex items-start justify-between p-3 border rounded-md">
+        {/* RIGHT COLUMN: KNOWLEDGE BASE & UPLOAD FORM */}
+        <div className="xl:col-span-7 grid gap-6 grid-cols-1 lg:grid-cols-2 items-start">
+          {/* DOCUMENTS LIST */}
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle>Knowledge Base</CardTitle>
+              <CardDescription>Your uploaded documents.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {documents?.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No documents uploaded yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {documents?.map((doc) => (
+                    <li key={doc.id} className="flex items-start justify-between p-3 border rounded-md">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <FileText className="size-4 text-blue-500" />
+                          <span className="font-medium text-sm">{doc.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          {doc.status === 'ready' ? (
+                            <span className="flex items-center gap-1 text-green-600"><CheckCircle2 className="size-3" /> Ready</span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-red-600"><AlertCircle className="size-3" /> Failed</span>
+                          )}
+                          <span>• {doc.chunks[0]?.count ?? 0} chunks</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <EditDocumentModal document={doc} onSuccess={fetchAI} />
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => handleDeleteDocument(doc.id)}
+                        >
+                          <Trash className="size-4" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* UPLOAD FORM */}
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle>Add New Source</CardTitle>
+              <CardDescription>Provide a source to ingest into the vector store.</CardDescription>
+            </CardHeader>
+            <Tabs defaultValue="text" className="w-full">
+              <div className="px-6">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="text"><FileText className="size-4" /></TabsTrigger>
+                  <TabsTrigger value="url"><Link2 className="size-4" /></TabsTrigger>
+                  <TabsTrigger value="youtube"><Video className="size-4" /></TabsTrigger>
+                  <TabsTrigger value="file"><FileUp className="size-4" /></TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value="text">
+                <form onSubmit={handleAddDocument}>
+                  <input type="hidden" name="source_type" value="text" />
+                  <CardContent className="space-y-4 mt-4">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <FileText className="size-4 text-blue-500" />
-                        <span className="font-medium text-sm">{doc.title}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {doc.status === 'ready' ? (
-                          <span className="flex items-center gap-1 text-green-600"><CheckCircle2 className="size-3" /> Ready</span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-red-600"><AlertCircle className="size-3" /> Failed</span>
-                        )}
-                        <span>• {doc.chunks[0]?.count ?? 0} chunks</span>
-                      </div>
+                      <Label htmlFor="title-text">Title</Label>
+                      <Input id="title-text" name="title" required placeholder="e.g. Return Policy" />
                     </div>
-                    <div className="flex items-center gap-1">
-                      <EditDocumentModal document={doc} onSuccess={fetchAI} />
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => handleDeleteDocument(doc.id)}
-                      >
-                        <Trash className="size-4" />
-                      </Button>
+                    <div className="space-y-1">
+                      <Label htmlFor="content">Raw Text Content</Label>
+                      <Textarea id="content" name="content" required rows={6} placeholder="Paste the text here..." />
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+                  </CardContent>
+                  <CardFooter>
+                    <Button type="submit" className="w-full" disabled={isPending}>
+                      {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
+                      Save & Train AI
+                    </Button>
+                  </CardFooter>
+                </form>
+              </TabsContent>
 
-        {/* UPLOAD FORM */}
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Add New Source</CardTitle>
-            <CardDescription>Provide a source to ingest into the vector store.</CardDescription>
-          </CardHeader>
-          <Tabs defaultValue="text" className="w-full">
-            <div className="px-6">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="text"><FileText className="size-4" /></TabsTrigger>
-                <TabsTrigger value="url"><Link2 className="size-4" /></TabsTrigger>
-                <TabsTrigger value="youtube"><Video className="size-4" /></TabsTrigger>
-                <TabsTrigger value="file"><FileUp className="size-4" /></TabsTrigger>
-              </TabsList>
-            </div>
+              <TabsContent value="url">
+                <form onSubmit={handleAddDocument}>
+                  <input type="hidden" name="source_type" value="url" />
+                  <CardContent className="space-y-4 mt-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="title-url">Title</Label>
+                      <Input id="title-url" name="title" required placeholder="e.g. Homepage" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="url">Website URL</Label>
+                      <Input id="url" name="url" type="url" required placeholder="https://example.com" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">The bot will scrape the readable text from this webpage.</p>
+                  </CardContent>
+                  <CardFooter>
+                    <Button type="submit" className="w-full" disabled={isPending}>
+                      {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
+                      Save & Train AI
+                    </Button>
+                  </CardFooter>
+                </form>
+              </TabsContent>
 
-            <TabsContent value="text">
-              <form onSubmit={handleAddDocument}>
-                <input type="hidden" name="source_type" value="text" />
-                <CardContent className="space-y-4 mt-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="title-text">Title</Label>
-                    <Input id="title-text" name="title" required placeholder="e.g. Return Policy" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="content">Raw Text Content</Label>
-                    <Textarea id="content" name="content" required rows={6} placeholder="Paste the text here..." />
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={isPending}>
-                    {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
-                    Save & Train AI
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
+              <TabsContent value="youtube">
+                <form onSubmit={handleAddDocument}>
+                  <input type="hidden" name="source_type" value="youtube" />
+                  <CardContent className="space-y-4 mt-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="title-yt">Title</Label>
+                      <Input id="title-yt" name="title" required placeholder="e.g. Product Demo" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="youtube_url">YouTube URL</Label>
+                      <Input id="youtube_url" name="youtube_url" type="url" required placeholder="https://youtube.com/watch?v=..." />
+                    </div>
+                    <p className="text-xs text-muted-foreground">The bot will download and index the video's captions/transcript.</p>
+                  </CardContent>
+                  <CardFooter>
+                    <Button type="submit" className="w-full" disabled={isPending}>
+                      {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
+                      Save & Train AI
+                    </Button>
+                  </CardFooter>
+                </form>
+              </TabsContent>
 
-            <TabsContent value="url">
-              <form onSubmit={handleAddDocument}>
-                <input type="hidden" name="source_type" value="url" />
-                <CardContent className="space-y-4 mt-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="title-url">Title</Label>
-                    <Input id="title-url" name="title" required placeholder="e.g. Homepage" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="url">Website URL</Label>
-                    <Input id="url" name="url" type="url" required placeholder="https://example.com" />
-                  </div>
-                  <p className="text-xs text-muted-foreground">The bot will scrape the readable text from this webpage.</p>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={isPending}>
-                    {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
-                    Save & Train AI
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="youtube">
-              <form onSubmit={handleAddDocument}>
-                <input type="hidden" name="source_type" value="youtube" />
-                <CardContent className="space-y-4 mt-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="title-yt">Title</Label>
-                    <Input id="title-yt" name="title" required placeholder="e.g. Product Demo" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="youtube_url">YouTube URL</Label>
-                    <Input id="youtube_url" name="youtube_url" type="url" required placeholder="https://youtube.com/watch?v=..." />
-                  </div>
-                  <p className="text-xs text-muted-foreground">The bot will download and index the video's captions/transcript.</p>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={isPending}>
-                    {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
-                    Save & Train AI
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="file">
-              <form onSubmit={handleAddDocument}>
-                <input type="hidden" name="source_type" value="file" />
-                <CardContent className="space-y-4 mt-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="title-file">Title</Label>
-                    <Input id="title-file" name="title" required placeholder="e.g. Training Manual" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="file">File (PDF, Word, Text)</Label>
-                    <Input id="file" name="file" type="file" accept=".pdf,.doc,.docx,.txt" required />
-                  </div>
-                  <p className="text-xs text-muted-foreground">The bot will extract text from the uploaded document.</p>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={isPending}>
-                    {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
-                    Save & Train AI
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </Card>
+              <TabsContent value="file">
+                <form onSubmit={handleAddDocument}>
+                  <input type="hidden" name="source_type" value="file" />
+                  <CardContent className="space-y-4 mt-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="title-file">Title</Label>
+                      <Input id="title-file" name="title" required placeholder="e.g. Training Manual" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="file">File (PDF, Word, Text)</Label>
+                      <Input id="file" name="file" type="file" accept=".pdf,.doc,.docx,.txt" required />
+                    </div>
+                    <p className="text-xs text-muted-foreground">The bot will extract text from the uploaded document.</p>
+                  </CardContent>
+                  <CardFooter>
+                    <Button type="submit" className="w-full" disabled={isPending}>
+                      {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
+                      Save & Train AI
+                    </Button>
+                  </CardFooter>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </Card>
+        </div>
       </div>
     </div>
   )

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
@@ -39,7 +39,41 @@ import {
   Briefcase,
   UserPlus,
   Coins,
+  PlugZap,
+  Tags,
+  Percent,
+  KeyRound,
+  Wallet,
+  Palette,
+  LayoutGrid,
 } from "lucide-react";
+
+function isNavItemActive(
+  itemHref: string,
+  pathname: string,
+  searchParams: ReturnType<typeof useSearchParams> | null
+): boolean {
+  if (itemHref.startsWith("/settings")) {
+    if (!pathname.startsWith("/settings")) return false;
+    const itemTab =
+      new URLSearchParams(itemHref.split("?")[1] || "").get("tab") ||
+      new URLSearchParams(itemHref.split("?")[1] || "").get("section") ||
+      itemHref.split("/settings/")[1];
+    if (!itemTab) {
+      return pathname.startsWith("/settings");
+    }
+    const currentTab =
+      searchParams?.get("tab") ||
+      searchParams?.get("section") ||
+      pathname.split("/settings/")[1] ||
+      "overview";
+    return itemTab === currentTab;
+  }
+  return (
+    pathname === itemHref ||
+    (itemHref !== "/dashboard" && pathname.startsWith(itemHref))
+  );
+}
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
   <svg
@@ -106,7 +140,7 @@ import {
 interface NavItem {
   href: string;
   label: string;
-  icon: typeof LayoutDashboard;
+  icon: React.ComponentType<{ className?: string }>;
   /**
    * When true, the nav row renders a small "Beta" chip after the label.
    * Purely informational — doesn't affect routing or access.
@@ -114,31 +148,53 @@ interface NavItem {
   beta?: boolean;
   /** RBAC module key for permission checking */
   module?: string;
+  /**
+   * Admin-configurable module key. When set, this item is only shown if
+   * the admin has enabled the corresponding module in Module Settings.
+   */
+  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch";
 }
 
-const navGroups: { label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[] }[] = [
+type MenuNode =
+  | ({
+      type: "link";
+    } & NavItem)
+  | {
+      type: "group";
+      label: string;
+      icon: React.ComponentType<{ className?: string }>;
+      items: NavItem[];
+      /** Admin-configurable module key — hides the entire group if disabled */
+      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch";
+    }
+  | {
+      type: "spacer";
+    };
+
+const menuStructure: MenuNode[] = [
+  // ── My Activity, Dashboard, WhatsApp ──
   {
-    label: "CRM",
-    icon: Briefcase,
-    items: [
-      { href: "/leads", label: "Leads", icon: UserPlus, module: "leads" },
-      { href: "/contacts", label: "Customers", icon: Users, module: "contacts" },
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
-      { href: "/follow-ups", label: "My Activity", icon: FileText, module: "activities" },
-      { href: "/pipelines", label: "Pipelines", icon: GitBranch, module: "deals" },
-      { href: "/products", label: "Products", icon: Package, module: "products" },
-      { href: "/quotations", label: "Quotations", icon: FileText, module: "orders" },
-      { href: "/orders", label: "Orders", icon: ShoppingCart, module: "orders" },
-      { href: "/dispatches", label: "Dispatches", icon: Truck, module: "orders" },
-      { href: "/pending-dispatch", label: "Pending Dispatch", icon: PackageCheck, module: "orders" },
-    ],
+    type: "link",
+    href: "/follow-ups",
+    label: "My Activity",
+    icon: FileText,
+    module: "activities",
   },
   {
+    type: "link",
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    module: "dashboard",
+  },
+  {
+    type: "group",
     label: "WhatsApp",
     icon: WhatsAppIcon,
+    configModule: "whatsapp" as const,
     items: [
-      { href: "/whatsapp/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "whatsapp" },
       { href: "/inbox", label: "Inbox", icon: MessageSquare, module: "whatsapp" },
+      { href: "/whatsapp/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "whatsapp" },
       { href: "/broadcasts", label: "Broadcasts", icon: Radio, module: "whatsapp_broadcasts" },
       { href: "/automations", label: "Automations", icon: Zap, module: "whatsapp_automations" },
       { href: "/flows", label: "Flows", icon: Workflow, beta: true, module: "whatsapp_flows" },
@@ -146,7 +202,99 @@ const navGroups: { label: string; icon: React.ComponentType<{ className?: string
       { href: "/settings?tab=ai", label: "Knowledge base", icon: Bot, module: "ai_assistant" },
     ],
   },
+
+  { type: "spacer" },
+
+  // ── Customer ──
   {
+    type: "link",
+    href: "/contacts",
+    label: "Customer",
+    icon: Users,
+    module: "contacts",
+  },
+
+  { type: "spacer" },
+
+  // ── Product, Quotation ──
+  {
+    type: "link",
+    href: "/products",
+    label: "Product",
+    icon: Package,
+    module: "products",
+  },
+  {
+    type: "link",
+    href: "/quotations",
+    label: "Quotation",
+    icon: FileText,
+    module: "orders",
+    configModule: "quotation" as const,
+  },
+
+  { type: "spacer" },
+
+  // ── Expense ──
+  {
+    type: "link",
+    href: "/expenses",
+    label: "Expense",
+    icon: Coins,
+    module: "expenses",
+    configModule: "expense" as const,
+  },
+
+  { type: "spacer" },
+
+  // ── Order, Dispatch, Pending Dispatch ──
+  {
+    type: "link",
+    href: "/orders",
+    label: "Order",
+    icon: ShoppingCart,
+    module: "orders",
+  },
+  {
+    type: "link",
+    href: "/dispatches",
+    label: "Dispatch",
+    icon: Truck,
+    module: "orders",
+    configModule: "dispatch" as const,
+  },
+  {
+    type: "link",
+    href: "/pending-dispatch",
+    label: "Pending Dispatch",
+    icon: PackageCheck,
+    module: "orders",
+    configModule: "pending_dispatch" as const,
+  },
+
+  { type: "spacer" },
+
+  // ── Lead, Deal ──
+  {
+    type: "link",
+    href: "/leads",
+    label: "Lead",
+    icon: UserPlus,
+    module: "leads",
+  },
+  {
+    type: "link",
+    href: "/pipelines",
+    label: "Deal",
+    icon: GitBranch,
+    module: "deals",
+  },
+
+  { type: "spacer" },
+
+  // ── Location Tracking (collapsed) ──
+  {
+    type: "group",
     label: "Location Tracking",
     icon: MapPin,
     items: [
@@ -158,20 +306,47 @@ const navGroups: { label: string; icon: React.ComponentType<{ className?: string
       { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
     ],
   },
+
+  { type: "spacer" },
+
+  // ── Report (collapsed) ──
   {
-    label: "Team",
-    icon: Users,
+    type: "group",
+    label: "Report",
+    icon: LineChart,
+    items: [
+      { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
+      { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },
+      { href: "/expenses", label: "Expenses Report", icon: Coins, module: "expenses" },
+      { href: "/location-tracking/track-report", label: "Location Reports", icon: MapPin, module: "location_tracking" },
+    ],
+  },
+
+  { type: "spacer" },
+
+  // ── User (collapsed) ──
+  {
+    type: "group",
+    label: "User",
+    icon: User,
     items: [
       { href: "/team/employees", label: "Employees", icon: User, module: "team_management" },
       { href: "/team/roles", label: "Employee Roles", icon: Shield, module: "team_management" },
-      { href: "/expenses", label: "Expenses", icon: Coins, module: "expenses" },
     ],
-  }
-];
+  },
 
-// The bottomNavItems AI assistant is removed as it's now in the WhatsApp group.
-const bottomNavItems = [
-  { href: "/settings", label: "Settings", icon: Settings },
+  { type: "spacer" },
+
+  // ── Settings (collapsed) ──
+  {
+    type: "group",
+    label: "Settings",
+    icon: Settings,
+    items: [
+      { href: "/settings", label: "All Settings", icon: LayoutGrid },
+      { href: "/settings?tab=module_settings", label: "Module Settings", icon: Settings },
+    ],
+  },
 ];
 
 interface SidebarProps {
@@ -180,34 +355,72 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-export function Sidebar({ open = false, onClose }: SidebarProps) {
+function SidebarInner({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { profile, profileLoading, account, accountRole, signOut, hasAutomations, hasBroadcasts, hasLocationTracking, hasPermission } = useAuth();
+  const searchParams = useSearchParams();
+  const {
+    profile,
+    profileLoading,
+    account,
+    accountRole,
+    signOut,
+    hasAutomations,
+    hasBroadcasts,
+    hasLocationTracking,
+    hasPermission,
+    isModuleEnabled,
+  } = useAuth();
   const totalUnread = useTotalUnread();
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    "CRM": false,
-    "WhatsApp": false,
-    "Location Tracking": false
+    WhatsApp: false,
+    "Location Tracking": false,
+    Report: false,
+    User: false,
+    Settings: false,
   });
 
+  useEffect(() => {
+    menuStructure.forEach((node) => {
+      if (node.type === "group") {
+        const hasActive = node.items.some((item) =>
+          isNavItemActive(item.href, pathname, searchParams)
+        );
+        if (hasActive) {
+          setOpenGroups((prev) => (prev[node.label] ? prev : { ...prev, [node.label]: true }));
+        }
+      }
+    });
+  }, [pathname, searchParams]);
+
   const toggleGroup = (label: string) => {
-    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
+    setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
-  const filteredGroups = navGroups.map(group => {
-    const items = group.items.filter((item) => {
-      // Role-based visibility check
-      if (item.module && !hasPermission(`view_${item.module}`)) return false;
+  const canViewItem = (item: NavItem): boolean => {
+    if (item.module && !hasPermission(`view_${item.module}`)) return false;
+    if (item.href === "/broadcasts" && !hasBroadcasts) return false;
+    if (item.href === "/automations" && !hasAutomations) return false;
+    if (item.href === "/flows" && !hasAutomations) return false;
+    if (item.href.startsWith("/location-tracking") && !hasLocationTracking) return false;
+    // Admin-configurable module toggle check
+    if (item.configModule && !isModuleEnabled(item.configModule)) return false;
+    return true;
+  };
 
-      if (item.href === "/broadcasts" && !hasBroadcasts) return false;
-      if (item.href === "/automations" && !hasAutomations) return false;
-      if (item.href === "/flows" && !hasAutomations) return false;
-      if (item.href.startsWith("/location-tracking") && !hasLocationTracking) return false;
-      return true;
-    });
-    return { ...group, items };
-  }).filter(group => group.items.length > 0);
+  const filteredMenu: MenuNode[] = menuStructure
+    .map((node) => {
+      if (node.type === "spacer") return node;
+      if (node.type === "link") {
+        return canViewItem(node) ? node : null;
+      }
+      // For group nodes, check the group-level configModule first
+      if (node.configModule && !isModuleEnabled(node.configModule)) return null;
+      const items = node.items.filter(canViewItem);
+      return items.length > 0 ? { ...node, items } : null;
+    })
+    .filter((node): node is MenuNode => node !== null);
+
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -245,6 +458,88 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     };
   }, [open, onClose]);
 
+  const renderNavLink = (item: NavItem, isTopLevel: boolean) => {
+    const isActive = isNavItemActive(item.href, pathname, searchParams);
+    const showUnreadDot =
+      item.href === "/inbox" && totalUnread > 0 && !isActive;
+
+    return (
+      <Link
+        key={`${item.href}-${item.label}`}
+        href={item.href}
+        onClick={onClose}
+        className={cn(
+          "flex items-center gap-3 rounded-lg transition-all duration-150 group relative",
+          isTopLevel
+            ? "px-3 py-2 text-sm font-medium"
+            : "px-3 py-1.5 text-sm font-medium",
+          isActive
+            ? isTopLevel
+              ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+              : "bg-primary/15 text-primary font-semibold"
+            : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+        )}
+      >
+        <item.icon
+          className={cn(
+            "h-4 w-4 shrink-0 transition-colors",
+            isActive
+              ? isTopLevel
+                ? "text-primary-foreground"
+                : "text-primary"
+              : "text-muted-foreground group-hover:text-foreground"
+          )}
+        />
+        <span className="flex-1 truncate">{item.label}</span>
+        {item.beta && (
+          <span
+            aria-label="Beta feature"
+            className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+          >
+            Beta
+          </span>
+        )}
+        {showUnreadDot && (
+          <span
+            aria-label={`${totalUnread} unread conversation${totalUnread === 1 ? "" : "s"}`}
+            className="relative flex h-2 w-2"
+          >
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+          </span>
+        )}
+        {[
+          "/leads",
+          "/contacts",
+          "/pipelines",
+          "/products",
+          "/quotations",
+          "/orders",
+          "/tasks",
+        ].includes(item.href.split("?")[0]) && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const basePath = item.href.split("?")[0];
+              window.location.href = `${basePath}?new=true`;
+            }}
+            className={cn(
+              "ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors",
+              isActive && isTopLevel
+                ? "text-primary-foreground/80 hover:bg-primary-foreground/20 hover:text-primary-foreground"
+                : "text-muted-foreground/70 hover:bg-background hover:text-foreground"
+            )}
+            title={`New ${item.label}`}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        )}
+      </Link>
+    );
+  };
+
   return (
     <>
       {/* Backdrop — only exists on mobile and only when open. Clicking
@@ -265,11 +560,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       <aside
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-border bg-card",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-border bg-card",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
-          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
+          "lg:static lg:z-0 lg:w-72 lg:translate-x-0 lg:transition-none",
         )}
         aria-label="Primary"
       >
@@ -294,176 +589,71 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <div className="flex flex-col gap-6">
-            {filteredGroups.map((group) => {
-              const isOpen = openGroups[group.label];
-              
+        <nav className="flex-1 overflow-y-auto px-3 py-3" style={{ scrollbarColor: 'hsl(var(--muted)) transparent', scrollbarWidth: 'thin' }}>
+          <div className="flex flex-col gap-1">
+            {filteredMenu.map((node, idx) => {
+              if (node.type === "spacer") {
+                return (
+                  <div key={`spacer-${idx}`} className="my-2" />
+                );
+              }
+
+              if (node.type === "link") {
+                return (
+                  <div key={`${node.href}-${node.label}`}>
+                    {renderNavLink(node, true)}
+                  </div>
+                );
+              }
+
+              const isOpen = openGroups[node.label];
+              const isGroupActive = node.items.some((item) =>
+                isNavItemActive(item.href, pathname, searchParams)
+              );
+
               return (
-                <div key={group.label} className="flex flex-col gap-1">
+                <div key={node.label} className="flex flex-col">
                   <button
-                    onClick={() => toggleGroup(group.label)}
-                    className="flex w-full items-center justify-between px-3 mb-1 text-sm font-bold tracking-wide text-foreground hover:text-primary transition-colors"
+                    type="button"
+                    onClick={() => toggleGroup(node.label)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors group",
+                      isGroupActive
+                        ? "text-foreground font-semibold bg-muted/50"
+                        : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                    )}
                   >
-                    <div className="flex items-center gap-2">
-                      <group.icon className="h-4 w-4" />
-                      {group.label}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <node.icon
+                        className={cn(
+                          "h-4 w-4 shrink-0 transition-colors",
+                          isGroupActive
+                            ? "text-primary"
+                            : "text-muted-foreground group-hover:text-foreground"
+                        )}
+                      />
+                      <span className="truncate">{node.label}</span>
                     </div>
-                    {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    {isOpen ? (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform" />
+                    )}
                   </button>
-                  
+
                   {isOpen && (
-                    <ul className="flex flex-col gap-1">
-                      {group.items.map((item) => {
-                        const isActive =
-                          pathname === item.href ||
-                          (item.href !== "/dashboard" && pathname.startsWith(item.href));
-
-                        const showUnreadDot =
-                          item.href === "/inbox" && totalUnread > 0 && !isActive;
-
-                        return (
-                          <li key={item.href}>
-                            <Link
-                              href={item.href}
-                              className={cn(
-                                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                                isActive
-                                  ? "bg-primary/10 text-primary"
-                                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                              )}
-                            >
-                              <item.icon className="h-4 w-4 shrink-0" />
-                              <span className="flex-1 truncate">{item.label}</span>
-                              {item.beta && (
-                                <span
-                                  aria-label="Beta feature"
-                                  className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
-                                >
-                                  Beta
-                                </span>
-                              )}
-                              {showUnreadDot && (
-                                <span
-                                  aria-label={`${totalUnread} unread conversation${totalUnread === 1 ? "" : "s"}`}
-                                  className="relative flex h-2 w-2"
-                                >
-                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                                </span>
-                              )}
-                              {item.href === "/leads" && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    window.location.href = "/leads?new=true";
-                                  }}
-                                  className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              )}
-                              {item.href === "/contacts" && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    window.location.href = "/contacts?new=true";
-                                  }}
-                                  className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              )}
-                              {item.href === "/pipelines" && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    window.location.href = "/pipelines?new=true";
-                                  }}
-                                  className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              )}
-                              {item.href === "/tasks" && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    window.location.href = "/tasks?new=true";
-                                  }}
-                                  className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              )}
-                              {item.href === "/quotations" && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    window.location.href = "/quotations?new=true";
-                                  }}
-                                  className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              )}
-                              {item.href === "/products" && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    window.location.href = "/products?new=true";
-                                  }}
-                                  className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              )}
-                            </Link>
-                          </li>
-                        );
-                      })}
+                    <ul className="flex flex-col gap-1 ml-7 my-1">
+                      {node.items.map((item) => (
+                        <li key={`${item.href}-${item.label}`}>
+                          {renderNavLink(item, false)}
+                        </li>
+                      ))}
                     </ul>
                   )}
                 </div>
               );
             })}
           </div>
-
-          <div className="my-4 border-t border-border" />
-
-          <ul className="flex flex-col gap-1">
-            {bottomNavItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
         </nav>
 
         {/* User section */}
@@ -570,5 +760,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         </div>
       </aside>
     </>
+  );
+}
+
+export function Sidebar(props: SidebarProps) {
+  return (
+    <Suspense fallback={null}>
+      <SidebarInner {...props} />
+    </Suspense>
   );
 }
