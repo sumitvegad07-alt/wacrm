@@ -339,6 +339,35 @@ timelines), `products`, `quotations`, `expenses`, `geofences`, `tracking_session
 `location_pings`, `profiles`, `accounts`, `custom_fields` (shared across modules via
 `module_name`), `account_sequences`.
 
+### Settings Hub & Account Configuration (Applied 27–28 Jul 2026 — verified against live UI)
+
+- **Flat "All Settings" Hub (`/settings`)**:
+  - Replaced the legacy scrolling sidebar/tabbed menu with a responsive 10-tile grid (`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6`) in `settings-overview.tsx`.
+  - **Profile Settings** (`/settings?tab=profile`): Consolidated Personal Information (avatar, display name, email), **Appearance mode** (`AppearancePanel`: light/dark/system theme), and **Default currency** (`DealsSettings`) into one unified page.
+  - **Standardized Settings Names**:
+    1. `Profile Settings` (Personal Info + Appearance + Currency)
+    2. `Custom fields & tags` (`FieldsAndTagsPanel`)
+    3. `Leads Settings` (`LeadsSettings`)
+    4. `Task Settings` (`TasksSettings`)
+    5. `Orders Settings` (`OrdersSettings`)
+    6. `Catalogue Settings` (`PricingSchemesSettings`)
+    7. `Expense Settings` (`ExpenseTypesSettings`)
+    8. `API Settings` (`ApiKeysSettings`)
+    9. `Security` (`SecurityPanel`)
+    10. `Audit Log` (`AuditLogPanel`)
+  - **Removed from Settings Hub**: Knowledge Base (AI), Templates, and Team are removed from the account settings hub (managed under their respective main menu modules or dedicated routes).
+
+### Universal Custom Fields (Applied 26–27 Jul 2026 — migration `096` & `097`)
+
+- **Section Grouping & Display Priority (`096_custom_fields_sections_priority.sql`)**: `custom_fields` supports `section_name` (e.g. `'Basic Information'`, `'Technical Details'`) and `priority` (integer ordering).
+- **All-Modules Custom Values (`097_all_modules_custom_values.sql`)**: Universal custom fields architecture implemented across all core CRM entities (`lead`, `contact`, `product`, `quotation`, `order`, `dispatch`, `task`, `expense`, `employee`).
+
+### Global UI Design System & Spacing Guidelines (Web)
+
+- **Full Screen Width for Forms & Panels (`w-full`)**: Do NOT use narrow wrappers (`max-w-2xl`, `max-w-xl`) or constrained centered containers on create, edit, view, or settings screens. All main screens and settings forms must use full screen width (`w-full` / `max-w-[95vw]`).
+- **Multi-Column Responsive Grids**: To prevent empty/wasted white space on the right-hand side of large desktop monitors, arrange form fields, settings toggles, and metadata panels in responsive multi-column grids (`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6` or `gap-8`).
+- **Base UI / Next.js Hydration & Button Nesting Rule**: When using `@base-ui/react` components such as `DialogTrigger`, use the `render={<Button />}` prop pattern instead of `asChild` wrapping a `<button>` or `<Button>` child. Using `asChild` with an inner button causes an HTML `<button> cannot be a descendant of <button>` validation error and React 19 hydration mismatch.
+
 ## Conventions
 
 - Route pages: `src/app/(dashboard)/<module>/page.tsx`, detail at `<module>/[id]/page.tsx`

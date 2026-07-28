@@ -41,3 +41,11 @@ When a PM requests a new feature, engineers must follow this flow:
 3. **API / Actions:** Write the Next.js Server Action or API Route.
 4. **UI Assembly:** Build the View (List/Table) and the Form (Create/Edit) using standard components.
 5. **Mobile Gap Check:** Determine if this feature needs to be replicated on the mobile app. (e.g., "Settings" = Web only. "Expense upload" = Mobile required).
+
+## 5. Web Screen Layout & Spacing Rules (27–28 Jul 2026 Update)
+
+- **Full-Width Pages:** Every create, edit, view, and detail screen globally across all modules must use full screen width (`w-full` / `max-w-[95vw]`). Never constrain main forms or tables to narrow wrappers (`max-w-2xl`, `max-w-xl`).
+- **Responsive Multi-Column Grids:** To eliminate empty right-hand space on desktop displays, use multi-column responsive grids (`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6` or `gap-8`) for forms, settings panels, and detail headers.
+- **Settings Hub Navigation:** The main `/settings` hub uses a flat tile grid (`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6`). Do not use nested page submenus or scrolling sidebar tabs for core settings.
+- **Base UI Hydration & Button Nesting:** For `@base-ui/react` components like `DialogTrigger`, always use `render={<Button />}` instead of `asChild` with a nested `<button>` or `<Button>` child to avoid `<button>` inside `<button>` HTML validation errors and React hydration mismatches.
+
