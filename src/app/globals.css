@@ -227,6 +227,12 @@ html[data-theme="rose"] {
   html {
     @apply font-sans;
   }
+  .dark {
+    color-scheme: dark;
+  }
+  input[type="date"], input[type="time"], input[type="datetime-local"] {
+    color-scheme: dark;
+  }
 }
 
 /* Custom Scrollbar for Landing Page Industry Tabs */

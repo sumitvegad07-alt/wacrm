@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, UserPlus, Loader2, DollarSign, Building2, Phone, Mail, Users } from "lucide-react";
+import { ArrowLeft, UserPlus, Loader2, Building2, Phone, Mail, Users, User, MapPin, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import type { Profile } from "@/types";
@@ -19,23 +19,24 @@ import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
 export default function NewLeadPage() {
   const router = useRouter();
   const supabase = createClient();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
   const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    whatsapp: "",
     company: "",
+    contact_person: "",
+    phone: "",
+    email: "",
     industry: "",
-    source: "",
-    estimated_value: "",
-    owner_id: "",
+    source: "Website",
     status: "new",
+    address: "",
+    city: "",
+    state: "",
+    country: "",
     notes: ""
   });
 
@@ -45,40 +46,42 @@ export default function NewLeadPage() {
         .from("profiles")
         .select("*")
         .order("full_name", { ascending: true });
-      if (data) {
-        setProfiles(data as Profile[]);
-        if (profile?.id) {
-          setForm(prev => ({ ...prev, owner_id: profile.id }));
-        }
-      }
+      if (data) setProfiles(data as Profile[]);
     }
     loadProfiles();
-  }, [supabase, profile?.id]);
+  }, [supabase]);
 
   const handleCreateLead = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.phone.trim()) {
-      toast.error("Please fill in Name and Phone Number");
+    if (!form.company.trim() && !form.contact_person.trim()) {
+      toast.error("Please enter a Company Name or Contact Person Name");
+      return;
+    }
+    if (!form.phone.trim()) {
+      toast.error("Please fill in Contact Number");
       return;
     }
 
     setCreating(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("Not authenticated");
+      if (!user?.id) throw new Error("Not authenticated");
 
       const payload: any = {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim() || null,
-        whatsapp: form.whatsapp.trim() || form.phone.trim(),
+        name: form.company.trim() || form.contact_person.trim() || "Unnamed Lead",
         company: form.company.trim() || null,
+        contact_person: form.contact_person.trim() || null,
+        phone: form.phone.trim() || null,
+        whatsapp: form.phone.trim() || null,
+        email: form.email.trim() || null,
         industry: form.industry.trim() || null,
         source: form.source || "Website",
         status: form.status || "new",
-        estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : 0,
-        owner_id: form.owner_id || profile?.id || userData.user.id,
-        user_id: userData.user.id,
+        address: form.address.trim() || null,
+        city: form.city.trim() || null,
+        state: form.state.trim() || null,
+        country: form.country.trim() || null,
+        owner_id: user.id,
+        user_id: user.id,
         collaborator_ids: collaboratorIds,
         notes: form.notes.trim() || null,
         is_active: true
@@ -105,20 +108,20 @@ export default function NewLeadPage() {
   return (
     <div className="p-8 w-full max-w-none space-y-8">
       {/* Top Header */}
-      <div className="flex items-center justify-between pb-6 border-b border-border">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/leads">
-            <Button variant="outline" size="icon" className="shrink-0">
-              <ArrowLeft className="w-4 h-4" />
+            <Button variant="ghost" size="icon" className="h-9 w-9 border border-border">
+              <ArrowLeft className="h-4 w-4 text-foreground" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <UserPlus className="w-6 h-6 text-primary" />
               Add New Lead
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Capture a new lead and assign owner and collaborators.
+              Capture a new lead and assign collaborators.
             </p>
           </div>
         </div>
@@ -127,21 +130,39 @@ export default function NewLeadPage() {
       <form onSubmit={handleCreateLead} className="space-y-8">
         {/* Contact Information */}
         <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Contact Information</h2>
+          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Basic Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. John Doe"
-                required
-              />
+              <Label htmlFor="company">Company Name *</Label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="company"
+                  value={form.company}
+                  onChange={e => setForm({ ...form, company: e.target.value })}
+                  placeholder="e.g. Acme Corp"
+                  className="pl-9"
+                  required
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number *</Label>
+              <Label htmlFor="contact_person">Contact Person Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="contact_person"
+                  value={form.contact_person}
+                  onChange={e => setForm({ ...form, contact_person: e.target.value })}
+                  placeholder="e.g. John Doe"
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Contact Number *</Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -153,16 +174,6 @@ export default function NewLeadPage() {
                   required
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp">WhatsApp Number</Label>
-              <Input
-                id="whatsapp"
-                value={form.whatsapp}
-                onChange={e => setForm({ ...form, whatsapp: e.target.value })}
-                placeholder="Same as Phone if left empty"
-              />
             </div>
 
             <div className="space-y-2">
@@ -185,31 +196,7 @@ export default function NewLeadPage() {
         {/* Lead Qualification */}
         <Card className="p-6 border-border shadow-sm space-y-6">
           <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Lead Qualification</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="company">Company Name</Label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="company"
-                  value={form.company}
-                  onChange={e => setForm({ ...form, company: e.target.value })}
-                  placeholder="Acme Corp"
-                  className="pl-9"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="industry">Industry</Label>
-              <Input
-                id="industry"
-                value={form.industry}
-                onChange={e => setForm({ ...form, industry: e.target.value })}
-                placeholder="e.g. Technology, Retail"
-              />
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <Label htmlFor="source">Lead Source</Label>
               <Select value={form.source} onValueChange={v => setForm({ ...form, source: v || "Website" })}>
@@ -226,16 +213,76 @@ export default function NewLeadPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="estimated_value">Estimated Value (₹)</Label>
+              <Label htmlFor="status">Lead Status</Label>
+              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v || "new" })}>
+                <SelectTrigger><SelectValue placeholder="Select Status" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="contacted">Contacted</SelectItem>
+                  <SelectItem value="qualified">Qualified</SelectItem>
+                  <SelectItem value="unqualified">Unqualified</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="industry">Industry</Label>
+              <Input
+                id="industry"
+                value={form.industry}
+                onChange={e => setForm({ ...form, industry: e.target.value })}
+                placeholder="e.g. Technology, Retail"
+              />
+            </div>
+          </div>
+        </Card>
+
+        {/* Address & Location */}
+        <Card className="p-6 border-border shadow-sm space-y-6">
+          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary" />
+            Address & Location
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="address">Street Address</Label>
+              <Input
+                id="address"
+                value={form.address}
+                onChange={e => setForm({ ...form, address: e.target.value })}
+                placeholder="Street address, apartment, suite..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                value={form.city}
+                onChange={e => setForm({ ...form, city: e.target.value })}
+                placeholder="e.g. Mumbai"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="state">State / Region</Label>
+              <Input
+                id="state"
+                value={form.state}
+                onChange={e => setForm({ ...form, state: e.target.value })}
+                placeholder="e.g. Maharashtra"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="country">Country</Label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Globe className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id="estimated_value"
-                  type="number"
-                  step="any"
-                  value={form.estimated_value}
-                  onChange={e => setForm({ ...form, estimated_value: e.target.value })}
-                  placeholder="0.00"
+                  id="country"
+                  value={form.country}
+                  onChange={e => setForm({ ...form, country: e.target.value })}
+                  placeholder="e.g. India"
                   className="pl-9"
                 />
               </div>
@@ -243,43 +290,17 @@ export default function NewLeadPage() {
           </div>
         </Card>
 
-        {/* Ownership & Collaboration */}
+        {/* Collaborators */}
         <Card className="p-6 border-border shadow-sm space-y-6">
           <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            Ownership & Collaboration
+            Collaborators
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <Label>Creator (Read-only)</Label>
-              <Input
-                value={profile?.full_name || profile?.email || "Current User"}
-                disabled
-                className="bg-muted text-muted-foreground"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Owner / Assigned To</Label>
-              <Select value={form.owner_id} onValueChange={v => setForm({ ...form, owner_id: v || "" })}>
-                <SelectTrigger><SelectValue placeholder="Select Owner" /></SelectTrigger>
-                <SelectContent>
-                  {profiles.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.full_name || p.email}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Collaborators</Label>
-              <CollaboratorsSelect
-                profiles={profiles}
-                selectedIds={collaboratorIds}
-                onChange={setCollaboratorIds}
-              />
-            </div>
-          </div>
+          <CollaboratorsSelect
+            profiles={profiles}
+            selectedIds={collaboratorIds}
+            onChange={setCollaboratorIds}
+          />
         </Card>
 
         {/* Notes */}

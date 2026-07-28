@@ -21,7 +21,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 export default function NewDealPage() {
   const router = useRouter();
   const supabase = createClient();
-  const { profile, account } = useAuth();
+  const { profile, account, user } = useAuth();
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -60,7 +60,7 @@ export default function NewDealPage() {
         supabase.from("profiles").select("*").order("full_name", { ascending: true }),
         supabase.from("contacts").select("*").order("name", { ascending: true }),
         supabase.from("leads").select("*").eq("is_active", true).order("name", { ascending: true }),
-        supabase.from("products").select("*").order("name", { ascending: true }),
+        supabase.from("products").select("*, tax_slab:tax_slabs(rate)").order("name", { ascending: true }),
         supabase.from("pipelines").select("*").order("created_at", { ascending: true }),
         supabase.from("pipeline_stages").select("*").order("position", { ascending: true })
       ]);
@@ -105,8 +105,7 @@ export default function NewDealPage() {
 
     setCreating(true);
     try {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) throw new Error("Not authenticated");
+      if (!user?.id) throw new Error("Not authenticated");
 
       const itemsTotal = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
       const targetName = dealFor === "customer"
@@ -114,22 +113,22 @@ export default function NewDealPage() {
         : (leads.find(l => l.id === form.lead_id)?.name || "Lead Deal");
 
       const payload: any = {
+        account_id: (account as any)?.id || (profile as any)?.account_id,
         title: targetName,
         value: itemsTotal,
         currency: (account as any)?.default_currency || "INR",
         deal_for: dealFor,
         contact_id: dealFor === "customer" ? form.contact_id : null,
         lead_id: dealFor === "lead" ? form.lead_id : null,
-        creator_id: profile?.id || user.user.id,
+        creator_id: user.id,
         collaborator_ids: collaboratorIds,
-        assigned_to: profile?.id || user.user.id,
         pipeline_id: defaultPipelineId || (stages[0]?.pipeline_id || null),
         stage_id: form.stage_id || (stages[0]?.id || null),
         expected_close_date: form.expected_close_date || null,
         notes: form.notes.trim() || null,
         status: "open",
         is_active: true,
-        user_id: user.user.id
+        user_id: user.id
       };
 
       const { data: deal, error } = await supabase
@@ -162,8 +161,20 @@ export default function NewDealPage() {
         }
       }
 
+      // Log deal creation in timeline
+      await supabase.from("module_activities").insert({
+        account_id: payload.account_id,
+        user_id: user.id,
+        module_name: "deal",
+        record_id: deal.id,
+        action: "created",
+        message: `Deal ${deal.deal_number || deal.id} created`,
+        details: { deal_number: deal.deal_number, value: deal.value }
+      });
+
       toast.success("Deal created successfully!");
       router.push(`/deals/${deal.id}`);
+
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to create deal");
@@ -314,6 +325,7 @@ export default function NewDealPage() {
               <Input
                 id="expected_close_date"
                 type="date"
+                className="[color-scheme:dark] bg-background text-foreground"
                 value={form.expected_close_date}
                 onChange={e => setForm({ ...form, expected_close_date: e.target.value })}
               />

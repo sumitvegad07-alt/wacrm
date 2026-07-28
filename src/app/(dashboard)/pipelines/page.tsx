@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Pipeline, PipelineStage, Deal, CustomField } from "@/types";
-import { PipelineBoard } from "@/components/pipelines/pipeline-board";
 import { PipelineSettings } from "@/components/pipelines/pipeline-settings";
 import { DealForm } from "@/components/pipelines/deal-form";
 import { PipelineAnalytics } from "@/components/pipelines/pipeline-analytics";
@@ -27,7 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { GitBranch, Plus, ChevronDown, Settings, Upload, LayoutDashboard, List, CheckCircle, XCircle, MoreHorizontal } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, Upload, CheckCircle, XCircle, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -57,9 +56,6 @@ export default function PipelinesPage() {
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Toggle view
-  const [viewMode, setViewMode] = useState<"board" | "list">("board");
 
   // DataTable state
   const [filterState, setFilterState] = useState<FilterState>({});
@@ -581,26 +577,6 @@ export default function PipelinesPage() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* View Toggle */}
-          <div className="flex items-center p-0.5 bg-muted rounded-md border border-border">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setViewMode("board")}
-              className={`h-7 px-2 text-xs ${viewMode === "board" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}
-            >
-              <LayoutDashboard className="size-3.5 mr-1" /> Board
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setViewMode("list")}
-              className={`h-7 px-2 text-xs ${viewMode === "list" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}
-            >
-              <List className="size-3.5 mr-1" /> List
-            </Button>
-          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -661,88 +637,78 @@ export default function PipelinesPage() {
         <>
           <PipelineAnalytics stages={stages} deals={deals} />
           
-          {viewMode === "board" ? (
-            <PipelineBoard
-              stages={stages}
-              deals={deals}
-              onDealMoved={handleDealMoved}
-              onAddDeal={handleAddDeal}
-              onEditDeal={handleEditDeal}
-            />
-          ) : (
-            <div className="mt-4 space-y-4">
-              {selectedDealIds.size > 0 && canCreateDeals && (
-                <div className="bg-card border border-border p-4 rounded-xl flex flex-wrap gap-4 items-center justify-between shadow-sm animate-in fade-in slide-in-from-bottom-2">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="secondary" className="px-3 py-1 bg-primary/10 text-primary border-primary/20">
-                      {selectedDealIds.size} selected
-                    </Badge>
-                    <span className="text-sm font-medium text-foreground">
-                      Bulk Actions
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedDealIds(new Set())}>
-                      Cancel
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-red-600 border-red-500/30 hover:bg-red-50" onClick={handleBulkDelete}>
-                      <XCircle className="mr-2 h-4 w-4" /> Delete
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-amber-600 border-amber-500/30 hover:bg-amber-50" onClick={() => handleBulkStatus("lost")}>
-                      <XCircle className="mr-2 h-4 w-4" /> Mark Lost
-                    </Button>
-                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleBulkStatus("won")}>
-                      <CheckCircle className="mr-2 h-4 w-4" /> Mark Won
-                    </Button>
-                    
-                    <DropdownMenu>
-                      <DropdownMenuTrigger render={<Button size="sm" variant="outline" className="gap-2" />}>
-                        <MoreHorizontal className="h-4 w-4" /> Move Stage
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 bg-popover border-border">
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Select Stage</div>
-                        <DropdownMenuSeparator className="bg-border" />
-                        {stages.map(stage => (
-                          <DropdownMenuItem key={stage.id} onClick={() => handleBulkStage(stage.id)} className="cursor-pointer">
-                            <span className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: stage.color }} />
-                            {stage.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+          <div className="mt-4 space-y-4">
+            {selectedDealIds.size > 0 && canCreateDeals && (
+              <div className="bg-card border border-border p-4 rounded-xl flex flex-wrap gap-4 items-center justify-between shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-center gap-4">
+                  <Badge variant="secondary" className="px-3 py-1 bg-primary/10 text-primary border-primary/20">
+                    {selectedDealIds.size} selected
+                  </Badge>
+                  <span className="text-sm font-medium text-foreground">
+                    Bulk Actions
+                  </span>
                 </div>
-              )}
-              
-              <DataTable
-                columns={columns}
-                data={filteredDeals}
-                filterState={filterState}
-                onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-                storageKey={`wacrm_deals_table_${selectedPipelineId}`}
-                onRowClick={(deal) => router.push(`/deals/${deal.id}`)}
-                rowKey={(deal) => deal.id}
-                selection={{
-                  selectedIds: selectedDealIds,
-                  onSelectAll: (checked) => {
-                    if (checked) {
-                      setSelectedDealIds(new Set(filteredDeals.map(d => d.id)));
-                    } else {
-                      setSelectedDealIds(new Set());
-                    }
-                  },
-                  onSelect: (id, checked) => {
-                    setSelectedDealIds(prev => {
-                      const next = new Set(prev);
-                      if (checked) next.add(id);
-                      else next.delete(id);
-                      return next;
-                    });
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedDealIds(new Set())}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-red-600 border-red-500/30 hover:bg-red-50" onClick={handleBulkDelete}>
+                    <XCircle className="mr-2 h-4 w-4" /> Delete
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-amber-600 border-amber-500/30 hover:bg-amber-50" onClick={() => handleBulkStatus("lost")}>
+                    <XCircle className="mr-2 h-4 w-4" /> Mark Lost
+                  </Button>
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleBulkStatus("won")}>
+                    <CheckCircle className="mr-2 h-4 w-4" /> Mark Won
+                  </Button>
+                  
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button size="sm" variant="outline" className="gap-2" />}>
+                      <MoreHorizontal className="h-4 w-4" /> Move Stage
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 bg-popover border-border">
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Select Stage</div>
+                      <DropdownMenuSeparator className="bg-border" />
+                      {stages.map(stage => (
+                        <DropdownMenuItem key={stage.id} onClick={() => handleBulkStage(stage.id)} className="cursor-pointer">
+                          <span className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: stage.color }} />
+                          {stage.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            )}
+            
+            <DataTable
+              columns={columns}
+              data={filteredDeals}
+              filterState={filterState}
+              onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
+              storageKey={`wacrm_deals_table_${selectedPipelineId}`}
+              onRowClick={(deal) => router.push(`/deals/${deal.id}`)}
+              rowKey={(deal) => deal.id}
+              selection={{
+                selectedIds: selectedDealIds,
+                onSelectAll: (checked) => {
+                  if (checked) {
+                    setSelectedDealIds(new Set(filteredDeals.map(d => d.id)));
+                  } else {
+                    setSelectedDealIds(new Set());
                   }
-                }}
-              />
-            </div>
-          )}
+                },
+                onSelect: (id, checked) => {
+                  setSelectedDealIds(prev => {
+                    const next = new Set(prev);
+                    if (checked) next.add(id);
+                    else next.delete(id);
+                    return next;
+                  });
+                }
+              }}
+            />
+          </div>
         </>
       )}
 

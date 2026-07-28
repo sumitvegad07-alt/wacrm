@@ -58,7 +58,7 @@ export function DealItemsTable({ items, onChange, products }: DealItemsTableProp
         unit: "—",
         quantity: 1,
         price: 0,
-        tax_rate: 18,
+        tax_rate: 0,
         tax_amount: 0,
         sub_total: 0,
         total: 0,
@@ -76,7 +76,10 @@ export function DealItemsTable({ items, onChange, products }: DealItemsTableProp
     const selectedProduct = products.find((p) => p.id === productId);
     if (selectedProduct) {
       const price = Number(selectedProduct.selling_price || selectedProduct.price) || 0;
-      const taxRate = Number(selectedProduct.default_tax_rate || selectedProduct.tax_rate) || 18;
+      // tax_slab is the joined object from tax_slabs(rate); fall back to 0 if not set
+      const taxRate = Number(
+        selectedProduct.tax_slab?.rate ?? selectedProduct.tax_rate ?? 0
+      );
       const unit = selectedProduct.unit || "—";
 
       const item = {
@@ -110,12 +113,12 @@ export function DealItemsTable({ items, onChange, products }: DealItemsTableProp
         <table className="w-full text-sm">
           <thead className="bg-muted text-muted-foreground border-b border-border">
             <tr>
-              <th className="py-2.5 px-4 text-left font-medium w-1/3">Product / Description</th>
-              <th className="py-2.5 px-4 text-left font-medium w-24">Unit</th>
-              <th className="py-2.5 px-4 text-right font-medium w-24">Qty</th>
-              <th className="py-2.5 px-4 text-right font-medium w-32">Rate (₹)</th>
-              <th className="py-2.5 px-4 text-right font-medium w-24">Tax %</th>
-              <th className="py-2.5 px-4 text-right font-medium w-32">Total (₹)</th>
+              <th className="py-2.5 px-4 text-left font-medium w-1/3">PRODUCT</th>
+              <th className="py-2.5 px-4 text-left font-medium w-20">UNIT</th>
+              <th className="py-2.5 px-4 text-right font-medium w-24">QTY</th>
+              <th className="py-2.5 px-4 text-right font-medium w-32">PRICE (₹)</th>
+              <th className="py-2.5 px-4 text-right font-medium w-24">TAX %</th>
+              <th className="py-2.5 px-4 text-right font-medium w-32">TOTAL (₹)</th>
               <th className="py-2.5 px-4 text-center font-medium w-16"></th>
             </tr>
           </thead>
@@ -130,22 +133,14 @@ export function DealItemsTable({ items, onChange, products }: DealItemsTableProp
               items.map((item, index) => (
                 <tr key={index} className="hover:bg-muted/30">
                   <td className="py-2.5 px-4">
-                    <div className="space-y-1.5">
-                      <SearchableSelect
-                        value={item.product_id || ""}
-                        onChange={(val) => {
-                          if (val) handleProductSelect(index, val);
-                        }}
-                        options={products.map((p) => ({ label: p.name, value: p.id }))}
-                        placeholder="Select from catalogue..."
-                      />
-                      <Input
-                        value={item.product_name}
-                        onChange={(e) => updateItem(index, { product_name: e.target.value })}
-                        placeholder="Or type custom item name..."
-                        className="h-8 text-xs"
-                      />
-                    </div>
+                    <SearchableSelect
+                      value={item.product_id || ""}
+                      onChange={(val) => {
+                        if (val) handleProductSelect(index, val);
+                      }}
+                      options={products.map((p) => ({ label: p.name, value: p.id }))}
+                      placeholder="Select a product..."
+                    />
                   </td>
                   <td className="py-2.5 px-4">
                     <span className="text-muted-foreground whitespace-nowrap text-xs">{item.unit || "—"}</span>
@@ -169,15 +164,8 @@ export function DealItemsTable({ items, onChange, products }: DealItemsTableProp
                       className="h-8 text-right text-xs"
                     />
                   </td>
-                  <td className="py-2.5 px-4">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={item.tax_rate}
-                      onChange={(e) => updateItem(index, { tax_rate: Number(e.target.value) })}
-                      className="h-8 text-right text-xs"
-                    />
+                  <td className="py-2.5 px-4 text-right text-muted-foreground text-xs font-medium">
+                    {item.tax_rate || 0}%
                   </td>
                   <td className="py-2.5 px-4 text-right font-medium">
                     ₹{Number(item.total || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}

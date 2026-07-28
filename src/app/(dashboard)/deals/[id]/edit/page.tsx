@@ -66,7 +66,7 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
         supabase.from("profiles").select("*").order("full_name", { ascending: true }),
         supabase.from("contacts").select("*").order("name", { ascending: true }),
         supabase.from("leads").select("*").order("name", { ascending: true }),
-        supabase.from("products").select("*").order("name", { ascending: true }),
+        supabase.from("products").select("*, tax_slab:tax_slabs(rate)").order("name", { ascending: true }),
         supabase.from("pipeline_stages").select("*").order("position", { ascending: true }),
         supabase.from("deals").select("*, creator:profiles!creator_id(*)").eq("id", dealId).single(),
         supabase.from("deal_items").select("*").eq("deal_id", dealId).order("position", { ascending: true })
@@ -340,6 +340,7 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
               <Input
                 id="expected_close_date"
                 type="date"
+                className="[color-scheme:dark] bg-background text-foreground"
                 value={form.expected_close_date}
                 onChange={e => setForm({ ...form, expected_close_date: e.target.value })}
               />

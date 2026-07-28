@@ -4,6 +4,10 @@ import { useMemo } from "react";
 import type { Deal, PipelineStage } from "@/types";
 import {
   DollarSign,
+  IndianRupee,
+  Euro,
+  PoundSterling,
+  Coins,
   TrendingUp,
   Target,
   BarChart3,
@@ -19,6 +23,15 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { formatCurrency } from "@/lib/currency";
+
+function getCurrencyIcon(currency?: string) {
+  const code = (currency || "USD").toUpperCase();
+  if (code === "INR") return <IndianRupee className="h-4 w-4 text-primary" />;
+  if (code === "EUR") return <Euro className="h-4 w-4 text-primary" />;
+  if (code === "GBP") return <PoundSterling className="h-4 w-4 text-primary" />;
+  if (code === "USD") return <DollarSign className="h-4 w-4 text-primary" />;
+  return <Coins className="h-4 w-4 text-primary" />;
+}
 
 interface PipelineAnalyticsProps {
   stages: PipelineStage[];
@@ -60,20 +73,22 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
     const totalValue = active.reduce((sum, d) => sum + Number(d.value || 0), 0);
     const avgValue = totalCount > 0 ? totalValue / totalCount : 0;
 
-    const stageById = new Map(sortedStages.map((s) => [s.id, s]));
     const weightedValue = openDeals.reduce((sum, d) => {
-      const stage = stageById.get(d.stage_id);
-      if (!stage) return sum;
-      const prob = computeStageProbability(stage, sortedStages);
+      const stage = sortedStages.find((s) => s.id === d.stage_id);
+      const prob = stage ? computeStageProbability(stage, sortedStages) : 0.5;
       return sum + Number(d.value || 0) * prob;
     }, 0);
 
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const thisMonth = (d: Deal) => {
-      const ts = d.updated_at ?? d.created_at;
-      return ts ? new Date(ts) >= monthStart : false;
+      if (!d.updated_at) return false;
+      const dt = new Date(d.updated_at);
+      return (
+        dt.getMonth() === now.getMonth() &&
+        dt.getFullYear() === now.getFullYear()
+      );
     };
+
     const wonThisMonth = deals.filter(
       (d) => d.status === "won" && thisMonth(d),
     ).length;
@@ -101,10 +116,10 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
           tooltip="Count of every deal in this pipeline that isn't marked as Lost. Won deals are still included."
         />
         <Metric
-          icon={<DollarSign className="h-4 w-4 text-primary" />}
+          icon={getCurrencyIcon(defaultCurrency)}
           label="Pipeline Value"
           value={formatCurrency(stats.totalValue, defaultCurrency)}
-          tooltip="Sum of the dollar values of all deals in this pipeline, excluding deals marked as Lost."
+          tooltip="Sum of the values of all deals in this pipeline, excluding deals marked as Lost."
         />
         <Metric
           icon={<Target className="h-4 w-4 text-blue-400" />}

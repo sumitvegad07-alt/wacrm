@@ -7,18 +7,38 @@ import { createClient } from "@/lib/supabase/client";
 import type { Deal, CustomField, Task, Contact, Conversation, PipelineStage, Profile } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Calendar, CheckSquare, MessageSquare, Briefcase, FileText, Loader2, Pencil, Check, X, Users, ShoppingBag, ArrowRight, ExternalLink, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, Calendar, CheckSquare, MessageSquare, Briefcase, FileText, Loader2, Pencil, Check, X, Users, ShoppingBag, ArrowRight, ExternalLink, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { DealForm } from "@/components/pipelines/deal-form";
 import { Timeline } from "@/components/shared/timeline";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+const LOST_REASONS = [
+  "Budget constraints",
+  "Chose competitor",
+  "No budget allocated",
+  "Requirements not met",
+  "Lost contact / no response",
+  "Project postponed / cancelled",
+  "Price too high",
+  "Other",
+];
 
 export default function DealDetailsPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const supabase = createClient();
-  const { profile: currentUser } = useAuth();
+  const { user } = useAuth();
 
   const [deal, setDeal] = useState<Deal | null>(null);
   const [stages, setStages] = useState<PipelineStage[]>([]);
@@ -28,7 +48,6 @@ export default function DealDetailsPage() {
   const [activities, setActivities] = useState<any[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [dealItems, setDealItems] = useState<any[]>([]);
-  const [creatorProfile, setCreatorProfile] = useState<Profile | null>(null);
   const [collaboratorProfiles, setCollaboratorProfiles] = useState<Profile[]>([]);
   const [lead, setLead] = useState<any | null>(null);
   
@@ -36,13 +55,19 @@ export default function DealDetailsPage() {
   const [converting, setConverting] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
+  // Mark as Lost dialog
+  const [lostDialogOpen, setLostDialogOpen] = useState(false);
+  const [lostReason, setLostReason] = useState("");
+  const [lostReasonText, setLostReasonText] = useState("");
+  const [markingLost, setMarkingLost] = useState(false);
+
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     
     // 1. Fetch Deal
     const { data: dealData, error: dealError } = await supabase
       .from("deals")
-      .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*), stage:pipeline_stages(*)")
+      .select("*, contact:contacts(*), stage:pipeline_stages(*)")
       .eq("id", id)
       .maybeSingle();
 
@@ -86,9 +111,6 @@ export default function DealDetailsPage() {
 
     if (profilesRes.data) {
       const allProfiles = profilesRes.data as Profile[];
-      const creator = allProfiles.find(p => p.id === dealData.creator_id || p.user_id === dealData.creator_id);
-      setCreatorProfile(creator || null);
-
       if (dealData.collaborator_ids && Array.isArray(dealData.collaborator_ids)) {
         const collabProfs = allProfiles.filter(p => 
           dealData.collaborator_ids.includes(p.id) || dealData.collaborator_ids.includes(p.user_id)
@@ -157,13 +179,24 @@ export default function DealDetailsPage() {
       return;
     }
 
+    // Log stage change
+    const stageName = stages.find(s => s.id === newStageId)?.name || "New Stage";
+    await supabase.from("module_activities").insert({
+      account_id: (deal as any).account_id,
+      user_id: user?.id,
+      module_name: "deal",
+      record_id: id,
+      action: "stage_changed",
+      message: `Stage moved to ${stageName}`,
+    });
+
     toast.success("Stage updated");
     fetchAllData();
   };
 
   const handleConvertToQuotation = async () => {
     if (!deal) return;
-    if (!confirm("Are you sure you want to convert this deal into a quotation? All items and logs will be copied and the deal will be moved to inactive.")) {
+    if (!confirm("Are you sure you want to convert this deal into a quotation? All items and logs will be copied and the deal will be moved to Won.")) {
       return;
     }
 
@@ -185,6 +218,47 @@ export default function DealDetailsPage() {
     }
   };
 
+  const handleMarkLost = async () => {
+    if (!deal) return;
+    const finalReason = lostReasonText.trim() || lostReason;
+    if (!finalReason) {
+      toast.error("Please select or enter a reason for losing this deal");
+      return;
+    }
+
+    setMarkingLost(true);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .update({ status: "lost", is_active: false })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      // Log lost activity
+      await supabase.from("module_activities").insert({
+        account_id: (deal as any).account_id,
+        user_id: user?.id,
+        module_name: "deal",
+        record_id: id,
+        action: "lost",
+        message: `Deal marked as Lost. Reason: ${finalReason}`,
+        details: { reason: finalReason },
+      });
+
+      toast.success("Deal marked as Lost");
+      setLostDialogOpen(false);
+      setLostReason("");
+      setLostReasonText("");
+      fetchAllData();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to mark deal as lost");
+    } finally {
+      setMarkingLost(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[50vh]">
@@ -195,8 +269,10 @@ export default function DealDetailsPage() {
 
   if (!deal) return null;
 
+  const isLost = deal.status === "lost";
+  const isWon = deal.status === "won" || deal.is_converted;
   const currentStageIndex = stages.findIndex(s => s.id === deal.stage_id);
-  const currentStage = deal.stage || stages.find(s => s.id === deal.stage_id);
+  const currentStage = (deal as any).stage || stages.find(s => s.id === deal.stage_id);
 
   return (
     <div className="space-y-6 w-full max-w-none flex flex-col h-full">
@@ -213,28 +289,28 @@ export default function DealDetailsPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-              {deal.deal_number && <span className="text-muted-foreground font-mono text-lg">{deal.deal_number}</span>}
+              {(deal as any).deal_number && <span className="text-muted-foreground font-mono text-lg">{(deal as any).deal_number}</span>}
               {deal.title}
               {deal.is_converted && (
                 <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 gap-1">
                   <CheckCircle2 className="h-3 w-3" /> Converted to Quotation
                 </Badge>
               )}
-              {!deal.is_converted && deal.status === "won" && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary border border-primary/20">
+              {!deal.is_converted && isWon && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 border border-emerald-500/20">
                   <Check className="h-3 w-3" />
                   Won
                 </span>
               )}
-              {!deal.is_converted && deal.status === "lost" && (
+              {isLost && (
                 <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-semibold text-red-400 border border-red-500/20">
                   <X className="h-3 w-3" />
                   Lost
                 </span>
               )}
-              {!deal.is_converted && deal.status === "open" && deal.stage && (
-                <Badge style={{ backgroundColor: deal.stage.color + '20', color: deal.stage.color, borderColor: deal.stage.color + '40' }} variant="outline">
-                  {deal.stage.name}
+              {!deal.is_converted && !isWon && !isLost && currentStage && (
+                <Badge style={{ backgroundColor: currentStage.color + '20', color: currentStage.color, borderColor: currentStage.color + '40' }} variant="outline">
+                  {currentStage.name}
                 </Badge>
               )}
             </h1>
@@ -247,7 +323,7 @@ export default function DealDetailsPage() {
               )}
               {deal.contact && (
                 <Link href={`/contacts/${deal.contact_id}`} className="flex items-center gap-1 hover:underline text-foreground">
-                  <Briefcase className="size-3.5" /> {deal.contact.name || deal.contact.phone}
+                  <Briefcase className="size-3.5" /> {(deal.contact as any).name || (deal.contact as any).phone}
                 </Link>
               )}
               {lead && (
@@ -260,27 +336,37 @@ export default function DealDetailsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {deal.is_converted && deal.converted_quotation_id ? (
-            <Link href={`/quotations/${deal.converted_quotation_id}/edit`}>
+          {deal.is_converted && (deal as any).converted_quotation_id ? (
+            <Link href={`/quotations/${(deal as any).converted_quotation_id}/edit`}>
               <Button variant="outline" className="gap-2 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10">
                 <ExternalLink className="size-4" />
                 View Quotation
               </Button>
             </Link>
-          ) : (
-            <Button
-              onClick={handleConvertToQuotation}
-              disabled={converting}
-              variant="default"
-              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              {converting ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
-              Convert to Quotation
-            </Button>
-          )}
+          ) : !isLost && !isWon ? (
+            <>
+              <Button
+                onClick={handleConvertToQuotation}
+                disabled={converting}
+                variant="default"
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {converting ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
+                Convert to Quotation
+              </Button>
+              <Button
+                onClick={() => setLostDialogOpen(true)}
+                variant="outline"
+                className="gap-2 border-red-500/30 text-red-500 hover:bg-red-500/10"
+              >
+                <XCircle className="size-4" />
+                Mark as Lost
+              </Button>
+            </>
+          ) : null}
 
           {deal.contact && (
-            <Button onClick={() => router.push(`/inbox?phone=${deal.contact?.phone}`)} variant="outline" className="gap-2">
+            <Button onClick={() => router.push(`/inbox?phone=${(deal.contact as any)?.phone}`)} variant="outline" className="gap-2">
               <MessageSquare className="size-4" />
               Message Customer
             </Button>
@@ -294,45 +380,98 @@ export default function DealDetailsPage() {
 
       {/* Visual Pipeline Stage Stepper Bar */}
       {stages.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
+        <div className={`border rounded-lg p-4 shadow-sm ${
+          isLost ? "bg-red-950/30 border-red-500/20" : isWon ? "bg-emerald-950/30 border-emerald-500/20" : "bg-card border-border"
+        }`}>
           <div className="flex items-center justify-between overflow-x-auto gap-2 py-1">
             {stages.map((stage, idx) => {
               const isActive = stage.id === deal.stage_id;
               const isPast = idx < currentStageIndex;
 
+              // Colour scheme by deal status
+              let btnClass = "";
+              let circleClass = "";
+              if (isLost) {
+                btnClass = isActive
+                  ? "bg-red-600 text-white font-medium shadow-sm"
+                  : isPast
+                  ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                  : "bg-red-900/20 text-red-600/50";
+                circleClass = isActive
+                  ? "bg-white text-red-600"
+                  : isPast
+                  ? "bg-red-500/30 text-red-400"
+                  : "bg-red-900/30 text-red-700/50";
+              } else if (isWon) {
+                btnClass = isActive
+                  ? "bg-emerald-600 text-white font-medium shadow-sm"
+                  : isPast
+                  ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                  : "bg-emerald-900/20 text-emerald-600/50";
+                circleClass = isActive
+                  ? "bg-white text-emerald-600"
+                  : isPast
+                  ? "bg-emerald-500/30 text-emerald-400"
+                  : "bg-emerald-900/30 text-emerald-700/50";
+              } else {
+                // Normal open deal → green theme
+                btnClass = isActive
+                  ? "bg-emerald-600 text-white font-medium shadow-sm"
+                  : isPast
+                  ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted";
+                circleClass = isActive
+                  ? "bg-white text-emerald-600"
+                  : isPast
+                  ? "bg-emerald-500/30 text-emerald-400"
+                  : "bg-muted text-muted-foreground";
+              }
+
               return (
                 <div key={stage.id} className="flex items-center flex-1 min-w-[140px]">
                   <button
                     type="button"
-                    onClick={() => handleStageChange(stage.id)}
-                    disabled={isActive}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-md w-full transition-all text-left ${
-                      isActive
-                        ? "bg-primary text-primary-foreground font-medium shadow-sm"
-                        : isPast
-                        ? "bg-primary/10 text-primary hover:bg-primary/20"
-                        : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                    }`}
+                    onClick={() => !isLost && !isWon && handleStageChange(stage.id)}
+                    disabled={isActive || isLost || isWon}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-md w-full transition-all text-left ${btnClass}`}
                   >
-                    <span
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                        isActive
-                          ? "bg-primary-foreground text-primary"
-                          : isPast
-                          ? "bg-primary/20 text-primary"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${circleClass}`}>
                       {isPast ? <Check className="h-3.5 w-3.5" /> : idx + 1}
                     </span>
                     <span className="truncate text-xs sm:text-sm">{stage.name}</span>
                   </button>
                   {idx < stages.length - 1 && (
-                    <ArrowRight className="h-4 w-4 mx-1.5 text-muted-foreground/50 shrink-0" />
+                    <ArrowRight className={`h-4 w-4 mx-1.5 shrink-0 ${isLost ? "text-red-500/30" : isWon ? "text-emerald-500/30" : "text-muted-foreground/50"}`} />
                   )}
                 </div>
               );
             })}
+
+            {/* Won indicator at end */}
+            {isWon && (
+              <div className="flex items-center min-w-[120px]">
+                <ArrowRight className="h-4 w-4 mx-1.5 shrink-0 text-emerald-500/50" />
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-emerald-600 text-white font-medium w-full">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-emerald-600 text-xs font-bold">
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="text-xs sm:text-sm truncate">Won</span>
+                </div>
+              </div>
+            )}
+
+            {/* Lost indicator at end */}
+            {isLost && (
+              <div className="flex items-center min-w-[120px]">
+                <ArrowRight className="h-4 w-4 mx-1.5 shrink-0 text-red-500/30" />
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-red-600 text-white font-medium w-full">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-red-600 text-xs font-bold">
+                    <X className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="text-xs sm:text-sm truncate">Lost</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -345,18 +484,14 @@ export default function DealDetailsPage() {
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-4">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Title</p>
-                <p className="font-medium">{deal.title}</p>
-              </div>
-              <div>
                 <p className="text-sm text-muted-foreground mb-1">Deal For</p>
-                {deal.deal_for === "lead" ? (
+                {(deal as any).deal_for === "lead" ? (
                   <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">
                     Lead: {lead?.name || "Selected Lead"}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/20">
-                    Customer: {deal.contact?.name || deal.contact?.phone || "Customer"}
+                    Customer: {(deal.contact as any)?.name || (deal.contact as any)?.phone || "Customer"}
                   </Badge>
                 )}
               </div>
@@ -366,22 +501,28 @@ export default function DealDetailsPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Deal Number</p>
-                <p className="font-mono font-medium">{deal.deal_number || deal.id.slice(0, 8)}</p>
+                <p className="font-mono font-medium">{(deal as any).deal_number || deal.id.slice(0, 8)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Current Stage</p>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="px-2.5 py-0.5 font-medium">
-                    {currentStage?.name || "Qualified"}
-                  </Badge>
-                  {deal.is_converted && (
-                    <Badge className="bg-emerald-600 text-white">Won (Converted)</Badge>
-                  )}
-                  {!deal.is_active && !deal.is_converted && (
-                    <Badge variant="destructive">Inactive</Badge>
+                  {isLost ? (
+                    <Badge variant="destructive">Lost</Badge>
+                  ) : isWon ? (
+                    <Badge className="bg-emerald-600 text-white">{deal.is_converted ? "Won (Converted)" : "Won"}</Badge>
+                  ) : (
+                    <Badge variant="secondary" className="px-2.5 py-0.5 font-medium">
+                      {currentStage?.name || "—"}
+                    </Badge>
                   )}
                 </div>
               </div>
+              {deal.expected_close_date && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Expected Close</p>
+                  <p className="font-medium">{new Date(deal.expected_close_date).toLocaleDateString()}</p>
+                </div>
+              )}
             </div>
 
             {/* Collaborators List */}
@@ -426,12 +567,12 @@ export default function DealDetailsPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted text-muted-foreground border-b border-border">
                       <tr>
-                        <th className="py-2.5 px-4 text-left font-medium">Product / Description</th>
-                        <th className="py-2.5 px-4 text-left font-medium">Unit</th>
-                        <th className="py-2.5 px-4 text-right font-medium">Qty</th>
-                        <th className="py-2.5 px-4 text-right font-medium">Rate (₹)</th>
-                        <th className="py-2.5 px-4 text-right font-medium">Tax %</th>
-                        <th className="py-2.5 px-4 text-right font-medium">Total (₹)</th>
+                        <th className="py-2.5 px-4 text-left font-medium">PRODUCT</th>
+                        <th className="py-2.5 px-4 text-left font-medium">UNIT</th>
+                        <th className="py-2.5 px-4 text-right font-medium">QTY</th>
+                        <th className="py-2.5 px-4 text-right font-medium">PRICE (₹)</th>
+                        <th className="py-2.5 px-4 text-right font-medium">TAX %</th>
+                        <th className="py-2.5 px-4 text-right font-medium">TOTAL (₹)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -455,7 +596,15 @@ export default function DealDetailsPage() {
 
                 <div className="flex justify-end">
                   <div className="text-right space-y-1 text-sm bg-muted/50 p-4 rounded-lg border border-border min-w-[240px]">
-                    <div className="flex justify-between font-semibold text-foreground">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Subtotal:</span>
+                      <span>₹{dealItems.reduce((sum, item) => sum + (Number(item.sub_total) || 0), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Tax:</span>
+                      <span>₹{dealItems.reduce((sum, item) => sum + (Number(item.tax_amount) || 0), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-1">
                       <span>Total Value:</span>
                       <span className="text-primary">
                         ₹{dealItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
@@ -511,6 +660,60 @@ export default function DealDetailsPage() {
         stages={stages}
         onSaved={fetchAllData}
       />
+
+      {/* Mark as Lost Dialog */}
+      <Dialog open={lostDialogOpen} onOpenChange={setLostDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-500">
+              <XCircle className="h-5 w-5" />
+              Mark Deal as Lost
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Select a reason</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {LOST_REASONS.map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => { setLostReason(reason); setLostReasonText(""); }}
+                    className={`text-left px-3 py-2 rounded-md text-sm border transition-colors ${
+                      lostReason === reason && !lostReasonText
+                        ? "border-red-500 bg-red-500/10 text-red-400"
+                        : "border-border bg-muted/30 hover:bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lost-reason-text">Or describe in detail (optional)</Label>
+              <Textarea
+                id="lost-reason-text"
+                placeholder="Add more context about why this deal was lost..."
+                value={lostReasonText}
+                onChange={(e) => { setLostReasonText(e.target.value); if (e.target.value) setLostReason(""); }}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLostDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleMarkLost}
+              disabled={markingLost || (!lostReason && !lostReasonText.trim())}
+              className="bg-red-600 hover:bg-red-700 text-white gap-2"
+            >
+              {markingLost ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+              Confirm Lost
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

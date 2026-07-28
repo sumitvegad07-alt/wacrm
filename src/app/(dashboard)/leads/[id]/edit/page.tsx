@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Pencil, Loader2, DollarSign, Building2, Phone, Mail, Users } from "lucide-react";
+import { ArrowLeft, Pencil, Loader2, Building2, Phone, Mail, Users, User, MapPin, Globe } from "lucide-react";
 import { toast } from "sonner";
 import type { Profile, Lead } from "@/types";
 import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
@@ -25,20 +25,20 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [creatorName, setCreatorName] = useState<string>("Unknown Creator");
   const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
 
   const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    whatsapp: "",
     company: "",
+    contact_person: "",
+    phone: "",
+    email: "",
     industry: "",
-    source: "",
-    estimated_value: "",
-    owner_id: "",
+    source: "Website",
     status: "new",
+    address: "",
+    city: "",
+    state: "",
+    country: "",
     notes: ""
   });
 
@@ -59,24 +59,18 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
 
       setCollaboratorIds(leadData.collaborator_ids || []);
 
-      if (leadData.creator) {
-        setCreatorName((leadData.creator as any).full_name || (leadData.creator as any).email || "Creator");
-      } else {
-        const cProf = profilesData?.find((p: any) => p.id === leadData.user_id || p.user_id === leadData.user_id);
-        if (cProf) setCreatorName(cProf.full_name || cProf.email);
-      }
-
       setForm({
-        name: leadData.name || "",
+        company: leadData.company || leadData.name || "",
+        contact_person: leadData.contact_person || "",
+        phone: leadData.phone || leadData.whatsapp || "",
         email: leadData.email || "",
-        phone: leadData.phone || "",
-        whatsapp: leadData.whatsapp || "",
-        company: leadData.company || "",
         industry: leadData.industry || "",
         source: leadData.source || "Website",
-        estimated_value: leadData.estimated_value ? String(leadData.estimated_value) : "",
-        owner_id: leadData.owner_id || leadData.assigned_to || "",
         status: leadData.status || "new",
+        address: leadData.address || "",
+        city: leadData.city || "",
+        state: leadData.state || "",
+        country: leadData.country || "",
         notes: leadData.notes || ""
       });
       setLoading(false);
@@ -86,24 +80,31 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
 
   const handleSaveLead = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.phone.trim()) {
-      toast.error("Please fill in Name and Phone Number");
+    if (!form.company.trim() && !form.contact_person.trim()) {
+      toast.error("Please enter a Company Name or Contact Person Name");
+      return;
+    }
+    if (!form.phone.trim()) {
+      toast.error("Please fill in Contact Number");
       return;
     }
 
     setSaving(true);
     try {
       const payload: any = {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim() || null,
-        whatsapp: form.whatsapp.trim() || form.phone.trim(),
+        name: form.company.trim() || form.contact_person.trim() || "Unnamed Lead",
         company: form.company.trim() || null,
+        contact_person: form.contact_person.trim() || null,
+        phone: form.phone.trim() || null,
+        whatsapp: form.phone.trim() || null,
+        email: form.email.trim() || null,
         industry: form.industry.trim() || null,
         source: form.source || "Website",
         status: form.status,
-        estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : 0,
-        owner_id: form.owner_id || null,
+        address: form.address.trim() || null,
+        city: form.city.trim() || null,
+        state: form.state.trim() || null,
+        country: form.country.trim() || null,
         collaborator_ids: collaboratorIds,
         notes: form.notes.trim() || null
       };
@@ -127,7 +128,7 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
+      <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -136,20 +137,20 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
   return (
     <div className="p-8 w-full max-w-none space-y-8">
       {/* Top Header */}
-      <div className="flex items-center justify-between pb-6 border-b border-border">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href={`/leads/${leadId}`}>
-            <Button variant="outline" size="icon" className="shrink-0">
-              <ArrowLeft className="w-4 h-4" />
+            <Button variant="ghost" size="icon" className="h-9 w-9 border border-border">
+              <ArrowLeft className="h-4 w-4 text-foreground" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <Pencil className="w-6 h-6 text-primary" />
               Edit Lead
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Update lead contact information, ownership, and collaborators.
+              Update lead details and assign collaborators.
             </p>
           </div>
         </div>
@@ -158,21 +159,39 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
       <form onSubmit={handleSaveLead} className="space-y-8">
         {/* Contact Information */}
         <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Contact Information</h2>
+          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Basic Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. John Doe"
-                required
-              />
+              <Label htmlFor="company">Company Name *</Label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="company"
+                  value={form.company}
+                  onChange={e => setForm({ ...form, company: e.target.value })}
+                  placeholder="e.g. Acme Corp"
+                  className="pl-9"
+                  required
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number *</Label>
+              <Label htmlFor="contact_person">Contact Person Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="contact_person"
+                  value={form.contact_person}
+                  onChange={e => setForm({ ...form, contact_person: e.target.value })}
+                  placeholder="e.g. John Doe"
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Contact Number *</Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -184,16 +203,6 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
                   required
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp">WhatsApp Number</Label>
-              <Input
-                id="whatsapp"
-                value={form.whatsapp}
-                onChange={e => setForm({ ...form, whatsapp: e.target.value })}
-                placeholder="Same as Phone if left empty"
-              />
             </div>
 
             <div className="space-y-2">
@@ -216,31 +225,7 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
         {/* Lead Qualification */}
         <Card className="p-6 border-border shadow-sm space-y-6">
           <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Lead Qualification</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="company">Company Name</Label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="company"
-                  value={form.company}
-                  onChange={e => setForm({ ...form, company: e.target.value })}
-                  placeholder="Acme Corp"
-                  className="pl-9"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="industry">Industry</Label>
-              <Input
-                id="industry"
-                value={form.industry}
-                onChange={e => setForm({ ...form, industry: e.target.value })}
-                placeholder="e.g. Technology, Retail"
-              />
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <Label htmlFor="source">Lead Source</Label>
               <Select value={form.source} onValueChange={v => setForm({ ...form, source: v || "Website" })}>
@@ -257,75 +242,94 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="estimated_value">Estimated Value (₹)</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="estimated_value"
-                  type="number"
-                  step="any"
-                  value={form.estimated_value}
-                  onChange={e => setForm({ ...form, estimated_value: e.target.value })}
-                  placeholder="0.00"
-                  className="pl-9"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
+              <Label htmlFor="status">Lead Status</Label>
               <Select value={form.status} onValueChange={v => setForm({ ...form, status: v || "new" })}>
-                <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select Status" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="new">New</SelectItem>
                   <SelectItem value="contacted">Contacted</SelectItem>
                   <SelectItem value="qualified">Qualified</SelectItem>
-                  <SelectItem value="proposal">Proposal</SelectItem>
-                  <SelectItem value="won">Won</SelectItem>
-                  <SelectItem value="lost">Lost</SelectItem>
+                  <SelectItem value="unqualified">Unqualified</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="industry">Industry</Label>
+              <Input
+                id="industry"
+                value={form.industry}
+                onChange={e => setForm({ ...form, industry: e.target.value })}
+                placeholder="e.g. Technology, Retail"
+              />
             </div>
           </div>
         </Card>
 
-        {/* Ownership & Collaboration */}
+        {/* Address & Location */}
+        <Card className="p-6 border-border shadow-sm space-y-6">
+          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary" />
+            Address & Location
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="address">Street Address</Label>
+              <Input
+                id="address"
+                value={form.address}
+                onChange={e => setForm({ ...form, address: e.target.value })}
+                placeholder="Street address, apartment, suite..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                value={form.city}
+                onChange={e => setForm({ ...form, city: e.target.value })}
+                placeholder="e.g. Mumbai"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="state">State / Region</Label>
+              <Input
+                id="state"
+                value={form.state}
+                onChange={e => setForm({ ...form, state: e.target.value })}
+                placeholder="e.g. Maharashtra"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="country">Country</Label>
+              <div className="relative">
+                <Globe className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="country"
+                  value={form.country}
+                  onChange={e => setForm({ ...form, country: e.target.value })}
+                  placeholder="e.g. India"
+                  className="pl-9"
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Collaborators */}
         <Card className="p-6 border-border shadow-sm space-y-6">
           <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            Ownership & Collaboration
+            Collaborators
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <Label>Creator (Read-only)</Label>
-              <Input
-                value={creatorName}
-                disabled
-                className="bg-muted text-muted-foreground"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Owner / Assigned To</Label>
-              <Select value={form.owner_id} onValueChange={v => setForm({ ...form, owner_id: v || "" })}>
-                <SelectTrigger><SelectValue placeholder="Select Owner" /></SelectTrigger>
-                <SelectContent>
-                  {profiles.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.full_name || p.email}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Collaborators</Label>
-              <CollaboratorsSelect
-                profiles={profiles}
-                selectedIds={collaboratorIds}
-                onChange={setCollaboratorIds}
-              />
-            </div>
-          </div>
+          <CollaboratorsSelect
+            profiles={profiles}
+            selectedIds={collaboratorIds}
+            onChange={setCollaboratorIds}
+          />
         </Card>
 
         {/* Notes */}
@@ -337,7 +341,7 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
               id="notes"
               value={form.notes}
               onChange={e => setForm({ ...form, notes: e.target.value })}
-              placeholder="Enter key details or conversation notes..."
+              placeholder="Enter key details or initial conversation notes..."
               rows={4}
             />
           </div>

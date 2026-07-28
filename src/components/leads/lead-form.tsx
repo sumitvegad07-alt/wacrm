@@ -106,7 +106,9 @@ export function LeadForm({ open, onOpenChange, lead, onSaved }: LeadFormProps) {
     const payload = {
       account_id: accountId,
       name: formData.name,
+      company: formData.name,
       contact_person: formData.contact_person,
+      phone: formData.whatsapp,
       whatsapp: formData.whatsapp,
       email: formData.email,
       source: formData.source,
