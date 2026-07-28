@@ -15,12 +15,15 @@ import { toast } from "sonner";
 import type { Profile, Contact, Lead, PipelineStage, Deal } from "@/types";
 import { DealItemsTable, type PartialDealItem } from "@/components/deals/deal-items-table";
 import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
+import { useAuth } from "@/hooks/use-auth";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 export default function EditDealPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const dealId = resolvedParams.id;
   const router = useRouter();
   const supabase = createClient();
+  const { account } = useAuth();
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -111,10 +114,6 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
 
   const handleSaveDeal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) {
-      toast.error("Please enter a Deal Title");
-      return;
-    }
     if (dealFor === "customer" && !form.contact_id) {
       toast.error("Please select a Customer / Contact");
       return;
@@ -127,17 +126,18 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
     setSaving(true);
     try {
       const itemsTotal = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-      const computedValue = items.length > 0 ? itemsTotal : (form.value ? parseFloat(form.value) : 0);
+      const targetName = dealFor === "customer"
+        ? (contacts.find(c => c.id === form.contact_id)?.name || "Customer Deal")
+        : (leads.find(l => l.id === form.lead_id)?.name || "Lead Deal");
 
       const payload: any = {
-        title: form.title.trim(),
-        value: computedValue,
-        currency: form.currency || "INR",
+        title: targetName,
+        value: itemsTotal,
+        currency: (account as any)?.default_currency || "INR",
         deal_for: dealFor,
         contact_id: dealFor === "customer" ? form.contact_id : null,
         lead_id: dealFor === "lead" ? form.lead_id : null,
         collaborator_ids: collaboratorIds,
-        assigned_to: form.assigned_to || null,
         stage_id: form.stage_id || null,
         expected_close_date: form.expected_close_date || null,
         notes: form.notes.trim() || null,
@@ -219,17 +219,6 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
           <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Opportunity Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="title">Deal Title *</Label>
-              <Input
-                id="title"
-                value={form.title}
-                onChange={e => setForm({ ...form, title: e.target.value })}
-                placeholder="e.g. Enterprise License Contract - Q3"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label className="block">Deal For *</Label>
               <div className="flex gap-2">
                 <Button
@@ -260,67 +249,45 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
             {dealFor === "customer" ? (
               <div className="space-y-2">
                 <Label>Customer / Contact *</Label>
-                <Select value={form.contact_id} onValueChange={v => setForm({ ...form, contact_id: v || "" })}>
-                  <SelectTrigger><SelectValue placeholder="Select Customer" /></SelectTrigger>
-                  <SelectContent>
-                    {contacts.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name || c.phone}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.contact_id}
+                  onChange={v => setForm({ ...form, contact_id: v })}
+                  placeholder="Select Customer..."
+                  searchPlaceholder="Search customer by name..."
+                  options={contacts.map(c => ({
+                    value: c.id,
+                    label: c.name || c.phone || "Unnamed Contact"
+                  }))}
+                />
               </div>
             ) : (
               <div className="space-y-2">
                 <Label>Lead *</Label>
-                <Select value={form.lead_id} onValueChange={v => setForm({ ...form, lead_id: v || "" })}>
-                  <SelectTrigger><SelectValue placeholder="Select Lead" /></SelectTrigger>
-                  <SelectContent>
-                    {leads.map(l => (
-                      <SelectItem key={l.id} value={l.id}>{l.name} {l.whatsapp ? `(${l.whatsapp})` : ""}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.lead_id}
+                  onChange={v => setForm({ ...form, lead_id: v })}
+                  placeholder="Select Lead..."
+                  searchPlaceholder="Search lead..."
+                  options={leads.map(l => ({
+                    value: l.id,
+                    label: `${l.name} ${l.whatsapp ? `(${l.whatsapp})` : ""}`
+                  }))}
+                />
               </div>
             )}
 
             <div className="space-y-2">
               <Label>Pipeline Stage</Label>
-              <Select value={form.stage_id} onValueChange={v => setForm({ ...form, stage_id: v || "" })}>
-                <SelectTrigger><SelectValue placeholder="Select Stage" /></SelectTrigger>
-                <SelectContent>
-                  {stages.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="value">Deal Value (₹)</Label>
-              <Input
-                id="value"
-                type="number"
-                step="any"
-                value={items.length > 0 ? computedValue : form.value}
-                disabled={items.length > 0}
-                onChange={e => setForm({ ...form, value: e.target.value })}
-                placeholder="0.00"
+              <SearchableSelect
+                value={form.stage_id}
+                onChange={v => setForm({ ...form, stage_id: v })}
+                placeholder="Select Stage..."
+                searchPlaceholder="Search stage..."
+                options={stages.map(s => ({
+                  value: s.id,
+                  label: s.name
+                }))}
               />
-              {items.length > 0 && (
-                <p className="text-xs text-muted-foreground">Auto-calculated from product line items below.</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="currency">Currency</Label>
-              <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v || "INR" })}>
-                <SelectTrigger><SelectValue placeholder="Currency" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="INR">INR (₹)</SelectItem>
-                  <SelectItem value="USD">USD ($)</SelectItem>
-                  <SelectItem value="EUR">EUR (€)</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="space-y-2">
@@ -341,30 +308,9 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
         <Card className="p-6 border-border shadow-sm space-y-6">
           <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            Ownership & Collaboration
+            Collaboration
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <Label>Creator (Read-only)</Label>
-              <Input
-                value={creatorName}
-                disabled
-                className="bg-muted text-muted-foreground"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Assigned Sales Owner</Label>
-              <Select value={form.assigned_to} onValueChange={v => setForm({ ...form, assigned_to: v || "" })}>
-                <SelectTrigger><SelectValue placeholder="Select Team Member" /></SelectTrigger>
-                <SelectContent>
-                  {profiles.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.full_name || p.email}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label>Collaborators</Label>
               <CollaboratorsSelect
