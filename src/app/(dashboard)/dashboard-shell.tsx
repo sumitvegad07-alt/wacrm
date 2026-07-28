@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -13,8 +13,18 @@ import { Button } from "@/components/ui/button";
 // client components can't export Next's metadata object.
 
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
-  const { user, loading, account } = useAuth();
+  const {
+    user,
+    loading,
+    account,
+    hasWhatsApp,
+    hasAutomations,
+    hasBroadcasts,
+    hasLocationTracking,
+    isModuleEnabled,
+  } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   // Sidebar drawer state — only used on mobile. On lg+ the sidebar is
   // always visible and this stays at `false` (ignored by the component).
@@ -26,6 +36,34 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       router.push("/login");
     }
   }, [user, loading, router]);
+
+  // Route protection: restrict direct navigation to disabled module routes
+  useEffect(() => {
+    if (loading || !user || !pathname) return;
+
+    const isRestricted =
+      (pathname.startsWith("/automations") && !hasAutomations) ||
+      (pathname.startsWith("/broadcasts") && !hasBroadcasts) ||
+      (pathname.startsWith("/locations") && !hasLocationTracking) ||
+      (pathname.startsWith("/whatsapp") && (!hasWhatsApp || !isModuleEnabled("whatsapp"))) ||
+      (pathname.startsWith("/quotations") && !isModuleEnabled("quotation")) ||
+      (pathname.startsWith("/expenses") && !isModuleEnabled("expense")) ||
+      (pathname.startsWith("/dispatch") && !isModuleEnabled("dispatch"));
+
+    if (isRestricted) {
+      router.replace("/dashboard");
+    }
+  }, [
+    loading,
+    user,
+    pathname,
+    hasAutomations,
+    hasBroadcasts,
+    hasLocationTracking,
+    hasWhatsApp,
+    isModuleEnabled,
+    router,
+  ]);
 
   useEffect(() => {
     if (account && !account.is_provisioned && account.subscription_status === 'active') {

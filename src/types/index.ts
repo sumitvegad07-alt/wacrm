@@ -797,3 +797,51 @@ export interface Expense {
   expense_type?: ExpenseType;
   employee?: Profile;
 }
+
+export interface Lead {
+  id: string;
+  name: string;
+  source?: string;
+  status?: string;
+  industry?: string;
+  whatsapp?: string;
+  created_at?: string;
+  is_converted?: boolean;
+  [key: string]: any;
+}
+
+export interface Employee {
+  id: string;
+  full_name: string;
+  email: string;
+  employee_code?: string;
+  mobile?: string;
+  department?: string;
+  designation?: string;
+  status?: string;
+  web_access?: boolean;
+  mobile_access?: boolean;
+  employee_role_id?: string;
+  employee_roles?: { name: string };
+  account_role?: string;
+  last_login?: string;
+  [key: string]: any;
+}
+
+export interface EmployeeRole {
+  id: string;
+  name: string;
+  description?: string;
+  [key: string]: any;
+}
+
+export interface EmployeeDevice {
+  id: string;
+  device_name?: string;
+  device_model?: string;
+  os_version?: string;
+  app_version?: string;
+  last_active?: string;
+  is_active?: boolean;
+  [key: string]: any;
+}

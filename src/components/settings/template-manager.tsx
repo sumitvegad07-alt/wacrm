@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -124,6 +125,7 @@ function emptyButton(type: TemplateButton['type']): TemplateButton {
 }
 
 export function TemplateManager() {
+  const router = useRouter();
   const supabase = createClient();
   const { user, loading: authLoading, account } = useAuth();
 
@@ -232,48 +234,11 @@ export function TemplateManager() {
   }
 
   function openEdit(template: MessageTemplate) {
-    setEditingId(template.id);
-    setForm({
-      name: template.name,
-      category: template.category,
-      language: template.language || 'en_US',
-      header_format: (template.header_type ?? 'none') as HeaderFormat,
-      header_content: template.header_content ?? '',
-      header_media_url: template.header_media_url ?? '',
-      header_sample: template.sample_values?.header?.[0] ?? '',
-      body_text: template.body_text,
-      body_samples: template.sample_values?.body ?? [],
-      footer_text: template.footer_text ?? '',
-      buttons: template.buttons ?? [],
-    });
-    setDialogOpen(true);
+    router.push(`/settings/templates/${template.id}/edit`);
   }
 
   function openCreate() {
-    setEditingId(null);
-    let templateStarter = { ...emptyForm };
-    const industry = account?.industry || 'Other';
-    
-    if (industry.includes("Real Estate")) {
-       templateStarter.name = "property_viewing_confirmation";
-       templateStarter.body_text = "Hi {{1}}, your property viewing for {{2}} is confirmed for {{3}}. We look forward to seeing you!";
-       templateStarter.body_samples = ["John", "123 Main St", "Tomorrow at 2 PM"];
-    } else if (industry.includes("Healthcare") || industry.includes("Dental")) {
-       templateStarter.name = "appointment_reminder";
-       templateStarter.body_text = "Hi {{1}}, this is a reminder for your upcoming appointment on {{2}} at {{3}}.";
-       templateStarter.body_samples = ["John", "Tomorrow", "10:00 AM"];
-    } else if (industry.includes("Retail") || industry.includes("E-commerce")) {
-       templateStarter.name = "order_update";
-       templateStarter.body_text = "Hi {{1}}, your order {{2}} has been shipped and is on its way!";
-       templateStarter.body_samples = ["John", "#12345"];
-    } else if (industry.includes("Education")) {
-       templateStarter.name = "course_registration";
-       templateStarter.body_text = "Hi {{1}}, your registration for {{2}} is confirmed. Classes start on {{3}}.";
-       templateStarter.body_samples = ["John", "Math 101", "Monday"];
-    }
-
-    setForm(templateStarter);
-    setDialogOpen(true);
+    router.push('/settings/templates/new');
   }
 
   async function handleSubmit() {
@@ -659,7 +624,7 @@ export function TemplateManager() {
           }
         }}
       >
-        <DialogContent className="bg-popover border-border sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-popover border-border sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-popover-foreground">
               {editingId ? 'Edit Message Template' : 'New Message Template'}

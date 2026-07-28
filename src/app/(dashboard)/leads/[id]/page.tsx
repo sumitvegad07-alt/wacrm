@@ -284,7 +284,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               Message
             </Button>
           )}
-          <Button onClick={() => setEditOpen(true)} variant="secondary" className="gap-2 shadow-sm">
+          <Button onClick={() => router.push(`/leads/${lead.id}/edit`)} variant="secondary" className="gap-2 shadow-sm">
             <Pencil className="size-4" />
             Edit
           </Button>

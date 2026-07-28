@@ -169,7 +169,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved }: LeadFormProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{lead ? "Edit Lead" : "Add New Lead"}</DialogTitle>

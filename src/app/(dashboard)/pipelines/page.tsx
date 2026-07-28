@@ -321,11 +321,9 @@ export default function PipelinesPage() {
 
   const handleAddDeal = useCallback(
     (stageId?: string) => {
-      setEditingDeal(null);
-      setDefaultStageId(stageId ?? stages[0]?.id ?? "");
-      setDealFormOpen(true);
+      router.push("/deals/new");
     },
-    [stages],
+    [router],
   );
 
   useEffect(() => {
@@ -336,10 +334,8 @@ export default function PipelinesPage() {
   }, [searchParams, loading, stages, selectedPipelineId, router, handleAddDeal, dealFormOpen]);
 
   const handleEditDeal = useCallback((deal: Deal) => {
-    setEditingDeal(deal);
-    setDefaultStageId(deal.stage_id);
-    setDealFormOpen(true);
-  }, []);
+    router.push(`/deals/${deal.id}/edit`);
+  }, [router]);
 
   async function handleCreatePipeline() {
     const name = newPipelineName.trim();
@@ -724,7 +720,7 @@ export default function PipelinesPage() {
                 filterState={filterState}
                 onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
                 storageKey={`wacrm_deals_table_${selectedPipelineId}`}
-                onRowClick={(deal) => handleEditDeal(deal)}
+                onRowClick={(deal) => router.push(`/deals/${deal.id}`)}
                 rowKey={(deal) => deal.id}
                 selection={{
                   selectedIds: selectedDealIds,

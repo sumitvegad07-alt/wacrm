@@ -287,7 +287,7 @@ export default function LeadsPage() {
             Manage raw prospects before they become contacts.
           </p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setFormOpen(true)}>
+        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/leads/new')}>
           <Plus className="mr-2 h-4 w-4" /> Add Lead
         </Button>
       </div>

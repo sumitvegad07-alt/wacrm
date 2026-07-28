@@ -177,7 +177,7 @@ export default function DealDetailsPage() {
               Message Customer
             </Button>
           )}
-          <Button onClick={() => setEditOpen(true)} className="gap-2">
+          <Button onClick={() => router.push(`/deals/${deal.id}/edit`)} className="gap-2">
             <Pencil className="size-4" />
             Edit Deal
           </Button>

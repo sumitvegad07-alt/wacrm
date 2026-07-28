@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ interface Device {
 }
 
 export default function EmployeesPage() {
+  const router = useRouter();
   const { accountId, hasPermission, isSuperadmin } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
@@ -231,7 +233,7 @@ export default function EmployeesPage() {
               className="pl-9 w-64 bg-card"
             />
           </div>
-          <Button onClick={() => setIsAddModalOpen(true)}>
+          <Button onClick={() => router.push('/team/employees/new')}>
             <UserPlus className="w-4 h-4 mr-2" />
             Add Employee
           </Button>
@@ -255,7 +257,7 @@ export default function EmployeesPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.map(emp => (
-                <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
+                <tr key={emp.id} onClick={() => router.push(`/team/employees/${emp.id}`)} className="hover:bg-muted/30 transition-colors cursor-pointer">
                   <td className="px-6 py-4">
                     <div className="font-medium text-foreground">{emp.full_name || "Unknown"}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">{emp.email} {emp.employee_code && `• ${emp.employee_code}`}</div>
@@ -278,7 +280,7 @@ export default function EmployeesPage() {
                     </Badge>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openEditModal(emp)}>
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/team/employees/${emp.id}`); }}>
                       <Edit className="w-4 h-4 mr-2" />
                       Manage
                     </Button>
@@ -292,7 +294,7 @@ export default function EmployeesPage() {
 
       {/* Add Employee Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-2xl w-[95vw]">
+        <DialogContent className="sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Employee</DialogTitle>
             <DialogDescription>
@@ -357,7 +359,7 @@ export default function EmployeesPage() {
 
       {/* Edit Employee & Device Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Manage Employee</DialogTitle>
           </DialogHeader>
