@@ -247,10 +247,10 @@ html[data-theme="rose"] {
   background: hsl(var(--muted-foreground));
 }
 
-/* ── Global scrollbar styling (dark-mode friendly) ── */
+/* ── Global scrollbar styling (visible sleek slider matching reference) ── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--muted)) transparent;
+  scrollbar-color: rgba(150, 150, 150, 0.35) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -263,10 +263,10 @@ html[data-theme="rose"] {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted));
-  border-radius: 10px;
+  background: rgba(150, 150, 150, 0.35);
+  border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: rgba(150, 150, 150, 0.55);
 }

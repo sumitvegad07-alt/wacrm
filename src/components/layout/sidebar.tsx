@@ -35,7 +35,6 @@ import {
   Map,
   LineChart,
   ChevronDown,
-  ChevronRight,
   Briefcase,
   UserPlus,
   Coins,
@@ -560,11 +559,11 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
       <aside
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-border bg-card",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-60 flex-col border-r border-border bg-card",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
-          "lg:static lg:z-0 lg:w-72 lg:translate-x-0 lg:transition-none",
+          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
         )}
         aria-label="Primary"
       >
@@ -589,7 +588,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3" style={{ scrollbarColor: 'hsl(var(--muted)) transparent', scrollbarWidth: 'thin' }}>
+        <nav className="flex-1 overflow-y-auto px-3 py-3">
           <div className="flex flex-col gap-1">
             {filteredMenu.map((node, idx) => {
               if (node.type === "spacer") {
@@ -634,11 +633,12 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                       />
                       <span className="truncate">{node.label}</span>
                     </div>
-                    {isOpen ? (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform" />
-                    )}
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                        isOpen && "rotate-180 text-foreground"
+                      )}
+                    />
                   </button>
 
                   {isOpen && (
