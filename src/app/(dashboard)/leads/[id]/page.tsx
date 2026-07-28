@@ -191,51 +191,26 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     }
 
     setConverting(true);
+    try {
+      const { data: newContactId, error } = await supabase.rpc(
+        "convert_lead_to_customer",
+        { p_lead_id: lead.id, p_hierarchy_level: level }
+      );
 
-    const { data: newContactId, error } = await supabase.rpc(
-      "convert_lead_to_customer",
-      { p_lead_id: lead.id, p_hierarchy_level: level }
-    );
+      if (error || !newContactId) {
+        console.error("Conversion failed", error);
+        toast.error(error?.message || "Failed to convert lead.");
+        return;
+      }
 
-    if (error || !newContactId) {
-      console.error("Conversion failed", error);
-      toast.error(error?.message || "Failed to convert lead.");
+      toast.success("Lead successfully converted to Customer!");
+      router.push(`/contacts/${newContactId}`);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to convert lead.");
+    } finally {
       setConverting(false);
-      return;
     }
-
-    // Copy timeline logs from module_activities to contact
-    if (activities && activities.length > 0) {
-      const copiedLogs = activities.map((act) => ({
-        account_id: account?.id,
-        module_name: "contact",
-        record_id: newContactId,
-        user_id: act.user_id || user?.id,
-        action: act.action || "copied_from_lead",
-        description: `[From Lead] ${act.description || ""}`
-      }));
-      await supabase.from("module_activities").insert(copiedLogs);
-    }
-
-    // Log activity on lead
-    await supabase.from("module_activities").insert({
-      account_id: account?.id,
-      module_name: "lead",
-      record_id: lead.id,
-      user_id: user?.id,
-      action: "converted_to_customer",
-      description: `Converted lead to Customer contact.`
-    });
-
-    // Mark lead as inactive and converted
-    await supabase.from("leads").update({
-      is_active: false,
-      is_converted: true,
-      converted_contact_id: newContactId
-    }).eq("id", lead.id);
-
-    toast.success("Lead successfully converted to Customer!");
-    router.push(`/contacts/${newContactId}`);
   };
 
   if (loading) {
@@ -357,16 +332,18 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 <p className="font-medium text-foreground">{lead.source || '-'}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Created By</p>
-                <p className="font-medium text-foreground">{creatorName}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Owner / Assigned To</p>
-                <p className="font-medium text-foreground">{ownerName}</p>
-              </div>
-              <div>
                 <p className="text-sm text-muted-foreground mb-1">Status</p>
-                <p className="font-medium capitalize text-foreground">{lead.status || 'new'}</p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="capitalize">
+                    {lead.status || 'new'}
+                  </Badge>
+                  {lead.is_converted && (
+                    <Badge className="bg-emerald-600 text-white">Won (Converted)</Badge>
+                  )}
+                  {!lead.is_active && !lead.is_converted && (
+                    <Badge variant="destructive">Inactive</Badge>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -186,6 +186,16 @@ export function SettingsOverview({
       subtitle: 'Lead sources, statuses & pipeline rules',
     },
     {
+      section: 'deal_pipelines',
+      loading: false,
+      subtitle: 'Default currency, sales pipelines, stages & rules',
+    },
+    {
+      section: 'module_settings',
+      loading: false,
+      subtitle: 'Enable or disable CRM modules for your team',
+    },
+    {
       section: 'tasks',
       loading: false,
       subtitle: 'Task categories, priorities & workflows',

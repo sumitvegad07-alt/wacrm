@@ -78,6 +78,36 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
   };
 
   const getActionMessage = (activity: any) => {
+    if (activity.details?.quotation_id) {
+      return (
+        <span>
+          Deal converted to Quotation{' '}
+          <Link href={`/quotations/${activity.details.quotation_id}`} className="text-primary hover:underline font-medium" onClick={(e) => e.stopPropagation()}>
+            {activity.details.quotation_number ? `#${activity.details.quotation_number}` : 'Quotation'}
+          </Link>
+        </span>
+      );
+    }
+    if (activity.details?.deal_id) {
+      return (
+        <span>
+          Quotation created from converted Deal{' '}
+          <Link href={`/deals/${activity.details.deal_id}`} className="text-primary hover:underline font-medium" onClick={(e) => e.stopPropagation()}>
+            {activity.details.deal_number || 'Deal'}
+          </Link>
+        </span>
+      );
+    }
+    if (activity.details?.contact_id) {
+      return (
+        <span>
+          Lead converted to Customer Contact{' '}
+          <Link href={`/contacts/${activity.details.contact_id}`} className="text-primary hover:underline font-medium" onClick={(e) => e.stopPropagation()}>
+            {activity.details.contact_name || 'Customer'}
+          </Link>
+        </span>
+      );
+    }
     // Dispatch events (mirrored onto the order timeline) link to the dispatch view.
     if (activity.details?.dispatch_id) {
       const num = activity.details.dispatch_number || 'dispatch';

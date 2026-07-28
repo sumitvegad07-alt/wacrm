@@ -74,7 +74,6 @@ function SettingsContent() {
       <div className="space-y-6">
         <ProfileForm />
         <AppearancePanel />
-        <DealsSettings />
       </div>
     ),
     security: <SecurityPanel />,
@@ -124,7 +123,12 @@ function SettingsContent() {
     templates: <TemplateManager />,
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
-    deal_pipelines: <DealPipelinesSettings />,
+    deal_pipelines: (
+      <div className="space-y-6">
+        <DealsSettings />
+        <DealPipelinesSettings />
+      </div>
+    ),
     leads: <LeadsSettings />,
     tasks: <TasksSettings />,
     orders: <OrdersSettings />,

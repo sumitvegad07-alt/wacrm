@@ -427,14 +427,16 @@ export function QuotationForm({
             <div className="flex items-center space-x-2 bg-muted rounded-md p-0.5">
               <button
                 type="button"
-                className={`px-2 py-1 text-xs rounded-sm transition-colors ${targetType === 'contact' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                disabled={!!quotationId}
+                className={`px-2 py-1 text-xs rounded-sm transition-colors ${targetType === 'contact' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'} ${!!quotationId ? 'opacity-50 cursor-not-allowed' : ''}`}
                 onClick={() => setTargetType('contact')}
               >
                 Customer
               </button>
               <button
                 type="button"
-                className={`px-2 py-1 text-xs rounded-sm transition-colors ${targetType === 'lead' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                disabled={!!quotationId}
+                className={`px-2 py-1 text-xs rounded-sm transition-colors ${targetType === 'lead' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'} ${!!quotationId ? 'opacity-50 cursor-not-allowed' : ''}`}
                 onClick={() => setTargetType('lead')}
               >
                 Lead
@@ -445,6 +447,7 @@ export function QuotationForm({
             <SearchableSelect
               value={contactId}
               onChange={setContactId}
+              disabled={!!quotationId}
               placeholder="Select a contact"
               searchPlaceholder="Search contacts..."
               emptyMessage="No contacts found."
@@ -457,6 +460,7 @@ export function QuotationForm({
             <SearchableSelect
               value={leadId}
               onChange={setLeadId}
+              disabled={!!quotationId}
               placeholder="Select a lead"
               searchPlaceholder="Search leads..."
               emptyMessage="No leads found."
@@ -518,6 +522,7 @@ export function QuotationForm({
           items={items} 
           onChange={setItems} 
           products={products} 
+          lockExistingProducts={!!quotationId}
         />
       </div>
 

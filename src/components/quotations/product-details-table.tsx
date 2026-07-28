@@ -17,11 +17,10 @@ interface ProductDetailsTableProps {
   items: PartialQuotationItem[];
   onChange: (items: PartialQuotationItem[]) => void;
   products: any[];
+  lockExistingProducts?: boolean;
 }
 
-const UNITS = ['Nos', 'Kg', 'Ltr', 'Box', 'Meter', 'Pcs'];
-
-export function ProductDetailsTable({ items, onChange, products }: ProductDetailsTableProps) {
+export function ProductDetailsTable({ items, onChange, products, lockExistingProducts }: ProductDetailsTableProps) {
   const calculateItemTotals = (item: PartialQuotationItem) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.price) || 0;
@@ -58,7 +57,7 @@ export function ProductDetailsTable({ items, onChange, products }: ProductDetail
       {
         product_id: null,
         product_name: '',
-        unit: 'Nos',
+        unit: '—',
         quantity: 1,
         price: 0,
         tax_rate: 0,
@@ -104,50 +103,54 @@ export function ProductDetailsTable({ items, onChange, products }: ProductDetail
             {items.map((item, index) => (
               <tr key={index} className="border-b border-border hover:bg-muted/30">
                 <td className="p-2 align-top">
-                  <SearchableSelect
-                    options={products.map(p => ({ label: p.sku ? `[${p.sku}] ${p.name}` : p.name, value: p.id }))}
-                    value={item.product_id || ''}
-                    onChange={(val) => {
-                      const product = products.find(p => p.id === val);
-                      if (product) {
-                         updateItem(index, {
-                            product_id: product.id,
-                            product_name: product.sku ? `[${product.sku}] ${product.name}` : product.name,
-                            price: Number(product.price) || 0,
-                         });
-                      } else {
-                         updateItem(index, { product_id: null, product_name: '' });
-                      }
-                    }}
-                    placeholder={item.product_name || "Select Product..."}
-                  />
-                  
-                  {/* Allow custom manual entry if not in list */}
-                  {!item.product_id && item.product_name === '' && (
-                    <Input 
-                      className="mt-2 h-9 text-xs" 
-                      placeholder="Or type custom product..." 
-                      value={item.product_name}
-                      onChange={(e) => updateItem(index, { product_name: e.target.value })}
-                    />
-                  )}
-                  {item.product_id === null && item.product_name !== '' && (
-                     <Input 
-                     className="mt-2 h-9 text-xs" 
-                     placeholder="Custom product name" 
-                     value={item.product_name}
-                     onChange={(e) => updateItem(index, { product_name: e.target.value })}
-                   />
+                  {lockExistingProducts && (item.product_name || item.product_id) ? (
+                    <div className="py-2 px-2.5 font-medium text-sm text-foreground bg-muted/40 border border-border/50 rounded-md">
+                      {item.product_name || "Product Item"}
+                    </div>
+                  ) : (
+                    <>
+                      <SearchableSelect
+                        options={products.map(p => ({ label: p.sku ? `[${p.sku}] ${p.name}` : p.name, value: p.id }))}
+                        value={item.product_id || ''}
+                        onChange={(val) => {
+                          const product = products.find(p => p.id === val);
+                          if (product) {
+                             updateItem(index, {
+                                product_id: product.id,
+                                product_name: product.sku ? `[${product.sku}] ${product.name}` : product.name,
+                                price: Number(product.price) || 0,
+                                unit: product.unit || '—',
+                             });
+                          } else {
+                             updateItem(index, { product_id: null, product_name: '' });
+                          }
+                        }}
+                        placeholder={item.product_name || "Select Product..."}
+                      />
+                      
+                      {/* Allow custom manual entry if not in list */}
+                      {!item.product_id && item.product_name === '' && (
+                        <Input 
+                          className="mt-2 h-9 text-xs" 
+                          placeholder="Or type custom product..." 
+                          value={item.product_name}
+                          onChange={(e) => updateItem(index, { product_name: e.target.value })}
+                        />
+                      )}
+                      {item.product_id === null && item.product_name !== '' && (
+                         <Input 
+                         className="mt-2 h-9 text-xs" 
+                         placeholder="Custom product name" 
+                         value={item.product_name}
+                         onChange={(e) => updateItem(index, { product_name: e.target.value })}
+                       />
+                      )}
+                    </>
                   )}
                 </td>
                 
                 <td className="p-2 align-top">
-                  <SearchableSelect
-                    options={UNITS.map(u => ({ label: u, value: u }))}
-                    value={item.unit || ''}
-                    onChange={(val) => updateItem(index, { unit: val })}
-                    placeholder="Unit"
-                  />
+                  <div className="py-2.5 px-2 text-sm text-muted-foreground whitespace-nowrap">{item.unit || '—'}</div>
                 </td>
                 
                 <td className="p-2 align-top">

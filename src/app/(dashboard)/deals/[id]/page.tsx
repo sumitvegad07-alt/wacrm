@@ -169,117 +169,14 @@ export default function DealDetailsPage() {
 
     setConverting(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("Not authenticated");
-
-      const { data: accountData } = await supabase
-        .from('profiles')
-        .select('account_id')
-        .eq('user_id', userData.user.id)
-        .single();
-      if (!accountData) throw new Error("No account found");
-
-      // Compute totals from dealItems or deal value
-      const subTotal = dealItems.length > 0 
-        ? dealItems.reduce((sum, item) => sum + (Number(item.sub_total) || 0), 0)
-        : Number(deal.value) || 0;
-      const taxTotal = dealItems.length > 0 
-        ? dealItems.reduce((sum, item) => sum + (Number(item.tax_amount) || 0), 0)
-        : 0;
-      const totalAmount = dealItems.length > 0 
-        ? dealItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
-        : Number(deal.value) || 0;
-
-      const quotationPayload = {
-        account_id: accountData.account_id,
-        user_id: userData.user.id,
-        contact_id: deal.contact_id || null,
-        lead_id: deal.lead_id || null,
-        date: new Date().toISOString().split('T')[0],
-        valid_until: null,
-        status: 'Draft',
-        terms_conditions: deal.notes || '',
-        sub_total: subTotal,
-        tax_total: taxTotal,
-        total_amount: totalAmount,
-      };
-
-      const { data: newQuotation, error: qErr } = await supabase
-        .from("quotations")
-        .insert(quotationPayload)
-        .select()
-        .single();
-
-      if (qErr || !newQuotation) throw qErr || new Error("Failed to create quotation");
-
-      // Insert quotation items
-      if (dealItems.length > 0) {
-        const qItems = dealItems.map((item, idx) => ({
-          quotation_id: newQuotation.id,
-          product_id: item.product_id || null,
-          product_name: item.product_name,
-          unit: item.unit || "Nos",
-          quantity: item.quantity,
-          price: item.price,
-          tax_rate: item.tax_rate,
-          tax_amount: item.tax_amount,
-          sub_total: item.sub_total,
-          total: item.total,
-          position: idx
-        }));
-        await supabase.from("quotation_items").insert(qItems);
-      } else {
-        // Fallback item if no line items were created
-        await supabase.from("quotation_items").insert([{
-          quotation_id: newQuotation.id,
-          product_name: deal.title,
-          unit: "Nos",
-          quantity: 1,
-          price: Number(deal.value) || 0,
-          tax_rate: 0,
-          tax_amount: 0,
-          sub_total: Number(deal.value) || 0,
-          total: Number(deal.value) || 0,
-          position: 0
-        }]);
-      }
-
-      // Copy timeline logs from module_activities
-      if (activities && activities.length > 0) {
-        const copiedLogs = activities.map((act) => ({
-          account_id: accountData.account_id,
-          module_name: "quotation",
-          record_id: newQuotation.id,
-          user_id: act.user_id || userData.user.id,
-          action: act.action || "copied_from_deal",
-          description: `[From Deal] ${act.description || ""}`
-        }));
-        await supabase.from("module_activities").insert(copiedLogs);
-      }
-
-      // Log conversion activity on Deal
-      await supabase.from("module_activities").insert({
-        account_id: accountData.account_id,
-        module_name: "deal",
-        record_id: deal.id,
-        user_id: userData.user.id,
-        action: "converted_to_quotation",
-        description: `Converted deal to Quotation #${newQuotation.quotation_number || newQuotation.id.slice(0, 8)}`
+      const { data: newQuotationId, error } = await supabase.rpc("convert_deal_to_quotation", {
+        p_deal_id: deal.id
       });
 
-      // Update deal: mark converted & inactive
-      await supabase
-        .from("deals")
-        .update({
-          is_converted: true,
-          is_active: false,
-          converted_quotation_id: newQuotation.id,
-          status: "won"
-        })
-        .eq("id", deal.id);
+      if (error || !newQuotationId) throw error || new Error("Failed to convert deal to quotation");
 
       toast.success("Deal converted to Quotation!");
-      router.push(`/quotations/${newQuotation.id}/edit`);
+      router.push(`/quotations/${newQuotationId}/edit`);
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to convert deal to quotation");
@@ -299,6 +196,7 @@ export default function DealDetailsPage() {
   if (!deal) return null;
 
   const currentStageIndex = stages.findIndex(s => s.id === deal.stage_id);
+  const currentStage = deal.stage || stages.find(s => s.id === deal.stage_id);
 
   return (
     <div className="space-y-6 w-full max-w-none flex flex-col h-full">
@@ -467,18 +365,22 @@ export default function DealDetailsPage() {
                 <p className="font-medium text-primary">{formatCurrency(deal.value, deal.currency)}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Assigned Sales Owner</p>
-                <p className="font-medium">{deal.assignee?.full_name || 'Unassigned'}</p>
+                <p className="text-sm text-muted-foreground mb-1">Deal Number</p>
+                <p className="font-mono font-medium">{deal.deal_number || deal.id.slice(0, 8)}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Creator</p>
-                <p className="font-medium text-foreground">
-                  {creatorProfile?.full_name || creatorProfile?.email || "User"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Status</p>
-                <p className="font-medium capitalize">{deal.status}</p>
+                <p className="text-sm text-muted-foreground mb-1">Current Stage</p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="px-2.5 py-0.5 font-medium">
+                    {currentStage?.name || "Qualified"}
+                  </Badge>
+                  {deal.is_converted && (
+                    <Badge className="bg-emerald-600 text-white">Won (Converted)</Badge>
+                  )}
+                  {!deal.is_active && !deal.is_converted && (
+                    <Badge variant="destructive">Inactive</Badge>
+                  )}
+                </div>
               </div>
             </div>
 

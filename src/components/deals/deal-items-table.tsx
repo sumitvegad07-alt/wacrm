@@ -17,7 +17,7 @@ interface DealItemsTableProps {
   products: any[];
 }
 
-const UNITS = ["Nos", "Kg", "Ltr", "Box", "Meter", "Pcs"];
+
 
 export function DealItemsTable({ items, onChange, products }: DealItemsTableProps) {
   const calculateItemTotals = (item: PartialDealItem) => {
@@ -55,7 +55,7 @@ export function DealItemsTable({ items, onChange, products }: DealItemsTableProp
       {
         product_id: null,
         product_name: "",
-        unit: "Nos",
+        unit: "—",
         quantity: 1,
         price: 0,
         tax_rate: 18,
@@ -77,7 +77,7 @@ export function DealItemsTable({ items, onChange, products }: DealItemsTableProp
     if (selectedProduct) {
       const price = Number(selectedProduct.selling_price || selectedProduct.price) || 0;
       const taxRate = Number(selectedProduct.default_tax_rate || selectedProduct.tax_rate) || 18;
-      const unit = selectedProduct.unit || "Nos";
+      const unit = selectedProduct.unit || "—";
 
       const item = {
         ...items[index],
@@ -148,17 +148,7 @@ export function DealItemsTable({ items, onChange, products }: DealItemsTableProp
                     </div>
                   </td>
                   <td className="py-2.5 px-4">
-                    <select
-                      value={item.unit || "Nos"}
-                      onChange={(e) => updateItem(index, { unit: e.target.value })}
-                      className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
-                    >
-                      {UNITS.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="text-muted-foreground whitespace-nowrap text-xs">{item.unit || "—"}</span>
                   </td>
                   <td className="py-2.5 px-4">
                     <Input
