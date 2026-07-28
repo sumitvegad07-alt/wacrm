@@ -572,8 +572,8 @@ export default function PipelinesPage() {
               <DropdownMenuSeparator className="bg-border" />
               {selectedPipeline && (
                 <DropdownMenuItem
-                  onClick={() => setSettingsOpen(true)}
-                  className="text-popover-foreground"
+                  onClick={() => router.push('/settings?tab=deal_pipelines')}
+                  className="text-popover-foreground cursor-pointer"
                 >
                   <Settings className="mr-2 h-3.5 w-3.5" />
                   Manage Pipelines
@@ -607,12 +607,12 @@ export default function PipelinesPage() {
           <GatedButton
             variant="outline"
             canAct={canEditSettings}
-            gateReason="create pipelines"
-            onClick={() => setNewPipelineOpen(true)}
+            gateReason="manage pipelines"
+            onClick={() => router.push('/settings?tab=deal_pipelines')}
             className="border-border bg-card text-foreground hover:bg-muted"
           >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Pipeline
+            <Settings className="mr-1.5 h-4 w-4" />
+            Deal Pipelines
           </GatedButton>
           <GatedButton
             canAct={canCreateDeals}

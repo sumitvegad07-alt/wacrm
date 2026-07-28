@@ -326,6 +326,7 @@ export interface Pipeline {
   id: string;
   user_id: string;
   name: string;
+  is_default?: boolean;
   created_at: string;
 }
 
@@ -372,6 +373,13 @@ export interface Deal {
    * contact is deleted (ON DELETE SET NULL). History preserved.
    */
   contact_id: string | null;
+  lead_id?: string | null;
+  deal_for?: 'customer' | 'lead';
+  creator_id?: string;
+  collaborator_ids?: string[];
+  is_active?: boolean;
+  is_converted?: boolean;
+  converted_quotation_id?: string | null;
   conversation_id?: string;
   assigned_to?: string;
   title: string;
@@ -384,8 +392,26 @@ export interface Deal {
   created_at: string;
   updated_at?: string;
   contact?: Contact;
+  lead?: Lead;
   stage?: PipelineStage;
   assignee?: Profile;
+  creator?: Profile;
+}
+
+export interface DealItem {
+  id: string;
+  deal_id: string;
+  product_id?: string | null;
+  product_name: string;
+  unit?: string;
+  quantity: number;
+  price: number;
+  tax_rate: number;
+  tax_amount: number;
+  sub_total: number;
+  total: number;
+  position: number;
+  created_at?: string;
 }
 
 
@@ -807,6 +833,12 @@ export interface Lead {
   whatsapp?: string;
   created_at?: string;
   is_converted?: boolean;
+  owner_id?: string;
+  collaborator_ids?: string[];
+  is_active?: boolean;
+  user_id?: string;
+  owner?: Profile;
+  creator?: Profile;
   [key: string]: any;
 }
 

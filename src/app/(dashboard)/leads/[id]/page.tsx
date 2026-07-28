@@ -2,15 +2,17 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Phone, Mail, Building2, MessageSquare, Pencil, UserCheck, MapPin, FileText, Loader2, User as UserIcon } from "lucide-react";
+import { ChevronLeft, Phone, Mail, Building2, MessageSquare, Pencil, UserCheck, MapPin, FileText, Loader2, User as UserIcon, Users, ExternalLink, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadForm } from "@/components/leads/lead-form";
 import { Timeline } from "@/components/shared/timeline";
 import { logModuleActivity } from "@/lib/activities";
+import type { Profile } from "@/types";
 
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -27,14 +29,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   
   const [statuses, setStatuses] = useState<{name: string, color: string}[]>([]);
   
-  // Ownership
-  const [ownerName, setOwnerName] = useState<string>("Unknown");
-  const [members, setMembers] = useState<{id: string, name: string}[]>([]);
+  // Ownership & Collaboration
+  const [ownerName, setOwnerName] = useState<string>("Unassigned");
+  const [creatorName, setCreatorName] = useState<string>("Unknown");
+  const [collaboratorProfiles, setCollaboratorProfiles] = useState<Profile[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [converting, setConverting] = useState(false);
-  // Customer hierarchy config, needed at conversion time.
   const [hierarchy, setHierarchy] = useState<{
     enabled: boolean;
     levels: { position: number; name: string }[];
@@ -59,21 +61,36 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     }
     setLead(leadData);
 
-    // Fetch owner profile
-    if (leadData.user_id) {
-      const { data: ownerProfile } = await supabase.from('profiles').select('full_name, email').eq('user_id', leadData.user_id).single();
-      if (ownerProfile) setOwnerName(ownerProfile.full_name || ownerProfile.email || "Unknown");
-    }
+    // Fetch all profiles for ownership/creator/collaborators mapping
+    const { data: allProfilesData } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("account_id", account.id);
 
-    // Fetch members for collaborator dropdown
-    if (canManageMembers) {
-      const { data: profiles } = await supabase.from('profiles').select('user_id, full_name, email').eq('account_id', account.id);
-      if (profiles) {
-        setMembers(profiles.map(p => ({ id: p.user_id, name: p.full_name || p.email })));
+    if (allProfilesData) {
+      const allProfiles = allProfilesData as Profile[];
+
+      // Creator
+      const creator = allProfiles.find(p => p.id === leadData.user_id || p.user_id === leadData.user_id);
+      setCreatorName(creator?.full_name || creator?.email || "User");
+
+      // Owner
+      const ownerId = leadData.owner_id || leadData.assigned_to;
+      const owner = allProfiles.find(p => p.id === ownerId || p.user_id === ownerId);
+      setOwnerName(owner?.full_name || owner?.email || "Unassigned");
+
+      // Collaborators
+      if (leadData.collaborator_ids && Array.isArray(leadData.collaborator_ids)) {
+        const cProfs = allProfiles.filter(p =>
+          leadData.collaborator_ids.includes(p.id) || leadData.collaborator_ids.includes(p.user_id)
+        );
+        setCollaboratorProfiles(cProfs);
+      } else {
+        setCollaboratorProfiles([]);
       }
     }
 
-    // 2. Fetch everything else in parallel
+    // 2. Fetch dependencies in parallel
     const [
       notesRes,
       fieldsRes,
@@ -96,7 +113,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     if (fieldsRes.data) setCustomFields(fieldsRes.data);
     if (valuesRes.data) {
       const map: Record<string, string> = {};
-      valuesRes.data.forEach((v) => {
+      valuesRes.data.forEach((v: any) => {
         map[v.custom_field_id] = v.value ?? '';
       });
       setCustomValues(map);
@@ -127,7 +144,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     }
 
     setLoading(false);
-  }, [resolvedParams.id, supabase, router, account, canManageMembers]);
+  }, [resolvedParams.id, supabase, router, account]);
 
   useEffect(() => {
     fetchAllData();
@@ -152,8 +169,6 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const handleConvert = async () => {
     if (!lead) return;
 
-    // With hierarchy enabled the new customer needs a level, or the database
-    // rejects the contact (migration 076) and the whole conversion rolls back.
     let level: number | null = null;
     if (hierarchy.enabled) {
       if (hierarchy.levels.length === 0) {
@@ -166,7 +181,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           .join("\n")}\n\nEnter the level number:`,
         String(hierarchy.levels[0].position),
       );
-      if (choice === null) return; // cancelled
+      if (choice === null) return;
       const parsed = Number(choice);
       if (!hierarchy.levels.some((l) => l.position === parsed)) {
         toast.error("That is not one of the configured levels.");
@@ -177,10 +192,6 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
 
     setConverting(true);
 
-    // Single atomic RPC (076_customer_level_enforcement.sql supersedes 067):
-    // creates the customer, migrates custom values / notes / tasks /
-    // activities, and flags the lead as converted (KEPT, not deleted) —
-    // all-or-nothing.
     const { data: newContactId, error } = await supabase.rpc(
       "convert_lead_to_customer",
       { p_lead_id: lead.id, p_hierarchy_level: level }
@@ -193,16 +204,38 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       return;
     }
 
+    // Copy timeline logs from module_activities to contact
+    if (activities && activities.length > 0) {
+      const copiedLogs = activities.map((act) => ({
+        account_id: account?.id,
+        module_name: "contact",
+        record_id: newContactId,
+        user_id: act.user_id || user?.id,
+        action: act.action || "copied_from_lead",
+        description: `[From Lead] ${act.description || ""}`
+      }));
+      await supabase.from("module_activities").insert(copiedLogs);
+    }
+
+    // Log activity on lead
+    await supabase.from("module_activities").insert({
+      account_id: account?.id,
+      module_name: "lead",
+      record_id: lead.id,
+      user_id: user?.id,
+      action: "converted_to_customer",
+      description: `Converted lead to Customer contact.`
+    });
+
+    // Mark lead as inactive and converted
+    await supabase.from("leads").update({
+      is_active: false,
+      is_converted: true,
+      converted_contact_id: newContactId
+    }).eq("id", lead.id);
+
     toast.success("Lead successfully converted to Customer!");
     router.push(`/contacts/${newContactId}`);
-  };
-
-  const handleCollaboratorChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    const newCollabId = val === "none" ? null : val;
-    setLead({ ...lead, collaborator_id: newCollabId });
-    await supabase.from("leads").update({ collaborator_id: newCollabId }).eq("id", lead.id);
-    toast.success("Collaborator updated.");
   };
 
   if (loading) {
@@ -218,7 +251,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="space-y-6 w-full max-w-none flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 bg-card border border-border p-4 rounded-lg shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-card border border-border p-4 rounded-lg shadow-sm">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -230,54 +263,53 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-              {lead.name || "Unnamed Lead"}
-              {statuses.length > 0 ? (
-                <select
-                  value={lead.status || "new"}
-                  onChange={async (e) => {
-                    const newStatus = e.target.value;
-                    setLead({ ...lead, status: newStatus });
-                    await supabase.from("leads").update({ status: newStatus }).eq("id", lead.id);
-                    toast.success(`Status updated to ${newStatus}`);
-                  }}
-                  className="text-xs bg-muted border-none outline-none rounded-md px-2 py-1 cursor-pointer font-medium capitalize shadow-sm"
-                >
-                  <option value="">Select Status</option>
-                  {statuses.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-                </select>
-              ) : (
-                <Badge variant="secondary" className="capitalize text-xs bg-muted">
-                  Status: {lead.status || "New"}
+              {lead.name}
+              {lead.is_converted && (
+                <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 gap-1">
+                  <CheckCircle2 className="h-3 w-3" /> Converted to Customer
                 </Badge>
               )}
-              
-              <Badge variant="outline" className="capitalize text-xs text-muted-foreground border-border bg-card">
-                Source: {lead.source || "Unknown"}
-              </Badge>
+              {!lead.is_converted && (
+                <Badge 
+                  variant="outline" 
+                  className="capitalize font-medium"
+                  style={{
+                    backgroundColor: `${statuses.find(s => s.name.toLowerCase() === lead.status?.toLowerCase())?.color || '#6366f1'}15`,
+                    color: statuses.find(s => s.name.toLowerCase() === lead.status?.toLowerCase())?.color || '#6366f1',
+                    borderColor: `${statuses.find(s => s.name.toLowerCase() === lead.status?.toLowerCase())?.color || '#6366f1'}30`,
+                  }}
+                >
+                  {lead.status || 'New'}
+                </Badge>
+              )}
             </h1>
-            <p className="text-sm text-muted-foreground mt-1.5 flex items-center gap-4">
-              {lead.whatsapp && <span className="flex items-center gap-1.5"><Phone className="size-3 text-primary/70" /> <span className="font-medium text-foreground">WhatsApp:</span> {lead.whatsapp}</span>}
-              {lead.email && <span className="flex items-center gap-1.5"><Mail className="size-3 text-primary/70" /> <span className="font-medium text-foreground">Email:</span> {lead.email}</span>}
-              {lead.industry && <span className="flex items-center gap-1.5"><Building2 className="size-3 text-primary/70" /> <span className="font-medium text-foreground">Industry:</span> {lead.industry}</span>}
-            </p>
+            <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-4">
+              {lead.company && <span className="flex items-center gap-1"><Building2 className="size-3.5" /> {lead.company}</span>}
+              {lead.phone && <span className="flex items-center gap-1"><Phone className="size-3.5" /> {lead.phone}</span>}
+              {lead.email && <span className="flex items-center gap-1"><Mail className="size-3.5" /> {lead.email}</span>}
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {lead.is_converted ? (
-            <Button
-              onClick={() => lead.converted_contact_id && router.push(`/contacts/${lead.converted_contact_id}`)}
-              variant="outline"
-              className="gap-2 border-green-500/30 text-green-600 shadow-sm"
-            >
-              <UserCheck className="size-4" />
-              Converted — View Customer
-            </Button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {lead.is_converted && lead.converted_contact_id ? (
+            <Link href={`/contacts/${lead.converted_contact_id}`}>
+              <Button variant="outline" className="gap-2 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10">
+                <ExternalLink className="size-4" />
+                View Customer
+              </Button>
+            </Link>
           ) : (
-            <Button onClick={handleConvert} disabled={converting} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm">
+            <Button 
+              onClick={handleConvert} 
+              disabled={converting}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+            >
               {converting ? <Loader2 className="size-4 animate-spin" /> : <UserCheck className="size-4" />}
               Convert to Customer
             </Button>
           )}
+
           {lead.whatsapp && (
             <Button onClick={() => router.push(`/inbox?phone=${lead.whatsapp}`)} variant="outline" className="gap-2 shadow-sm">
               <MessageSquare className="size-4" />
@@ -292,47 +324,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left Column: Details & Custom Fields */}
+        {/* Left Column: Details & Ownership */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-card border border-border rounded-lg p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
-                Lead Details
-              </h3>
-              
-              {/* Ownership Info */}
-              <div className="flex items-center gap-4 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md border border-border/50">
-                <div className="flex items-center gap-1.5">
-                  <UserIcon className="size-3.5" />
-                  <span className="font-medium">Created By:</span>
-                  <span className="text-foreground">{ownerName}</span>
-                </div>
-                
-                <div className="w-px h-4 bg-border"></div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="font-medium">Collaborator:</span>
-                  {canManageMembers ? (
-                    <select 
-                      className="bg-transparent border-none outline-none text-foreground text-sm cursor-pointer py-0 px-1 font-medium"
-                      value={lead.collaborator_id || "none"}
-                      onChange={handleCollaboratorChange}
-                    >
-                      <option value="none">None</option>
-                      {members.map(m => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="text-foreground">
-                      {members.find(m => m.id === lead.collaborator_id)?.name || "None"}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+          <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-6">
+            <h3 className="text-lg font-semibold border-b border-border pb-3 text-foreground">
+              Lead Details & Ownership
+            </h3>
             
-            <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Business Name</p>
                 <p className="font-medium text-foreground">{lead.name || '-'}</p>
@@ -353,7 +352,49 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 <p className="text-sm text-muted-foreground mb-1">Industry</p>
                 <p className="font-medium text-foreground">{lead.industry || '-'}</p>
               </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Source</p>
+                <p className="font-medium text-foreground">{lead.source || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Created By</p>
+                <p className="font-medium text-foreground">{creatorName}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Owner / Assigned To</p>
+                <p className="font-medium text-foreground">{ownerName}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Status</p>
+                <p className="font-medium capitalize text-foreground">{lead.status || 'new'}</p>
+              </div>
             </div>
+
+            {/* Collaborators List */}
+            <div className="pt-2">
+              <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
+                <Users className="h-4 w-4" />
+                Collaborators ({collaboratorProfiles.length})
+              </p>
+              {collaboratorProfiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No collaborators assigned.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {collaboratorProfiles.map((prof) => (
+                    <Badge key={prof.id} variant="secondary" className="px-2.5 py-1 text-xs font-normal">
+                      {prof.full_name || prof.email}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {lead.notes && (
+              <div className="pt-4 border-t border-border/50">
+                <p className="text-sm text-muted-foreground mb-2">Lead Notes</p>
+                <p className="text-sm whitespace-pre-wrap bg-muted/30 p-3 rounded-md border border-border/50">{lead.notes}</p>
+              </div>
+            )}
 
             {(lead.address || lead.city || lead.state || lead.country) && (
               <>

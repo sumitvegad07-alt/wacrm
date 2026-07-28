@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Pencil, Loader2 } from "lucide-react";
+import { ArrowLeft, Pencil, Loader2, Users, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
-import type { Profile, Contact, PipelineStage, Deal } from "@/types";
+import type { Profile, Contact, Lead, PipelineStage, Deal } from "@/types";
+import { DealItemsTable, type PartialDealItem } from "@/components/deals/deal-items-table";
+import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
 
 export default function EditDealPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -22,15 +24,23 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [dealFor, setDealFor] = useState<"customer" | "lead">("customer");
+  const [creatorName, setCreatorName] = useState<string>("Unknown Creator");
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
+  const [items, setItems] = useState<PartialDealItem[]>([]);
 
   const [form, setForm] = useState({
     title: "",
     value: "",
     currency: "INR",
     contact_id: "",
+    lead_id: "",
     assigned_to: "",
     stage_id: "",
     expected_close_date: "",
@@ -41,16 +51,30 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [{ data: profilesData }, { data: contactsData }, { data: stagesData }, { data: dealData, error }] = await Promise.all([
+      const [
+        { data: profilesData },
+        { data: contactsData },
+        { data: leadsData },
+        { data: productsData },
+        { data: stagesData },
+        { data: dealData, error },
+        { data: itemsData }
+      ] = await Promise.all([
         supabase.from("profiles").select("*").order("full_name", { ascending: true }),
         supabase.from("contacts").select("*").order("name", { ascending: true }),
+        supabase.from("leads").select("*").order("name", { ascending: true }),
+        supabase.from("products").select("*").order("name", { ascending: true }),
         supabase.from("pipeline_stages").select("*").order("position", { ascending: true }),
-        supabase.from("deals").select("*").eq("id", dealId).single()
+        supabase.from("deals").select("*, creator:profiles!creator_id(*)").eq("id", dealId).single(),
+        supabase.from("deal_items").select("*").eq("deal_id", dealId).order("position", { ascending: true })
       ]);
 
       if (profilesData) setProfiles(profilesData as Profile[]);
       if (contactsData) setContacts(contactsData as Contact[]);
+      if (leadsData) setLeads(leadsData as Lead[]);
+      if (productsData) setProducts(productsData || []);
       if (stagesData) setStages(stagesData as PipelineStage[]);
+      if (itemsData) setItems(itemsData as PartialDealItem[]);
 
       if (error || !dealData) {
         toast.error("Deal not found");
@@ -58,11 +82,22 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
         return;
       }
 
+      setDealFor(dealData.deal_for === "lead" ? "lead" : "customer");
+      setCollaboratorIds(dealData.collaborator_ids || []);
+      if (dealData.creator) {
+        setCreatorName((dealData.creator as any).full_name || (dealData.creator as any).email || "Creator");
+      } else {
+        // Fallback check profile list
+        const cProf = profilesData?.find((p: any) => p.id === dealData.creator_id || p.user_id === dealData.creator_id);
+        if (cProf) setCreatorName(cProf.full_name || cProf.email);
+      }
+
       setForm({
         title: dealData.title || "",
         value: dealData.value ? String(dealData.value) : "",
         currency: dealData.currency || "INR",
         contact_id: dealData.contact_id || "",
+        lead_id: dealData.lead_id || "",
         assigned_to: dealData.assigned_to || "",
         stage_id: dealData.stage_id || "",
         expected_close_date: dealData.expected_close_date ? dealData.expected_close_date.split("T")[0] : "",
@@ -80,18 +115,28 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
       toast.error("Please enter a Deal Title");
       return;
     }
-    if (!form.contact_id) {
+    if (dealFor === "customer" && !form.contact_id) {
       toast.error("Please select a Customer / Contact");
+      return;
+    }
+    if (dealFor === "lead" && !form.lead_id) {
+      toast.error("Please select a Lead");
       return;
     }
 
     setSaving(true);
     try {
+      const itemsTotal = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+      const computedValue = items.length > 0 ? itemsTotal : (form.value ? parseFloat(form.value) : 0);
+
       const payload: any = {
         title: form.title.trim(),
-        value: form.value ? parseFloat(form.value) : 0,
+        value: computedValue,
         currency: form.currency || "INR",
-        contact_id: form.contact_id,
+        deal_for: dealFor,
+        contact_id: dealFor === "customer" ? form.contact_id : null,
+        lead_id: dealFor === "lead" ? form.lead_id : null,
+        collaborator_ids: collaboratorIds,
         assigned_to: form.assigned_to || null,
         stage_id: form.stage_id || null,
         expected_close_date: form.expected_close_date || null,
@@ -106,6 +151,25 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
 
       if (error) throw error;
 
+      // Sync deal items: delete existing & re-insert
+      await supabase.from("deal_items").delete().eq("deal_id", dealId);
+      if (items.length > 0) {
+        const itemPayloads = items.map((item, idx) => ({
+          deal_id: dealId,
+          product_id: item.product_id || null,
+          product_name: item.product_name || "Item",
+          unit: item.unit || "Nos",
+          quantity: Number(item.quantity) || 1,
+          price: Number(item.price) || 0,
+          tax_rate: Number(item.tax_rate) || 0,
+          tax_amount: Number(item.tax_amount) || 0,
+          sub_total: Number(item.sub_total) || 0,
+          total: Number(item.total) || 0,
+          position: idx
+        }));
+        await supabase.from("deal_items").insert(itemPayloads);
+      }
+
       toast.success("Deal updated successfully!");
       router.push(`/deals/${dealId}`);
     } catch (err: any) {
@@ -116,9 +180,13 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
     }
   };
 
+  const computedValue = items.length > 0
+    ? items.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
+    : (form.value ? parseFloat(form.value) : 0);
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full min-h-[60vh]">
+      <div className="flex items-center justify-center p-12">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -140,7 +208,7 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
               Edit Deal
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Update opportunity stage, valuation, and customer details.
+              Update deal details, stage, collaborators, and product line items.
             </p>
           </div>
         </div>
@@ -162,46 +230,59 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div className="space-y-2">
-              <Label>Customer / Contact *</Label>
-              <Select value={form.contact_id} onValueChange={v => setForm({ ...form, contact_id: v || "" })}>
-                <SelectTrigger><SelectValue placeholder="Select Customer" /></SelectTrigger>
-                <SelectContent>
-                  {contacts.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name || c.phone}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="block">Deal For *</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={dealFor === "customer" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => {
+                    setDealFor("customer");
+                    setForm(prev => ({ ...prev, lead_id: "" }));
+                  }}
+                >
+                  Customer
+                </Button>
+                <Button
+                  type="button"
+                  variant={dealFor === "lead" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => {
+                    setDealFor("lead");
+                    setForm(prev => ({ ...prev, contact_id: "" }));
+                  }}
+                >
+                  Lead
+                </Button>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="value">Deal Value (₹)</Label>
-              <Input
-                id="value"
-                type="number"
-                step="any"
-                value={form.value}
-                onChange={e => setForm({ ...form, value: e.target.value })}
-                placeholder="0.00"
-              />
-            </div>
+            {dealFor === "customer" ? (
+              <div className="space-y-2">
+                <Label>Customer / Contact *</Label>
+                <Select value={form.contact_id} onValueChange={v => setForm({ ...form, contact_id: v || "" })}>
+                  <SelectTrigger><SelectValue placeholder="Select Customer" /></SelectTrigger>
+                  <SelectContent>
+                    {contacts.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name || c.phone}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Lead *</Label>
+                <Select value={form.lead_id} onValueChange={v => setForm({ ...form, lead_id: v || "" })}>
+                  <SelectTrigger><SelectValue placeholder="Select Lead" /></SelectTrigger>
+                  <SelectContent>
+                    {leads.map(l => (
+                      <SelectItem key={l.id} value={l.id}>{l.name} {l.whatsapp ? `(${l.whatsapp})` : ""}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="currency">Currency</Label>
-              <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v || "INR" })}>
-                <SelectTrigger><SelectValue placeholder="Currency" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="INR">INR (₹)</SelectItem>
-                  <SelectItem value="USD">USD ($)</SelectItem>
-                  <SelectItem value="EUR">EUR (€)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Pipeline Stage & Status</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <Label>Pipeline Stage</Label>
               <Select value={form.stage_id} onValueChange={v => setForm({ ...form, stage_id: v || "" })}>
@@ -215,15 +296,61 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="value">Deal Value (₹)</Label>
+              <Input
+                id="value"
+                type="number"
+                step="any"
+                value={items.length > 0 ? computedValue : form.value}
+                disabled={items.length > 0}
+                onChange={e => setForm({ ...form, value: e.target.value })}
+                placeholder="0.00"
+              />
+              {items.length > 0 && (
+                <p className="text-xs text-muted-foreground">Auto-calculated from product line items below.</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="currency">Currency</Label>
+              <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v || "INR" })}>
+                <SelectTrigger><SelectValue placeholder="Currency" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INR">INR (₹)</SelectItem>
+                  <SelectItem value="USD">USD ($)</SelectItem>
+                  <SelectItem value="EUR">EUR (€)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label>Status</Label>
               <Select value={form.status} onValueChange={v => setForm({ ...form, status: v || "open" })}>
                 <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="open">Open / In Progress</SelectItem>
-                  <SelectItem value="won">Won (Closed)</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="won">Won</SelectItem>
                   <SelectItem value="lost">Lost</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+        </Card>
+
+        {/* Ownership & Collaboration */}
+        <Card className="p-6 border-border shadow-sm space-y-6">
+          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            Ownership & Collaboration
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <Label>Creator (Read-only)</Label>
+              <Input
+                value={creatorName}
+                disabled
+                className="bg-muted text-muted-foreground"
+              />
             </div>
 
             <div className="space-y-2">
@@ -239,6 +366,30 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div className="space-y-2">
+              <Label>Collaborators</Label>
+              <CollaboratorsSelect
+                profiles={profiles}
+                selectedIds={collaboratorIds}
+                onChange={setCollaboratorIds}
+              />
+            </div>
+          </div>
+        </Card>
+
+        {/* Product Line Items */}
+        <Card className="p-6 border-border shadow-sm space-y-6">
+          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
+            <ShoppingBag className="h-5 w-5 text-primary" />
+            Product Line Items
+          </h2>
+          <DealItemsTable items={items} onChange={setItems} products={products} />
+        </Card>
+
+        {/* Notes & Requirements */}
+        <Card className="p-6 border-border shadow-sm space-y-6">
+          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Additional Details</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
               <Label htmlFor="expected_close_date">Expected Close Date</Label>
               <Input
                 id="expected_close_date"
@@ -248,7 +399,7 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
               />
             </div>
 
-            <div className="md:col-span-3 space-y-2">
+            <div className="space-y-2">
               <Label htmlFor="notes">Notes & Requirements</Label>
               <Textarea
                 id="notes"

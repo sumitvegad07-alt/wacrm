@@ -1,6 +1,7 @@
 import {
   Coins,
   FileText,
+  GitBranch,
   KeyRound,
   LayoutGrid,
   Palette,
@@ -35,6 +36,7 @@ export const SETTINGS_SECTIONS = [
   'templates',
   'fields',
   'deals',
+  'deal_pipelines',
   'leads',
   'tasks',
   'orders',
@@ -67,6 +69,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'hidden' }, // hidden in rail
   fields: { id: 'fields', label: 'Custom fields & tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Currency', icon: Coins, group: 'hidden' },
+  deal_pipelines: { id: 'deal_pipelines', label: 'Deal Pipelines', icon: GitBranch, group: 'workspace' },
   leads: { id: 'leads', label: 'Leads Settings', icon: User, group: 'workspace' },
   tasks: { id: 'tasks', label: 'Task Settings', icon: FileText, group: 'workspace' },
   orders: { id: 'orders', label: 'Orders Settings', icon: ShoppingCart, group: 'workspace' },

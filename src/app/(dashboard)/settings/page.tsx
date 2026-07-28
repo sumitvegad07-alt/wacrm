@@ -21,6 +21,7 @@ import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { AISettingsPanel } from '@/components/settings/ai-settings-panel';
 import { ExpenseTypesSettings } from '@/components/settings/expense-types-settings';
 import { ModuleSettingsPanel } from '@/components/settings/module-settings';
+import { DealPipelinesSettings } from '@/components/settings/deal-pipelines-settings';
 import {
   resolveSection,
   SECTION_META,
@@ -123,6 +124,7 @@ function SettingsContent() {
     templates: <TemplateManager />,
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
+    deal_pipelines: <DealPipelinesSettings />,
     leads: <LeadsSettings />,
     tasks: <TasksSettings />,
     orders: <OrdersSettings />,
