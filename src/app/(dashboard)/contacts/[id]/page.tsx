@@ -147,7 +147,7 @@ export default function ContactDetailsPage() {
   if (!contact) return null;
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto flex flex-col h-full">
+    <div className="space-y-6 w-full max-w-none flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 bg-card border border-border p-4 rounded-lg">
         <div className="flex items-center gap-4">

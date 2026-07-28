@@ -362,7 +362,7 @@ export function TaskForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("bg-popover border-border text-popover-foreground max-h-[90vh] overflow-y-auto", isNote ? "sm:max-w-xl" : "sm:max-w-3xl")}>
+      <DialogContent className={cn("bg-popover border-border text-popover-foreground max-h-[94vh] overflow-y-auto", isNote ? "sm:max-w-2xl" : "sm:max-w-[95vw] w-full")}>
         
         {/* Custom Header similar to Note Screenshot */}
         <div className="flex items-center justify-between border-b border-border pb-4 mb-4 pr-6">

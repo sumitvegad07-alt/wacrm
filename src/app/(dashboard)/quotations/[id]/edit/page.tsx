@@ -44,7 +44,7 @@ export default function EditQuotationPage() {
   if (!initialData) return null;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 w-full max-w-none">
       <QuotationForm 
         open={true} 
         onOpenChange={(o) => !o && router.push(`/quotations/${initialData.id}`)} 

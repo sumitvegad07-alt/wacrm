@@ -359,7 +359,7 @@ export default function RolesPage() {
 
               {/* Boxy Permissions Matrix */}
               <div className="flex-1 overflow-y-auto p-6 bg-muted/20">
-                <div className="max-w-5xl mx-auto space-y-8">
+                <div className="w-full max-w-none space-y-8">
                   
                   {/* Super Admin Override */}
                   <Card className={`p-4 transition-colors ${permissions.all ? 'border-primary bg-primary/5' : ''}`}>

@@ -154,7 +154,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
   }
 
   return (
-    <div className="space-y-6 pb-20 max-w-7xl mx-auto px-6 mt-6">
+    <div className="space-y-6 pb-20 w-full max-w-none px-6 mt-6">
       <header className="flex flex-col sm:flex-row shrink-0 items-start sm:items-center justify-between gap-4 bg-card p-6 rounded-lg border border-border shadow-sm">
         <div className="flex items-center gap-4">
           <Link href="/quotations">

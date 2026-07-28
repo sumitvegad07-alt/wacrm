@@ -128,7 +128,7 @@ export default function NewBroadcastPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="w-full max-w-none space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">New Broadcast</h1>

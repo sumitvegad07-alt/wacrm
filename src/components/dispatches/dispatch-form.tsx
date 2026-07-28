@@ -217,7 +217,7 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-24">
+    <div className="space-y-6 w-full max-w-none pb-24">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => router.back()}><ChevronLeft className="size-5" /></Button>

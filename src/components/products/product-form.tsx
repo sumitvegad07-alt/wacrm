@@ -246,7 +246,7 @@ export function ProductForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-4xl w-full p-0 flex flex-col max-h-[90vh]">
+      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-[95vw] w-full p-0 flex flex-col max-h-[94vh]">
         <DialogHeader className="border-b border-border/50 p-4 shrink-0">
           <DialogTitle className="text-popover-foreground">
             {isEdit ? 'Edit Product' : 'New Product'}

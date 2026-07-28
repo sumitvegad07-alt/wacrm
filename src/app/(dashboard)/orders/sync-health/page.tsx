@@ -115,7 +115,7 @@ export default function OrderSyncHealthPage() {
   }
 
   return (
-    <div className="p-6 space-y-8 max-w-5xl">
+    <div className="p-6 space-y-8 w-full max-w-none">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <TrendingUp className="size-6" /> Order Sync Health

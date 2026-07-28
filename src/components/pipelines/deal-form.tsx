@@ -340,7 +340,7 @@ export function DealForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-popover-foreground text-xl">
             {deal ? "Edit Deal" : "New Deal"}
