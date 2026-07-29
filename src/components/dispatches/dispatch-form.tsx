@@ -12,6 +12,9 @@ import { ChevronLeft, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { logModuleActivity } from '@/lib/activities';
+import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
+import { validateRequiredCustomFields } from '@/lib/custom-fields';
+import { CustomField } from '@/types';
 
 function supaErr(e: unknown): string {
   if (!e) return 'Unknown error';
@@ -27,6 +30,12 @@ interface Line {
   price: number;
   remaining: number; // max dispatchable for this edit context
   qty: string;
+}
+
+interface DispatchFormProps {
+  isEdit?: boolean;
+  dispatchId?: string;
+  prefillOrderId?: string;
 }
 
 /**
@@ -45,7 +54,7 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
   const [saving, setSaving] = useState(false);
 
   const [customers, setCustomers] = useState<{ id: string; label: string; address: string }[]>([]);
-  const [orders, setOrders] = useState<{ id: string; order_number: string; contact_id: string | null }[]>([]);
+  const [orders, setOrders] = useState<{ id: string; order_number: string; contact_id: string }[]>([]);
 
   const [customerId, setCustomerId] = useState('');
   const [orderId, setOrderId] = useState('');
@@ -60,6 +69,8 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
   const [lrDate, setLrDate] = useState('');
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   const billingAddress = useMemo(() => customers.find((c) => c.id === customerId)?.address || '', [customers, customerId]);
 
@@ -98,12 +109,14 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
     let alive = true;
     (async () => {
       setLoading(true);
-      const [{ data: contactData }, { data: orderData }] = await Promise.all([
+      const [{ data: contactData }, { data: orderData }, { data: fieldsData }] = await Promise.all([
         supabase.from('contacts').select('id, company, name, address, city, state, country').eq('account_id', accountId).order('company'),
         // Dispatchable orders: approved or partially dispatched.
         supabase.from('orders').select('id, order_number, contact_id, status').eq('account_id', accountId).in('status', ['Approved', 'Part Dispatch', 'Dispatched']).order('created_at', { ascending: false }),
+        supabase.from('custom_fields').select('*').eq('module_name', 'dispatch').order('created_at'),
       ]);
       if (!alive) return;
+      setCustomFields(fieldsData || []);
       setCustomers(((contactData ?? []) as any[]).map((c) => ({
         id: c.id, label: c.company || c.name || 'Unnamed',
         address: [c.address, c.city, c.state, c.country].filter(Boolean).join(', '),
@@ -131,7 +144,16 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
         const preset: Record<string, number> = {};
         (d.dispatch_items || []).forEach((di: any) => { preset[di.order_item_id] = Number(di.quantity); });
         if (d.order_id) await loadOrderLines(d.order_id, dispatchId, preset);
+        const { data: cvData } = await supabase.from('dispatch_custom_values').select('*').eq('dispatch_id', dispatchId);
+        if (cvData) {
+          const vals: Record<string, string> = {};
+          cvData.forEach((row: any) => { vals[row.custom_field_id] = row.value; });
+          setCustomValues(vals);
+        } else {
+          setCustomValues({});
+        }
       } else if (prefillOrderId) {
+        setCustomValues({});
         const ord = ((orderData ?? []) as any[]).find((o) => o.id === prefillOrderId);
         if (ord) { setCustomerId(ord.contact_id || ''); setOrderId(prefillOrderId); await loadOrderLines(prefillOrderId); }
       }
@@ -161,6 +183,12 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
     if (shipping.length === 0) { toast.error('Enter a quantity for at least one item'); return; }
     for (const l of shipping) {
       if (Number(l.qty) > l.remaining + 0.0001) { toast.error(`${l.productName}: cannot dispatch more than remaining (${l.remaining})`); return; }
+    }
+
+    const cfError = validateRequiredCustomFields(customFields, customValues);
+    if (cfError) {
+      toast.error(cfError);
+      return;
     }
 
     setSaving(true);
@@ -202,6 +230,15 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
         await logModuleActivity(supabase, { moduleName: 'dispatch', recordId: created.id, action: 'dispatch_created', message: `Dispatch ${created.dispatch_number} generated.` });
         // Mirror onto the order timeline, linked back to this dispatch.
         await logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: 'dispatch_created', message: `Dispatch ${created.dispatch_number} generated.`, details: { dispatch_id: created.id, dispatch_number: created.dispatch_number } });
+      }
+      if (savedId && Object.keys(customValues).length > 0) {
+        await supabase.from('dispatch_custom_values').delete().eq('dispatch_id', savedId);
+        const toInsert = Object.entries(customValues)
+          .filter(([_, v]) => v !== undefined && v !== '')
+          .map(([fId, v]) => ({ account_id: accountId, dispatch_id: savedId, custom_field_id: fId, value: v }));
+        if (toInsert.length > 0) {
+          await supabase.from('dispatch_custom_values').insert(toInsert);
+        }
       }
       toast.success(isEdit ? 'Dispatch updated' : `Dispatch ${savedNumber} created`);
       router.push(`/dispatches/${savedId}`);
@@ -267,6 +304,19 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
           <div className="space-y-1.5"><Label>LR Date</Label><Input type="date" value={lrDate} onChange={(e) => setLrDate(e.target.value)} /></div>
         </div>
       </div>
+
+      {/* Custom Fields */}
+      {customFields.length > 0 && (
+        <div className="bg-card border border-border rounded-lg p-5">
+          <CustomFieldsSectionRenderer
+            accountId={accountId}
+            moduleName="dispatch"
+            customFields={customFields}
+            customValues={customValues}
+            onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
+          />
+        </div>
+      )}
 
       {/* Product Details */}
       <div className="bg-card border border-border rounded-lg p-5">

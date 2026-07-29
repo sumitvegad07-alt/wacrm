@@ -43,9 +43,9 @@ import { TaskForm } from '@/components/tasks/task-form';
 import { ImportTasksModal } from '@/components/tasks/import-tasks-modal';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
+import { appendCustomFieldColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { isDateInFilter } from "@/lib/date-filters";
 import {
   DropdownMenu,
@@ -94,7 +94,6 @@ export default function TasksPage() {
   const [editTask, setEditTask] = useState<Task | null>(null);
 
   const [importOpen, setImportOpen] = useState(false);
-  const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
@@ -313,40 +312,21 @@ export default function TasksPage() {
   ];
 
   // Append custom fields
-  customFields.forEach(cf => {
-    let type: any = "text";
-    let options: any[] = [];
-    if (cf.field_type === 'dropdown' || cf.field_type === 'radio' || cf.field_type === 'multi-select') {
-      type = "select";
-      const uniqueVals = Array.from(new Set(tasks.map(t => t[`cf_${cf.id}`]).filter(Boolean)));
-      options = uniqueVals.map(val => ({ label: val as string, value: val as string }));
-    } else if (cf.field_type === 'date') {
-      type = "date";
-    }
-
-    columns.splice(columns.length - 1, 0, {
-      id: `cf_${cf.id}`,
-      label: cf.field_name,
-      type: type,
-      options: options.length > 0 ? options : undefined,
-      visibleByDefault: false,
-      render: (task) => {
-        const val = task[`cf_${cf.id}`];
-        if (!val) return <span className="text-muted-foreground">-</span>;
-        if (cf.field_type === 'checkbox') return <span>{val === 'true' ? 'Yes' : 'No'}</span>;
-        if (cf.field_type === 'attachment') return <a href={val} target="_blank" rel="noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>View</a>;
-        return <span>{val}</span>;
-      }
-    });
-  });
+  // Append custom fields (controlled by admin show_in_table, sortable, filterable flags)
+  appendCustomFieldColumns(columns, customFields, tasks);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
       // Hide Completed
       if (hideCompleted && (task.status === 'Completed' || task.status === 'Cancelled')) return false;
 
-      // Global search
-      if (globalSearch && !task.title?.toLowerCase().includes(globalSearch.toLowerCase()) && !task.description?.toLowerCase().includes(globalSearch.toLowerCase())) {
+      // Global search (title, description, and searchable custom fields)
+      if (
+        globalSearch &&
+        !task.title?.toLowerCase().includes(globalSearch.toLowerCase()) &&
+        !task.description?.toLowerCase().includes(globalSearch.toLowerCase()) &&
+        !matchesSearchableCustomFields(task, customFields, globalSearch)
+      ) {
         return false;
       }
 
@@ -393,11 +373,6 @@ export default function TasksPage() {
           <p className="text-sm text-muted-foreground mt-1">Manage your tasks and to-dos.</p>
         </div>
         <div className="flex items-center gap-2">
-          {canEditSettings && (
-            <Button variant="outline" onClick={() => setCustomFieldsOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
-              <SlidersHorizontal className="size-4 mr-2" /> Custom fields
-            </Button>
-          )}
           <Button variant="outline" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
             <Upload className="size-4 mr-2" /> Import
           </Button>
@@ -474,7 +449,6 @@ export default function TasksPage() {
 
       <TaskForm open={formOpen} onOpenChange={setFormOpen} task={editTask} onSaved={fetchTasks} />
       {importOpen && <ImportTasksModal open={importOpen} onOpenChange={setImportOpen} onImported={fetchTasks} />}
-      {canEditSettings && <CustomFieldsManager open={customFieldsOpen} onOpenChange={setCustomFieldsOpen} />}
 
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="border-border bg-popover text-popover-foreground sm:max-w-md">

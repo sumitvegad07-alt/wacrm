@@ -34,6 +34,7 @@ import { GatedButton } from "@/components/ui/gated-button";
 
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
+import { appendCustomFieldColumns, matchesSearchableCustomFields } from "@/lib/custom-fields";
 
 const SPEC_DEFAULT_STAGES = [
   { name: "New Lead", color: "#3b82f6", position: 0 },
@@ -436,33 +437,8 @@ export default function PipelinesPage() {
     },
   ];
 
-  // Append custom fields
-  customFields.forEach(cf => {
-    let type: any = "text";
-    let options: any[] = [];
-    if (cf.field_type === 'dropdown' || cf.field_type === 'radio' || cf.field_type === 'multi-select') {
-      type = "select";
-      const uniqueVals = Array.from(new Set(deals.map(d => d[`cf_${cf.id}`]).filter(Boolean)));
-      options = uniqueVals.map(val => ({ label: val as string, value: val as string }));
-    } else if (cf.field_type === 'date') {
-      type = "date";
-    }
-
-    columns.push({
-      id: `cf_${cf.id}`,
-      label: cf.field_name,
-      type: type,
-      options: options.length > 0 ? options : undefined,
-      visibleByDefault: false,
-      render: (deal) => {
-        const val = deal[`cf_${cf.id}`];
-        if (!val) return <span className="text-muted-foreground">-</span>;
-        if (cf.field_type === 'checkbox') return <span>{val === 'true' ? 'Yes' : 'No'}</span>;
-        if (cf.field_type === 'attachment') return <a href={val} target="_blank" rel="noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>View</a>;
-        return <span>{val}</span>;
-      }
-    });
-  });
+  // Append custom fields (controlled by admin show_in_table, sortable, filterable flags)
+  appendCustomFieldColumns(columns, customFields, deals);
 
   const filteredDeals = useMemo(() => {
     return deals.filter(deal => {

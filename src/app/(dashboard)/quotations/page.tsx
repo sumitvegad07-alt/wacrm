@@ -33,10 +33,10 @@ import { logQuotationActivity } from '@/lib/quotations';
 import { QuotationForm } from '@/components/quotations/quotation-form';
 import { useAuth } from '@/hooks/use-auth';
 import { useCan } from '@/hooks/use-can';
-import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
+import { appendCustomFieldColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { isDateInFilter } from "@/lib/date-filters";
 import {
   DropdownMenu,
@@ -72,7 +72,6 @@ export default function QuotationsPage() {
   const [customFields, setCustomFields] = useState<any[]>([]);
 
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
-  const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
@@ -341,43 +340,19 @@ export default function QuotationsPage() {
     }
   ];
 
-  // Append custom fields
-  customFields.forEach(cf => {
-    let type: any = "text";
-    let options: any[] = [];
-    if (cf.field_type === 'dropdown' || cf.field_type === 'radio' || cf.field_type === 'multi-select') {
-      type = "select";
-      const uniqueVals = Array.from(new Set(quotations.map(q => q[`cf_${cf.id}`]).filter(Boolean)));
-      options = uniqueVals.map(val => ({ label: val as string, value: val as string }));
-    } else if (cf.field_type === 'date') {
-      type = "date";
-    }
-
-    columns.splice(columns.length - 1, 0, {
-      id: `cf_${cf.id}`,
-      label: cf.field_name,
-      type: type,
-      options: options.length > 0 ? options : undefined,
-      visibleByDefault: false,
-      render: (quotation) => {
-        const val = quotation[`cf_${cf.id}`];
-        if (!val) return <span className="text-muted-foreground">-</span>;
-        if (cf.field_type === 'checkbox') return <span>{val === 'true' ? 'Yes' : 'No'}</span>;
-        if (cf.field_type === 'attachment') return <a href={val} target="_blank" rel="noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>View</a>;
-        return <span>{val}</span>;
-      }
-    });
-  });
+  // Append custom fields (controlled by admin show_in_table, sortable, filterable flags)
+  appendCustomFieldColumns(columns, customFields, quotations);
 
   const filteredQuotations = useMemo(() => {
     return quotations.filter(quotation => {
-      // Global search
+      // Global search (number, contact, lead, and searchable custom fields)
       if (globalSearch) {
         const search = globalSearch.toLowerCase();
         const matchesNumber = quotation.quotation_number?.toLowerCase().includes(search);
         const matchesContact = quotation.contact?.name?.toLowerCase().includes(search);
         const matchesLead = quotation.lead?.title?.toLowerCase().includes(search);
-        if (!matchesNumber && !matchesContact && !matchesLead) {
+        const matchesCustom = matchesSearchableCustomFields(quotation, customFields, globalSearch);
+        if (!matchesNumber && !matchesContact && !matchesLead && !matchesCustom) {
           return false;
         }
       }
@@ -466,11 +441,6 @@ export default function QuotationsPage() {
               }}
             >
               Seed Dummy
-            </Button>
-          )}
-          {canEditSettings && (
-            <Button variant="outline" onClick={() => setCustomFieldsOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
-              <SlidersHorizontal className="size-4 mr-2" /> Custom fields
             </Button>
           )}
           <Button 
@@ -572,8 +542,6 @@ export default function QuotationsPage() {
           }}
         />
       )}
-      
-      {canEditSettings && <CustomFieldsManager open={customFieldsOpen} onOpenChange={setCustomFieldsOpen} />}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,8 @@ import { TermsEditor } from './terms-editor';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
+import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
+import { validateRequiredCustomFields } from '@/lib/custom-fields';
 import { logQuotationActivity } from '@/lib/quotations';
 import {
   Dialog,
@@ -44,6 +47,7 @@ export function QuotationForm({
 }: QuotationFormProps) {
   const supabase = createClient();
   const router = useRouter();
+  const { accountId } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -237,6 +241,12 @@ export function QuotationForm({
     }
     if (items.length === 0) {
       toast.error('Please add at least one product to the quotation');
+      return;
+    }
+
+    const cfError = validateRequiredCustomFields(customFields, customValues);
+    if (cfError) {
+      toast.error(cfError);
       return;
     }
 
@@ -498,22 +508,16 @@ export function QuotationForm({
 
 
       {customFields.length > 0 && (
-        <div className="space-y-4 pt-4 border-t border-border">
-          <h3 className="text-lg font-medium text-foreground">Custom Fields</h3>
-          <div className="bg-muted/20 p-4 rounded-lg border border-border space-y-4">
-            {customFields.map((field) => (
-              <div key={field.id} className="space-y-2">
-                <Label className="text-muted-foreground capitalize">
-                  {field.field_name}
-                </Label>
-                <CustomFieldInput 
-                  field={field} 
-                  value={customValues[field.id] ?? ''} 
-                  onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
-                />
-              </div>
-            ))}
-          </div>
+        <div className="pt-4 border-t border-border">
+          <CustomFieldsSectionRenderer
+            accountId={accountId}
+            moduleName="quotation"
+            customFields={customFields}
+            customValues={customValues}
+            onChange={(fieldId, val) =>
+              setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+            }
+          />
         </div>
       )}
 

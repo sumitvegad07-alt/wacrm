@@ -45,6 +45,7 @@ import {
   Wallet,
   Palette,
   LayoutGrid,
+  SlidersHorizontal,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -336,6 +337,28 @@ const menuStructure: MenuNode[] = [
 
   { type: "spacer" },
 
+  // ── Custom Fields (collapsed) ──
+  {
+    type: "group",
+    label: "Custom Fields",
+    icon: SlidersHorizontal,
+    items: [
+      { href: "/custom-fields/user", label: "User", icon: User },
+      { href: "/custom-fields/contact", label: "Customer", icon: Users },
+      { href: "/custom-fields/product", label: "Product", icon: Package },
+      { href: "/custom-fields/quotation", label: "Sale Quotation", icon: FileText },
+      { href: "/custom-fields/lead", label: "Lead", icon: UserPlus },
+      { href: "/custom-fields/deal", label: "Deal", icon: GitBranch },
+      { href: "/custom-fields/customer_visit", label: "Customer Visit", icon: Building2 },
+      { href: "/custom-fields/lead_visit", label: "Lead Visit", icon: MapPin },
+      { href: "/custom-fields/order", label: "Order", icon: ShoppingCart },
+      { href: "/custom-fields/dispatch", label: "Dispatch", icon: Truck },
+      { href: "/custom-fields/expense", label: "Expense", icon: Coins },
+    ],
+  },
+
+  { type: "spacer" },
+
   // ── Settings (collapsed) ──
   {
     type: "group",
@@ -376,6 +399,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     "Location Tracking": false,
     Report: false,
     User: false,
+    "Custom Fields": false,
     Settings: false,
   });
 

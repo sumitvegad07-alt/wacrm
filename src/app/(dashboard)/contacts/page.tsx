@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, CustomField } from '@/types';
+import { appendCustomFieldColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -27,7 +28,6 @@ import {
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ImportModal } from '@/components/contacts/import-modal';
-import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { useCan } from '@/hooks/use-can';
 import { useAuth } from '@/hooks/use-auth';
 import { GatedButton } from '@/components/ui/gated-button';
@@ -64,7 +64,6 @@ export default function ContactsPage() {
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [editContactTags, setEditContactTags] = useState<ContactTag[]>([]);
   const [importOpen, setImportOpen] = useState(false);
-  const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   
   // Deletion Modals
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -336,50 +335,20 @@ export default function ContactsPage() {
     });
   }
 
-  // Append custom fields to columns
-  customFields.forEach(cf => {
-    let type: any = "text";
-    let options: any[] = [];
-    
-    if (cf.field_type === 'dropdown' || cf.field_type === 'radio' || cf.field_type === 'multi-select') {
-      type = "select";
-      const uniqueVals = Array.from(new Set(contacts.map(c => c[`cf_${cf.id}`]).filter(Boolean)));
-      options = uniqueVals.map(val => ({ label: val, value: val }));
-    } else if (cf.field_type === 'date') {
-      type = "date";
-    }
-
-    columns.splice(columns.length - 1, 0, {
-      id: `cf_${cf.id}`,
-      label: cf.field_name,
-      type: type,
-      options: options.length > 0 ? options : undefined,
-      visibleByDefault: false,
-      render: (contact) => {
-        const val = contact[`cf_${cf.id}`];
-        if (!val) return <span className="text-muted-foreground">-</span>;
-        
-        if (cf.field_type === 'checkbox') {
-          return <span>{val === 'true' ? 'Yes' : 'No'}</span>;
-        }
-        if (cf.field_type === 'attachment') {
-          return <a href={val} target="_blank" rel="noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>View</a>;
-        }
-        return <span>{val}</span>;
-      }
-    });
-  });
+  // Append custom fields to columns (controlled by admin show_in_table, sortable, filterable flags)
+  appendCustomFieldColumns(columns, customFields, contacts);
 
   const filteredContacts = useMemo(() => {
     return contacts.filter(contact => {
-      // Global search (company name is primary, then person, phone, email)
+      // Global search (company name is primary, then person, phone, email, and searchable custom fields)
       if (globalSearch) {
         const q = globalSearch.toLowerCase();
         const hit =
           contact.company?.toLowerCase().includes(q) ||
           contact.name?.toLowerCase().includes(q) ||
           contact.phone?.includes(globalSearch) ||
-          contact.email?.toLowerCase().includes(q);
+          contact.email?.toLowerCase().includes(q) ||
+          matchesSearchableCustomFields(contact, customFields, globalSearch);
         if (!hit) return false;
       }
 
@@ -430,11 +399,6 @@ export default function ContactsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {canEditSettings && (
-            <Button variant="outline" onClick={() => setCustomFieldsOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
-              <SlidersHorizontal className="size-4 mr-2" /> Custom fields
-            </Button>
-          )}
           <GatedButton variant="outline" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
             <Upload className="size-4 mr-2" /> Import
           </GatedButton>
@@ -486,7 +450,6 @@ export default function ContactsPage() {
 
       <ContactForm open={formOpen} onOpenChange={setFormOpen} contact={editContact} contactTags={editContactTags} onSaved={fetchData} onViewExisting={(id) => { setFormOpen(false); router.push(`/contacts/${id}`); }} />
       <ImportModal open={importOpen} onOpenChange={setImportOpen} onImported={fetchData} />
-      {canEditSettings && <CustomFieldsManager open={customFieldsOpen} onOpenChange={setCustomFieldsOpen} />}
 
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">

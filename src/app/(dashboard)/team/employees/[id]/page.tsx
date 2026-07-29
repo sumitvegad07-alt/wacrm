@@ -16,7 +16,9 @@ import {
   XCircle, AlertCircle, Loader2, Save, MapPin, RefreshCw 
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Employee, EmployeeRole, EmployeeDevice } from "@/types";
+import { useAuth } from "@/hooks/use-auth";
+import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
+import type { Employee, EmployeeRole, EmployeeDevice, CustomField } from "@/types";
 
 export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -24,12 +26,15 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const router = useRouter();
   const supabase = createClient();
 
+  const { accountId } = useAuth();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<EmployeeDevice[]>([]);
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   // Edit form state
   const [form, setForm] = useState({
@@ -93,6 +98,25 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         .eq("user_id", employeeId)
         .order("last_seen_at", { ascending: false });
       if (devData) setDevices(devData as EmployeeDevice[]);
+
+      const { data: fieldsData } = await supabase
+        .from("custom_fields")
+        .select("*")
+        .eq("module_name", "user")
+        .order("created_at");
+      if (fieldsData) setCustomFields(fieldsData);
+
+      const { data: cvData } = await supabase
+        .from("user_custom_values")
+        .select("*")
+        .eq("user_id", employeeId);
+      if (cvData) {
+        const vals: Record<string, string> = {};
+        cvData.forEach((row: any) => { vals[row.custom_field_id] = row.value; });
+        setCustomValues(vals);
+      } else {
+        setCustomValues({});
+      }
     } catch (err) {
       console.error(err);
       toast.error("Failed to load employee details");
@@ -127,6 +151,20 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         .eq("id", employeeId);
 
       if (error) throw error;
+      if (employeeId && Object.keys(customValues).length > 0) {
+        await supabase.from("user_custom_values").delete().eq("user_id", employeeId);
+        const toInsert = Object.entries(customValues)
+          .filter(([_, val]) => val !== undefined && val !== '')
+          .map(([fieldId, val]) => ({
+            account_id: accountId,
+            user_id: employeeId,
+            custom_field_id: fieldId,
+            value: val
+          }));
+        if (toInsert.length > 0) {
+          await supabase.from("user_custom_values").insert(toInsert);
+        }
+      }
       toast.success("Employee details updated");
       setIsEditing(false);
       fetchEmployeeData();
@@ -279,6 +317,16 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">System Account Role</span>
                   <p className="font-medium text-foreground capitalize text-base">{employee.account_role || "member"}</p>
                 </div>
+                {customFields.map((field) => (
+                  <div key={field.id}>
+                    <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
+                      {field.field_name}
+                    </span>
+                    <p className="font-medium text-foreground text-base">
+                      {customValues[field.id] || "—"}
+                    </p>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="space-y-4">
@@ -333,6 +381,17 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                     </Select>
                   </div>
                 </div>
+                {customFields.length > 0 && (
+                  <div className="pt-4 border-t border-border mt-4">
+                    <CustomFieldsSectionRenderer
+                      accountId={accountId || ""}
+                      moduleName="user"
+                      customFields={customFields}
+                      customValues={customValues}
+                      onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </Card>

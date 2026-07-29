@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Task, Contact, Deal, Product, Conversation, Profile, TaskStatus, TaskPriority, CustomField } from "@/types";
 import { CustomFieldInput } from "@/components/ui/custom-field-input";
+import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
+import { validateRequiredCustomFields } from "@/lib/custom-fields";
 import {
   Dialog,
   DialogContent,
@@ -250,6 +252,13 @@ export function TaskForm({
       toast.error("Note text is required");
       return;
     }
+
+    const cfError = validateRequiredCustomFields(customFields, customValues);
+    if (cfError) {
+      toast.error(cfError);
+      return;
+    }
+
     setSaving(true);
 
     const payload = {
@@ -574,22 +583,16 @@ export function TaskForm({
               </div>
 
               {customFields.length > 0 && (
-                <div className="space-y-4 pt-4 mt-4 border-t border-border/50">
-                  <h4 className="text-sm font-medium text-foreground">Custom Fields</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {customFields.map((field) => (
-                      <div key={field.id} className="grid gap-2">
-                        <Label className="text-muted-foreground capitalize">
-                          {field.field_name}
-                        </Label>
-                        <CustomFieldInput 
-                          field={field} 
-                          value={customValues[field.id] ?? ''} 
-                          onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
-                        />
-                      </div>
-                    ))}
-                  </div>
+                <div className="pt-4 mt-4 border-t border-border/50">
+                  <CustomFieldsSectionRenderer
+                    accountId={accountId}
+                    moduleName="task"
+                    customFields={customFields}
+                    customValues={customValues}
+                    onChange={(fieldId, val) =>
+                      setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+                    }
+                  />
                 </div>
               )}
             </div>

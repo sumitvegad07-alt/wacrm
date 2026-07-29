@@ -13,6 +13,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { Expense, ExpenseType, Profile, CustomField } from "@/types";
 import { cn } from "@/lib/utils";
 import { CustomFieldInput } from "@/components/ui/custom-field-input";
+import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
+import { validateRequiredCustomFields } from "@/lib/custom-fields";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -193,6 +195,12 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
     
     if (selectedType?.proof_required && !proofFile && !expense?.proof_file) {
       toast.error("Proof file is required for this expense type");
+      return;
+    }
+
+    const cfError = validateRequiredCustomFields(customFields, customValues);
+    if (cfError) {
+      toast.error(cfError);
       return;
     }
 
@@ -390,20 +398,16 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
             )}
 
             {customFields.length > 0 && (
-              <div className="space-y-4 pt-4 border-t border-border mt-2">
-                <h4 className="text-sm font-medium text-foreground pb-2">Custom Fields</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {customFields.map((field) => (
-                    <div key={field.id} className="grid gap-2">
-                      <Label className="text-muted-foreground capitalize">{field.field_name}</Label>
-                      <CustomFieldInput 
-                        field={field} 
-                        value={customValues[field.id] ?? ''} 
-                        onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
-                      />
-                    </div>
-                  ))}
-                </div>
+              <div className="pt-4 border-t border-border mt-2">
+                <CustomFieldsSectionRenderer
+                  accountId={accountId}
+                  moduleName="expense"
+                  customFields={customFields}
+                  customValues={customValues}
+                  onChange={(fieldId, val) =>
+                    setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+                  }
+                />
               </div>
             )}
 

@@ -11,14 +11,19 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, UserPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import type { EmployeeRole } from "@/types";
+import { useAuth } from "@/hooks/use-auth";
+import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
+import type { EmployeeRole, CustomField } from "@/types";
 
 export default function NewEmployeePage() {
   const router = useRouter();
   const supabase = createClient();
 
+  const { accountId } = useAuth();
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [creating, setCreating] = useState(false);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -38,6 +43,12 @@ export default function NewEmployeePage() {
         .select("*")
         .order("name", { ascending: true });
       if (data) setRoles(data as EmployeeRole[]);
+      const { data: fieldsData } = await supabase
+        .from("custom_fields")
+        .select("*")
+        .eq("module_name", "user")
+        .order("created_at");
+      if (fieldsData) setCustomFields(fieldsData);
     }
     loadRoles();
   }, [supabase]);
@@ -74,6 +85,20 @@ export default function NewEmployeePage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Failed to create employee account");
+      }
+
+      if (data.user?.id && Object.keys(customValues).length > 0) {
+        const toInsert = Object.entries(customValues)
+          .filter(([_, val]) => val !== undefined && val !== '')
+          .map(([fieldId, val]) => ({
+            account_id: accountId,
+            user_id: data.user.id,
+            custom_field_id: fieldId,
+            value: val
+          }));
+        if (toInsert.length > 0) {
+          await supabase.from("user_custom_values").insert(toInsert);
+        }
       }
 
       toast.success("Employee created successfully!");
@@ -219,6 +244,18 @@ export default function NewEmployeePage() {
             </div>
           </div>
         </Card>
+
+        {customFields.length > 0 && (
+          <Card className="p-6 border-border shadow-sm">
+            <CustomFieldsSectionRenderer
+              accountId={accountId || ""}
+              moduleName="user"
+              customFields={customFields}
+              customValues={customValues}
+              onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
+            />
+          </Card>
+        )}
 
         <div className="flex items-center justify-end gap-4 pt-4">
           <Link href="/team/employees">

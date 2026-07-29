@@ -139,13 +139,14 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
     );
   }
 
-  if (field.field_type === 'attachment') {
+  if (field.field_type === 'attachment' || field.field_type === 'camera') {
+    const isCamera = field.field_type === 'camera';
     return (
       <div className="flex items-center gap-2">
         {value ? (
           <div className="flex items-center gap-2 flex-1 border border-border rounded-md px-3 py-1.5 bg-muted/50">
-            <a href={value} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline truncate max-w-[200px]">
-              View Attachment
+            <a href={value} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline truncate max-w-[200px] flex items-center gap-1">
+              {isCamera ? '📷 View Photo' : '📎 View Attachment'}
             </a>
             <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange('')} className="text-muted-foreground hover:text-red-400 ml-auto">
               <X className="size-3.5" />
@@ -155,6 +156,8 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
           <div className="flex items-center gap-2 w-full">
             <Input 
               type="file" 
+              accept={isCamera ? "image/*" : undefined}
+              capture={isCamera ? "environment" : undefined}
               disabled={uploading}
               className="bg-muted border-border text-foreground h-9 text-sm file:mr-2 file:py-1 file:px-2 file:border-0 file:text-xs file:bg-primary/20 file:text-primary file:rounded cursor-pointer"
               onChange={async (e) => {
@@ -166,7 +169,7 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
                 const { data, error } = await supabase.storage.from('custom-field-attachments').upload(fileName, file);
                 
                 if (error) {
-                  toast.error('Failed to upload attachment. Ensure the "custom-field-attachments" bucket exists.');
+                  toast.error('Failed to upload file. Ensure the "custom-field-attachments" bucket exists.');
                 } else {
                   const { data: { publicUrl } } = supabase.storage.from('custom-field-attachments').getPublicUrl(fileName);
                   onChange(publicUrl);

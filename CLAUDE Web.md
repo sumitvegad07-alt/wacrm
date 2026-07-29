@@ -362,6 +362,18 @@ timelines), `products`, `quotations`, `expenses`, `geofences`, `tracking_session
 - **Section Grouping & Display Priority (`096_custom_fields_sections_priority.sql`)**: `custom_fields` supports `section_name` (e.g. `'Basic Information'`, `'Technical Details'`) and `priority` (integer ordering).
 - **All-Modules Custom Values (`097_all_modules_custom_values.sql`)**: Universal custom fields architecture implemented across all core CRM entities (`lead`, `contact`, `product`, `quotation`, `order`, `dispatch`, `task`, `expense`, `employee`).
 
+### Dynamic Table Columns & Required Field Enforcement (Applied 28–29 Jul 2026)
+
+- **Centralized Admin Schema Governance (Admin vs Developer Rule)**: Admin Settings (`/settings` → Custom Fields) is the **exclusive** authority for defining custom fields. Module pages (`contacts`, `leads`, etc.) no longer display inline "+ New Field" modal creation buttons. Admins alone govern:
+  - **Required (`is_required`)**: Whether users MUST provide a value before saving a record.
+  - **Show in Table (`show_in_table`)**: Whether a column for this field is dynamically added to the module's main data table.
+  - **Sortable (`is_sortable`)**: Whether the dynamically added table column allows ascending/descending sorting.
+  - **Filterable (`is_filterable`)**: Whether global search matches against this field's value.
+- **Dynamic Table Column Injection (`appendCustomFieldColumns`)**: `src/lib/custom-fields.ts` exports `appendCustomFieldColumns(columns, customFields, data)`. Every module's data table (`Contacts`, `Leads`, `Products`, `Pipelines/Deals`, etc.) invokes this to dynamically append columns where `show_in_table = true` with proper formatting and sorting.
+- **Required Field Enforcement (`validateRequiredCustomFields`)**:
+  - `CustomFieldsSectionRenderer` automatically renders a red asterisk (`*`) next to field labels when `field.is_required = true`.
+  - Client-side validation (`validateRequiredCustomFields(customFields, customValues)` in `src/lib/custom-fields.ts`) is executed inside `handleSubmit` / `handleSave` across **all** modules (`Contacts`, `Leads`, `Quotations`, `Tasks`, `Expenses`, `Deals`, `Orders`, `Dispatches`, `Products`). If any required active field is empty, submission is blocked with a descriptive sonner error toast.
+
 ### Global UI Design System & Spacing Guidelines (Web)
 
 - **Full Screen Width for Forms & Panels (`w-full`)**: Do NOT use narrow wrappers (`max-w-2xl`, `max-w-xl`) or constrained centered containers on create, edit, view, or settings screens. All main screens and settings forms must use full screen width (`w-full` / `max-w-[95vw]`).

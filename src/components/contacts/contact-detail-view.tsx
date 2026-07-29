@@ -12,6 +12,7 @@ import {
 } from '@/components/inbox/template-picker';
 import { TaskListEmbedded } from '@/components/tasks/task-list-embedded';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
+import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import {
   Sheet,
   SheetContent,
@@ -662,22 +663,19 @@ export function ContactDetailView({
                   </div>
                 ) : customFields.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    No custom fields defined. Create them in Settings.
+                    No custom fields defined yet. Create them from the &apos;Custom Fields&apos; menu in the sidebar.
                   </p>
                 ) : (
-                  <div className="space-y-3">
-                    {customFields.map((field) => (
-                      <div key={field.id} className="space-y-1.5">
-                        <Label className="text-muted-foreground text-xs capitalize">
-                          {field.field_name}
-                        </Label>
-                        <CustomFieldInput 
-                          field={field} 
-                          value={customValues[field.id] ?? ''} 
-                          onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
-                        />
-                      </div>
-                    ))}
+                  <div className="space-y-4">
+                    <CustomFieldsSectionRenderer
+                      accountId={accountId}
+                      moduleName="contact"
+                      customFields={customFields}
+                      customValues={customValues}
+                      onChange={(fieldId, val) =>
+                        setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+                      }
+                    />
                     <Button
                       onClick={saveCustomFields}
                       disabled={savingCustom}

@@ -13,6 +13,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Loader2, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
+import { validateRequiredCustomFields } from '@/lib/custom-fields';
+import { CustomField } from '@/types';
 
 /**
  * Web order creation. The ONE pricing authority is the SQL function
@@ -165,6 +168,8 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
   const [pricing, setPricing] = useState<PricingResult | null>(null);
   const [pricingBusy, setPricingBusy] = useState(false);
   const [pricingError, setPricingError] = useState<string | null>(null);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   // Edit-mode: the loaded order's original customer (to detect a customer change
   // on save), whether it's locked (dispatched → read-only), and any load error.
@@ -190,12 +195,14 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       setLoading(true);
       setLocked(false);
       setLoadError(null);
-      const [{ data: contactData }, { data: productData }, { data: acct }] = await Promise.all([
+      const [{ data: contactData }, { data: productData }, { data: acct }, { data: fieldsData }] = await Promise.all([
         supabase.from('contacts').select('id, company, name').eq('account_id', accountId).order('company'),
         supabase.from('products').select('id, name, sku, price, unit').eq('account_id', accountId).eq('active', true).order('name'),
         supabase.from('accounts').select('settings').eq('id', accountId).single(),
+        supabase.from('custom_fields').select('*').eq('module_name', 'order').order('created_at'),
       ]);
       if (!alive) return;
+      setCustomFields(fieldsData || []);
       setContacts((contactData ?? []).map((c: Record<string, unknown>) => ({
         id: c.id as string,
         label: (c.company as string) || (c.name as string) || 'Unnamed',
@@ -249,6 +256,14 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
         }));
         setLines(editLines.length > 0 ? editLines : [newLine()]);
         setPricing(null);
+        const { data: cvData } = await supabase.from('order_custom_values').select('*').eq('order_id', orderId);
+        if (cvData) {
+          const vals: Record<string, string> = {};
+          cvData.forEach((row: any) => { vals[row.custom_field_id] = row.value; });
+          setCustomValues(vals);
+        } else {
+          setCustomValues({});
+        }
         setLoading(false);
         return;
       }
@@ -261,6 +276,7 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       setLines([newLine()]);
       setOrderDiscountValue('');
       setPricing(null);
+      setCustomValues({});
       setLoading(false);
     })();
     return () => { alive = false; };
@@ -358,6 +374,13 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       toast.error(`Below the price floor: ${names}. Reduce the discount to save.`);
       return;
     }
+
+    const cfError = validateRequiredCustomFields(customFields, customValues);
+    if (cfError) {
+      toast.error(cfError);
+      return;
+    }
+
     setSaving(true);
     try {
       if (isEdit && orderId) {
@@ -373,6 +396,15 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
           p_contact_id: contactId,
         });
         if (error) throw error;
+        if (orderId && Object.keys(customValues).length > 0) {
+          await supabase.from('order_custom_values').delete().eq('order_id', orderId);
+          const toInsert = Object.entries(customValues)
+            .filter(([_, v]) => v !== undefined && v !== '')
+            .map(([fId, v]) => ({ account_id: accountId, order_id: orderId, custom_field_id: fId, value: v }));
+          if (toInsert.length > 0) {
+            await supabase.from('order_custom_values').insert(toInsert);
+          }
+        }
         const status = (data as Record<string, unknown>)?.pricing_status as string | undefined;
         // Log the edit on the order timeline (the RPC doesn't log this).
         await logModuleActivity(supabase, {
@@ -396,6 +428,14 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
           p_app_version: null,
         });
         if (error) throw error;
+        if (newOrderId && Object.keys(customValues).length > 0) {
+          const toInsert = Object.entries(customValues)
+            .filter(([_, v]) => v !== undefined && v !== '')
+            .map(([fId, v]) => ({ account_id: accountId, order_id: newOrderId, custom_field_id: fId, value: v }));
+          if (toInsert.length > 0) {
+            await supabase.from('order_custom_values').insert(toInsert);
+          }
+        }
         const num = (data as Record<string, unknown>)?.order_number as string | undefined;
         // Log creation on the order timeline (create_order doesn't log this).
         await logModuleActivity(supabase, {
@@ -635,6 +675,19 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
               <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">
                 <AlertTriangle className="size-4 mt-0.5 shrink-0" />
                 <span>Couldn&apos;t price this order: {pricingError}</span>
+              </div>
+            )}
+
+            {/* Custom Fields */}
+            {customFields.length > 0 && (
+              <div className="pt-2 border-t border-border">
+                <CustomFieldsSectionRenderer
+                  accountId={accountId}
+                  moduleName="order"
+                  customFields={customFields}
+                  customValues={customValues}
+                  onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
+                />
               </div>
             )}
 

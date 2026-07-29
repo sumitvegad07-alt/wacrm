@@ -15,6 +15,7 @@ import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { isDateInFilter } from "@/lib/date-filters";
 import { ExpenseForm } from "@/components/expenses/expense-form";
+import { appendCustomFieldColumns, matchesSearchableCustomFields } from "@/lib/custom-fields";
 import { Expense, CustomField } from "@/types";
 
 export default function ExpensesPage() {
@@ -364,33 +365,8 @@ export default function ExpensesPage() {
     });
   }
 
-  // Append custom fields to columns
-  customFields.forEach(cf => {
-    let type: any = "text";
-    let options: any[] = [];
-    
-    if (cf.field_type === 'dropdown' || cf.field_type === 'radio' || cf.field_type === 'multi-select') {
-      type = "select";
-      const uniqueVals = Array.from(new Set(expenses.map(e => (e as any)[`cf_${cf.id}`]).filter(Boolean)));
-      options = uniqueVals.map(val => ({ label: val, value: val }));
-    } else if (cf.field_type === 'date') {
-      type = "date";
-    }
-
-    columns.push({
-      id: `cf_${cf.id}`,
-      label: cf.field_name,
-      type: type,
-      options: options.length > 0 ? options : undefined,
-      render: (expense) => {
-        const val = (expense as any)[`cf_${cf.id}`];
-        if (cf.field_type === 'attachment' && val) {
-          return <a href={val} target="_blank" rel="noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>View File</a>;
-        }
-        return <span>{val || "-"}</span>;
-      }
-    });
-  });
+  // Append custom fields to columns (controlled by admin show_in_table, sortable, filterable flags)
+  appendCustomFieldColumns(columns, customFields, expenses);
 
   const handleFilterChange = (columnId: string, value: any) => {
     setFilterState(prev => ({
@@ -401,9 +377,12 @@ export default function ExpensesPage() {
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter(expense => {
-      if (globalSearch && 
-          !expense.employee?.full_name?.toLowerCase().includes(globalSearch.toLowerCase()) && 
-          !expense.expense_type?.expense_name?.toLowerCase().includes(globalSearch.toLowerCase())) {
+      if (
+        globalSearch &&
+        !expense.employee?.full_name?.toLowerCase().includes(globalSearch.toLowerCase()) &&
+        !expense.expense_type?.expense_name?.toLowerCase().includes(globalSearch.toLowerCase()) &&
+        !matchesSearchableCustomFields(expense, customFields, globalSearch)
+      ) {
         return false;
       }
 

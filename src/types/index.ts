@@ -132,17 +132,35 @@ export interface ContactTag {
   tag_id: string;
 }
 
+export interface CustomFieldSection {
+  id: string;
+  account_id: string;
+  module_name: string;
+  name: string;
+  position: number;
+  created_at: string;
+}
+
 export interface CustomField {
   id: string;
   user_id: string;
   /** Tenancy key — NOT NULL since migration 017. */
   account_id: string;
-  module_name: 'contact' | 'deal' | 'task' | 'product' | 'quotation' | 'lead';
+  module_name: string;
+  section_id?: string | null;
+  position?: number;
+  is_active?: boolean;
+  field_id_number?: number;
   field_name: string;
   field_type: string;
   field_options?: Record<string, unknown>;
   source_type?: 'static' | 'module';
   source_module?: string;
+  is_required?: boolean;
+  show_in_table?: boolean;
+  is_sortable?: boolean;
+  is_searchable?: boolean;
+  is_filterable?: boolean;
   created_at: string;
 }
 

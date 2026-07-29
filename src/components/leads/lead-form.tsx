@@ -17,6 +17,8 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { logModuleActivity } from "@/lib/activities";
 import { CustomFieldInput } from "@/components/ui/custom-field-input";
+import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
+import { validateRequiredCustomFields } from "@/lib/custom-fields";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import type { Tag, CustomField } from "@/types";
 
@@ -100,6 +102,13 @@ export function LeadForm({ open, onOpenChange, lead, onSaved }: LeadFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!accountId) return;
+
+    const cfError = validateRequiredCustomFields(customFields, customValues);
+    if (cfError) {
+      toast.error(cfError);
+      return;
+    }
+
     setIsSubmitting(true);
     
     const supabase = createClient();
@@ -296,21 +305,15 @@ export function LeadForm({ open, onOpenChange, lead, onSaved }: LeadFormProps) {
             </div>
 
             {customFields.length > 0 && (
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">Custom Fields</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {customFields.map((field) => (
-                    <div key={field.id} className="space-y-2">
-                      <Label className="text-muted-foreground capitalize">{field.field_name}</Label>
-                      <CustomFieldInput 
-                        field={field} 
-                        value={customValues[field.id] ?? ''} 
-                        onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <CustomFieldsSectionRenderer
+                accountId={accountId}
+                moduleName="lead"
+                customFields={customFields}
+                customValues={customValues}
+                onChange={(fieldId, val) =>
+                  setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+                }
+              />
             )}
 
           </div>

@@ -13,6 +13,7 @@ import { LeadForm } from "@/components/leads/lead-form";
 import { LeadImportDialog } from "@/components/leads/lead-import-dialog";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
+import { appendCustomFieldColumns, matchesSearchableCustomFields } from "@/lib/custom-fields";
 import { isDateInFilter } from "@/lib/date-filters";
 import { CustomField } from "@/types";
 
@@ -178,42 +179,8 @@ export default function LeadsPage() {
     }
   ];
 
-  // Append custom fields to columns
-  customFields.forEach(cf => {
-    let type: any = "text";
-    let options: any[] = [];
-    
-    if (cf.field_type === 'dropdown' || cf.field_type === 'radio' || cf.field_type === 'multi-select') {
-      type = "select";
-      // Note: for relational fields, this takes the distinct values in the table. 
-      // If we wanted to fetch the full module list for the filter we would need an async effect here,
-      // but for now relying on unique row values for the filter is standard.
-      const uniqueVals = Array.from(new Set(leads.map(l => l[`cf_${cf.id}`]).filter(Boolean)));
-      options = uniqueVals.map(val => ({ label: val, value: val }));
-    } else if (cf.field_type === 'date') {
-      type = "date";
-    }
-
-    columns.push({
-      id: `cf_${cf.id}`,
-      label: cf.field_name,
-      type: type,
-      options: options.length > 0 ? options : undefined,
-      visibleByDefault: false,
-      render: (lead) => {
-        const val = lead[`cf_${cf.id}`];
-        if (!val) return <span className="text-muted-foreground">-</span>;
-        
-        if (cf.field_type === 'checkbox') {
-          return <span>{val === 'true' ? 'Yes' : 'No'}</span>;
-        }
-        if (cf.field_type === 'attachment') {
-          return <a href={val} target="_blank" rel="noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>View</a>;
-        }
-        return <span>{val}</span>;
-      }
-    });
-  });
+  // Append custom fields to columns (controlled by admin show_in_table, sortable, filterable flags)
+  appendCustomFieldColumns(columns, customFields, leads);
 
   const handleFilterChange = (columnId: string, value: any) => {
     setFilterState(prev => ({
@@ -225,8 +192,13 @@ export default function LeadsPage() {
   // Apply filters locally (since we fetch all leads for now)
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
-      // Global search
-      if (globalSearch && !lead.name.toLowerCase().includes(globalSearch.toLowerCase()) && !lead.whatsapp?.includes(globalSearch)) {
+      // Global search (name, whatsapp, and searchable custom fields)
+      if (
+        globalSearch &&
+        !lead.name.toLowerCase().includes(globalSearch.toLowerCase()) &&
+        !lead.whatsapp?.includes(globalSearch) &&
+        !matchesSearchableCustomFields(lead, customFields, globalSearch)
+      ) {
         return false;
       }
 

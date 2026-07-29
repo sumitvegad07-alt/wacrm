@@ -6,6 +6,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, CustomField } from '@/types';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
+import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
+import { validateRequiredCustomFields } from '@/lib/custom-fields';
 import {
   findExistingContact,
   isExactMatch,
@@ -174,6 +176,12 @@ export function ContactForm({
     if (!address.trim()) { toast.error('Full Address is required'); return; }
     if (hierarchy.enabled && hierarchyLevel == null) {
       toast.error('Customer Level is required');
+      return;
+    }
+
+    const cfError = validateRequiredCustomFields(customFields, customValues);
+    if (cfError) {
+      toast.error(cfError);
       return;
     }
 
@@ -414,22 +422,16 @@ export function ContactForm({
           </div>
 
           {customFields.length > 0 && (
-            <div className="space-y-4 pt-2">
-              <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">Custom Fields</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {customFields.map((field) => (
-                  <div key={field.id} className="space-y-2">
-                    <Label className="text-muted-foreground capitalize">
-                      {field.field_name}
-                    </Label>
-                    <CustomFieldInput 
-                      field={field} 
-                      value={customValues[field.id] ?? ''} 
-                      onChange={(val) => setCustomValues((prev) => ({ ...prev, [field.id]: val }))}
-                    />
-                  </div>
-                ))}
-              </div>
+            <div className="pt-2">
+              <CustomFieldsSectionRenderer
+                accountId={accountId}
+                moduleName="contact"
+                customFields={customFields}
+                customValues={customValues}
+                onChange={(fieldId, val) =>
+                  setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+                }
+              />
             </div>
           )}
 
