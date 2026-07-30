@@ -9,16 +9,14 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft, UserPlus } from "lucide-react";
 import { logModuleActivity } from "@/lib/activities";
-import { CustomFieldInput } from "@/components/ui/custom-field-input";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
-import { validateRequiredCustomFields } from "@/lib/custom-fields";
+import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import type { Tag, CustomField } from "@/types";
 
@@ -26,10 +24,11 @@ interface LeadFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   lead: any | null; // null for creation, populated for editing
-  onSaved: () => void;
+  onSaved: (savedId?: string) => void;
+  asPage?: boolean;
 }
 
-export function LeadForm({ open, onOpenChange, lead, onSaved }: LeadFormProps) {
+export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: LeadFormProps) {
   const { accountId, user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -37,6 +36,9 @@ export function LeadForm({ open, onOpenChange, lead, onSaved }: LeadFormProps) {
     name: "", contact_person: "", whatsapp: "", email: "", source: "", industry: "", status: "",
     address: "", city: "", state: "", country: "", latitude: "", longitude: ""
   });
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
 
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -67,31 +69,38 @@ export function LeadForm({ open, onOpenChange, lead, onSaved }: LeadFormProps) {
   async function fetchLookups() {
     if (!accountId) return;
     const supabase = createClient();
-    
-    const [cfRes, stRes, soRes, inRes] = await Promise.all([
-      supabase.from("custom_fields").select("*").or("module_name.eq.lead,module_name.is.null").order("field_name"),
+    if (user?.id) {
+      await ensureDefaultSectionsAndFields(accountId, 'lead', user.id, supabase);
+    }
+    const [statusRes, sourceRes, industryRes, tagsRes, cfRes] = await Promise.all([
       supabase.from("lead_statuses").select("id, name").eq("account_id", accountId).order("position"),
       supabase.from("lead_sources").select("id, name").eq("account_id", accountId).order("position"),
-      supabase.from("lead_industries").select("id, name").eq("account_id", accountId).order("position")
+      supabase.from("lead_industries").select("id, name").eq("account_id", accountId).order("position"),
+      supabase.from("tags").select("*").eq("account_id", accountId).order("name"),
+      supabase.from("custom_fields").select("*").eq("account_id", accountId).eq("module_name", "lead").order("position", { ascending: true }).order("created_at", { ascending: true })
     ]);
-    
-    if (stRes.data) {
-      setStatuses(stRes.data);
-      if (!lead?.id && stRes.data.length > 0 && !formData.status) {
-        setFormData(prev => ({ ...prev, status: stRes.data[0].name }));
-      }
-    }
-    if (soRes.data) setSources(soRes.data);
-    if (inRes.data) setIndustries(inRes.data);
+
+    if (statusRes.data) setStatuses(statusRes.data);
+    if (sourceRes.data) setSources(sourceRes.data);
+    if (industryRes.data) setIndustries(industryRes.data);
+    if (tagsRes.data) setTags(tagsRes.data);
 
     if (cfRes.data) {
       setCustomFields(cfRes.data as CustomField[]);
       if (lead?.id) {
-        const { data: vals } = await supabase.from("lead_custom_values").select("*").eq("lead_id", lead.id);
-        if (vals) {
-          const cv: Record<string, string> = {};
-          vals.forEach(v => { if (v.value) cv[v.custom_field_id] = v.value; });
-          setCustomValues(cv);
+        const { data: values } = await supabase
+          .from("lead_custom_values")
+          .select("custom_field_id, value")
+          .eq("lead_id", lead.id);
+
+        if (values) {
+          const map: Record<string, string> = {};
+          values.forEach((v) => {
+            if (v.value !== null) {
+              map[v.custom_field_id] = String(v.value);
+            }
+          });
+          setCustomValues(map);
         }
       } else {
         setCustomValues({});
@@ -101,67 +110,72 @@ export function LeadForm({ open, onOpenChange, lead, onSaved }: LeadFormProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!accountId) return;
+    if (!accountId || !user?.id) {
+      toast.error("You must be logged in to an account to save a lead");
+      return;
+    }
+    if (!formData.name.trim()) {
+      toast.error("Business / Lead Name is required");
+      return;
+    }
 
-    const cfError = validateRequiredCustomFields(customFields, customValues);
-    if (cfError) {
-      toast.error(cfError);
+    const errorMsg = validateRequiredCustomFields(customFields, customValues, formData);
+    if (errorMsg) {
+      toast.error(errorMsg);
       return;
     }
 
     setIsSubmitting(true);
-    
     const supabase = createClient();
+
     const payload = {
       account_id: accountId,
-      name: formData.name,
-      company: formData.name,
-      contact_person: formData.contact_person,
-      phone: formData.whatsapp,
-      whatsapp: formData.whatsapp,
-      email: formData.email,
-      source: formData.source,
-      industry: formData.industry,
-      status: formData.status,
-      address: formData.address,
-      city: formData.city,
-      state: formData.state,
-      country: formData.country,
-      latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-      longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+      owner_id: user.id,
+      user_id: user.id,
+      name: formData.name.trim(),
+      company: formData.name.trim(),
+      contact_person: formData.contact_person.trim() || null,
+      whatsapp: formData.whatsapp.trim() || null,
+      phone: formData.whatsapp.trim() || null,
+      email: formData.email.trim() || null,
+      source: formData.source.trim() || null,
+      industry: formData.industry.trim() || null,
+      status: formData.status.trim() || null,
+      address: formData.address.trim() || null,
+      city: formData.city.trim() || null,
+      state: formData.state.trim() || null,
+      country: formData.country.trim() || null,
+      latitude: formData.latitude.trim() || null,
+      longitude: formData.longitude.trim() || null,
+      collaborator_ids: collaboratorIds,
     };
 
-    let error;
     let savedId = lead?.id;
+    let saveError = null;
 
     if (lead?.id) {
-      const { error: updateErr } = await supabase.from("leads").update(payload).eq("id", lead.id);
-      error = updateErr;
+      const { error } = await supabase.from("leads").update(payload).eq("id", lead.id);
+      saveError = error;
     } else {
-      if (!user) {
-        toast.error("Not authenticated");
-        setIsSubmitting(false);
-        return;
-      }
-      const insertPayload = { ...payload, user_id: user.id };
-      const { data: insertData, error: insertErr } = await supabase.from("leads").insert(insertPayload).select().single();
-      error = insertErr;
-      if (insertData) savedId = insertData.id;
+      const { data, error } = await supabase.from("leads").insert(payload).select("id").single();
+      saveError = error;
+      if (data) savedId = data.id;
     }
 
-    if (error) {
-      toast.error(lead ? "Failed to update lead" : "Failed to add lead");
+    if (saveError) {
+      toast.error("Failed to save lead: " + saveError.message);
     } else if (savedId) {
-      
-      // Sync custom fields
-      const cfUpserts = customFields.filter(f => customValues[f.id] !== undefined).map(f => ({
-         lead_id: savedId!,
-         custom_field_id: f.id,
-         value: customValues[f.id]
-      }));
+      const cfUpserts = Object.entries(customValues)
+        .filter(([_, val]) => val !== undefined && val !== null && String(val).trim() !== "")
+        .map(([fieldId, val]) => ({
+          lead_id: savedId,
+          custom_field_id: fieldId,
+          value: String(val),
+        }));
+
       if (cfUpserts.length > 0) {
-        await supabase.from('lead_custom_values').delete().eq('lead_id', savedId);
-        await supabase.from('lead_custom_values').insert(cfUpserts);
+        await supabase.from("lead_custom_values").delete().eq("lead_id", savedId);
+        await supabase.from("lead_custom_values").insert(cfUpserts);
       }
 
       await logModuleActivity(supabase, {
@@ -173,158 +187,171 @@ export function LeadForm({ open, onOpenChange, lead, onSaved }: LeadFormProps) {
 
       toast.success(lead ? "Lead updated successfully!" : "Lead added successfully!");
       onOpenChange(false);
-      onSaved();
+      onSaved(savedId);
     }
     setIsSubmitting(false);
   }
 
+  const formContent = (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid gap-6 py-4">
+        <CustomFieldsSectionRenderer
+          accountId={accountId}
+          moduleName="lead"
+          customFields={customFields}
+          customValues={customValues}
+          onChange={(fieldId, val) =>
+            setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+          }
+          formData={{
+            name: formData.name,
+            contact_person: formData.contact_person,
+            whatsapp: formData.whatsapp,
+            email: formData.email,
+            status: formData.status,
+            source: formData.source,
+            industry: formData.industry,
+            address: formData.address,
+            city: formData.city,
+            state: formData.state,
+            country: formData.country,
+          }}
+          onFormDataChange={(key, val) => {
+            setFormData((prev) => ({ ...prev, [key]: val }));
+          }}
+          renderCustomSystemField={(fld) => {
+            const k = (fld.system_key || '').toLowerCase();
+            const nameLower = (fld.field_name || '').toLowerCase();
+            if (k === 'status' || k === 'lead_status' || nameLower === 'lead status' || nameLower === 'status') {
+              return (
+                <SearchableSelect
+                  value={formData.status}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, status: val }))}
+                  options={statuses.map((s) => ({ value: s.name, label: s.name }))}
+                  placeholder="Select status..."
+                  className="bg-muted border-border"
+                />
+              );
+            }
+            if (k === 'source' || k === 'lead_source' || nameLower === 'lead source' || nameLower === 'source') {
+              return (
+                <SearchableSelect
+                  value={formData.source}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, source: val }))}
+                  options={sources.map((s) => ({ value: s.name, label: s.name }))}
+                  placeholder="Select source..."
+                  className="bg-muted border-border"
+                />
+              );
+            }
+            if (k === 'industry' || k === 'lead_industry' || nameLower === 'industry' || nameLower === 'lead industry') {
+              return (
+                <SearchableSelect
+                  value={formData.industry}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, industry: val }))}
+                  options={industries.map((i) => ({ value: i.name, label: i.name }))}
+                  placeholder="Select industry..."
+                  className="bg-muted border-border"
+                />
+              );
+            }
+            if (k === 'city' || nameLower === 'city') {
+              return (
+                <Input
+                  value={formData.city}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
+                  onBlur={(e) => {
+                    const val = e.target.value.toLowerCase().trim();
+                    if (!val) return;
+                    const cityLookup: Record<string, { state: string; country: string }> = {
+                      mumbai: { state: 'Maharashtra', country: 'India' },
+                      delhi: { state: 'Delhi', country: 'India' },
+                      bangalore: { state: 'Karnataka', country: 'India' },
+                      pune: { state: 'Maharashtra', country: 'India' },
+                      ahmedabad: { state: 'Gujarat', country: 'India' },
+                      chennai: { state: 'Tamil Nadu', country: 'India' },
+                      'new york': { state: 'New York', country: 'United States' },
+                      london: { state: 'England', country: 'United Kingdom' },
+                      dubai: { state: 'Dubai', country: 'United Arab Emirates' },
+                    };
+                    if (cityLookup[val]) {
+                      setFormData((prev) => ({
+                        ...prev,
+                        state: prev.state || cityLookup[val].state,
+                        country: prev.country || cityLookup[val].country,
+                      }));
+                    }
+                  }}
+                />
+              );
+            }
+            return null;
+          }}
+        />
+
+        <div className="space-y-3 pt-2 border-t border-border/50">
+          <span className="text-xs font-medium text-muted-foreground">GPS Coordinates (Optional)</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs">Latitude</Label>
+              <Input value={formData.latitude} onChange={(e) => setFormData((prev) => ({ ...prev, latitude: e.target.value }))} placeholder="e.g. 19.0760" className="h-8 text-xs" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs">Longitude</Label>
+              <Input value={formData.longitude} onChange={(e) => setFormData((prev) => ({ ...prev, longitude: e.target.value }))} placeholder="e.g. 72.8777" className="h-8 text-xs" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-2 pt-4 border-t border-border mt-6">
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Save Lead
+        </Button>
+      </div>
+    </form>
+  );
+
+  if (asPage) {
+    return (
+      <div className="p-8 w-full max-w-none space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
+            >
+              <ArrowLeft className="h-4 w-4 text-foreground" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <UserPlus className="w-6 h-6 text-primary" />
+                {lead ? 'Edit Lead' : 'Add New Lead'}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {lead ? 'Update lead details below.' : 'Create a new lead in your CRM.'}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          {formContent}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{lead ? "Edit Lead" : "Add New Lead"}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-6 py-4">
-            
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">Primary Details</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Business / Lead Name *</Label>
-                  <Input id="name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="contact_person">Contact Person</Label>
-                  <Input id="contact_person" value={formData.contact_person} onChange={e => setFormData({ ...formData, contact_person: e.target.value })} />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="whatsapp">WhatsApp Number</Label>
-                  <Input id="whatsapp" value={formData.whatsapp} onChange={e => setFormData({ ...formData, whatsapp: e.target.value })} />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-                </div>
-                
-                <div className="grid gap-2">
-                  <Label htmlFor="status">Lead Status</Label>
-                  <SearchableSelect
-                    value={formData.status}
-                    onChange={(val) => setFormData({ ...formData, status: val })}
-                    options={statuses.map(s => ({ value: s.name, label: s.name }))}
-                    placeholder="Select Status"
-                    searchPlaceholder="Search statuses..."
-                    emptyMessage="Setup statuses in Settings"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="source">Source</Label>
-                  <SearchableSelect
-                    value={formData.source}
-                    onChange={(val) => setFormData({ ...formData, source: val })}
-                    options={sources.map(s => ({ value: s.name, label: s.name }))}
-                    placeholder="Select Source"
-                    searchPlaceholder="Search sources..."
-                    emptyMessage="Setup sources in Settings"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="industry">Industry</Label>
-                  <SearchableSelect
-                    value={formData.industry}
-                    onChange={(val) => setFormData({ ...formData, industry: val })}
-                    options={industries.map(s => ({ value: s.name, label: s.name }))}
-                    placeholder="Select Industry"
-                    searchPlaceholder="Search industries..."
-                    emptyMessage="Setup industries in Settings"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">Location Details</h4>
-              <div className="grid gap-2">
-                <Label htmlFor="address">Address</Label>
-                <Input id="address" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input 
-                    id="city" 
-                    value={formData.city} 
-                    onChange={e => setFormData({ ...formData, city: e.target.value })} 
-                    onBlur={(e) => {
-                      const val = e.target.value.toLowerCase().trim();
-                      if (!val) return;
-                      // TODO: Replace this static mapping with a real Geocoding API if preferred
-                      const cityLookup: Record<string, {state: string, country: string}> = {
-                        "mumbai": { state: "Maharashtra", country: "India" },
-                        "delhi": { state: "Delhi", country: "India" },
-                        "bangalore": { state: "Karnataka", country: "India" },
-                        "pune": { state: "Maharashtra", country: "India" },
-                        "ahmedabad": { state: "Gujarat", country: "India" },
-                        "chennai": { state: "Tamil Nadu", country: "India" },
-                        "new york": { state: "New York", country: "United States" },
-                        "london": { state: "England", country: "United Kingdom" },
-                        "dubai": { state: "Dubai", country: "United Arab Emirates" }
-                      };
-                      if (cityLookup[val]) {
-                        setFormData(prev => ({
-                          ...prev,
-                          state: prev.state || cityLookup[val].state,
-                          country: prev.country || cityLookup[val].country
-                        }));
-                      }
-                    }}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="state">State</Label>
-                  <Input id="state" value={formData.state} onChange={e => setFormData({ ...formData, state: e.target.value })} />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="country">Country</Label>
-                  <Input id="country" value={formData.country} onChange={e => setFormData({ ...formData, country: e.target.value })} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="latitude">Latitude</Label>
-                  <Input id="latitude" value={formData.latitude} onChange={e => setFormData({ ...formData, latitude: e.target.value })} placeholder="e.g. 19.0760" />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="longitude">Longitude</Label>
-                  <Input id="longitude" value={formData.longitude} onChange={e => setFormData({ ...formData, longitude: e.target.value })} placeholder="e.g. 72.8777" />
-                </div>
-              </div>
-            </div>
-
-            {customFields.length > 0 && (
-              <CustomFieldsSectionRenderer
-                accountId={accountId}
-                moduleName="lead"
-                customFields={customFields}
-                customValues={customValues}
-                onChange={(fieldId, val) =>
-                  setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
-                }
-              />
-            )}
-
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Lead
-            </Button>
-          </DialogFooter>
-        </form>
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{lead ? "Edit Lead" : "Add New Lead"}</DialogTitle>
+        </DialogHeader>
+        {formContent}
       </DialogContent>
     </Dialog>
   );

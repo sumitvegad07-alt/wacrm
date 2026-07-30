@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, CustomField } from '@/types';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
-import { validateRequiredCustomFields } from '@/lib/custom-fields';
+import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import {
   findExistingContact,
   isExactMatch,
@@ -26,11 +26,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowLeft, Users } from 'lucide-react';
 
 interface ContactFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  asPage?: boolean;
   contact?: Contact | null;
   contactTags?: ContactTag[];
   onSaved: () => void;
@@ -42,6 +43,7 @@ interface ContactFormProps {
 export function ContactForm({
   open,
   onOpenChange,
+  asPage = false,
   contact,
   contactTags = [],
   onSaved,
@@ -133,11 +135,16 @@ export function ContactForm({
 
   async function fetchCustomFields() {
     if (!accountId) return;
+    if (user?.id) {
+      await ensureDefaultSectionsAndFields(accountId, 'contact', user.id, supabase);
+    }
     const { data: fields } = await supabase
       .from('custom_fields')
       .select('*')
-      .or('module_name.eq.contact,module_name.is.null')
-      .order('field_name');
+      .eq('account_id', accountId)
+      .eq('module_name', 'contact')
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true });
     
     if (fields) {
       setCustomFields(fields as CustomField[]);
@@ -164,24 +171,27 @@ export function ContactForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // Item 2 — required fields. Company name, contact person, phone, and
-    // full address are mandatory; customer level is mandatory only when the
-    // account has order hierarchy (secondary sales) enabled.
-    if (!company.trim()) { toast.error('Company Name is required'); return; }
-    if (!name.trim()) { toast.error('Contact Person is required'); return; }
-    if (!phone.trim()) {
-      toast.error('Phone number is required');
-      return;
-    }
-    if (!address.trim()) { toast.error('Full Address is required'); return; }
-    if (hierarchy.enabled && hierarchyLevel == null) {
-      toast.error('Customer Level is required');
-      return;
-    }
+    const formDataMap = {
+      company,
+      name,
+      phone,
+      email,
+      hierarchy_level: hierarchyLevel,
+      address,
+      area,
+      city,
+      state: stateField,
+      country,
+      pincode,
+    };
 
-    const cfError = validateRequiredCustomFields(customFields, customValues);
+    const cfError = validateRequiredCustomFields(customFields, customValues, formDataMap);
     if (cfError) {
       toast.error(cfError);
+      return;
+    }
+    if (hierarchy.enabled && hierarchyLevel == null) {
+      toast.error('Customer Level is required when sales hierarchy is enabled');
       return;
     }
 
@@ -253,115 +263,92 @@ export function ContactForm({
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-popover-foreground text-xl">
-            {isEdit ? 'Edit Customer' : 'Add Customer'}
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            {isEdit
-              ? 'Update the contact details below.'
-              : 'Fill in the details to create a new contact.'}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">Primary Details</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="cf-company" className="text-muted-foreground">
-                  Company Name <span className="text-red-400">*</span>
-                </Label>
-                <Input
-                  id="cf-company"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  placeholder="Acme Distributors"
-                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="cf-name" className="text-muted-foreground">
-                  Contact Person <span className="text-red-400">*</span>
-                </Label>
-                <Input
-                  id="cf-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Jane Doe"
-                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="cf-phone" className="text-muted-foreground">
-                  Phone <span className="text-red-400">*</span>
-                </Label>
-                <Input
-                  id="cf-phone"
-                  value={phone}
-                  onChange={(e) => {
-                    setPhone(e.target.value);
-                    if (dupMatch) setDupMatch(null);
-                  }}
-                  onBlur={checkDuplicate}
-                  placeholder="+1 234 567 8900"
-                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                />
-                {dupMatch ? (
-                  <div
-                    className={`flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs ${
-                      dupMatch.exact
-                        ? 'border-red-500/40 bg-red-500/10 text-red-300'
-                        : 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                    }`}
-                  >
-                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                    <div className="space-y-1">
-                      <p>
-                        {dupMatch.exact
-                          ? 'A customer with this phone number already exists.'
-                          : 'A customer with a very similar number already exists.'}
-                      </p>
-                      {onViewExisting && (
-                        <button
-                          type="button"
-                          onClick={() => onViewExisting(dupMatch.contact.id)}
-                          className="font-medium underline underline-offset-2 hover:no-underline"
-                        >
-                          View {dupMatch.contact.name || dupMatch.contact.phone}
-                        </button>
-                      )}
-                    </div>
+  const formContent = (
+    <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+          <CustomFieldsSectionRenderer
+            accountId={accountId}
+            moduleName="contact"
+            customFields={customFields}
+            customValues={customValues}
+            onChange={(fieldId, val) =>
+              setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+            }
+            formData={{
+              company,
+              name,
+              phone,
+              email,
+              hierarchy_level: hierarchyLevel,
+              address,
+              area,
+              city,
+              state: stateField,
+              country,
+              pincode,
+            }}
+            onFormDataChange={(key, val) => {
+              if (key === 'company') setCompany(val);
+              if (key === 'name') setName(val);
+              if (key === 'phone') {
+                setPhone(val);
+                if (dupMatch) setDupMatch(null);
+              }
+              if (key === 'email') setEmail(val);
+              if (key === 'hierarchy_level') setHierarchyLevel(val ? parseInt(val) : null);
+              if (key === 'address') setAddress(val);
+              if (key === 'area') setArea(val);
+              if (key === 'city') setCity(val);
+              if (key === 'state') setStateField(val);
+              if (key === 'country') setCountry(val);
+              if (key === 'pincode') setPincode(val);
+            }}
+            renderCustomSystemField={(fld) => {
+              if (fld.system_key === 'phone') {
+                return (
+                  <div className="space-y-1">
+                    <Input
+                      id="cf-phone"
+                      value={phone}
+                      onChange={(e) => {
+                        setPhone(e.target.value);
+                        if (dupMatch) setDupMatch(null);
+                      }}
+                      onBlur={checkDuplicate}
+                      placeholder="+1 234 567 8900"
+                      className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                    />
+                    {dupMatch && (
+                      <div
+                        className={`flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs ${
+                          dupMatch.exact
+                            ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                            : 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <p>
+                            {dupMatch.exact
+                              ? 'A customer with this phone number already exists.'
+                              : 'A customer with a very similar number already exists.'}
+                          </p>
+                          {onViewExisting && (
+                            <button
+                              type="button"
+                              onClick={() => onViewExisting(dupMatch.contact.id)}
+                              className="font-medium underline underline-offset-2 hover:no-underline"
+                            >
+                              View {dupMatch.contact.name || dupMatch.contact.phone}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Include country code, e.g. +1 for US
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="cf-email" className="text-muted-foreground">
-                  Email
-                </Label>
-                <Input
-                  id="cf-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="contact@example.com"
-                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                />
-              </div>
-
-              {hierarchy.enabled && (
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Customer Level <span className="text-red-400">*</span></Label>
+                );
+              }
+              if (fld.system_key === 'hierarchy_level') {
+                if (!hierarchy.enabled) return null;
+                return (
                   <select
                     value={hierarchyLevel ?? ''}
                     onChange={(e) => setHierarchyLevel(e.target.value === '' ? null : parseInt(e.target.value))}
@@ -374,86 +361,112 @@ export function ContactForm({
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
+                );
+              }
+              return null;
+            }}
+          />
+
+          <div className="space-y-3 pt-2 border-t border-border/50">
+            <span className="text-xs font-medium text-muted-foreground">GPS Coordinates (Optional)</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-xs">Latitude</Label>
+                <Input value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="e.g. 19.1197" className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-xs">Longitude</Label>
+                 <Input value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="e.g. 72.8464" className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs" />
+              </div>
             </div>
           </div>
 
-          {/* Address & Location */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">Address &amp; Location</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 md:col-span-2">
-                <Label className="text-muted-foreground">Full Address <span className="text-red-400">*</span></Label>
-                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street, building, landmark" className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Area / Locality</Label>
-                <Input value={area} onChange={(e) => setArea(e.target.value)} placeholder="e.g. Andheri West" className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">City</Label>
-                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">State</Label>
-                <Input value={stateField} onChange={(e) => setStateField(e.target.value)} placeholder="State" className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Country</Label>
-                <Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Country" className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Pincode</Label>
-                <Input value={pincode} onChange={(e) => setPincode(e.target.value)} placeholder="Postal / PIN code" className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Latitude</Label>
-                <Input value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="e.g. 19.1197" className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Longitude</Label>
-                <Input value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="e.g. 72.8464" className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-              </div>
-              <p className="text-xs text-muted-foreground md:col-span-2">
-                Coordinates are normally captured automatically on the mobile app during a visit. You can enter or adjust them here manually.
+          {asPage ? (
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="border-border text-muted-foreground hover:bg-muted"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={saving || checkingDup || (!isEdit && !!dupMatch?.exact)}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {saving && <Loader2 className="size-4 animate-spin" />}
+                {isEdit ? 'Update' : 'Create'}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-end gap-2 pt-4 border-t border-border mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="border-border text-muted-foreground hover:bg-muted"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={saving || checkingDup || (!isEdit && !!dupMatch?.exact)}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {saving && <Loader2 className="size-4 animate-spin" />}
+                {isEdit ? 'Update' : 'Create'}
+              </Button>
+            </div>
+          )}
+        </form>
+  );
+
+  if (asPage) {
+    return (
+      <div className="p-8 w-full max-w-none space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
+            >
+              <ArrowLeft className="h-4 w-4 text-foreground" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <Users className="w-6 h-6 text-primary" />
+                {isEdit ? 'Edit Customer' : 'Add New Customer'}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {isEdit ? 'Update the contact details below.' : 'Capture a new customer and fill in their details.'}
               </p>
             </div>
           </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          {formContent}
+        </div>
+      </div>
+    );
+  }
 
-          {customFields.length > 0 && (
-            <div className="pt-2">
-              <CustomFieldsSectionRenderer
-                accountId={accountId}
-                moduleName="contact"
-                customFields={customFields}
-                customValues={customValues}
-                onChange={(fieldId, val) =>
-                  setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
-                }
-              />
-            </div>
-          )}
-
-          <DialogFooter className="bg-popover border-border">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="border-border text-muted-foreground hover:bg-muted"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={saving || checkingDup || (!isEdit && !!dupMatch?.exact)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground"
-            >
-              {saving && <Loader2 className="size-4 animate-spin" />}
-              {isEdit ? 'Update' : 'Create'}
-            </Button>
-          </DialogFooter>
-        </form>
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-popover-foreground text-xl">
+            {isEdit ? 'Edit Customer' : 'Add Customer'}
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            {isEdit
+              ? 'Update the contact details below.'
+              : 'Fill in the details to create a new contact.'}
+          </DialogDescription>
+        </DialogHeader>
+        {formContent}
       </DialogContent>
     </Dialog>
   );

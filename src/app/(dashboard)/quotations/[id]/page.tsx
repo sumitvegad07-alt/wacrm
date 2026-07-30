@@ -15,10 +15,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { QuotationForm } from '@/components/quotations/quotation-form';
 
 const STATUS_COLORS: Record<string, string> = {
-  Pending: 'bg-slate-100 text-slate-700 border-slate-200',
-  Sent: 'bg-blue-100 text-blue-700 border-blue-200',
-  Approved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  Rejected: 'bg-red-100 text-red-700 border-red-200',
+  Pending: 'bg-amber-600 text-white shadow-sm border-transparent',
+  Sent: 'bg-blue-600 text-white shadow-sm border-transparent',
+  Approved: 'bg-emerald-600 text-white shadow-sm border-transparent',
+  Rejected: 'bg-red-600 text-white shadow-sm border-transparent',
 };
 
 export default function QuotationViewPage({ params }: { params: Promise<{ id: string }> }) {

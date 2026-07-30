@@ -95,15 +95,15 @@ export default function TaskDetailsPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
               {task.title}
-              <Badge variant="outline" className="font-normal bg-card">
+              <Badge className="font-semibold bg-blue-600 text-white border-transparent shadow-sm">
                 {task.status}
               </Badge>
               {isOverdue(task) && (
-                <Badge variant="destructive" className="font-normal">
+                <Badge variant="destructive" className="font-semibold shadow-sm">
                   Overdue
                 </Badge>
               )}
-              <Badge variant="outline" className="font-normal bg-card">
+              <Badge className="font-semibold bg-amber-600 text-white border-transparent shadow-sm">
                 {task.priority} Priority
               </Badge>
             </h1>

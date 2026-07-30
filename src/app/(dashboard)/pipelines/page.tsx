@@ -34,7 +34,7 @@ import { GatedButton } from "@/components/ui/gated-button";
 
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
-import { appendCustomFieldColumns, matchesSearchableCustomFields } from "@/lib/custom-fields";
+import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
 
 const SPEC_DEFAULT_STAGES = [
   { name: "New Lead", color: "#3b82f6", position: 0 },
@@ -410,7 +410,7 @@ export default function PipelinesPage() {
       options: stages.map(s => ({ label: s.name, value: s.id })),
       render: (deal) => {
         const stage = stages.find(s => s.id === deal.stage_id);
-        return <span className="px-2 py-1 rounded-full text-xs" style={{ backgroundColor: `${stage?.color}20`, color: stage?.color }}>{stage?.name || '-'}</span>
+        return <span className="px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-sm" style={{ backgroundColor: stage?.color || '#64748b' }}>{stage?.name || '-'}</span>
       }
     },
     {
@@ -437,8 +437,10 @@ export default function PipelinesPage() {
     },
   ];
 
-  // Append custom fields (controlled by admin show_in_table, sortable, filterable flags)
-  appendCustomFieldColumns(columns, customFields, deals);
+  // Transform base columns and append custom fields (controlled by admin show_in_table, sortable, filterable flags)
+  const visibleColumns = useMemo(() => {
+    return getVisibleTableColumns([...columns], customFields, deals);
+  }, [columns, customFields, deals]);
 
   const filteredDeals = useMemo(() => {
     return deals.filter(deal => {
@@ -628,13 +630,13 @@ export default function PipelinesPage() {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedDealIds(new Set())}>
                     Cancel
                   </Button>
-                  <Button size="sm" variant="outline" className="text-red-600 border-red-500/30 hover:bg-red-50" onClick={handleBulkDelete}>
+                  <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white shadow-sm" onClick={handleBulkDelete}>
                     <XCircle className="mr-2 h-4 w-4" /> Delete
                   </Button>
-                  <Button size="sm" variant="outline" className="text-amber-600 border-amber-500/30 hover:bg-amber-50" onClick={() => handleBulkStatus("lost")}>
+                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm" onClick={() => handleBulkStatus("lost")}>
                     <XCircle className="mr-2 h-4 w-4" /> Mark Lost
                   </Button>
-                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleBulkStatus("won")}>
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white shadow-sm" onClick={() => handleBulkStatus("won")}>
                     <CheckCircle className="mr-2 h-4 w-4" /> Mark Won
                   </Button>
                   
@@ -658,7 +660,7 @@ export default function PipelinesPage() {
             )}
             
             <DataTable
-              columns={columns}
+              columns={visibleColumns}
               data={filteredDeals}
               filterState={filterState}
               onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}

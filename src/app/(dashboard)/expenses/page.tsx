@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { Plus, Search, Filter, CheckCircle, XCircle, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,13 @@ import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { isDateInFilter } from "@/lib/date-filters";
 import { ExpenseForm } from "@/components/expenses/expense-form";
-import { appendCustomFieldColumns, matchesSearchableCustomFields } from "@/lib/custom-fields";
+import { getVisibleTableColumns, matchesSearchableCustomFields } from "@/lib/custom-fields";
 import { Expense, CustomField } from "@/types";
 
 export default function ExpensesPage() {
   const { accountId, profile, accountRole, user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -91,6 +92,12 @@ export default function ExpensesPage() {
   useEffect(() => {
     loadExpenses();
   }, [accountId, profile]);
+
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      router.push('/expenses/new');
+    }
+  }, [searchParams, router]);
 
   const handleStatusUpdate = async (id: string, newStatus: string, reason?: string) => {
     if (!isAdmin) return;
@@ -305,10 +312,10 @@ export default function ExpensesPage() {
         { label: "Rejected", value: "Rejected" }
       ],
       render: (expense) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          expense.status === "Approved" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-          expense.status === "Rejected" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-          "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+        <span className={`px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-sm ${
+          expense.status === "Approved" ? "bg-green-600" :
+          expense.status === "Rejected" ? "bg-red-600" :
+          "bg-amber-600"
         }`}>
           {expense.status}
         </span>
@@ -340,10 +347,10 @@ export default function ExpensesPage() {
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             {expense.status === "Pending" && (
               <>
-                <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700 text-white" onClick={() => handleStatusUpdate(expense.id, "Approved")}>
+                <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700 text-white shadow-sm" onClick={() => handleStatusUpdate(expense.id, "Approved")}>
                   <CheckCircle className="h-4 w-4 mr-1" /> Approve
                 </Button>
-                <Button size="sm" className="h-8 bg-red-600 hover:bg-red-700 text-white" onClick={() => {
+                <Button size="sm" className="h-8 bg-red-600 hover:bg-red-700 text-white shadow-sm" onClick={() => {
                   const reason = prompt("Enter rejection reason:");
                   if (reason !== null) handleStatusUpdate(expense.id, "Rejected", reason);
                 }}>
@@ -351,11 +358,11 @@ export default function ExpensesPage() {
                 </Button>
               </>
             )}
-            <Button size="sm" variant="outline" className="h-8 border-blue-500/30 text-blue-500 hover:bg-blue-900/30 hover:text-blue-400" onClick={() => { setSelectedExpense(expense); setFormOpen(true); }}>
+            <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-sm" onClick={() => { setSelectedExpense(expense); setFormOpen(true); }}>
               Edit
             </Button>
             {expense.status === "Pending" && (
-              <Button size="sm" variant="outline" className="h-8 border-red-500/30 text-red-500 hover:bg-red-900/30 hover:text-red-400" onClick={() => handleDelete(expense.id)}>
+              <Button size="sm" className="h-8 bg-red-600 hover:bg-red-700 text-white shadow-sm" onClick={() => handleDelete(expense.id)}>
                 Delete
               </Button>
             )}
@@ -365,8 +372,9 @@ export default function ExpensesPage() {
     });
   }
 
-  // Append custom fields to columns (controlled by admin show_in_table, sortable, filterable flags)
-  appendCustomFieldColumns(columns, customFields, expenses);
+  const visibleColumns = useMemo(() => {
+    return getVisibleTableColumns([...columns], customFields, expenses);
+  }, [columns, customFields, expenses]);
 
   const handleFilterChange = (columnId: string, value: any) => {
     setFilterState(prev => ({
@@ -417,10 +425,7 @@ export default function ExpensesPage() {
             {isAdmin ? "Manage and approve employee expenses." : "Submit and track your expense claims."}
           </p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => {
-          setSelectedExpense(null);
-          setFormOpen(true);
-        }}>
+        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/expenses/new')}>
           <Plus className="mr-2 h-4 w-4" /> New Expense
         </Button>
       </div>
@@ -456,13 +461,13 @@ export default function ExpensesPage() {
             <Button variant="ghost" size="sm" onClick={() => setSelectedExpenseIds(new Set())}>
               Cancel
             </Button>
-            <Button size="sm" variant="outline" className="text-red-600 border-red-500/30 hover:bg-red-50" onClick={handleBulkDelete}>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white shadow-sm" onClick={handleBulkDelete}>
               <XCircle className="mr-2 h-4 w-4" /> Delete Selected
             </Button>
-            <Button size="sm" variant="outline" className="text-amber-600 border-amber-500/30 hover:bg-amber-50" onClick={handleBulkReject}>
+            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm" onClick={handleBulkReject}>
               <XCircle className="mr-2 h-4 w-4" /> Reject Selected
             </Button>
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleBulkApprove}>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white shadow-sm" onClick={handleBulkApprove}>
               <CheckCircle className="mr-2 h-4 w-4" /> Approve Selected
             </Button>
           </div>
@@ -470,7 +475,7 @@ export default function ExpensesPage() {
       )}
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filteredExpenses}
         filterState={filterState}
         onFilterChange={handleFilterChange}

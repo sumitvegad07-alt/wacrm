@@ -240,18 +240,15 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
               {lead.name}
               {lead.is_converted && (
-                <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 gap-1">
+                <Badge className="bg-emerald-600 text-white border-transparent shadow-sm gap-1">
                   <CheckCircle2 className="h-3 w-3" /> Converted to Customer
                 </Badge>
               )}
               {!lead.is_converted && (
                 <Badge 
-                  variant="outline" 
-                  className="capitalize font-medium"
+                  className="capitalize font-semibold text-white shadow-sm border-transparent"
                   style={{
-                    backgroundColor: `${statuses.find(s => s.name.toLowerCase() === lead.status?.toLowerCase())?.color || '#6366f1'}15`,
-                    color: statuses.find(s => s.name.toLowerCase() === lead.status?.toLowerCase())?.color || '#6366f1',
-                    borderColor: `${statuses.find(s => s.name.toLowerCase() === lead.status?.toLowerCase())?.color || '#6366f1'}30`,
+                    backgroundColor: statuses.find(s => s.name.toLowerCase() === lead.status?.toLowerCase())?.color || '#6366f1',
                   }}
                 >
                   {lead.status || 'New'}
@@ -269,7 +266,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         <div className="flex flex-wrap items-center gap-2">
           {lead.is_converted && lead.converted_contact_id ? (
             <Link href={`/contacts/${lead.converted_contact_id}`}>
-              <Button variant="outline" className="gap-2 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10">
+              <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
                 <ExternalLink className="size-4" />
                 View Customer
               </Button>

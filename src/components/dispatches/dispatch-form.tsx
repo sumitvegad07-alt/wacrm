@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { logModuleActivity } from '@/lib/activities';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
-import { validateRequiredCustomFields } from '@/lib/custom-fields';
+import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
 
 function supaErr(e: unknown): string {
@@ -47,7 +47,7 @@ interface DispatchFormProps {
 export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: string; prefillOrderId?: string }) {
   const router = useRouter();
   const supabase = createClient();
-  const { accountId, defaultCurrency } = useAuth();
+  const { user, accountId, defaultCurrency } = useAuth();
   const isEdit = !!dispatchId;
 
   const [loading, setLoading] = useState(true);
@@ -109,11 +109,12 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
     let alive = true;
     (async () => {
       setLoading(true);
+      await ensureDefaultSectionsAndFields(accountId, 'dispatch', user?.id, supabase);
       const [{ data: contactData }, { data: orderData }, { data: fieldsData }] = await Promise.all([
         supabase.from('contacts').select('id, company, name, address, city, state, country').eq('account_id', accountId).order('company'),
         // Dispatchable orders: approved or partially dispatched.
         supabase.from('orders').select('id, order_number, contact_id, status').eq('account_id', accountId).in('status', ['Approved', 'Part Dispatch', 'Dispatched']).order('created_at', { ascending: false }),
-        supabase.from('custom_fields').select('*').eq('module_name', 'dispatch').order('created_at'),
+        supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'dispatch').order('created_at'),
       ]);
       if (!alive) return;
       setCustomFields(fieldsData || []);
@@ -185,7 +186,11 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
       if (Number(l.qty) > l.remaining + 0.0001) { toast.error(`${l.productName}: cannot dispatch more than remaining (${l.remaining})`); return; }
     }
 
-    const cfError = validateRequiredCustomFields(customFields, customValues);
+    const cfError = validateRequiredCustomFields(customFields, customValues, {
+      dispatch_date: date,
+      lr_number: lrNo,
+      transporter_name: transport,
+    });
     if (cfError) {
       toast.error(cfError);
       return;
@@ -279,12 +284,11 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
             <SearchableSelect value={orderId} onChange={onOrderChange} placeholder="Select order..." searchPlaceholder="Search orders..."
               options={ordersForCustomer.map((o) => ({ value: o.id, label: o.order_number }))} className="h-10 bg-background" disabled={isEdit} />
           </div>
-          <div className="space-y-1.5"><Label>Date *</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
           <div className="space-y-1.5"><Label>Dispatch Code</Label><Input value={dispatchCode} onChange={(e) => setDispatchCode(e.target.value)} placeholder="Dispatch Code" /></div>
           <div className="space-y-1.5"><Label>Invoice No.</Label><Input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder="Invoice No." /></div>
           <div className="space-y-1.5"><Label>Invoice Date</Label><Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Transport</Label><Input value={transport} onChange={(e) => setTransport(e.target.value)} placeholder="Transport / courier" /></div>
           <div className="space-y-1.5"><Label>Transport Contact No.</Label><Input value={transportContact} onChange={(e) => setTransportContact(e.target.value)} placeholder="Contact number" /></div>
+          <div className="space-y-1.5"><Label>LR Date</Label><Input type="date" value={lrDate} onChange={(e) => setLrDate(e.target.value)} /></div>
         </div>
       </div>
 
@@ -296,27 +300,26 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
         </div>
       )}
 
-      {/* LR Details */}
+      {/* Dispatch Information & Custom Fields */}
       <div className="bg-card border border-border rounded-lg p-5">
-        <h3 className="text-lg font-semibold mb-4">LR Details</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1.5"><Label>LR No.</Label><Input value={lrNo} onChange={(e) => setLrNo(e.target.value)} placeholder="Enter LR No." /></div>
-          <div className="space-y-1.5"><Label>LR Date</Label><Input type="date" value={lrDate} onChange={(e) => setLrDate(e.target.value)} /></div>
-        </div>
+        <CustomFieldsSectionRenderer
+          accountId={accountId}
+          moduleName="dispatch"
+          customFields={customFields}
+          customValues={customValues}
+          onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
+          formData={{
+            dispatch_date: date,
+            lr_number: lrNo,
+            transporter_name: transport,
+          }}
+          onFormDataChange={(key, val) => {
+            if (key === 'dispatch_date') setDate(val);
+            if (key === 'lr_number') setLrNo(val);
+            if (key === 'transporter_name') setTransport(val);
+          }}
+        />
       </div>
-
-      {/* Custom Fields */}
-      {customFields.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-5">
-          <CustomFieldsSectionRenderer
-            accountId={accountId}
-            moduleName="dispatch"
-            customFields={customFields}
-            customValues={customValues}
-            onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
-          />
-        </div>
-      )}
 
       {/* Product Details */}
       <div className="bg-card border border-border rounded-lg p-5">

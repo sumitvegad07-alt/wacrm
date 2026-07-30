@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Product, CustomField } from '@/types';
-import { appendCustomFieldColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
+import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from '@/lib/custom-fields';
 import { formatCurrency } from '@/lib/currency';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -117,8 +117,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {
-      setFormOpen(true);
-      router.replace('/products');
+      router.push('/products/new');
     }
   }, [searchParams, router]);
 
@@ -217,9 +216,9 @@ export default function ProductsPage() {
       options: [{ label: 'Active', value: 'true' }, { label: 'Inactive', value: 'false' }],
       render: (product) => (
         product.active ? (
-          <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200">Active</Badge>
+          <Badge className="bg-emerald-600 text-white shadow-sm border-transparent font-medium">Active</Badge>
         ) : (
-          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200">Inactive</Badge>
+          <Badge className="bg-slate-600 text-white shadow-sm border-transparent font-medium">Inactive</Badge>
         )
       )
     },
@@ -260,8 +259,10 @@ export default function ProductsPage() {
     }
   ];
 
-  // Append custom fields (controlled by admin show_in_table, sortable, filterable flags)
-  appendCustomFieldColumns(columns, customFields, products);
+  // Transform base columns and append custom fields (controlled by admin show_in_table, sortable, filterable flags)
+  const visibleColumns = useMemo(() => {
+    return getVisibleTableColumns([...columns], customFields, products);
+  }, [columns, customFields, products]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
@@ -321,7 +322,7 @@ export default function ProductsPage() {
           <Button variant="outline" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
             <Upload className="size-4 mr-2" /> Import
           </Button>
-          <Button onClick={() => { setEditProduct(null); setFormOpen(true); }} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+          <Button onClick={() => router.push('/products/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <Plus className="size-4 mr-2" /> New Product
           </Button>
         </div>
@@ -370,7 +371,7 @@ export default function ProductsPage() {
       </div>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filteredProducts}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}

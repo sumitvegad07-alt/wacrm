@@ -147,10 +147,10 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
 
   function getPriorityColor(priority: string) {
     switch (priority?.toLowerCase()) {
-      case "urgent": return "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20";
-      case "high": return "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20";
-      case "low": return "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20";
-      default: return "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20";
+      case "urgent": return "bg-red-600 text-white shadow-sm border-transparent";
+      case "high": return "bg-orange-600 text-white shadow-sm border-transparent";
+      case "low": return "bg-green-600 text-white shadow-sm border-transparent";
+      default: return "bg-slate-600 text-white shadow-sm border-transparent";
     }
   }
 

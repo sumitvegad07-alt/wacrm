@@ -5,7 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
-import { CalendarIcon, UploadCloud, X } from "lucide-react";
+import { CalendarIcon, UploadCloud, X, ArrowLeft, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
@@ -14,7 +14,7 @@ import { Expense, ExpenseType, Profile, CustomField } from "@/types";
 import { cn } from "@/lib/utils";
 import { CustomFieldInput } from "@/components/ui/custom-field-input";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
-import { validateRequiredCustomFields } from "@/lib/custom-fields";
+import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,12 +56,13 @@ type FormValues = z.infer<typeof expenseSchema>;
 interface ExpenseFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  asPage?: boolean;
   expense?: Expense | null;
   onSaved: () => void;
 }
 
-export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFormProps) {
-  const { accountId, profile, accountRole } = useAuth();
+export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSaved }: ExpenseFormProps) {
+  const { user, accountId, profile, accountRole } = useAuth();
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
@@ -115,6 +116,8 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
   }, [open, expense, expenseTypes, form]);
 
   async function loadExpenseTypes() {
+    if (!accountId) return;
+    await ensureDefaultSectionsAndFields(accountId, "expense", user?.id, supabase);
     const { data: typesData } = await supabase
       .from("expense_types")
       .select("*")
@@ -198,7 +201,11 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
       return;
     }
 
-    const cfError = validateRequiredCustomFields(customFields, customValues);
+    const cfError = validateRequiredCustomFields(customFields, customValues, {
+      expense_type: data.expense_type_id,
+      amount: data.amount,
+      expense_date: data.expense_date,
+    });
     if (cfError) {
       toast.error(cfError);
       return;
@@ -275,13 +282,11 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
     setLoading(false);
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <DialogHeader>
-            <DialogTitle>{expense ? "Edit Expense" : "Submit Expense"}</DialogTitle>
-          </DialogHeader>
+  const formContent = (
+    <>
+          <div className="flex items-center justify-between border-b border-border pb-4 mb-4 pr-6">
+            <h2 className="text-xl font-light text-foreground">{expense ? "Edit Expense" : "Submit Expense"}</h2>
+          </div>
 
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -290,7 +295,7 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
                 control={form.control}
                 name="expense_type_id"
                 render={({ field }) => (
-                  <Select key={expenseTypes.length} value={field.value} onValueChange={(val) => handleTypeChange(val || "")}>
+                  <Select key={expenseTypes.length} value={field.value || ""} onValueChange={(val) => handleTypeChange(val || "")}>
                     <SelectTrigger id="expense_type">
                       <SelectValue placeholder="Select type">
                         {expenseTypes.find(t => t.id === field.value)?.expense_name || "Select type"}
@@ -311,39 +316,6 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
               )}
             </div>
 
-            <div className="grid gap-2">
-              <Label>Date <span className="text-destructive">*</span></Label>
-              <Controller
-                control={form.control}
-                name="expense_date"
-                render={({ field }) => (
-                  <Popover>
-                    <PopoverTrigger
-                      render={
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        />
-                      }
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                )}
-              />
-            </div>
-
             {selectedType?.allowance_type === "TRAVELLING" && selectedType.is_per_km === "USER" && (
               <div className="grid gap-2">
                 <Label>Travel KM</Label>
@@ -356,18 +328,44 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
               </div>
             )}
 
-            <div className="grid gap-2">
-              <Label>Amount (₹) <span className="text-destructive">*</span></Label>
-              <Input
-                type="number"
-                step="0.01"
-                {...form.register("amount", { valueAsNumber: true })}
-                disabled={!selectedType || (!isAdmin && ((!selectedType.amount_changeable && selectedType.is_per_km === "NO") || selectedType.is_per_km !== "NO"))}
-                className={!selectedType || (!isAdmin && ((!selectedType.amount_changeable && selectedType.is_per_km === "NO") || selectedType.is_per_km !== "NO")) ? "bg-muted cursor-not-allowed" : ""}
+            <div className="pt-4 border-t border-border mt-2">
+              <CustomFieldsSectionRenderer
+                accountId={accountId}
+                moduleName="expense"
+                customFields={customFields}
+                customValues={customValues}
+                onChange={(fieldId, val) =>
+                  setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+                }
+                formData={{
+                  expense_date: form.watch("expense_date") ? format(form.watch("expense_date"), "yyyy-MM-dd") : "",
+                  amount: form.watch("amount") ?? "",
+                }}
+                onFormDataChange={(key, val) => {
+                  if (key === "expense_date" && val) {
+                    form.setValue("expense_date", new Date(val));
+                  }
+                  if (key === "amount") {
+                    form.setValue("amount", Number(val) || 0);
+                  }
+                }}
+                renderCustomSystemField={(field) => {
+                  if (field.system_key === "amount") {
+                    const isDisabled = !selectedType || (!isAdmin && ((!selectedType.amount_changeable && selectedType.is_per_km === "NO") || selectedType.is_per_km !== "NO"));
+                    return (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={form.watch("amount") ?? ""}
+                        onChange={(e) => form.setValue("amount", e.target.valueAsNumber || 0)}
+                        disabled={isDisabled}
+                        className={isDisabled ? "bg-muted cursor-not-allowed" : ""}
+                      />
+                    );
+                  }
+                  return null;
+                }}
               />
-              {form.formState.errors.amount && (
-                <p className="text-xs text-destructive">{form.formState.errors.amount.message}</p>
-              )}
             </div>
 
             <div className="grid gap-2">
@@ -397,29 +395,55 @@ export function ExpenseForm({ open, onOpenChange, expense, onSaved }: ExpenseFor
               </div>
             )}
 
-            {customFields.length > 0 && (
-              <div className="pt-4 border-t border-border mt-2">
-                <CustomFieldsSectionRenderer
-                  accountId={accountId}
-                  moduleName="expense"
-                  customFields={customFields}
-                  customValues={customValues}
-                  onChange={(fieldId, val) =>
-                    setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
-                  }
-                />
-              </div>
-            )}
-
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-2 pt-4 border-t border-border mt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? "Submitting..." : "Submit Expense"}
             </Button>
-          </DialogFooter>
+          </div>
+    </>
+  );
+
+  if (asPage) {
+    return (
+      <div className="p-8 w-full max-w-none space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
+            >
+              <ArrowLeft className="h-4 w-4 text-foreground" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <Receipt className="w-6 h-6 text-primary" />
+                {expense ? "Edit Expense" : "Submit New Expense"}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {expense ? "Update the expense details below." : "Submit an expense claim with receipts and remarks."}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            {formContent}
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          {formContent}
         </form>
       </DialogContent>
     </Dialog>

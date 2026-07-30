@@ -45,19 +45,19 @@ export default function FieldStaffPage() {
     switch (status) {
       case 'active':
         return (
-          <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+          <Badge className="bg-emerald-600 text-white shadow-sm border-transparent font-medium">
             <SignalHigh className="size-3 mr-1" /> Active
           </Badge>
         );
       case 'stale':
         return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200">
+          <Badge className="bg-amber-600 text-white shadow-sm border-transparent font-medium">
             <Clock className="size-3 mr-1" /> Stale
           </Badge>
         );
       case 'offline':
         return (
-          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200">
+          <Badge className="bg-slate-600 text-white shadow-sm border-transparent font-medium">
             <UserX className="size-3 mr-1" /> Offline
           </Badge>
         );

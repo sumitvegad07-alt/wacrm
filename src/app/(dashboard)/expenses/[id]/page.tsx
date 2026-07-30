@@ -184,9 +184,9 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
   if (!expense) return null;
 
   const isPending = expense.status === "Pending";
-  const statusColor = expense.status === "Approved" ? "bg-green-100 text-green-700 border-green-200" :
-                      expense.status === "Rejected" ? "bg-red-100 text-red-700 border-red-200" :
-                      "bg-amber-100 text-amber-700 border-amber-200";
+  const statusColor = expense.status === "Approved" ? "bg-green-600 text-white border-transparent shadow-sm" :
+                      expense.status === "Rejected" ? "bg-red-600 text-white border-transparent shadow-sm" :
+                      "bg-amber-600 text-white border-transparent shadow-sm";
 
   return (
     <div className="space-y-6">
@@ -227,12 +227,12 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
             </>
           )}
           {isAdmin && (
-            <Button variant="outline" size="sm" className="border-blue-500/30 text-blue-500 hover:bg-blue-900/30 hover:text-blue-400" onClick={() => setEditOpen(true)}>
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm" onClick={() => setEditOpen(true)}>
               Edit Expense
             </Button>
           )}
           {!isAdmin && expense.employee_id === profile?.id && isPending && (
-            <Button variant="outline" size="sm" className="border-blue-500/30 text-blue-500 hover:bg-blue-900/30 hover:text-blue-400" onClick={() => setEditOpen(true)}>
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm" onClick={() => setEditOpen(true)}>
               Edit Expense
             </Button>
           )}

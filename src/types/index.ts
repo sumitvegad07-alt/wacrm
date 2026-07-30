@@ -138,6 +138,7 @@ export interface CustomFieldSection {
   module_name: string;
   name: string;
   position: number;
+  is_active?: boolean;
   created_at: string;
 }
 
@@ -161,6 +162,7 @@ export interface CustomField {
   is_sortable?: boolean;
   is_searchable?: boolean;
   is_filterable?: boolean;
+  system_key?: string | null;
   created_at: string;
 }
 

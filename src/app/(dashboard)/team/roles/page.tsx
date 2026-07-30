@@ -268,12 +268,12 @@ export default function RolesPage() {
                     {role.description || "No description"}
                   </div>
                   {role.permissions?.all && (
-                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary mt-2">
+                    <span className="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-sm mt-2">
                       Full Access
                     </span>
                   )}
                   {role.name === "Admin" && (
-                    <span className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-destructive mt-2 ml-2">
+                    <span className="inline-flex items-center rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-sm mt-2 ml-2">
                       System Locked
                     </span>
                   )}

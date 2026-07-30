@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import type { Product, CustomField } from '@/types';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
-import { validateRequiredCustomFields } from '@/lib/custom-fields';
+import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import {
   Dialog,
   DialogContent,
@@ -19,12 +19,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Upload, X } from 'lucide-react';
+import { Trash2, Upload, X, ArrowLeft, Package } from 'lucide-react';
 import { logModuleActivity } from '@/lib/activities';
 
 interface ProductFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  asPage?: boolean;
   product?: Product | null;
   onSaved: () => void;
 }
@@ -32,6 +33,7 @@ interface ProductFormProps {
 export function ProductForm({
   open,
   onOpenChange,
+  asPage = false,
   product,
   onSaved,
 }: ProductFormProps) {
@@ -95,11 +97,16 @@ export function ProductForm({
 
   async function fetchCustomFields() {
     if (!accountId) return;
+    if (user?.id) {
+      await ensureDefaultSectionsAndFields(accountId, 'product', user.id, supabase);
+    }
     const { data: fields } = await supabase
       .from('custom_fields')
       .select('*')
+      .eq('account_id', accountId)
       .eq('module_name', 'product')
-      .order('field_name');
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true });
     
     if (fields) {
       setCustomFields(fields as CustomField[]);
@@ -253,33 +260,59 @@ export function ProductForm({
     onSaved();
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-[95vw] w-full p-0 flex flex-col max-h-[94vh]">
-        <DialogHeader className="border-b border-border/50 p-4 shrink-0">
-          <DialogTitle className="text-popover-foreground">
-            {isEdit ? 'Edit Product' : 'New Product'}
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground hidden">
-            Create or edit a product.
-          </DialogDescription>
-        </DialogHeader>
+  const formContent = (
+    <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            <CustomFieldsSectionRenderer
+              accountId={accountId}
+              moduleName="product"
+              customFields={customFields}
+              customValues={customValues}
+              onChange={(fieldId, val) =>
+                setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+              }
+              formData={{
+                name,
+                sku,
+                category,
+                unit,
+                price,
+                min_price: minPrice,
+              }}
+              onFormDataChange={(key, val) => {
+                if (key === 'name') setName(val);
+                if (key === 'sku') setSku(val);
+                if (key === 'category') setCategory(val);
+                if (key === 'unit') setUnit(val);
+                if (key === 'price') setPrice(val);
+                if (key === 'min_price') setMinPrice(val);
+              }}
+              renderCustomSystemField={(fld) => {
+                if (fld.system_key === 'min_price') {
+                  return (
+                    <div className="grid gap-1">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={minPrice}
+                        onChange={(e) => setMinPrice(e.target.value)}
+                        placeholder="No floor"
+                        className="border-border bg-muted text-foreground"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Discounts can never take this product below this price.
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
 
-        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4 pt-4 border-t border-border/50">
+              <h4 className="text-sm font-medium text-foreground">Additional Details</h4>
               <div className="grid gap-2">
-                <Label className="text-muted-foreground">Product Name <span className="text-red-400">*</span></Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Product Name"
-                  className="border-border bg-muted text-foreground"
-                  autoFocus
-                />
-              </div>
-
-              <div className="grid gap-2 md:col-span-2">
                 <Label className="text-muted-foreground">Description</Label>
                 <Textarea
                   value={description}
@@ -289,101 +322,40 @@ export function ProductForm({
                 />
               </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">SKU</Label>
-                <Input
-                  value={sku}
-                  onChange={(e) => setSku(e.target.value)}
-                  placeholder="e.g. ITEM-001"
-                  className="border-border bg-muted text-foreground"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">Stock</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value)}
+                    placeholder="Leave blank if not tracked"
+                    className="border-border bg-muted text-foreground"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">Tax slab</Label>
+                  <select
+                    value={taxSlabId}
+                    onChange={(e) => setTaxSlabId(e.target.value)}
+                    className="h-9 rounded-md border border-border bg-muted px-3 text-sm text-foreground"
+                  >
+                    <option value="">No tax (0%)</option>
+                    {taxSlabs.map((slab) => (
+                      <option key={slab.id} value={slab.id}>
+                        {slab.name} — {Number(slab.rate)}%
+                      </option>
+                    ))}
+                  </select>
+                  {taxSlabs.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      No slabs defined yet. Add them in Settings → Pricing &amp; Schemes.
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Price</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="0.00"
-                  className="border-border bg-muted text-foreground"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4 md:col-span-2">
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Tax slab</Label>
-                <select
-                  value={taxSlabId}
-                  onChange={(e) => setTaxSlabId(e.target.value)}
-                  className="h-9 rounded-md border border-border bg-muted px-3 text-sm text-foreground"
-                >
-                  <option value="">No tax (0%)</option>
-                  {taxSlabs.map((slab) => (
-                    <option key={slab.id} value={slab.id}>
-                      {slab.name} — {Number(slab.rate)}%
-                    </option>
-                  ))}
-                </select>
-                {taxSlabs.length === 0 && (
-                  <p className="text-[11px] text-muted-foreground">
-                    No slabs defined yet. Add them in Settings → Pricing &amp; Schemes.
-                  </p>
-                )}
-              </div>
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Minimum price</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
-                  placeholder="No floor"
-                  className="border-border bg-muted text-foreground"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Discounts can never take this product below this price.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-2 md:col-span-2">
-              <Label className="text-muted-foreground">Category</Label>
-              <Input
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g. Electronics"
-                className="border-border bg-muted text-foreground"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 md:col-span-2">
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Unit</Label>
-                <Input
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value)}
-                  placeholder="e.g. pcs, kg, hr"
-                  className="border-border bg-muted text-foreground"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Stock</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value)}
-                  placeholder="Leave blank if not tracked"
-                  className="border-border bg-muted text-foreground"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 md:col-span-2">
               <div className="grid gap-2">
                 <Label className="text-muted-foreground">Product Image</Label>
                 <div className="flex items-center gap-4">
@@ -422,32 +394,17 @@ export function ProductForm({
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-2 pt-2">
-              <input 
-                type="checkbox"
-                id="active"
-                checked={active}
-                onChange={(e) => setActive(e.target.checked)}
-                className="rounded border-border bg-muted accent-primary"
-              />
-              <Label htmlFor="active" className="text-muted-foreground font-normal">Active Product</Label>
-            </div>
-
-            {customFields.length > 0 && (
-              <div className="pt-4 mt-4 border-t border-border/50 md:col-span-2">
-                <CustomFieldsSectionRenderer
-                  accountId={accountId}
-                  moduleName="product"
-                  customFields={customFields}
-                  customValues={customValues}
-                  onChange={(fieldId, val) =>
-                    setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
-                  }
+              <div className="flex items-center gap-2 pt-2">
+                <input 
+                  type="checkbox"
+                  id="active"
+                  checked={active}
+                  onChange={(e) => setActive(e.target.checked)}
+                  className="rounded border-border bg-muted accent-primary"
                 />
+                <Label htmlFor="active" className="text-muted-foreground font-normal">Active Product</Label>
               </div>
-            )}
             </div>
           </div>
 
@@ -505,6 +462,50 @@ export function ProductForm({
               ))}
           </div>
         </form>
+  );
+
+  if (asPage) {
+    return (
+      <div className="p-8 w-full max-w-none space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
+            >
+              <ArrowLeft className="h-4 w-4 text-foreground" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <Package className="w-6 h-6 text-primary" />
+                {isEdit ? 'Edit Product' : 'Add New Product'}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {isEdit ? 'Update the product details below.' : 'Create a new product in your catalog.'}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          {formContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-4xl w-full p-0 flex flex-col max-h-[90vh]">
+        <DialogHeader className="border-b border-border/50 p-4 shrink-0">
+          <DialogTitle className="text-popover-foreground">
+            {isEdit ? 'Edit Product' : 'New Product'}
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground hidden">
+            Create or edit a product.
+          </DialogDescription>
+        </DialogHeader>
+        {formContent}
       </DialogContent>
     </Dialog>
   );

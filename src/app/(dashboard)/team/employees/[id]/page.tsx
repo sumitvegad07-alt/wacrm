@@ -243,11 +243,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">{employee.full_name || "Employee Profile"}</h1>
-              <Badge variant="outline" className={employee.status === "active" ? "border-green-500 text-green-600 bg-green-500/10" : "border-red-500 text-red-600 bg-red-500/10"}>
+              <Badge className={employee.status === "active" ? "bg-emerald-600 text-white shadow-sm border-transparent font-medium capitalize" : "bg-red-600 text-white shadow-sm border-transparent font-medium capitalize"}>
                 {employee.status || "active"}
               </Badge>
               {employee.account_role === "admin" && (
-                <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30">System Admin</Badge>
+                <Badge className="bg-amber-600 text-white shadow-sm border-transparent font-medium">System Admin</Badge>
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
@@ -443,10 +443,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                     <div className="space-y-1">
                       <div className="font-medium text-sm flex items-center gap-2 text-foreground">
                         {device.device_name || "Unknown Device"}
-                        <Badge variant="outline" className={
-                          device.status === 'approved' ? 'border-green-500 text-green-600 text-[10px]' :
-                          device.status === 'blocked' ? 'border-red-500 text-red-600 text-[10px]' :
-                          'border-yellow-500 text-yellow-600 text-[10px]'
+                        <Badge className={
+                          device.status === 'approved' ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] uppercase font-bold' :
+                          device.status === 'blocked' ? 'bg-red-600 text-white shadow-sm border-transparent text-[10px] uppercase font-bold' :
+                          'bg-amber-600 text-white shadow-sm border-transparent text-[10px] uppercase font-bold'
                         }>
                           {device.status}
                         </Badge>

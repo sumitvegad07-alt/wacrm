@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Task, Contact, Deal, Product, Conversation, Profile, TaskStatus, TaskPriority, CustomField } from "@/types";
 import { CustomFieldInput } from "@/components/ui/custom-field-input";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
-import { validateRequiredCustomFields } from "@/lib/custom-fields";
+import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { Trash2, Loader2, X } from "lucide-react";
+import { Trash2, Loader2, X, ArrowLeft, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,7 @@ const TIME_OPTIONS = Array.from({ length: 288 }).map((_, i) => {
 interface TaskFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  asPage?: boolean;
   task?: Task | null;
   defaultContactId?: string;
   defaultDealId?: string;
@@ -57,6 +58,7 @@ const PRIORITIES: TaskPriority[] = ["Low", "Medium", "High", "Urgent"];
 export function TaskForm({
   open,
   onOpenChange,
+  asPage = false,
   task,
   defaultContactId,
   defaultDealId,
@@ -191,16 +193,17 @@ export function TaskForm({
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !accountId) return;
     let cancelled = false;
     (async () => {
+      await ensureDefaultSectionsAndFields(accountId, "task", user?.id, supabase);
       const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes, expRes, oRes, dispRes] = await Promise.all([
         supabase.from("profiles").select("*").order("full_name"),
         supabase.from("contacts").select("*").order("name"),
         supabase.from("deals").select("*").order("title"),
         supabase.from("products").select("*").order("name"),
         supabase.from("conversations").select("*, contact:contacts(name, phone)").order("last_message_at", { ascending: false }),
-        supabase.from("custom_fields").select("*").eq("module_name", "task").order("field_name"),
+        supabase.from("custom_fields").select("*").eq("account_id", accountId).eq("module_name", "task").order("field_name"),
         supabase.from("quotations").select("*, contact:contacts(name)").order("quotation_number", { ascending: false }),
         supabase.from("leads").select("*").order("name"),
         supabase.from("expenses").select("*, expense_type:expense_types(expense_name)").order("created_at", { ascending: false }),
@@ -253,7 +256,10 @@ export function TaskForm({
       return;
     }
 
-    const cfError = validateRequiredCustomFields(customFields, customValues);
+    const cfError = validateRequiredCustomFields(customFields, customValues, {
+      due_date: dueDate,
+      priority,
+    });
     if (cfError) {
       toast.error(cfError);
       return;
@@ -369,10 +375,8 @@ export function TaskForm({
   const canAssignOthers = accountRole === "admin" || accountRole === "owner" || hasAssignPerm;
   const assignableProfiles = canAssignOthers ? profiles : profiles.filter(p => p.id === user?.id);
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("bg-popover border-border text-popover-foreground max-h-[94vh] overflow-y-auto", isNote ? "sm:max-w-2xl" : "sm:max-w-[95vw] w-full")}>
-        
+  const formContent = (
+    <>
         {/* Custom Header similar to Note Screenshot */}
         <div className="flex items-center justify-between border-b border-border pb-4 mb-4 pr-6">
           <h2 className="text-xl font-light text-foreground">{task ? "Edit" : "Add"} {isNote ? "Note" : "Activity"}</h2>
@@ -419,15 +423,6 @@ export function TaskForm({
 
               <div className="grid grid-cols-2 gap-4 mt-6">
                 <div className="grid gap-2">
-                  <Label className="text-muted-foreground text-xs uppercase font-medium">Scheduled Date</Label>
-                  <Input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="border-border bg-background text-foreground"
-                  />
-                </div>
-                <div className="grid gap-2">
                   <Label className="text-muted-foreground text-xs uppercase font-medium">Scheduled Time</Label>
                   <SearchableSelect
                     value={dueTime}
@@ -436,21 +431,6 @@ export function TaskForm({
                     placeholder="Select time"
                     className="h-10 w-full bg-background"
                   />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground text-xs uppercase font-medium">Priority</Label>
-                  <select
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary"
-                  >
-                    {PRIORITIES.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-muted-foreground text-xs uppercase font-medium">Assigned To</Label>
@@ -468,6 +448,26 @@ export function TaskForm({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-border/50">
+                <CustomFieldsSectionRenderer
+                  accountId={accountId}
+                  moduleName="task"
+                  customFields={customFields}
+                  customValues={customValues}
+                  onChange={(fieldId, val) =>
+                    setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+                  }
+                  formData={{
+                    due_date: dueDate,
+                    priority,
+                  }}
+                  onFormDataChange={(key, val) => {
+                    if (key === "due_date") setDueDate(val);
+                    if (key === "priority") setPriority(val as TaskPriority);
+                  }}
+                />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border/50">
@@ -581,20 +581,6 @@ export function TaskForm({
                   </div>
                 )}
               </div>
-
-              {customFields.length > 0 && (
-                <div className="pt-4 mt-4 border-t border-border/50">
-                  <CustomFieldsSectionRenderer
-                    accountId={accountId}
-                    moduleName="task"
-                    customFields={customFields}
-                    customValues={customValues}
-                    onChange={(fieldId, val) =>
-                      setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
-                    }
-                  />
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -645,6 +631,43 @@ export function TaskForm({
             </Button>
           </div>
         </div>
+    </>
+  );
+
+  if (asPage) {
+    return (
+      <div className="p-8 w-full max-w-none space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
+            >
+              <ArrowLeft className="h-4 w-4 text-foreground" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <CheckSquare className="w-6 h-6 text-primary" />
+                {task ? "Edit" : "Add"} {isNote ? "Note" : "Task / Activity"}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {task ? "Update the activity details below." : "Create a new task, meeting, call, or note."}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          {formContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={cn("bg-popover border-border text-popover-foreground max-h-[90vh] overflow-y-auto", isNote ? "sm:max-w-2xl" : "sm:max-w-3xl")}>
+        {formContent}
       </DialogContent>
     </Dialog>
   );

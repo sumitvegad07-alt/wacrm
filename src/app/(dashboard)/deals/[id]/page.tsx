@@ -292,24 +292,24 @@ export default function DealDetailsPage() {
               {(deal as any).deal_number && <span className="text-muted-foreground font-mono text-lg">{(deal as any).deal_number}</span>}
               {deal.title}
               {deal.is_converted && (
-                <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 gap-1">
+                <Badge className="bg-emerald-600 text-white border-transparent shadow-sm gap-1 font-semibold">
                   <CheckCircle2 className="h-3 w-3" /> Converted to Quotation
                 </Badge>
               )}
               {!deal.is_converted && isWon && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 border border-emerald-500/20">
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm border-transparent">
                   <Check className="h-3 w-3" />
                   Won
                 </span>
               )}
               {isLost && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-semibold text-red-400 border border-red-500/20">
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-red-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm border-transparent">
                   <X className="h-3 w-3" />
                   Lost
                 </span>
               )}
               {!deal.is_converted && !isWon && !isLost && currentStage && (
-                <Badge style={{ backgroundColor: currentStage.color + '20', color: currentStage.color, borderColor: currentStage.color + '40' }} variant="outline">
+                <Badge style={{ backgroundColor: currentStage.color }} className="text-white border-transparent shadow-sm font-semibold">
                   {currentStage.name}
                 </Badge>
               )}
@@ -338,7 +338,7 @@ export default function DealDetailsPage() {
         <div className="flex flex-wrap items-center gap-2">
           {deal.is_converted && (deal as any).converted_quotation_id ? (
             <Link href={`/quotations/${(deal as any).converted_quotation_id}/edit`}>
-              <Button variant="outline" className="gap-2 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10">
+              <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
                 <ExternalLink className="size-4" />
                 View Quotation
               </Button>
@@ -349,15 +349,14 @@ export default function DealDetailsPage() {
                 onClick={handleConvertToQuotation}
                 disabled={converting}
                 variant="default"
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
               >
                 {converting ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
                 Convert to Quotation
               </Button>
               <Button
                 onClick={() => setLostDialogOpen(true)}
-                variant="outline"
-                className="gap-2 border-red-500/30 text-red-500 hover:bg-red-500/10"
+                className="gap-2 bg-red-600 hover:bg-red-700 text-white shadow-sm"
               >
                 <XCircle className="size-4" />
                 Mark as Lost
@@ -371,7 +370,7 @@ export default function DealDetailsPage() {
               Message Customer
             </Button>
           )}
-          <Button onClick={() => router.push(`/deals/${deal.id}/edit`)} variant="outline" className="gap-2">
+          <Button onClick={() => router.push(`/deals/${deal.id}/edit`)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
             <Pencil className="size-4" />
             Edit Deal
           </Button>

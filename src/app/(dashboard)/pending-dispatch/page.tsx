@@ -24,8 +24,8 @@ interface PendingRow {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  Approved: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
-  'Part Dispatch': 'bg-orange-500/10 text-orange-600 border-orange-500/30',
+  Approved: 'bg-blue-600 text-white shadow-sm border-transparent',
+  'Part Dispatch': 'bg-orange-600 text-white shadow-sm border-transparent',
 };
 
 export default function PendingDispatchPage() {

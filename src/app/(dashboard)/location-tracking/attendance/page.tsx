@@ -193,7 +193,7 @@ export default function UserAttendancePage() {
         { label: "Absent", value: "Absent" }
       ],
       render: (row) => (
-        <Badge variant={row.status === "Present" ? "default" : "destructive"} className={row.status === "Present" ? "bg-green-500 hover:bg-green-600" : ""}>
+        <Badge className={row.status === "Present" ? "bg-emerald-600 text-white shadow-sm border-transparent font-medium" : "bg-red-600 text-white shadow-sm border-transparent font-medium"}>
           {row.status}
         </Badge>
       )

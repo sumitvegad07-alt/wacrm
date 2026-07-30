@@ -108,7 +108,7 @@ export default function DispatchDetailPage() {
             <div className="text-2xl font-bold tracking-wide">DISPATCH <span className="text-primary">#{dispNo.split('-').pop() || dispNo}</span></div>
             <div className="flex items-center justify-end gap-2 mt-2">
               {canEdit && (
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => router.push(`/dispatches/${id}/edit`)}>
+                <Button size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm" onClick={() => router.push(`/dispatches/${id}/edit`)}>
                   <Pencil className="size-4" /> Edit
                 </Button>
               )}

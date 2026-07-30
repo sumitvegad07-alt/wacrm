@@ -98,11 +98,10 @@ export default function CustomerVisitsPage() {
         <span className="font-medium whitespace-nowrap inline-flex items-center gap-2">
           {row.name}
           <Badge
-            variant="outline"
             className={
               row.targetType === 'Lead'
-                ? 'bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] px-1.5'
-                : 'bg-blue-500/10 text-blue-600 border-blue-500/20 text-[10px] px-1.5'
+                ? 'bg-amber-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
+                : 'bg-blue-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
             }
           >
             {row.targetType}
@@ -169,11 +168,10 @@ export default function CustomerVisitsPage() {
       ],
       render: (row) => (
         <Badge 
-          variant="outline" 
           className={
-            row.feedbackType === 'Excellent' ? 'bg-green-500/10 text-green-600 border-green-500/20' : 
-            row.feedbackType === 'Good' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' :
-            'bg-amber-500/10 text-amber-600 border-amber-500/20'
+            row.feedbackType === 'Excellent' ? 'bg-emerald-600 text-white shadow-sm border-transparent font-medium' : 
+            row.feedbackType === 'Good' ? 'bg-blue-600 text-white shadow-sm border-transparent font-medium' :
+            'bg-amber-600 text-white shadow-sm border-transparent font-medium'
           }
         >
           {row.feedbackType}

@@ -267,7 +267,7 @@ export default function EmployeesPage() {
                     <div className="text-xs text-muted-foreground mt-0.5">{emp.department || ""}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <Badge variant="secondary" className="font-normal bg-primary/10 text-primary hover:bg-primary/20">
+                    <Badge className="font-semibold bg-blue-600 text-white shadow-sm border-transparent">
                       {emp.employee_roles?.name || "Unassigned"}
                     </Badge>
                   </td>
@@ -275,7 +275,7 @@ export default function EmployeesPage() {
                     {emp.account_role}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <Badge variant="outline" className={emp.status === 'active' ? 'border-green-500 text-green-600' : 'border-red-500 text-red-600'}>
+                    <Badge className={emp.status === 'active' ? 'bg-emerald-600 text-white shadow-sm border-transparent font-medium capitalize' : 'bg-red-600 text-white shadow-sm border-transparent font-medium capitalize'}>
                       {emp.status || 'active'}
                     </Badge>
                   </td>
@@ -294,7 +294,7 @@ export default function EmployeesPage() {
 
       {/* Add Employee Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Employee</DialogTitle>
             <DialogDescription>
@@ -359,7 +359,7 @@ export default function EmployeesPage() {
 
       {/* Edit Employee & Device Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Manage Employee</DialogTitle>
           </DialogHeader>
@@ -451,10 +451,10 @@ export default function EmployeesPage() {
                         <div>
                           <div className="font-medium text-sm flex items-center gap-2 text-foreground">
                             {device.device_name || "Unknown Device"} 
-                            {device.status === 'active' && <span className="bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">Active</span>}
-                            {device.status === 'pending' && <span className="bg-orange-500/10 text-orange-600 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider animate-pulse">Pending</span>}
-                            {device.status === 'rejected' && <span className="bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">Rejected</span>}
-                            {device.status === 'inactive' && <span className="bg-slate-500/10 text-slate-400 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">Logged Out</span>}
+                            {device.status === 'active' && <span className="bg-emerald-600 text-white shadow-sm px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">Active</span>}
+                            {device.status === 'pending' && <span className="bg-amber-600 text-white shadow-sm px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider animate-pulse">Pending</span>}
+                            {device.status === 'rejected' && <span className="bg-red-600 text-white shadow-sm px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">Rejected</span>}
+                            {device.status === 'inactive' && <span className="bg-slate-600 text-white shadow-sm px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">Logged Out</span>}
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">
                             {device.device_model} • {device.os}
@@ -463,12 +463,12 @@ export default function EmployeesPage() {
                         <div className="flex gap-2">
                           {device.status === 'pending' && (
                             <>
-                              <Button size="sm" variant="outline" className="text-green-600 border-green-200 hover:bg-green-500/10" onClick={() => handleDeviceAction(device.id, 'active')}>Approve</Button>
-                              <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-500/10" onClick={() => handleDeviceAction(device.id, 'rejected')}>Reject</Button>
+                              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" onClick={() => handleDeviceAction(device.id, 'active')}>Approve</Button>
+                              <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white shadow-sm" onClick={() => handleDeviceAction(device.id, 'rejected')}>Reject</Button>
                             </>
                           )}
                           {device.status === 'active' && (
-                            <Button size="sm" variant="outline" className="text-orange-600 border-orange-200 hover:bg-orange-500/10" onClick={() => handleDeviceAction(device.id, 'inactive')}>Force Logout</Button>
+                            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm" onClick={() => handleDeviceAction(device.id, 'inactive')}>Force Logout</Button>
                           )}
                         </div>
                       </div>

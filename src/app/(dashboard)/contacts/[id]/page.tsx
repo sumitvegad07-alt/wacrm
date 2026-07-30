@@ -163,7 +163,7 @@ export default function ContactDetailsPage() {
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
               {contact.company || contact.name || "Unnamed Customer"}
               {tags.map(t => (
-                <Badge key={t.id} style={{ backgroundColor: t.color + '20', color: t.color, borderColor: t.color + '40' }} variant="outline">
+                <Badge key={t.id} style={{ backgroundColor: t.color }} className="text-white border-transparent shadow-sm font-semibold">
                   {t.name}
                 </Badge>
               ))}

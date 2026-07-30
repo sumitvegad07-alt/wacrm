@@ -45,6 +45,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { CustomField, CustomFieldSection } from '@/types';
+import { ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 
 interface CustomFieldsModuleBuilderProps {
   moduleName: string;
@@ -123,6 +124,9 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
     if (!accountId) return;
     setLoading(true);
     try {
+      if (user?.id) {
+        await ensureDefaultSectionsAndFields(accountId, moduleName, user.id, supabase);
+      }
       // Fetch sections for this module
       const { data: secData, error: secErr } = await supabase
         .from('custom_field_sections')
@@ -231,36 +235,25 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
     }
   };
 
-  const handleDeleteSection = async (sec: CustomFieldSection) => {
-    if (sections.length <= 1) {
-      toast.error('You must keep at least one section');
+  const handleToggleSectionStatus = async (sec: CustomFieldSection) => {
+    if (sec.is_active !== false && sections.filter((s) => s.is_active !== false).length <= 1) {
+      toast.error('You must keep at least one active section');
       return;
     }
-    if (!confirm(`Delete section "${sec.name}"? Any fields inside will be moved to another section.`)) {
-      return;
-    }
+    const newStatus = !(sec.is_active !== false);
+    setSections((prev) =>
+      prev.map((s) => (s.id === sec.id ? { ...s, is_active: newStatus } : s))
+    );
     try {
-      // Find backup section ID
-      const backupSection = sections.find((s) => s.id !== sec.id);
-      if (backupSection) {
-        await supabase
-          .from('custom_fields')
-          .update({ section_id: backupSection.id })
-          .eq('section_id', sec.id);
-      }
       const { error } = await supabase
         .from('custom_field_sections')
-        .delete()
+        .update({ is_active: newStatus })
         .eq('id', sec.id);
       if (error) throw error;
-      toast.success('Section deleted');
-      if (activeSectionId === sec.id && backupSection) {
-        setActiveSectionId(backupSection.id);
-      }
-      setSectionModalOpen(false);
-      fetchData();
+      toast.success(newStatus ? 'Section activated' : 'Section deactivated');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to delete section');
+      toast.error('Failed to update section status');
+      fetchData();
     }
   };
 
@@ -353,21 +346,6 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
       fetchData();
     } catch (err: any) {
       toast.error(err.message || 'Failed to save field');
-    }
-  };
-
-  const handleDeleteField = async (fld: CustomField) => {
-    if (!confirm(`Delete field "${fld.field_name}"? All recorded values for this field will be lost.`)) {
-      return;
-    }
-    try {
-      const { error } = await supabase.from('custom_fields').delete().eq('id', fld.id);
-      if (error) throw error;
-      toast.success('Field deleted');
-      setFieldModalOpen(false);
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete field');
     }
   };
 
@@ -571,6 +549,24 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                         <div className="flex items-center gap-2.5 truncate">
                           <GripVertical className="size-4 text-muted-foreground/50 shrink-0" />
                           <span className="text-sm truncate">{sec.name}</span>
+                          <Badge
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleSectionStatus(sec);
+                            }}
+                            className={`border-0 text-[10px] px-1.5 py-0 cursor-pointer select-none transition-opacity hover:opacity-80 shrink-0 ${
+                              sec.is_active !== false
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                            }`}
+                            title={
+                              sec.is_active !== false
+                                ? 'Active Section (Click to make inactive)'
+                                : 'Inactive Section (Click to activate)'
+                            }
+                          >
+                            {sec.is_active !== false ? 'Active' : 'Inactive'}
+                          </Badge>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <button
@@ -644,7 +640,11 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                     return (
                       <div
                         key={fld.id}
-                        className="flex items-center justify-between px-5 py-3.5 hover:bg-muted/30 transition-colors"
+                        className={`flex items-center justify-between px-5 py-3.5 transition-colors border-b border-border/40 ${
+                          isActive
+                            ? 'hover:bg-muted/30'
+                            : 'bg-amber-500/10 dark:bg-amber-500/15 border-l-4 border-l-amber-500 hover:bg-amber-500/20'
+                        }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <GripVertical className="size-4 text-muted-foreground/50 shrink-0" />
@@ -654,16 +654,11 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                           <span className="text-sm font-medium text-foreground truncate">
                             {fld.field_name}
                           </span>
-                          <Badge
-                            onClick={() => handleToggleFieldStatus(fld)}
-                            className={`border-0 text-xs font-semibold px-2 py-0.5 cursor-pointer select-none transition-opacity hover:opacity-80 ml-2 ${
-                              isActive
-                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                            }`}
-                          >
-                            {isActive ? 'Active' : 'Inactive'}
-                          </Badge>
+                          {fld.system_key && (
+                            <Badge className="bg-primary/15 text-primary border-0 text-[10px] px-1.5 py-0">
+                              Predefined
+                            </Badge>
+                          )}
                           {fld.is_required && (
                             <Badge className="bg-destructive/15 text-destructive border-0 text-[10px] px-1.5 py-0">
                               Req
@@ -722,6 +717,24 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                           >
                             <Edit2 className="size-3.5" />
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFieldStatus(fld)}
+                            className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-destructive transition-colors ml-0.5"
+                            title={isActive ? 'Deactivate Field (set inactive)' : 'Activate Field'}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                          <Badge
+                            onClick={() => handleToggleFieldStatus(fld)}
+                            className={`border-0 text-xs font-bold px-2.5 py-1 cursor-pointer select-none transition-all hover:opacity-85 shadow-sm ml-2 ${
+                              isActive
+                                ? 'bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 font-bold tracking-wide'
+                                : 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 font-extrabold tracking-wide ring-2 ring-amber-400'
+                            }`}
+                          >
+                            {isActive ? 'Active' : 'Deactivated'}
+                          </Badge>
                         </div>
                       </div>
                     );
@@ -762,10 +775,13 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
             {editingSection ? (
               <Button
                 type="button"
-                variant="destructive"
-                onClick={() => handleDeleteSection(editingSection)}
+                variant={editingSection.is_active !== false ? "outline" : "default"}
+                onClick={() => {
+                  handleToggleSectionStatus(editingSection);
+                  setSectionModalOpen(false);
+                }}
               >
-                Delete Section
+                {editingSection.is_active !== false ? 'Deactivate Section' : 'Activate Section'}
               </Button>
             ) : (
               <div />
@@ -995,10 +1011,13 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
             {editingField ? (
               <Button
                 type="button"
-                variant="destructive"
-                onClick={() => handleDeleteField(editingField)}
+                variant={editingField.is_active !== false ? "outline" : "default"}
+                onClick={() => {
+                  handleToggleFieldStatus(editingField);
+                  setFieldModalOpen(false);
+                }}
               >
-                Delete Field
+                {editingField.is_active !== false ? 'Deactivate Field' : 'Activate Field'}
               </Button>
             ) : (
               <div />

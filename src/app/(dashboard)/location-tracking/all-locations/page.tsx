@@ -195,8 +195,7 @@ export default function AllLocationsPage() {
       options: [{ label: 'Regular', value: 'Regular' }],
       render: (row) => (
         <Badge
-          variant="outline"
-          className="border-green-500/20 bg-green-500/10 text-green-600"
+          className="bg-emerald-600 text-white shadow-sm border-transparent font-medium"
         >
           {row.status}
         </Badge>

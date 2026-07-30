@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -380,6 +380,7 @@ interface SidebarProps {
 function SidebarInner({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const {
     profile,
     profileLoading,
@@ -539,14 +540,23 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
           "/quotations",
           "/orders",
           "/tasks",
+          "/expenses",
+          "/dispatches",
         ].includes(item.href.split("?")[0]) && (
           <button
             type="button"
+            onMouseEnter={() => {
+              const basePath = item.href.split("?")[0];
+              const targetPath = basePath === "/pipelines" ? "/deals/new" : `${basePath}/new`;
+              router.prefetch(targetPath);
+            }}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               const basePath = item.href.split("?")[0];
-              window.location.href = `${basePath}?new=true`;
+              const targetPath = basePath === "/pipelines" ? "/deals/new" : `${basePath}/new`;
+              router.push(targetPath);
+              if (onClose) onClose();
             }}
             className={cn(
               "ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors",

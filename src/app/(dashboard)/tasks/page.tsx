@@ -45,7 +45,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
-import { appendCustomFieldColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
+import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { isDateInFilter } from "@/lib/date-filters";
 import {
   DropdownMenu,
@@ -56,18 +56,18 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const PRIORITY_COLORS: Record<string, string> = {
-  Low: 'bg-slate-100 text-slate-700 border-slate-200',
-  Medium: 'bg-blue-100 text-blue-700 border-blue-200',
-  High: 'bg-orange-100 text-orange-700 border-orange-200',
-  Urgent: 'bg-red-100 text-red-700 border-red-200',
+  Low: 'bg-slate-600 text-white shadow-sm border-transparent',
+  Medium: 'bg-blue-600 text-white shadow-sm border-transparent',
+  High: 'bg-orange-600 text-white shadow-sm border-transparent',
+  Urgent: 'bg-red-600 text-white shadow-sm border-transparent',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  Pending: 'bg-slate-100 text-slate-700 border-slate-200',
-  'In Progress': 'bg-blue-100 text-blue-700 border-blue-200',
-  Waiting: 'bg-amber-100 text-amber-700 border-amber-200',
-  Completed: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  Cancelled: 'bg-red-100 text-red-700 border-red-200',
+  Pending: 'bg-slate-600 text-white shadow-sm border-transparent',
+  'In Progress': 'bg-blue-600 text-white shadow-sm border-transparent',
+  Waiting: 'bg-amber-600 text-white shadow-sm border-transparent',
+  Completed: 'bg-emerald-600 text-white shadow-sm border-transparent',
+  Cancelled: 'bg-red-600 text-white shadow-sm border-transparent',
 };
 
 export default function TasksPage() {
@@ -139,12 +139,10 @@ export default function TasksPage() {
   }, [fetchTasks]);
 
   useEffect(() => {
-    if (searchParams.get("new") === "true" && !loading && !formOpen) {
-      setEditTask(null);
-      setFormOpen(true);
-      router.replace('/tasks');
+    if (searchParams.get("new") === "true") {
+      router.push('/tasks/new');
     }
-  }, [searchParams, loading, formOpen, router]);
+  }, [searchParams, router]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -311,9 +309,9 @@ export default function TasksPage() {
     }
   ];
 
-  // Append custom fields
-  // Append custom fields (controlled by admin show_in_table, sortable, filterable flags)
-  appendCustomFieldColumns(columns, customFields, tasks);
+  const visibleColumns = useMemo(() => {
+    return getVisibleTableColumns([...columns], customFields, tasks);
+  }, [columns, customFields, tasks]);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
@@ -376,7 +374,7 @@ export default function TasksPage() {
           <Button variant="outline" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
             <Upload className="size-4 mr-2" /> Import
           </Button>
-          <Button onClick={() => { setEditTask(null); setFormOpen(true); }} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+          <Button onClick={() => router.push('/tasks/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <Plus className="size-4 mr-2" /> New Task
           </Button>
         </div>
@@ -428,7 +426,7 @@ export default function TasksPage() {
       </div>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filteredTasks}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}

@@ -624,7 +624,7 @@ export function TemplateManager() {
           }
         }}
       >
-        <DialogContent className="bg-popover border-border sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
+        <DialogContent className="bg-popover border-border sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-popover-foreground">
               {editingId ? 'Edit Message Template' : 'New Message Template'}

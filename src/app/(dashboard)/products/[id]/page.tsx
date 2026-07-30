@@ -139,9 +139,9 @@ export default function ProductDetailsPage() {
               <p className="text-sm text-muted-foreground mt-1 flex items-center gap-4">
                 {product.sku && <span className="flex items-center gap-1 font-mono text-xs"><Link2 className="size-3" /> SKU: {product.sku}</span>}
                 {product.active ? (
-                  <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 py-0 text-[10px]">Active</Badge>
+                  <Badge className="bg-emerald-600 text-white shadow-sm border-transparent py-0 text-[10px] font-semibold">Active</Badge>
                 ) : (
-                  <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 py-0 text-[10px]">Inactive</Badge>
+                  <Badge className="bg-slate-600 text-white shadow-sm border-transparent py-0 text-[10px] font-semibold">Inactive</Badge>
                 )}
               </p>
             </div>

@@ -12,9 +12,9 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
-import { Loader2, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Loader2, Plus, Trash2, AlertTriangle, ArrowLeft, ShoppingCart } from 'lucide-react';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
-import { validateRequiredCustomFields } from '@/lib/custom-fields';
+import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
 
 /**
@@ -31,6 +31,7 @@ import { CustomField } from '@/types';
 interface OrderFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  asPage?: boolean;
   onSaved: () => void;
   /** Optional prefill when an order is started from a customer site visit. */
   prefillContactId?: string | null;
@@ -132,9 +133,9 @@ function supaErr(e: unknown): string {
   );
 }
 
-export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefillSiteVisitId, orderId }: OrderFormProps) {
+export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefillContactId, prefillSiteVisitId, orderId }: OrderFormProps) {
   const supabase = createClient();
-  const { accountId, defaultCurrency, hasPermission } = useAuth();
+  const { user, accountId, defaultCurrency, hasPermission } = useAuth();
   const isEdit = !!orderId;
 
   const money = useMemo(() => {
@@ -195,11 +196,14 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       setLoading(true);
       setLocked(false);
       setLoadError(null);
+      if (user?.id) {
+        await ensureDefaultSectionsAndFields(accountId, 'order', user.id, supabase);
+      }
       const [{ data: contactData }, { data: productData }, { data: acct }, { data: fieldsData }] = await Promise.all([
         supabase.from('contacts').select('id, company, name').eq('account_id', accountId).order('company'),
         supabase.from('products').select('id, name, sku, price, unit').eq('account_id', accountId).eq('active', true).order('name'),
         supabase.from('accounts').select('settings').eq('id', accountId).single(),
-        supabase.from('custom_fields').select('*').eq('module_name', 'order').order('created_at'),
+        supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'order').order('position', { ascending: true }).order('created_at', { ascending: true }),
       ]);
       if (!alive) return;
       setCustomFields(fieldsData || []);
@@ -375,7 +379,9 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
       return;
     }
 
-    const cfError = validateRequiredCustomFields(customFields, customValues);
+    const cfError = validateRequiredCustomFields(customFields, customValues, {
+      date,
+    });
     if (cfError) {
       toast.error(cfError);
       return;
@@ -454,18 +460,9 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Order' : 'New Order'}</DialogTitle>
-          <DialogDescription>
-            Prices are calculated live by the server. The standard price is struck through when a
-            discount applies, so you can show the customer exactly what they&apos;re getting.
-          </DialogDescription>
-        </DialogHeader>
-
-        {loading ? (
+  const formContent = (
+    <>
+      {loading ? (
           <div className="flex items-center justify-center py-16"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
         ) : loadError ? (
           <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-3 text-sm text-red-600 dark:text-red-400">
@@ -478,8 +475,8 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
           </div>
         ) : (
           <div className="space-y-5">
-            {/* Customer + date */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Customer & Order Information */}
+            <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Customer <span className="text-red-400">*</span></Label>
                 <SearchableSelect
@@ -494,10 +491,20 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
                   </p>
                 )}
               </div>
-              <div className="space-y-1.5">
-                <Label>Date</Label>
-                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
+
+              <CustomFieldsSectionRenderer
+                accountId={accountId}
+                moduleName="order"
+                customFields={customFields}
+                customValues={customValues}
+                onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
+                formData={{
+                  date,
+                }}
+                onFormDataChange={(key, val) => {
+                  if (key === 'date') setDate(val);
+                }}
+              />
             </div>
 
             {/* Line items */}
@@ -678,18 +685,6 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
               </div>
             )}
 
-            {/* Custom Fields */}
-            {customFields.length > 0 && (
-              <div className="pt-2 border-t border-border">
-                <CustomFieldsSectionRenderer
-                  accountId={accountId}
-                  moduleName="order"
-                  customFields={customFields}
-                  customValues={customValues}
-                  onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
-                />
-              </div>
-            )}
 
             {/* Totals */}
             <div className="rounded-lg bg-muted/40 border border-border p-4 space-y-1.5 text-sm">
@@ -710,6 +705,62 @@ export function OrderForm({ open, onOpenChange, onSaved, prefillContactId, prefi
           </div>
         )}
 
+        <div className="flex justify-end gap-2 pt-4">
+          {locked || loadError ? (
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving || loading || (pricing != null && !pricing.valid)}>
+                {saving && <Loader2 className="size-4 mr-1 animate-spin" />} {isEdit ? 'Save Changes' : 'Create Order'}
+              </Button>
+            </>
+          )}
+        </div>
+    </>
+  );
+
+  if (asPage) {
+    return (
+      <div className="p-8 w-full max-w-none space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
+            >
+              <ArrowLeft className="h-4 w-4 text-foreground" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <ShoppingCart className="w-6 h-6 text-primary" />
+                {isEdit ? 'Edit Order' : 'Add New Order'}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {isEdit ? 'Update the order details below.' : 'Create a new sales order with live pricing and discounts.'}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          {formContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Edit Order' : 'New Order'}</DialogTitle>
+          <DialogDescription>
+            Prices are calculated live by the server. The standard price is struck through when a
+            discount applies, so you can show the customer exactly what they&apos;re getting.
+          </DialogDescription>
+        </DialogHeader>
+        {formContent}
         <DialogFooter>
           {locked || loadError ? (
             <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>

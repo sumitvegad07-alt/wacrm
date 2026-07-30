@@ -40,12 +40,12 @@ const NEXT_STATUS: Record<string, { to: string; label: string; icon: typeof Chec
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  Pending: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
-  Approved: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
-  'Part Dispatch': 'bg-orange-500/10 text-orange-600 border-orange-500/30',
-  Dispatched: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
-  Rejected: 'bg-red-500/10 text-red-600 border-red-500/30',
-  Cancelled: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
+  Pending: 'bg-amber-600 text-white shadow-sm border-transparent',
+  Approved: 'bg-blue-600 text-white shadow-sm border-transparent',
+  'Part Dispatch': 'bg-orange-600 text-white shadow-sm border-transparent',
+  Dispatched: 'bg-emerald-600 text-white shadow-sm border-transparent',
+  Rejected: 'bg-red-600 text-white shadow-sm border-transparent',
+  Cancelled: 'bg-slate-600 text-white shadow-sm border-transparent',
 };
 
 // Statuses from which more items can still be dispatched.
@@ -71,9 +71,9 @@ interface Dispatch {
 }
 
 const CLASS_BADGE: Record<string, string> = {
-  direct: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
-  primary: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  secondary: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  direct: 'bg-slate-600 text-white shadow-sm border-transparent',
+  primary: 'bg-blue-600 text-white shadow-sm border-transparent',
+  secondary: 'bg-amber-600 text-white shadow-sm border-transparent',
 };
 
 type Tab = 'details' | 'dispatches' | 'summary';

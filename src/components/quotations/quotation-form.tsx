@@ -8,14 +8,14 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, FileText, ArrowLeft } from 'lucide-react';
 import { ProductDetailsTable, type PartialQuotationItem } from './product-details-table';
 import { TermsEditor } from './terms-editor';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
-import { validateRequiredCustomFields } from '@/lib/custom-fields';
+import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { logQuotationActivity } from '@/lib/quotations';
 import {
   Dialog,
@@ -33,6 +33,7 @@ interface QuotationFormProps {
   versionId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  asPage?: boolean;
   onSaved: (savedId?: string) => void;
 }
 
@@ -43,11 +44,12 @@ export function QuotationForm({
   versionId,
   open,
   onOpenChange,
+  asPage = false,
   onSaved
 }: QuotationFormProps) {
   const supabase = createClient();
   const router = useRouter();
-  const { accountId } = useAuth();
+  const { user, accountId } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -76,7 +78,9 @@ export function QuotationForm({
 
   useEffect(() => {
     async function fetchData() {
+      if (!accountId) return;
       setLoading(true);
+      await ensureDefaultSectionsAndFields(accountId, 'quotation', user?.id, supabase);
       
       // Fetch dependencies
       const [
@@ -90,7 +94,7 @@ export function QuotationForm({
         supabase.from('leads').select('id, title').order('title'),
         supabase.from('products').select('id, name, sku, price').eq('active', true).order('name'),
         supabase.from('quotation_terms_templates').select('*').order('title'),
-        supabase.from('custom_fields').select('*').eq('module_name', 'quotation').order('created_at')
+        supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'quotation').order('created_at')
       ]);
 
       setContacts(contactsData || []);
@@ -244,7 +248,10 @@ export function QuotationForm({
       return;
     }
 
-    const cfError = validateRequiredCustomFields(customFields, customValues);
+    const cfError = validateRequiredCustomFields(customFields, customValues, {
+      date,
+      valid_until: validUntil,
+    });
     if (cfError) {
       toast.error(cfError);
       return;
@@ -409,26 +416,13 @@ export function QuotationForm({
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-popover-foreground text-xl">
-            {quotationId ? 'Edit Quotation' : 'Create Quotation'}
-            {initialData?.quotation_number && (
-              <span className="ml-2 text-sm text-muted-foreground font-normal">({initialData.quotation_number})</span>
-            )}
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            {quotationId ? "Update the quotation details below." : "Fill in the details to create a new quotation."}
-          </DialogDescription>
-        </DialogHeader>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : (
+  const formContent = (
+    <>
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
           <div className="space-y-8 mt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="space-y-2">
@@ -482,44 +476,27 @@ export function QuotationForm({
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="date">Date <span className="text-red-500">*</span></Label>
-          <Input 
-            id="date" 
-            type="date" 
-            className="bg-background"
-            value={date} 
-            onChange={e => setDate(e.target.value)} 
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="valid_until">Valid Until</Label>
-          <Input 
-            id="valid_until" 
-            type="date" 
-            className="bg-background"
-            value={validUntil} 
-            onChange={e => setValidUntil(e.target.value)} 
-          />
-        </div>
-
       </div>
 
-
-      {customFields.length > 0 && (
-        <div className="pt-4 border-t border-border">
-          <CustomFieldsSectionRenderer
-            accountId={accountId}
-            moduleName="quotation"
-            customFields={customFields}
-            customValues={customValues}
-            onChange={(fieldId, val) =>
-              setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
-            }
-          />
-        </div>
-      )}
+      <div className="pt-4 border-t border-border">
+        <CustomFieldsSectionRenderer
+          accountId={accountId}
+          moduleName="quotation"
+          customFields={customFields}
+          customValues={customValues}
+          onChange={(fieldId, val) =>
+            setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+          }
+          formData={{
+            date,
+            valid_until: validUntil,
+          }}
+          onFormDataChange={(key, val) => {
+            if (key === 'date') setDate(val);
+            if (key === 'valid_until') setValidUntil(val);
+          }}
+        />
+      </div>
 
       <div className="pt-4 border-t border-border">
         <ProductDetailsTable 
@@ -543,7 +520,7 @@ export function QuotationForm({
         )}
         
         {!loading && (
-          <DialogFooter className="bg-popover border-border sm:justify-between items-center w-full mt-6 flex-row gap-4">
+          <div className="sm:justify-between items-center w-full mt-6 flex-row gap-4 flex border-t border-border pt-4">
             <div className="flex-1"></div>
             <div className="flex gap-2 justify-end shrink-0">
               <Button
@@ -558,8 +535,56 @@ export function QuotationForm({
                 {versionId ? 'SAVE NEW VERSION' : quotationId ? 'Update Quotation' : 'Create Quotation'}
               </Button>
             </div>
-          </DialogFooter>
+          </div>
         )}
+    </>
+  );
+
+  if (asPage) {
+    return (
+      <div className="p-8 w-full max-w-none space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
+            >
+              <ArrowLeft className="h-4 w-4 text-foreground" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <FileText className="w-6 h-6 text-primary" />
+                {quotationId ? 'Edit Quotation' : 'Create New Quotation'}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {quotationId ? 'Update the quotation details below.' : 'Create a new quotation for a customer or lead.'}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          {formContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-popover-foreground text-xl">
+            {quotationId ? 'Edit Quotation' : 'Create Quotation'}
+            {initialData?.quotation_number && (
+              <span className="ml-2 text-sm text-muted-foreground font-normal">({initialData.quotation_number})</span>
+            )}
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            {quotationId ? "Update the quotation details below." : "Fill in the details to create a new quotation."}
+          </DialogDescription>
+        </DialogHeader>
+        {formContent}
       </DialogContent>
     </Dialog>
   );

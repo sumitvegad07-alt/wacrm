@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,8 @@ import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-ty
 import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
 import { OrderForm } from '@/components/orders/order-form';
+import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
+import { CustomField } from '@/types';
 
 interface OrderRow {
   id: string;
@@ -31,20 +33,20 @@ interface OrderRow {
 }
 
 const CLASS_BADGE: Record<string, string> = {
-  direct: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
-  primary: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  secondary: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  direct: 'bg-slate-600 text-white shadow-sm border-transparent',
+  primary: 'bg-blue-600 text-white shadow-sm border-transparent',
+  secondary: 'bg-amber-600 text-white shadow-sm border-transparent',
 };
 
 // Per-row status is a read-only badge; changes go through update_order_status
 // (single via detail view, or the bulk bar below), never a direct write.
 const STATUS_BADGE: Record<string, string> = {
-  Pending: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
-  Approved: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
-  'Part Dispatch': 'bg-orange-500/10 text-orange-600 border-orange-500/30',
-  Dispatched: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
-  Rejected: 'bg-red-500/10 text-red-600 border-red-500/30',
-  Cancelled: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
+  Pending: 'bg-amber-600 text-white shadow-sm border-transparent',
+  Approved: 'bg-blue-600 text-white shadow-sm border-transparent',
+  'Part Dispatch': 'bg-orange-600 text-white shadow-sm border-transparent',
+  Dispatched: 'bg-emerald-600 text-white shadow-sm border-transparent',
+  Rejected: 'bg-red-600 text-white shadow-sm border-transparent',
+  Cancelled: 'bg-slate-600 text-white shadow-sm border-transparent',
 };
 
 // Legal transitions per the SQL state machine — a bulk action only applies to
@@ -67,9 +69,11 @@ const BULK_ACTIONS: { to: string; label: string; icon: typeof CheckCircle2; vari
 export default function OrdersPage() {
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner } = useAuth();
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterState, setFilterState] = useState<FilterState>({});
   const [globalSearch, setGlobalSearch] = useState('');
@@ -85,38 +89,61 @@ export default function OrdersPage() {
     if (!accountId) return;
     setLoading(true);
 
-    const [{ data: orderData }, { data: profiles }] = await Promise.all([
+    const [{ data: orderData }, { data: profiles }, { data: fieldsData }] = await Promise.all([
       supabase
         .from('orders')
         .select('*, order_items(count), contacts(company, name), leads(name)')
         .eq('account_id', accountId)
         .order('created_at', { ascending: false }),
       supabase.from('profiles').select('id, full_name').eq('account_id', accountId),
+      supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'order'),
     ]);
+
+    setCustomFields(fieldsData || []);
+
+    let orderValues: any[] = [];
+    if (orderData && orderData.length > 0) {
+      const orderIds = orderData.map((o: any) => o.id);
+      const { data: vals } = await supabase.from('order_custom_values').select('*').in('order_id', orderIds);
+      orderValues = vals || [];
+    }
 
     const profileMap: Record<string, string> = {};
     profiles?.forEach((p: { id: string; full_name: string }) => { profileMap[p.id] = p.full_name; });
 
-    const rows: OrderRow[] = (orderData || []).map((o: Record<string, any>) => ({
-      id: o.id,
-      order_number: o.order_number,
-      date: o.date,
-      total_amount: o.total_amount || 0,
-      status: o.status,
-      classification: o.classification,
-      user_id: o.user_id,
-      contact_id: o.contact_id,
-      lead_id: o.lead_id,
-      customerName: o.contacts?.company || o.contacts?.name || o.leads?.name || 'Unknown',
-      itemCount: o.order_items?.[0]?.count ?? 0,
-      salesmanName: profileMap[o.user_id] || 'Unknown',
-    }));
+    const rows: OrderRow[] = (orderData || []).map((o: Record<string, any>) => {
+      const customData: Record<string, any> = {};
+      orderValues.filter((v: any) => v.order_id === o.id).forEach((v: any) => {
+        customData[`cf_${v.custom_field_id}`] = v.value;
+      });
+      return {
+        id: o.id,
+        order_number: o.order_number,
+        date: o.date,
+        total_amount: o.total_amount || 0,
+        status: o.status,
+        classification: o.classification,
+        user_id: o.user_id,
+        contact_id: o.contact_id,
+        lead_id: o.lead_id,
+        customerName: o.contacts?.company || o.contacts?.name || o.leads?.name || 'Unknown',
+        itemCount: o.order_items?.[0]?.count ?? 0,
+        salesmanName: profileMap[o.user_id] || 'Unknown',
+        ...customData,
+      };
+    });
     setOrders(rows);
     setSelectedIds(new Set());
     setLoading(false);
   }, [accountId, supabase]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      router.push('/orders/new');
+    }
+  }, [searchParams, router]);
 
   // Bulk status change over the selected rows. Each order goes through the
   // update_order_status RPC (validates transition + manage_order_status +
@@ -224,11 +251,15 @@ export default function OrdersPage() {
     }] : []),
   ];
 
+  const visibleColumns = useMemo(() => {
+    return getVisibleTableColumns([...columns], customFields, orders);
+  }, [columns, customFields, orders]);
+
   const filtered = useMemo(() => {
     return orders.filter((o) => {
       if (globalSearch) {
         const q = globalSearch.toLowerCase();
-        if (!o.order_number.toLowerCase().includes(q) && !o.customerName.toLowerCase().includes(q) && !o.salesmanName.toLowerCase().includes(q)) return false;
+        if (!o.order_number.toLowerCase().includes(q) && !o.customerName.toLowerCase().includes(q) && !o.salesmanName.toLowerCase().includes(q) && !matchesSearchableCustomFields(o, customFields, globalSearch)) return false;
       }
       for (const [colId, val] of Object.entries(filterState)) {
         if (val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0)) continue;
@@ -241,7 +272,7 @@ export default function OrdersPage() {
       }
       return true;
     });
-  }, [orders, filterState, globalSearch]);
+  }, [orders, filterState, globalSearch, customFields]);
 
   return (
     <div className="space-y-6">
@@ -259,7 +290,7 @@ export default function OrdersPage() {
             </Button>
           )}
           {canCreateOrder && (
-            <Button onClick={() => setCreateOpen(true)} className="gap-2">
+            <Button onClick={() => router.push('/orders/new')} className="gap-2">
               <Plus className="size-4" /> Create Order
             </Button>
           )}
@@ -294,7 +325,7 @@ export default function OrdersPage() {
       </div>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filtered}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}

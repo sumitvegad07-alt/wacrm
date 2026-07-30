@@ -36,7 +36,7 @@ import { useCan } from '@/hooks/use-can';
 
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
-import { appendCustomFieldColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
+import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { isDateInFilter } from "@/lib/date-filters";
 import {
   DropdownMenu,
@@ -47,10 +47,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const STATUS_COLORS: Record<string, string> = {
-  Pending: 'bg-slate-100 text-slate-700 border-slate-200',
-  Sent: 'bg-blue-100 text-blue-700 border-blue-200',
-  Approved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  Rejected: 'bg-red-100 text-red-700 border-red-200',
+  Pending: 'bg-amber-600 text-white shadow-sm border-transparent',
+  Sent: 'bg-blue-600 text-white shadow-sm border-transparent',
+  Approved: 'bg-emerald-600 text-white shadow-sm border-transparent',
+  Rejected: 'bg-red-600 text-white shadow-sm border-transparent',
 };
 
 export default function QuotationsPage() {
@@ -85,11 +85,7 @@ export default function QuotationsPage() {
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {
-      setFormQuotationId(undefined);
-      setFormCloneId(undefined);
-      setFormVersionId(undefined);
-      setFormOpen(true);
-      router.replace('/quotations');
+      router.push('/quotations/new');
     }
   }, [searchParams, router]);
 
@@ -340,8 +336,9 @@ export default function QuotationsPage() {
     }
   ];
 
-  // Append custom fields (controlled by admin show_in_table, sortable, filterable flags)
-  appendCustomFieldColumns(columns, customFields, quotations);
+  const visibleColumns = useMemo(() => {
+    return getVisibleTableColumns([...columns], customFields, quotations);
+  }, [columns, customFields, quotations]);
 
   const filteredQuotations = useMemo(() => {
     return quotations.filter(quotation => {
@@ -445,12 +442,7 @@ export default function QuotationsPage() {
           )}
           <Button 
             className="gap-2"
-            onClick={() => {
-              setFormQuotationId(undefined);
-              setFormCloneId(undefined);
-              setFormVersionId(undefined);
-              setFormOpen(true);
-            }}
+            onClick={() => router.push('/quotations/new')}
           >
             <Plus className="size-4" />
             New Quotation
@@ -482,7 +474,7 @@ export default function QuotationsPage() {
       </div>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filteredQuotations}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}

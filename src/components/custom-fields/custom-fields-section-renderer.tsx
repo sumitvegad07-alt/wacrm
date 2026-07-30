@@ -12,6 +12,9 @@ interface CustomFieldsSectionRendererProps {
   customFields: CustomField[];
   customValues: Record<string, any>;
   onChange: (fieldId: string, value: any) => void;
+  formData?: Record<string, any>;
+  onFormDataChange?: (key: string, value: any) => void;
+  renderCustomSystemField?: (field: CustomField) => React.ReactNode | null;
 }
 
 export function CustomFieldsSectionRenderer({
@@ -20,6 +23,9 @@ export function CustomFieldsSectionRenderer({
   customFields,
   customValues,
   onChange,
+  formData,
+  onFormDataChange,
+  renderCustomSystemField,
 }: CustomFieldsSectionRendererProps) {
   const [sections, setSections] = useState<CustomFieldSection[]>([]);
   const supabase = createClient();
@@ -90,21 +96,41 @@ export function CustomFieldsSectionRenderer({
               {sec.name}
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {sectionFields.map((field) => (
-                <div key={field.id} className="space-y-2">
-                  <Label className="text-muted-foreground capitalize flex items-center gap-1">
-                    {field.field_name}
-                    {field.is_required && (
-                      <span className="text-destructive font-bold">*</span>
+              {sectionFields.map((field) => {
+                const customNode = renderCustomSystemField?.(field);
+                const isSystem = Boolean(field.system_key);
+                const value = isSystem && formData && field.system_key
+                  ? formData[field.system_key] ?? ''
+                  : customValues[field.id] ?? '';
+
+                const handleChange = (val: string) => {
+                  if (isSystem && onFormDataChange && field.system_key) {
+                    onFormDataChange(field.system_key, val);
+                  } else {
+                    onChange(field.id, val);
+                  }
+                };
+
+                return (
+                  <div key={field.id} className="space-y-2">
+                    <Label className="text-muted-foreground capitalize flex items-center gap-1">
+                      {field.field_name}
+                      {field.is_required && (
+                        <span className="text-destructive font-bold">*</span>
+                      )}
+                    </Label>
+                    {customNode ? (
+                      customNode
+                    ) : (
+                      <CustomFieldInput
+                        field={field}
+                        value={value}
+                        onChange={handleChange}
+                      />
                     )}
-                  </Label>
-                  <CustomFieldInput
-                    field={field}
-                    value={customValues[field.id] ?? ''}
-                    onChange={(val) => onChange(field.id, val)}
-                  />
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );

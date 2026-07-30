@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, CustomField } from '@/types';
-import { appendCustomFieldColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
+import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from '@/lib/custom-fields';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -141,15 +141,12 @@ export default function ContactsPage() {
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {
-      openAddForm();
-      router.replace('/contacts');
+      router.push('/contacts/new');
     }
   }, [searchParams, router]);
 
   function openAddForm() {
-    setEditContact(null);
-    setEditContactTags([]);
-    setFormOpen(true);
+    router.push('/contacts/new');
   }
 
   async function openEditForm(contact: Contact) {
@@ -327,7 +324,7 @@ export default function ContactsPage() {
         if (!lvl) return <span className="text-muted-foreground">-</span>;
         const color = lvl.color || "#6b7280";
         return (
-          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap" style={{ backgroundColor: color + '22', color }}>
+          <span className="inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm whitespace-nowrap" style={{ backgroundColor: color }}>
             {lvl.name}
           </span>
         );
@@ -335,8 +332,10 @@ export default function ContactsPage() {
     });
   }
 
-  // Append custom fields to columns (controlled by admin show_in_table, sortable, filterable flags)
-  appendCustomFieldColumns(columns, customFields, contacts);
+  // Transform base columns and append custom fields (controlled by admin show_in_table, sortable, filterable flags)
+  const visibleColumns = useMemo(() => {
+    return getVisibleTableColumns([...columns], customFields, contacts);
+  }, [columns, customFields, contacts]);
 
   const filteredContacts = useMemo(() => {
     return contacts.filter(contact => {
@@ -429,7 +428,7 @@ export default function ContactsPage() {
       </div>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filteredContacts}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}

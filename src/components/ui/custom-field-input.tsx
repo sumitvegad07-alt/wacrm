@@ -184,6 +184,17 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
     );
   }
 
+  if (field.field_type === 'textarea') {
+    return (
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={`Enter ${field.field_name}...`}
+        className="w-full min-h-[80px] rounded-md bg-muted border border-border text-foreground p-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+      />
+    );
+  }
+
   let inputType = 'text';
   if (field.field_type === 'number') inputType = 'number';
   if (field.field_type === 'email') inputType = 'email';

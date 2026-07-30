@@ -11,6 +11,8 @@ import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
+import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
+import { CustomField } from '@/types';
 
 interface DispatchRow {
   id: string;
@@ -30,6 +32,7 @@ export default function DispatchesPage() {
   const canCreate = hasPermission('add_orders');
 
   const [rows, setRows] = useState<DispatchRow[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterState, setFilterState] = useState<FilterState>({});
   const [globalSearch, setGlobalSearch] = useState('');
@@ -37,15 +40,31 @@ export default function DispatchesPage() {
   const fetchData = useCallback(async () => {
     if (!accountId) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('order_dispatches')
-      .select('id, dispatch_number, dispatched_at, invoice_no, order:orders(order_number, contacts(company, name), leads(name)), dispatch_items(quantity, order_item:order_items(price))')
-      .eq('account_id', accountId)
-      .order('created_at', { ascending: false });
+    const [{ data }, { data: fieldsData }] = await Promise.all([
+      supabase
+        .from('order_dispatches')
+        .select('id, dispatch_number, dispatched_at, invoice_no, order:orders(order_number, contacts(company, name), leads(name)), dispatch_items(quantity, order_item:order_items(price))')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: false }),
+      supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'dispatch'),
+    ]);
+
+    setCustomFields(fieldsData || []);
+
+    let dispatchValues: any[] = [];
+    if (data && data.length > 0) {
+      const dispatchIds = data.map((d: any) => d.id);
+      const { data: vals } = await supabase.from('dispatch_custom_values').select('*').in('dispatch_id', dispatchIds);
+      dispatchValues = vals || [];
+    }
 
     setRows(((data || []) as any[]).map((d) => {
       const dItems = (d.dispatch_items || []) as any[];
       const subAmount = dItems.reduce((s, di) => s + Number(di.quantity || 0) * Number(di.order_item?.price || 0), 0);
+      const customData: Record<string, any> = {};
+      dispatchValues.filter((v: any) => v.dispatch_id === d.id).forEach((v: any) => {
+        customData[`cf_${v.custom_field_id}`] = v.value;
+      });
       return {
         id: d.id,
         dispatch_number: d.dispatch_number,
@@ -55,6 +74,7 @@ export default function DispatchesPage() {
         itemCount: dItems.length,
         invoice_no: d.invoice_no || '—',
         subAmount,
+        ...customData,
       };
     }));
     setLoading(false);
@@ -72,10 +92,14 @@ export default function DispatchesPage() {
     { id: 'subAmount', label: 'Sub Amount', type: 'text', render: (d) => <span className="font-medium">{formatCurrency(d.subAmount, defaultCurrency)}</span> },
   ];
 
+  const visibleColumns = useMemo(() => {
+    return getVisibleTableColumns([...columns], customFields, rows);
+  }, [columns, customFields, rows]);
+
   const filtered = useMemo(() => rows.filter((d) => {
     if (globalSearch) {
       const q = globalSearch.toLowerCase();
-      if (!d.dispatch_number.toLowerCase().includes(q) && !d.order_number.toLowerCase().includes(q) && !d.customerName.toLowerCase().includes(q)) return false;
+      if (!d.dispatch_number.toLowerCase().includes(q) && !d.order_number.toLowerCase().includes(q) && !d.customerName.toLowerCase().includes(q) && !matchesSearchableCustomFields(d, customFields, globalSearch)) return false;
     }
     for (const [colId, val] of Object.entries(filterState)) {
       if (val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0)) continue;
@@ -85,7 +109,7 @@ export default function DispatchesPage() {
       else if (colId === 'date') { if (!isDateInFilter(d.date, val as string | string[])) return false; }
     }
     return true;
-  }), [rows, filterState, globalSearch]);
+  }), [rows, filterState, globalSearch, customFields]);
 
   return (
     <div className="space-y-6">
@@ -107,7 +131,7 @@ export default function DispatchesPage() {
       </div>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filtered}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}

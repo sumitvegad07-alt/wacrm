@@ -16,7 +16,7 @@ import type {
 } from "@/types";
 import { CustomFieldInput } from "@/components/ui/custom-field-input";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
-import { validateRequiredCustomFields } from "@/lib/custom-fields";
+import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,8 @@ import {
   MessageSquare,
   DollarSign,
   Loader2,
+  ArrowLeft,
+  Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TaskListEmbedded } from "@/components/tasks/task-list-embedded";
@@ -45,6 +47,7 @@ import { logModuleActivity } from "@/lib/activities";
 interface DealFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  asPage?: boolean;
   deal?: Deal | null;
   pipelineId: string;
   stages: PipelineStage[];
@@ -55,6 +58,7 @@ interface DealFormProps {
 export function DealForm({
   open,
   onOpenChange,
+  asPage = false,
   deal,
   pipelineId,
   stages,
@@ -123,11 +127,16 @@ export function DealForm({
     
     async function fetchCustomFields() {
       if (!accountId) return;
+      if (user?.id) {
+        await ensureDefaultSectionsAndFields(accountId, "deal", user.id, supabase);
+      }
       const { data: fields } = await supabase
         .from("custom_fields")
         .select("*")
+        .eq("account_id", accountId)
         .eq("module_name", "deal")
-        .order("field_name");
+        .order("position", { ascending: true })
+        .order("created_at", { ascending: true });
         
       if (cancelled) return;
       
@@ -210,7 +219,11 @@ export function DealForm({
       return;
     }
 
-    const cfError = validateRequiredCustomFields(customFields, customValues);
+    const cfError = validateRequiredCustomFields(customFields, customValues, {
+      title,
+      value,
+      expected_close_date: expectedCloseDate,
+    });
     if (cfError) {
       toast.error(cfError);
       return;
@@ -347,127 +360,124 @@ export function DealForm({
     onSaved();
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-[95vw] w-full max-h-[94vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-popover-foreground text-xl">
-            {deal ? "Edit Deal" : "New Deal"}
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            {deal ? "Update the deal details below." : "Fill in the details to create a new deal."}
-          </DialogDescription>
-        </DialogHeader>
+  const formContent = (
+    <>
+        <div className="flex items-center justify-between border-b border-border pb-4 mb-4 pr-6">
+          <h2 className="text-xl font-light text-foreground">{deal ? "Edit Deal" : "New Deal"}</h2>
+        </div>
 
         <div className="space-y-6 mt-4">
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">Deal Details</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Title</Label>
-                  <Input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Deal title"
-                    className="border-border bg-muted text-foreground"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Customer</Label>
-                  <SearchableSelect
-                    value={contactId}
-                    onChange={setContactId}
-                    placeholder="Select a contact"
-                    searchPlaceholder="Search contacts..."
-                    emptyMessage="No contacts found."
-                    options={contacts.map((c) => ({
-                      value: c.id,
-                      label: c.name || c.phone,
-                    }))}
-                  />
-
-                  {linkedConversation && (
-                    <Link
-                      href="/inbox"
-                      className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
-                    >
-                      <MessageSquare className="h-3 w-3" />
-                      Link to Conversation
-                    </Link>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-[1fr_110px] gap-3">
-                  <div className="grid gap-2">
-                    <Label className="text-muted-foreground">Value</Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        type="number"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder="0"
-                        className="border-border bg-muted pl-7 text-foreground"
-                      />
+          <CustomFieldsSectionRenderer
+            accountId={accountId}
+            moduleName="deal"
+            customFields={customFields}
+            customValues={customValues}
+            onChange={(fieldId, val) =>
+              setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
+            }
+            formData={{
+              title,
+              value,
+              expected_close_date: expectedCloseDate,
+            }}
+            onFormDataChange={(key, val) => {
+              if (key === "title") setTitle(val);
+              if (key === "value") setValue(val);
+              if (key === "expected_close_date") setExpectedCloseDate(val);
+            }}
+            renderCustomSystemField={(fld) => {
+              if (fld.system_key === "value") {
+                return (
+                  <div className="grid grid-cols-[1fr_110px] gap-3">
+                    <div className="grid gap-1">
+                      <div className="relative">
+                        <DollarSign className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          type="number"
+                          value={value}
+                          onChange={(e) => setValue(e.target.value)}
+                          placeholder="0"
+                          className="border-border bg-muted pl-7 text-foreground"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-1">
+                      <select
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value)}
+                        className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                      >
+                        {CURRENCIES.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.code}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label className="text-muted-foreground">Currency</Label>
-                    <select
-                      value={currency}
-                      onChange={(e) => setCurrency(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
-                    >
-                      {CURRENCIES.map((c) => (
-                        <option key={c.code} value={c.code}>
-                          {c.code}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                );
+              }
+              return null;
+            }}
+          />
 
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Expected Close Date</Label>
-                  <Input
-                    type="date"
-                    value={expectedCloseDate}
-                    onChange={(e) => setExpectedCloseDate(e.target.value)}
-                    className="border-border bg-muted text-foreground"
-                  />
-                </div>
+          <div className="space-y-4 pt-4 border-t border-border/50">
+            <h4 className="text-sm font-medium text-foreground">Additional Deal Details</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">Customer</Label>
+                <SearchableSelect
+                  value={contactId}
+                  onChange={setContactId}
+                  placeholder="Select a contact"
+                  searchPlaceholder="Search contacts..."
+                  emptyMessage="No contacts found."
+                  options={contacts.map((c) => ({
+                    value: c.id,
+                    label: c.name || c.phone,
+                  }))}
+                />
 
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Stage</Label>
-                  <select
-                    value={stageId}
-                    onChange={(e) => setStageId(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                {linkedConversation && (
+                  <Link
+                    href="/inbox"
+                    className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
                   >
-                    {stages.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <MessageSquare className="h-3 w-3" />
+                    Link to Conversation
+                  </Link>
+                )}
+              </div>
 
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Assigned To</Label>
-                  <select
-                    value={assignedTo}
-                    onChange={(e) => setAssignedTo(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
-                  >
-                    <option value="">Unassigned</option>
-                    {profiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.full_name || p.email}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">Stage</Label>
+                <select
+                  value={stageId}
+                  onChange={(e) => setStageId(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                >
+                  {stages.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">Assigned To</Label>
+                <select
+                  value={assignedTo}
+                  onChange={(e) => setAssignedTo(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                >
+                  <option value="">Unassigned</option>
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.full_name || p.email}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -480,20 +490,7 @@ export function DealForm({
                 className="min-h-[100px] border-border bg-muted text-foreground"
               />
             </div>
-
-            {customFields.length > 0 && (
-              <div className="pt-4 border-t border-border/50">
-                <CustomFieldsSectionRenderer
-                  accountId={accountId}
-                  moduleName="deal"
-                  customFields={customFields}
-                  customValues={customValues}
-                  onChange={(fieldId, val) =>
-                    setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
-                  }
-                />
-              </div>
-            )}
+          </div>
 
             {deal && (
               <>
@@ -553,7 +550,7 @@ export function DealForm({
             )}
           </div>
 
-        <DialogFooter className="bg-popover border-border sm:justify-between items-center w-full mt-6 flex-row gap-4">
+        <div className="sm:justify-between items-center w-full mt-6 flex-row gap-4 flex border-t border-border pt-4">
           <div className="flex-1">
             {deal &&
               (confirmDelete ? (
@@ -605,7 +602,44 @@ export function DealForm({
               {saving ? "Saving..." : deal ? "Save Changes" : "Create Deal"}
             </Button>
           </div>
-        </DialogFooter>
+        </div>
+    </>
+  );
+
+  if (asPage) {
+    return (
+      <div className="p-8 w-full max-w-none space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
+            >
+              <ArrowLeft className="h-4 w-4 text-foreground" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <Briefcase className="w-6 h-6 text-primary" />
+                {deal ? "Edit Deal" : "Create New Deal"}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {deal ? "Update the deal details below." : "Create a new deal to track in your sales pipeline."}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          {formContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        {formContent}
       </DialogContent>
     </Dialog>
   );

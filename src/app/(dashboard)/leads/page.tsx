@@ -13,7 +13,7 @@ import { LeadForm } from "@/components/leads/lead-form";
 import { LeadImportDialog } from "@/components/leads/lead-import-dialog";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
-import { appendCustomFieldColumns, matchesSearchableCustomFields } from "@/lib/custom-fields";
+import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
 import { isDateInFilter } from "@/lib/date-filters";
 import { CustomField } from "@/types";
 
@@ -54,8 +54,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {
-      setFormOpen(true);
-      router.replace('/leads');
+      router.push('/leads/new');
     }
   }, [searchParams, router]);
 
@@ -136,8 +135,8 @@ export default function LeadsPage() {
       type: "select",
       options: leadStatuses.map(s => ({ label: s.name, value: s.name })),
       render: (lead) => (
-        <span className={`capitalize px-2 py-1 rounded-full text-xs ${
-          lead.is_converted ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'
+        <span className={`capitalize px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-sm ${
+          lead.is_converted ? 'bg-green-600' : 'bg-blue-600'
         }`}>
           {lead.is_converted ? "Converted" : lead.status}
         </span>
@@ -179,8 +178,10 @@ export default function LeadsPage() {
     }
   ];
 
-  // Append custom fields to columns (controlled by admin show_in_table, sortable, filterable flags)
-  appendCustomFieldColumns(columns, customFields, leads);
+  // Transform base columns and append custom fields (controlled by admin show_in_table, sortable, filterable flags)
+  const visibleColumns = useMemo(() => {
+    return getVisibleTableColumns([...columns], customFields, leads);
+  }, [columns, customFields, leads]);
 
   const handleFilterChange = (columnId: string, value: any) => {
     setFilterState(prev => ({
@@ -285,7 +286,7 @@ export default function LeadsPage() {
       </div>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filteredLeads}
         filterState={filterState}
         onFilterChange={handleFilterChange}

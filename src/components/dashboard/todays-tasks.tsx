@@ -127,7 +127,7 @@ export function TodaysTasks() {
       </div>
       
       <div className="mt-4 pt-4 border-t border-border/50 text-center">
-        <Link href="/tasks?new=true" className="text-sm text-primary hover:underline">
+        <Link href="/tasks/new" className="text-sm text-primary hover:underline">
           + Add new task
         </Link>
       </div>
