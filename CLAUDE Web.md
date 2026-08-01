@@ -380,15 +380,19 @@ timelines), `products`, `quotations`, `expenses`, `geofences`, `tracking_session
 - **Multi-Column Responsive Grids**: To prevent empty/wasted white space on the right-hand side of large desktop monitors, arrange form fields, settings toggles, and metadata panels in responsive multi-column grids (`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6` or `gap-8`).
 - **Base UI / Next.js Hydration & Button Nesting Rule**: When using `@base-ui/react` components such as `DialogTrigger`, use the `render={<Button />}` prop pattern instead of `asChild` wrapping a `<button>` or `<Button>` child. Using `asChild` with an inner button causes an HTML `<button> cannot be a descendant of <button>` validation error and React 19 hydration mismatch.
 
-### Territory Master (migrations 101–104, applied to prod 2026-07-31 — verified)
+### Territory Master (migrations 101–105, applied to prod 2026-07-31 — verified)
 
 New foundational geography module (dependency for future Route Management). Replaces the flat
 `contacts.country/state/city/area` text columns with a configurable per-account hierarchy.
+Surfaced under **Settings → Territory** (a full-width `TerritoryManager` with a "Manage
+territories" tree tab + "Hierarchy & assignment" config tab) — NOT the main sidebar.
 
 - **Config reuses the `accounts.settings` jsonb pattern** (like `order_settings`):
   `accounts.settings.territory_settings = { levels: [{position,name,enabled}] (1–5), assignment_mode: 'area_wise'|'direct' }`.
-  Default: Country/State/City enabled, Area/Sub Area disabled, mode `direct`. Edited in
-  **Settings → Territory Settings** (`territory-settings.tsx`).
+  Default: Country/State/City enabled, Area/Sub Area disabled, mode **`area_wise`** (founder
+  change; the client normalizers + the `territory_assign_employee_areas` coalesce fallback all
+  default area_wise — migration 105). **Seed is India-only** (not the full ISO country list —
+  founder change): `seed-data.generated.ts` ships `SEED_COUNTRIES=[India]`.
 - **`territories`** — adjacency list (`parent_id` self-FK), `level int` (= the enabled level
   position), `status` enum(`active|inactive|archived`), `is_seed_data`, `deleted_at` (soft
   archive). Unique **partial** index `(account_id, coalesce(parent_id,'0…'), lower(name)) WHERE
