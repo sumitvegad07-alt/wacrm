@@ -10,16 +10,20 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { ExpenseForm } from "@/components/expenses/expense-form";
 import { Timeline } from "@/components/shared/timeline";
+import { getApproverProfile } from "@/lib/reporting/api";
 import { format } from "date-fns";
 
 export default function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
   const supabase = createClient();
-  const { accountId, profile, accountRole, user } = useAuth();
+  const { accountId, profile, accountRole, user, isModuleEnabled } = useAuth();
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
+  const reportingEnabled = isModuleEnabled('reporting_hierarchy');
 
   const [expense, setExpense] = useState<any>(null);
+  // undefined = not resolved yet; null = resolved to "no approver"
+  const [suggestedApprover, setSuggestedApprover] = useState<{ full_name: string | null; email: string } | null | undefined>(undefined);
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [tasks, setTasks] = useState<any[]>([]);
@@ -137,6 +141,22 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
     fetchAllData();
   }, [fetchAllData]);
 
+  // Resolve the suggested approver for a pending expense (display-only — any admin
+  // can still approve; see Reporting Hierarchy Open Question 1).
+  const expenseEmployeeId: string | undefined = expense?.employee_id;
+  const expenseIsPending = expense?.status === "Pending";
+  useEffect(() => {
+    if (!reportingEnabled || !expenseEmployeeId || !expenseIsPending) {
+      setSuggestedApprover(undefined);
+      return;
+    }
+    let active = true;
+    getApproverProfile(expenseEmployeeId)
+      .then((p) => { if (active) setSuggestedApprover(p); })
+      .catch(() => { if (active) setSuggestedApprover(undefined); });
+    return () => { active = false; };
+  }, [reportingEnabled, expenseEmployeeId, expenseIsPending]);
+
   const handleStatusUpdate = async (newStatus: string, reason?: string) => {
     if (!isAdmin || !expense) return;
     
@@ -209,6 +229,15 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5">
               Claimed by {expense.employee?.full_name || expense.employee?.email}
             </p>
+            {reportingEnabled && isPending && suggestedApprover !== undefined && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {suggestedApprover ? (
+                  <>Suggested approver: <span className="font-medium text-foreground">{suggestedApprover.full_name || suggestedApprover.email}</span></>
+                ) : (
+                  <>No reporting manager set — any admin can approve.</>
+                )}
+              </p>
+            )}
           </div>
         </div>
 

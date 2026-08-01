@@ -31,9 +31,7 @@ export default function NewEmployeePage() {
     employee_code: "",
     mobile: "",
     department: "",
-    designation: "",
     employee_role_id: "",
-    account_role: "member"
   });
 
   useEffect(() => {
@@ -64,21 +62,31 @@ export default function NewEmployeePage() {
       return;
     }
 
+    if (!form.employee_role_id) {
+      toast.error("Please select an employee role");
+      return;
+    }
+
     setCreating(true);
     try {
-      const res = await fetch("/api/admin/employees/create", {
+      // One role: the security level (account_role) is derived from whether the
+      // chosen Employee Role has Full Access — admins never pick a system role.
+      const selectedRole = roles.find((r) => r.id === form.employee_role_id);
+      const account_role = selectedRole?.permissions?.all === true ? "admin" : "agent";
+
+      const res = await fetch("/api/team/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          account_id: accountId,
           email: form.email.trim(),
           password: form.password,
           full_name: form.full_name.trim(),
           employee_code: form.employee_code.trim() || undefined,
           mobile: form.mobile.trim() || undefined,
           department: form.department.trim() || undefined,
-          designation: form.designation.trim() || undefined,
           employee_role_id: form.employee_role_id || undefined,
-          account_role: form.account_role || "member"
+          account_role,
         }),
       });
 
@@ -87,12 +95,13 @@ export default function NewEmployeePage() {
         throw new Error(data.error || "Failed to create employee account");
       }
 
-      if (data.user?.id && Object.keys(customValues).length > 0) {
+      const profileId: string | undefined = data.profile?.id;
+      if (profileId && Object.keys(customValues).length > 0) {
         const toInsert = Object.entries(customValues)
           .filter(([_, val]) => val !== undefined && val !== '')
           .map(([fieldId, val]) => ({
             account_id: accountId,
-            user_id: data.user.id,
+            user_id: profileId,
             custom_field_id: fieldId,
             value: val
           }));
@@ -102,11 +111,7 @@ export default function NewEmployeePage() {
       }
 
       toast.success("Employee created successfully!");
-      if (data.user?.id) {
-        router.push(`/team/employees/${data.user.id}`);
-      } else {
-        router.push("/team/employees");
-      }
+      router.push(profileId ? `/team/employees/${profileId}` : "/team/employees");
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to create employee account");
@@ -131,7 +136,7 @@ export default function NewEmployeePage() {
               Add New Employee
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Create login credentials and assign business & system roles to an employee.
+              Create login credentials and assign an employee role.
             </p>
           </div>
         </div>
@@ -163,19 +168,22 @@ export default function NewEmployeePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address (Login ID) *</Label>
+              <Label htmlFor="email">Login ID *</Label>
               <Input
                 id="email"
                 type="email"
                 value={form.email}
                 onChange={e => setForm({ ...form, email: e.target.value })}
-                placeholder="john@example.com"
+                placeholder="e.g. ramesh.sales@company.com"
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Used to sign in. Must be in email format, but it does <strong>not</strong> have to be a real, working inbox.
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Temporary Password *</Label>
+              <Label htmlFor="password">Password *</Label>
               <Input
                 id="password"
                 type="text"
@@ -193,24 +201,20 @@ export default function NewEmployeePage() {
           <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Role & Organization Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label>Business Role *</Label>
-              <Select value={form.employee_role_id} onValueChange={v => setForm({ ...form, employee_role_id: v || "" })}>
+              <Label>Employee Role *</Label>
+              <Select
+                value={form.employee_role_id}
+                onValueChange={v => setForm({ ...form, employee_role_id: v || "" })}
+                items={Object.fromEntries(roles.map(r => [r.id, r.name]))}
+              >
                 <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
                 <SelectContent>
                   {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>System Account Role</Label>
-              <Select value={form.account_role} onValueChange={v => setForm({ ...form, account_role: v || "member" })}>
-                <SelectTrigger><SelectValue placeholder="Select account role" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
+              <p className="text-xs text-muted-foreground">
+                The role decides this employee&apos;s rights. A role with Full Access makes them an admin.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -220,26 +224,6 @@ export default function NewEmployeePage() {
                 value={form.mobile}
                 onChange={e => setForm({ ...form, mobile: e.target.value })}
                 placeholder="+1 234 567 8900"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="department">Department</Label>
-              <Input
-                id="department"
-                value={form.department}
-                onChange={e => setForm({ ...form, department: e.target.value })}
-                placeholder="e.g. Sales"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="designation">Designation</Label>
-              <Input
-                id="designation"
-                value={form.designation}
-                onChange={e => setForm({ ...form, designation: e.target.value })}
-                placeholder="e.g. Field Executive"
               />
             </div>
           </div>

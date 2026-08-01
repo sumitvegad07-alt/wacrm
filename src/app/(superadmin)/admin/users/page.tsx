@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Search, UserCircle2, ExternalLink } from "lucide-react";
+import { Search, UserCircle2, ExternalLink, ShieldCheck, ShieldAlert } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 interface UserRow {
   id: string;
@@ -20,6 +21,7 @@ export default function GlobalUsersPage() {
   const [filtered, setFiltered] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -62,26 +64,44 @@ export default function GlobalUsersPage() {
     );
   }, [search, users]);
 
+  const toggleSuperadmin = async (userId: string, currentStatus: boolean) => {
+    setUpdatingId(userId);
+    const nextStatus = !currentStatus;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_superadmin: nextStatus })
+      .eq("id", userId);
+
+    if (!error) {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, is_superadmin: nextStatus } : u))
+      );
+    } else {
+      alert("Failed to update superadmin status: " + error.message);
+    }
+    setUpdatingId(null);
+  };
+
   const roleBadge = (role: string | null, isSuperadmin: boolean) => {
     if (isSuperadmin)
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-400">
-          Superadmin
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-600 text-white shadow-sm">
+          Platform Superadmin
         </span>
       );
     const colors: Record<string, string> = {
       owner:
-        "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+        "bg-blue-600 text-white shadow-sm",
       admin:
-        "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
+        "bg-amber-600 text-white shadow-sm",
       agent:
-        "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
+        "bg-slate-600 text-white shadow-sm",
       viewer:
-        "bg-muted text-muted-foreground",
+        "bg-muted text-muted-foreground border border-border",
     };
     return (
       <span
-        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold ${
           colors[role || "viewer"] || colors["viewer"]
         }`}
       >
@@ -96,7 +116,7 @@ export default function GlobalUsersPage() {
         <div>
           <h1 className="text-2xl font-bold">All Users</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Every user across all tenant accounts.
+            Every user across all tenant accounts. Manage platform superadmin privileges below.
           </p>
         </div>
         <span className="text-sm text-muted-foreground">
@@ -123,13 +143,14 @@ export default function GlobalUsersPage() {
           ))}
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="bg-muted border-b border-border">
               <tr>
                 <th className="px-4 py-3 font-medium text-foreground">User</th>
                 <th className="px-4 py-3 font-medium text-foreground">Company</th>
                 <th className="px-4 py-3 font-medium text-foreground">Role</th>
+                <th className="px-4 py-3 font-medium text-foreground text-right">Superadmin Control</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -150,7 +171,7 @@ export default function GlobalUsersPage() {
                     {u.account_id ? (
                       <Link
                         href={`/admin/companies/${u.account_id}`}
-                        className="flex items-center gap-1 hover:text-foreground transition-colors"
+                        className="flex items-center gap-1 hover:text-foreground transition-colors font-medium text-primary"
                       >
                         {u.account_name || "Unknown"}
                         <ExternalLink className="h-3 w-3" />
@@ -162,12 +183,36 @@ export default function GlobalUsersPage() {
                   <td className="px-4 py-3">
                     {roleBadge(u.account_role, u.is_superadmin)}
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    {u.is_superadmin ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={updatingId === u.id}
+                        onClick={() => toggleSuperadmin(u.id, true)}
+                        className="gap-1.5 text-xs border-red-500/40 text-red-600 hover:bg-red-500/10"
+                      >
+                        <ShieldAlert className="size-3.5" />
+                        Revoke Superadmin
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        disabled={updatingId === u.id}
+                        onClick={() => toggleSuperadmin(u.id, false)}
+                        className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                      >
+                        <ShieldCheck className="size-3.5" />
+                        Grant Superadmin
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={3}
+                    colSpan={4}
                     className="px-4 py-8 text-center text-muted-foreground"
                   >
                     No users found.

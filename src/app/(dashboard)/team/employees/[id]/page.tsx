@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
+import { EmployeeAreaAssignment } from "@/components/territories/employee-area-assignment";
 import type { Employee, EmployeeRole, EmployeeDevice, CustomField } from "@/types";
 
 export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,15 +27,18 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const router = useRouter();
   const supabase = createClient();
 
-  const { accountId } = useAuth();
+  const { accountId, canEditSettings, isModuleEnabled } = useAuth();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<EmployeeDevice[]>([]);
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"details" | "areas">("details");
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  // Other employees in the account (for the Reporting Manager picker).
+  const [employees, setEmployees] = useState<{ id: string; full_name: string | null; email: string; status: string | null }[]>([]);
 
   // Edit form state
   const [form, setForm] = useState({
@@ -43,9 +47,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     email: "",
     mobile: "",
     department: "",
-    designation: "",
     employee_role_id: "",
-    account_role: "member",
+    manager_id: "",
     status: "active"
   });
 
@@ -78,9 +81,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         email: empData.email || "",
         mobile: empData.mobile || "",
         department: empData.department || "",
-        designation: empData.designation || "",
         employee_role_id: empData.employee_role_id || "",
-        account_role: empData.account_role || "member",
+        manager_id: empData.manager_id || "",
         status: empData.status || "active"
       });
 
@@ -90,6 +92,14 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         .select("*")
         .order("name", { ascending: true });
       if (rolesData) setRoles(rolesData as EmployeeRole[]);
+
+      // Other employees (for the Reporting Manager picker)
+      const { data: empList } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, status")
+        .eq("account_id", empData.account_id)
+        .order("full_name", { ascending: true });
+      if (empList) setEmployees(empList.filter((e) => e.id !== employeeId));
 
       // Fetch devices
       const { data: devData } = await supabase
@@ -136,6 +146,16 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     }
     setSaving(true);
     try {
+      // One role: derive the security level from the chosen Employee Role's Full
+      // Access flag. Never demote the account Owner.
+      const selectedRole = roles.find((r) => r.id === form.employee_role_id);
+      const derivedAccountRole =
+        employee?.account_role === "owner"
+          ? "owner"
+          : selectedRole?.permissions?.all === true
+          ? "admin"
+          : "agent";
+
       const { error } = await supabase
         .from("profiles")
         .update({
@@ -143,14 +163,22 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           employee_code: form.employee_code.trim() || null,
           mobile: form.mobile.trim() || null,
           department: form.department.trim() || null,
-          designation: form.designation.trim() || null,
           employee_role_id: form.employee_role_id || null,
-          account_role: form.account_role as any,
+          manager_id: form.manager_id || null,
+          account_role: derivedAccountRole as any,
           status: form.status
         })
         .eq("id", employeeId);
 
-      if (error) throw error;
+      if (error) {
+        // Cycle-prevention trigger (23514) → show the specific loop message.
+        if ((error as { code?: string }).code === "23514") {
+          toast.error(error.message);
+          setSaving(false);
+          return;
+        }
+        throw error;
+      }
       if (employeeId && Object.keys(customValues).length > 0) {
         await supabase.from("user_custom_values").delete().eq("user_id", employeeId);
         const toInsert = Object.entries(customValues)
@@ -246,8 +274,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               <Badge className={employee.status === "active" ? "bg-emerald-600 text-white shadow-sm border-transparent font-medium capitalize" : "bg-red-600 text-white shadow-sm border-transparent font-medium capitalize"}>
                 {employee.status || "active"}
               </Badge>
-              {employee.account_role === "admin" && (
-                <Badge className="bg-amber-600 text-white shadow-sm border-transparent font-medium">System Admin</Badge>
+              {(employee.account_role === "admin" || employee.account_role === "owner") && (
+                <Badge className="bg-amber-600 text-white shadow-sm border-transparent font-medium capitalize">{employee.account_role}</Badge>
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
@@ -275,7 +303,35 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Tabs */}
+      {isModuleEnabled("territory") && (
+        <div className="flex items-center gap-1 border-b border-border">
+          {([
+            { id: "details", label: "Details" },
+            { id: "areas", label: "Area Assignment" },
+          ] as const).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              className={
+                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors " +
+                (activeTab === t.id
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground")
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeTab === "areas" && isModuleEnabled("territory") && accountId && (
+        <EmployeeAreaAssignment employeeId={employeeId} accountId={accountId} canEdit={canEditSettings} />
+      )}
+
+      <div className={"grid grid-cols-1 lg:grid-cols-3 gap-8" + (activeTab === "areas" ? " hidden" : "")}>
         {/* Left 2 Cols: Basic Details & Business Roles */}
         <div className="lg:col-span-2 space-y-8">
           <Card className="p-6 border-border shadow-sm">
@@ -300,23 +356,22 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   <p className="font-medium text-foreground text-base">{employee.mobile || "—"}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Department</span>
-                  <p className="font-medium text-foreground text-base">{employee.department || "—"}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Designation</span>
-                  <p className="font-medium text-foreground text-base">{employee.designation || "—"}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Assigned Business Role</span>
+                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Employee Role</span>
                   <p className="font-medium text-primary text-base">
-                    {employee.employee_roles?.name || "No Business Role Assigned"}
+                    {employee.employee_roles?.name || "No role assigned"}
+                    {employee.account_role === "owner" ? " · Owner" : employee.account_role === "admin" ? " · Admin" : ""}
                   </p>
                 </div>
-                <div>
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">System Account Role</span>
-                  <p className="font-medium text-foreground capitalize text-base">{employee.account_role || "member"}</p>
-                </div>
+                {isModuleEnabled("reporting_hierarchy") && (
+                  <div>
+                    <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Reporting Manager</span>
+                    <p className="font-medium text-foreground text-base">
+                      {form.manager_id
+                        ? (employees.find((e) => e.id === form.manager_id)?.full_name || employees.find((e) => e.id === form.manager_id)?.email || "—")
+                        : "Not set"}
+                    </p>
+                  </div>
+                )}
                 {customFields.map((field) => (
                   <div key={field.id}>
                     <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
@@ -344,32 +399,39 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                     <Input value={form.mobile} onChange={e => setForm({...form, mobile: e.target.value})} placeholder="+1 234 567 8900" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Department</Label>
-                    <Input value={form.department} onChange={e => setForm({...form, department: e.target.value})} placeholder="e.g. Sales" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Designation</Label>
-                    <Input value={form.designation} onChange={e => setForm({...form, designation: e.target.value})} placeholder="e.g. Field Executive" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Business Role</Label>
-                    <Select value={form.employee_role_id} onValueChange={v => setForm({...form, employee_role_id: v || ""})}>
+                    <Label>Employee Role</Label>
+                    <Select
+                      value={form.employee_role_id}
+                      onValueChange={v => setForm({...form, employee_role_id: v || ""})}
+                      items={Object.fromEntries(roles.map(r => [r.id, r.name]))}
+                    >
                       <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
                       <SelectContent>
                         {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">A role with Full Access makes this employee an admin.</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label>System Role</Label>
-                    <Select value={form.account_role} onValueChange={v => setForm({...form, account_role: v || "member"})}>
-                      <SelectTrigger><SelectValue placeholder="Select account role" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="member">Member</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {isModuleEnabled("reporting_hierarchy") && (
+                    <div className="space-y-2">
+                      <Label>Reporting Manager</Label>
+                      <Select
+                        value={form.manager_id || "__none__"}
+                        onValueChange={v => setForm({...form, manager_id: v && v !== "__none__" ? v : ""})}
+                        items={{ __none__: "— None —", ...Object.fromEntries(employees.map(e => [e.id, (e.full_name || e.email) + (e.status === "inactive" ? " (inactive)" : "")])) }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select a manager" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— None —</SelectItem>
+                          {employees.map(e => (
+                            <SelectItem key={e.id} value={e.id}>
+                              {(e.full_name || e.email) + (e.status === "inactive" ? " (inactive)" : "")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label>Account Status</Label>
                     <Select value={form.status} onValueChange={v => setForm({...form, status: v || "active"})}>
@@ -414,6 +476,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               </Link>
             </div>
           </Card>
+
         </div>
 
         {/* Right Col: Devices & Login Controls */}

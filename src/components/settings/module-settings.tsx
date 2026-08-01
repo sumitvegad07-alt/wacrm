@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
-import { FileText, Coins, Truck, PackageCheck } from "lucide-react";
+import { FileText, Coins, Truck, PackageCheck, Map, Network } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ── WhatsApp SVG icon (matches sidebar) ──────────────────────
@@ -62,6 +62,20 @@ const MODULES: ModuleDef[] = [
     description:
       "Enable tracking of orders awaiting dispatch.",
     Icon: PackageCheck,
+  },
+  {
+    key: "territory",
+    label: "Territory Master",
+    description:
+      "Enable the configurable geographic hierarchy (country/state/city/area), employee area assignment, and territory-based customer geography. Configure levels under Territory Settings.",
+    Icon: Map,
+  },
+  {
+    key: "reporting_hierarchy",
+    label: "Reporting Hierarchy",
+    description:
+      "Enable a reporting manager + default approver per employee (set in Employee Master). Managers see their team's records and become the suggested approver for their reports' expenses.",
+    Icon: Network,
   },
 ];
 

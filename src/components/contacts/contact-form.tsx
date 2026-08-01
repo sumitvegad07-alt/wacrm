@@ -1,10 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, CustomField } from '@/types';
+import { TerritoryPicker } from '@/components/territories/territory-picker';
+import { getTerritoryRows, getAccountTerritorySettings } from '@/lib/territories/api';
+import { enabledLevels } from '@/lib/territories/settings';
+import { DEFAULT_TERRITORY_SETTINGS } from '@/lib/territories/settings';
+import type { Territory, TerritorySettings } from '@/lib/territories/types';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
@@ -50,8 +55,9 @@ export function ContactForm({
   onViewExisting,
 }: ContactFormProps) {
   const supabase = createClient();
-  const { accountId, user } = useAuth();
+  const { accountId, user, isModuleEnabled } = useAuth();
   const isEdit = !!contact;
+  const territoryEnabled = isModuleEnabled('territory');
 
   const [name, setName] = useState('');          // contact person
   const [phone, setPhone] = useState('');
@@ -83,6 +89,28 @@ export function ContactForm({
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string }[] }>({ enabled: false, levels: [] });
   const [hierarchyLevel, setHierarchyLevel] = useState<number | null>(null);
 
+  // Territory Master — the configured geography hierarchy that replaces the flat
+  // country/state/city/area text fields (rendered dynamically, no hardcoded fields).
+  const [territorySettings, setTerritorySettings] = useState<TerritorySettings>(DEFAULT_TERRITORY_SETTINGS);
+  const [territoryRows, setTerritoryRows] = useState<Territory[]>([]);
+  const [territoryId, setTerritoryId] = useState<string | null>(null);
+  const [needsTerritoryReview, setNeedsTerritoryReview] = useState(false);
+
+  // When Territory Master is enabled, the flat country/state/city/area system
+  // fields are replaced by the Territory picker — hide them from the shared
+  // custom-fields renderer (Customer form only; the shared renderer is untouched).
+  const GEO_SYSTEM_KEYS = ['country', 'state', 'city', 'area'];
+  const renderedCustomFields = useMemo(
+    () =>
+      territoryEnabled
+        ? customFields.filter(
+            (f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)),
+          )
+        : customFields,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customFields, territoryEnabled],
+  );
+
   useEffect(() => {
     if (open && accountId) {
       setName(contact?.name ?? '');
@@ -99,10 +127,28 @@ export function ContactForm({
       setLongitude(contact?.longitude != null ? String(contact.longitude) : '');
       setHierarchyLevel(contact?.hierarchy_level ?? null);
       setDupMatch(null);
+      setTerritoryId((contact as Contact & { territory_id?: string | null })?.territory_id ?? null);
+      setNeedsTerritoryReview(!!(contact as Contact & { needs_territory_review?: boolean })?.needs_territory_review);
       fetchCustomFields();
       fetchHierarchyConfig();
+      if (territoryEnabled) fetchTerritoryData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, contact, accountId]);
+
+  async function fetchTerritoryData() {
+    if (!accountId) return;
+    try {
+      const [s, rows] = await Promise.all([
+        getAccountTerritorySettings(accountId),
+        getTerritoryRows(accountId),
+      ]);
+      setTerritorySettings(s);
+      setTerritoryRows(rows);
+    } catch {
+      /* territory data is optional enrichment; ignore load failure */
+    }
+  }
 
   async function fetchHierarchyConfig() {
     if (!accountId) return;
@@ -185,7 +231,7 @@ export function ContactForm({
       pincode,
     };
 
-    const cfError = validateRequiredCustomFields(customFields, customValues, formDataMap);
+    const cfError = validateRequiredCustomFields(renderedCustomFields, customValues, formDataMap);
     if (cfError) {
       toast.error(cfError);
       return;
@@ -225,6 +271,11 @@ export function ContactForm({
         latitude: latitude.trim() !== '' ? parseFloat(latitude) : null,
         longitude: longitude.trim() !== '' ? parseFloat(longitude) : null,
         hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
+        // Territory Master (authoritative geography). Clearing the review flag
+        // once a territory is chosen resolves any "needs migration" state.
+        ...(territoryEnabled
+          ? { territory_id: territoryId, needs_territory_review: territoryId ? false : needsTerritoryReview }
+          : {}),
       };
 
       let contactId: string;
@@ -268,7 +319,7 @@ export function ContactForm({
           <CustomFieldsSectionRenderer
             accountId={accountId}
             moduleName="contact"
-            customFields={customFields}
+            customFields={renderedCustomFields}
             customValues={customValues}
             onChange={(fieldId, val) =>
               setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
@@ -366,6 +417,25 @@ export function ContactForm({
               return null;
             }}
           />
+
+          {territoryEnabled && enabledLevels(territorySettings).length > 0 && (
+            <div className="space-y-3 pt-2 border-t border-border/50">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">Territory (Geography)</span>
+                {needsTerritoryReview && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/15 text-amber-600 dark:text-amber-500 gap-1">
+                    <AlertTriangle className="size-2.5" /> needs review
+                  </Badge>
+                )}
+              </div>
+              <TerritoryPicker
+                rows={territoryRows}
+                settings={territorySettings}
+                value={territoryId}
+                onChange={setTerritoryId}
+              />
+            </div>
+          )}
 
           <div className="space-y-3 pt-2 border-t border-border/50">
             <span className="text-xs font-medium text-muted-foreground">GPS Coordinates (Optional)</span>

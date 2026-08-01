@@ -20,10 +20,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // Creating a login account needs the service-role key (admin API). If it's not
+    // configured, fail with a clear, actionable message instead of the cryptic
+    // "supabaseKey is required" that createClient throws.
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json(
+        { error: "Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it to .env.local (Supabase → Project Settings → API → service_role key) and restart the dev server." },
+        { status: 500 }
+      );
+    }
+
     // Initialize Supabase admin client
     const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
     // 1. Create the user in Supabase Auth

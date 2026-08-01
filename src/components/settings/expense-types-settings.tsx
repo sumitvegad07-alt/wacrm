@@ -45,7 +45,7 @@ export function ExpenseTypesSettings() {
   const [ratePerKm, setRatePerKm] = useState("0");
   const [enableRateTiers, setEnableRateTiers] = useState(false);
   const [rateTiers, setRateTiers] = useState<any[]>([]);
-  const [availableDesignations, setAvailableDesignations] = useState<string[]>([]);
+  const [tierRoles, setTierRoles] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -62,12 +62,9 @@ export function ExpenseTypesSettings() {
   }
 
   async function fetchDesignations() {
-    // Get unique designations from profiles
-    const { data } = await supabase.from('profiles').select('designation').eq('account_id', accountId).not('designation', 'is', null);
-    if (data) {
-      const unique = Array.from(new Set(data.map(d => d.designation).filter(Boolean)));
-      setAvailableDesignations(unique as string[]);
-    }
+    // Rate tiers are now keyed on Employee Role (not the removed designation field).
+    const { data } = await supabase.from('employee_roles').select('id, name').eq('account_id', accountId).order('name');
+    if (data) setTierRoles(data as { id: string; name: string }[]);
   }
 
   const handleToggleOdometer = async (checked: boolean) => {
@@ -193,7 +190,7 @@ export function ExpenseTypesSettings() {
       if (payload.enable_rate_tiers && rateTiers.length > 0) {
         const tiersToInsert = rateTiers.map(t => ({
           expense_type_id: savedId,
-          designation: t.designation,
+          employee_role_id: t.employee_role_id || null,
           default_amount: parseFloat(t.default_amount) || 0,
           rate_per_km: parseFloat(t.rate_per_km) || 0,
         }));
@@ -209,7 +206,7 @@ export function ExpenseTypesSettings() {
   };
 
   const addRateTier = () => {
-    setRateTiers([...rateTiers, { designation: '', default_amount: '0', rate_per_km: '0' }]);
+    setRateTiers([...rateTiers, { employee_role_id: '', default_amount: '0', rate_per_km: '0' }]);
   };
 
   if (loading) {
@@ -346,18 +343,19 @@ export function ExpenseTypesSettings() {
                         {rateTiers.map((tier, index) => (
                           <div key={index} className="flex gap-2 items-center">
                             <div className="flex-1 space-y-1">
-                              <Label className="text-xs">Designation</Label>
-                              <Select 
-                                value={tier.designation} 
+                              <Label className="text-xs">Employee Role</Label>
+                              <Select
+                                value={tier.employee_role_id}
+                                items={Object.fromEntries(tierRoles.map(r => [r.id, r.name]))}
                                 onValueChange={(val) => {
                                   const nt = [...rateTiers];
-                                  nt[index].designation = val;
+                                  nt[index].employee_role_id = val;
                                   setRateTiers(nt);
                                 }}
                               >
-                                <SelectTrigger><SelectValue placeholder="Select designation" /></SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                                 <SelectContent>
-                                  {availableDesignations.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                                  {tierRoles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -511,7 +509,7 @@ export function ExpenseTypesSettings() {
                   <Info className="size-3.5 text-foreground" />
                   <p className="font-medium text-foreground">Designation Tiers</p>
                 </div>
-                <p>Configure custom per-km rates or default amounts per employee designation (e.g. Executive vs Manager travel allowances).</p>
+                <p>Configure custom per-km rates or default amounts per employee role (e.g. Executive vs Manager travel allowances).</p>
               </div>
             </CardContent>
           </Card>

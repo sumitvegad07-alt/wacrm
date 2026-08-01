@@ -156,13 +156,13 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
       let activeAmount = type.default_amount;
       let activeRate = type.rate_per_km;
       
-      // Resolve Rate Tier
-      if (type.enable_rate_tiers && profile) {
+      // Resolve Rate Tier (keyed on the employee's role)
+      if (type.enable_rate_tiers && profile?.employee_role_id) {
         const { data: tier } = await supabase
           .from('expense_rate_tiers')
           .select('*')
           .eq('expense_type_id', type.id)
-          .or(`designation.eq.${profile.designation},employee_role_id.eq.${profile.employee_role_id}`)
+          .eq('employee_role_id', profile.employee_role_id)
           .limit(1)
           .maybeSingle();
           

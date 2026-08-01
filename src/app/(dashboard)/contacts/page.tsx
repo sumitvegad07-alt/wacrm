@@ -53,7 +53,8 @@ export default function ContactsPage() {
   const searchParams = useSearchParams();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
-  const { accountId } = useAuth();
+  const { accountId, isModuleEnabled } = useAuth();
+  const territoryEnabled = isModuleEnabled('territory');
 
   const [contacts, setContacts] = useState<ContactWithData[]>([]);
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string; color?: string }[] }>({ enabled: false, levels: [] });
@@ -117,16 +118,30 @@ export default function ContactsPage() {
         if (tagsMap[ct.tag_id]) tagsByContact[ct.contact_id].push(tagsMap[ct.tag_id]);
       });
 
+      // Territory names via a separate lookup (not a PostgREST embed) — the
+      // contacts.territory_id FK is new, and embedding right after adding an FK
+      // risks a stale schema-cache failure that would blank the whole list
+      // (see CLAUDE Web.md, issue #294 pattern).
+      const territoryNames: Record<string, string> = {};
+      if (territoryEnabled) {
+        const tids = [...new Set(contactsData.map((c) => c.territory_id).filter(Boolean))] as string[];
+        if (tids.length > 0) {
+          const { data: terrs } = await supabase.from('territories').select('id, name').in('id', tids);
+          terrs?.forEach((t) => { territoryNames[t.id] = t.name; });
+        }
+      }
+
       enhancedContacts = contactsData.map(contact => {
         const contactValues = valuesData?.filter((v: any) => v.contact_id === contact.id) || [];
         const customData: any = {};
         contactValues.forEach((v: any) => {
           customData[`cf_${v.custom_field_id}`] = v.value;
         });
-        return { 
-          ...contact, 
+        return {
+          ...contact,
           tags: tagsByContact[contact.id] || [],
-          ...customData 
+          _territoryName: contact.territory_id ? (territoryNames[contact.territory_id] ?? null) : null,
+          ...customData
         };
       });
     }
@@ -309,6 +324,26 @@ export default function ContactsPage() {
       )
     }
   ];
+
+  // Territory Master replaces the flat country/state/city/area columns when enabled.
+  if (territoryEnabled) {
+    for (const geoId of ['area', 'city', 'state', 'country']) {
+      const idx = columns.findIndex((c) => c.id === geoId);
+      if (idx >= 0) columns.splice(idx, 1);
+    }
+    columns.splice(columns.length - 1, 0, {
+      id: 'territory',
+      label: 'Territory',
+      type: 'text',
+      visibleByDefault: true,
+      render: (contact) => {
+        const c = contact as ContactWithData & { _territoryName?: string | null; needs_territory_review?: boolean };
+        if (c._territoryName) return <span className="text-sm">{c._territoryName}</span>;
+        if (c.needs_territory_review) return <span className="text-xs text-amber-600 dark:text-amber-500">needs review</span>;
+        return <span className="text-muted-foreground">-</span>;
+      },
+    });
+  }
 
   // Customer Level column — only when the account uses order hierarchy.
   // Inserted before the trailing actions column.

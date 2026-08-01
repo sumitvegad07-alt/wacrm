@@ -137,7 +137,14 @@ export default function CompanyDetailPage() {
       </Link>
 
       <div>
-        <h1 className="text-2xl font-bold">{company.name}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">{company.name}</h1>
+          {company.customer_id && (
+            <span className="font-mono text-xs font-semibold px-2.5 py-1 rounded-md bg-primary/10 text-primary border border-primary/20">
+              ID: {company.customer_id}
+            </span>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground mt-1">
           Industry: {company.industry || "Not specified"} · Joined:{" "}
           {new Date(company.created_at).toLocaleDateString("en-IN")}

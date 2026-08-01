@@ -152,7 +152,7 @@ interface NavItem {
    * Admin-configurable module key. When set, this item is only shown if
    * the admin has enabled the corresponding module in Module Settings.
    */
-  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch";
+  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory";
 }
 
 type MenuNode =
@@ -165,7 +165,7 @@ type MenuNode =
       icon: React.ComponentType<{ className?: string }>;
       items: NavItem[];
       /** Admin-configurable module key — hides the entire group if disabled */
-      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch";
+      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory";
     }
   | {
       type: "spacer";
@@ -213,7 +213,6 @@ const menuStructure: MenuNode[] = [
     icon: Users,
     module: "contacts",
   },
-
   { type: "spacer" },
 
   // ── Product, Quotation ──
@@ -324,10 +323,10 @@ const menuStructure: MenuNode[] = [
 
   { type: "spacer" },
 
-  // ── User (collapsed) ──
+  // ── Employees (collapsed) ──
   {
     type: "group",
-    label: "User",
+    label: "Employees",
     icon: User,
     items: [
       { href: "/team/employees", label: "Employees", icon: User, module: "team_management" },
@@ -386,6 +385,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     profileLoading,
     account,
     accountRole,
+    isSuperadmin,
     signOut,
     hasAutomations,
     hasBroadcasts,
@@ -769,18 +769,23 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                 <User className="size-4" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem
-                render={
-                  <Link
-                    href="/settings?tab=whatsapp"
-                    onClick={onClose}
-                    className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
-                  />
-                }
-              >
-                <Settings className="size-4" />
-                Settings
-              </DropdownMenuItem>
+              {isSuperadmin && (
+                <>
+                  <DropdownMenuItem
+                    render={
+                      <Link
+                        href="/admin"
+                        onClick={onClose}
+                        className="text-primary font-semibold focus:bg-primary/10 focus:text-primary"
+                      />
+                    }
+                  >
+                    <Shield className="size-4 text-primary" />
+                    Super Admin Portal
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-border" />
+                </>
+              )}
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem
                 onClick={signOut}

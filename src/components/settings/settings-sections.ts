@@ -15,6 +15,7 @@ import {
   UsersRound,
   BrainCircuit,
   Wallet,
+  Map,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -44,6 +45,7 @@ export const SETTINGS_SECTIONS = [
   'members',
   'api',
   'expense_types',
+  'territories',
   'module_settings',
 ] as const;
 
@@ -75,6 +77,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   orders: { id: 'orders', label: 'Orders Settings', icon: ShoppingCart, group: 'workspace' },
   pricing: { id: 'pricing', label: 'Catalogue Settings', icon: Percent, group: 'workspace' },
   expense_types: { id: 'expense_types', label: 'Expense Settings', icon: Wallet, group: 'workspace' },
+  territories: { id: 'territories', label: 'Territory', icon: Map, group: 'workspace' },
   members: { id: 'members', label: 'Team', icon: UsersRound, group: 'hidden' },
   api: { id: 'api', label: 'API Settings', icon: KeyRound, group: 'workspace' },
   module_settings: { id: 'module_settings', label: 'Module Settings', icon: ToggleRight, group: 'workspace' },

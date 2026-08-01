@@ -67,7 +67,6 @@ export default function EmployeesPage() {
     employee_code: "",
     mobile: "",
     department: "",
-    designation: "",
     employee_role_id: "",
   });
   const [creating, setCreating] = useState(false);
@@ -93,7 +92,7 @@ export default function EmployeesPage() {
 
     const { data: roleData } = await supabase
       .from("employee_roles")
-      .select("id, name")
+      .select("id, name, permissions")
       .eq("status", "active");
     if (roleData) setRoles(roleData);
 
@@ -120,14 +119,19 @@ export default function EmployeesPage() {
     if (!selectedEmployee) return;
     setSaving(true);
 
+    // Derive the security level from the chosen Employee Role; never demote Owner.
+    const selRole = roles.find((r) => r.id === editForm.employee_role_id) as { permissions?: { all?: boolean } } | undefined;
+    const derivedAccountRole =
+      selectedEmployee.account_role === "owner" ? "owner" : selRole?.permissions?.all === true ? "admin" : "agent";
+
     const { error } = await supabase
       .from("profiles")
       .update({
         employee_code: editForm.employee_code,
         mobile: editForm.mobile,
         department: editForm.department,
-        designation: editForm.designation,
         employee_role_id: editForm.employee_role_id,
+        account_role: derivedAccountRole,
         status: editForm.status,
         web_access: editForm.web_access,
         mobile_access: editForm.mobile_access,
@@ -152,12 +156,15 @@ export default function EmployeesPage() {
     
     setCreating(true);
     try {
+      const selRole = roles.find((r) => r.id === addForm.employee_role_id) as { permissions?: { all?: boolean } } | undefined;
+      const account_role = selRole?.permissions?.all === true ? "admin" : "agent";
       const res = await fetch("/api/team/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...addForm,
           account_id: accountId,
+          account_role,
         })
       });
       
@@ -173,7 +180,7 @@ export default function EmployeesPage() {
       // Reset form
       setAddForm({
         full_name: "", email: "", password: "", employee_code: "",
-        mobile: "", department: "", designation: "", employee_role_id: ""
+        mobile: "", department: "", employee_role_id: ""
       });
       
       fetchData();
@@ -248,9 +255,7 @@ export default function EmployeesPage() {
             <thead className="bg-muted/50 border-b font-medium text-muted-foreground">
               <tr>
                 <th className="px-6 py-4">Employee</th>
-                <th className="px-6 py-4">Designation</th>
-                <th className="px-6 py-4">Business Role</th>
-                <th className="px-6 py-4">System Role</th>
+                <th className="px-6 py-4">Employee Role</th>
                 <th className="px-6 py-4 text-center">Status</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
@@ -263,16 +268,12 @@ export default function EmployeesPage() {
                     <div className="text-xs text-muted-foreground mt-0.5">{emp.email} {emp.employee_code && `• ${emp.employee_code}`}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-foreground">{emp.designation || "-"}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{emp.department || ""}</div>
-                  </td>
-                  <td className="px-6 py-4">
                     <Badge className="font-semibold bg-blue-600 text-white shadow-sm border-transparent">
                       {emp.employee_roles?.name || "Unassigned"}
                     </Badge>
-                  </td>
-                  <td className="px-6 py-4 capitalize text-muted-foreground">
-                    {emp.account_role}
+                    {(emp.account_role === "admin" || emp.account_role === "owner") && (
+                      <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-500 font-semibold capitalize">{emp.account_role}</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <Badge className={emp.status === 'active' ? 'bg-emerald-600 text-white shadow-sm border-transparent font-medium capitalize' : 'bg-red-600 text-white shadow-sm border-transparent font-medium capitalize'}>
@@ -317,32 +318,29 @@ export default function EmployeesPage() {
                 <Input value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} placeholder="john@example.com" type="email" />
               </div>
               <div className="space-y-2">
-                <Label>Temporary Password *</Label>
+                <Label>Password *</Label>
                 <Input value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} placeholder="********" type="text" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
               <div className="space-y-2">
-                <Label>Business Role *</Label>
-                <Select value={addForm.employee_role_id} onValueChange={v => setAddForm({...addForm, employee_role_id: v || ""})}>
+                <Label>Employee Role *</Label>
+                <Select
+                  value={addForm.employee_role_id}
+                  onValueChange={v => setAddForm({...addForm, employee_role_id: v || ""})}
+                  items={Object.fromEntries(roles.map(r => [r.id, r.name]))}
+                >
                   <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
                   <SelectContent>
                     {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">A role with Full Access makes this employee an admin.</p>
               </div>
               <div className="space-y-2">
                 <Label>Mobile Number</Label>
                 <Input value={addForm.mobile} onChange={e => setAddForm({...addForm, mobile: e.target.value})} placeholder="+1 234 567 8900" />
-              </div>
-              <div className="space-y-2">
-                <Label>Department</Label>
-                <Input value={addForm.department} onChange={e => setAddForm({...addForm, department: e.target.value})} placeholder="e.g. Sales" />
-              </div>
-              <div className="space-y-2">
-                <Label>Designation</Label>
-                <Input value={addForm.designation} onChange={e => setAddForm({...addForm, designation: e.target.value})} placeholder="e.g. Field Executive" />
               </div>
             </div>
           </div>
@@ -378,14 +376,6 @@ export default function EmployeesPage() {
                     <Label>Mobile</Label>
                     <Input value={editForm.mobile || ""} onChange={e => setEditForm({...editForm, mobile: e.target.value})} />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Department</Label>
-                    <Input value={editForm.department || ""} onChange={e => setEditForm({...editForm, department: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Designation</Label>
-                    <Input value={editForm.designation || ""} onChange={e => setEditForm({...editForm, designation: e.target.value})} />
-                  </div>
                 </div>
               </div>
 
@@ -394,8 +384,12 @@ export default function EmployeesPage() {
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Access & Permissions</h3>
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label>Business Role</Label>
-                    <Select value={editForm.employee_role_id || ""} onValueChange={v => setEditForm({...editForm, employee_role_id: v || undefined})}>
+                    <Label>Employee Role</Label>
+                    <Select
+                      value={editForm.employee_role_id || ""}
+                      onValueChange={v => setEditForm({...editForm, employee_role_id: v || undefined})}
+                      items={Object.fromEntries(roles.map(r => [r.id, r.name]))}
+                    >
                       <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
                       <SelectContent>
                         {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}

@@ -380,6 +380,144 @@ timelines), `products`, `quotations`, `expenses`, `geofences`, `tracking_session
 - **Multi-Column Responsive Grids**: To prevent empty/wasted white space on the right-hand side of large desktop monitors, arrange form fields, settings toggles, and metadata panels in responsive multi-column grids (`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6` or `gap-8`).
 - **Base UI / Next.js Hydration & Button Nesting Rule**: When using `@base-ui/react` components such as `DialogTrigger`, use the `render={<Button />}` prop pattern instead of `asChild` wrapping a `<button>` or `<Button>` child. Using `asChild` with an inner button causes an HTML `<button> cannot be a descendant of <button>` validation error and React 19 hydration mismatch.
 
+### Territory Master (migrations 101–104, applied to prod 2026-07-31 — verified)
+
+New foundational geography module (dependency for future Route Management). Replaces the flat
+`contacts.country/state/city/area` text columns with a configurable per-account hierarchy.
+
+- **Config reuses the `accounts.settings` jsonb pattern** (like `order_settings`):
+  `accounts.settings.territory_settings = { levels: [{position,name,enabled}] (1–5), assignment_mode: 'area_wise'|'direct' }`.
+  Default: Country/State/City enabled, Area/Sub Area disabled, mode `direct`. Edited in
+  **Settings → Territory Settings** (`territory-settings.tsx`).
+- **`territories`** — adjacency list (`parent_id` self-FK), `level int` (= the enabled level
+  position), `status` enum(`active|inactive|archived`), `is_seed_data`, `deleted_at` (soft
+  archive). Unique **partial** index `(account_id, coalesce(parent_id,'0…'), lower(name)) WHERE
+  deleted_at IS NULL` → duplicate names rejected under the same parent, allowed under different
+  parents, reusable after archiving. `set_updated_at` trigger uses `update_updated_at_column()`.
+- **`employee_area_assignments`** — `(employee_id→profiles.id, territory_id→territories.id)`,
+  unique `(employee_id, territory_id)`.
+- **`contacts` gained `territory_id` (nullable FK, ON DELETE RESTRICT) + `needs_territory_review`
+  boolean.** The legacy `country/state/city/area` columns are **kept but deprecated** (NOT
+  dropped) — hidden from the Customer form + list when the Territory module is on.
+- **RLS**: select = `is_account_member(account_id)`; writes = `is_account_member(account_id,'admin')`;
+  assignments select = admin OR `employee_id IN (select id from profiles where user_id=auth.uid())`.
+  ⚠️ the spec's `employee_id = auth.uid()` was wrong for this schema (employee_id is profiles.id,
+  not the auth user id) — translated in the policy.
+- **RPCs (all SECURITY DEFINER, admin-gated, WHERE-qualified for pg_safeupdate, return jsonb):**
+  `territory_archive(id,force)` (subtree soft-delete, blocks on attached contacts/assignments
+  unless force), `territory_restore(id)` (blocks if parent archived), `territory_delete(id)`
+  (hard delete only if childless+unattached), `territory_assign_employee_areas(employee_id,
+  ids[])` (**area-wise: rejects a 2nd employee on a taken area** — founder decision Q1),
+  `territory_update_settings(account_id,levels,mode,confirm)` (**disabling a level with data
+  archives it, requires confirmation** — Q2), `territory_migrate_contact_geo(account_id)`
+  (idempotent, **case/space-insensitive** name match, unmatched → `needs_territory_review`, never
+  auto-creates territories — Q3), `territory_bulk_seed(account_id,countries,states,districts)`
+  (idempotent seed). **Seed is India-only** (founder decision 2026-07-31): only India is
+  preloaded as a country + its 28 states/8 UTs + 762 LGD-current districts; the full ISO 3166-1
+  list stays in the pinned `supabase/seed-data/territory-seed.json` for reference but is NOT
+  seeded (`generate-territory-seed.mjs` hard-codes `SEED_COUNTRIES=[India]`). Admins add other
+  countries manually via the tree. Shipped as the dynamically imported generated
+  `src/lib/territories/seed-data.generated.ts` (Q4).
+- **Module toggle**: `territory` key added to `accounts.module_settings` (Module Settings page)
+  + `ModuleSettings` type + `/api/account/module-settings` `CONFIGURABLE_MODULES`. Defaults `true`.
+- **Surfaced under Settings → Territory, NOT the main sidebar** (founder decision): the settings
+  section renders `<TerritoryManager />` (an inline "Manage territories" tree tab + "Hierarchy &
+  assignment" config tab). The `/territories` route still exists for deep-linking but has no menu
+  entry. `settings-overview.tsx` has the tile; `settings-sections.ts` registers the `territories`
+  section.
+- **Employee Area Assignment** (`employee-area-assignment.tsx`) has a search box and **cascade
+  selection**: checking a parent selects its whole subtree (parent shows indeterminate on partial).
+- **Client data layer**: `src/lib/territories/api.ts` (direct-Supabase reads + RPC wrappers;
+  `getTerritoryRows` paginates past the 1000-row cap — the seed alone is 1047). Page:
+  `src/app/(dashboard)/territories/page.tsx`; tree `components/territories/territory-tree.tsx`;
+  CSV import `territory-import-dialog.tsx` (hand-rolled `parseCsv`, no papaparse); employee
+  assignment `employee-area-assignment.tsx`; contact cascade `territory-picker.tsx`.
+- **Not offline on mobile** — read-only cache only (see CLAUDE mobile.md).
+
+### Reporting Hierarchy (migration 106, applied to prod 2026-07-31 — verified)
+
+Who-reports-to-whom, reusing the pre-existing (previously empty, **undocumented**)
+`profiles.manager_id` self-FK. Foundation for Route Management + "Team" data scope.
+
+- **`profiles.manager_id`** (uuid, self-FK, `ON DELETE SET NULL`) = Reporting Manager — was
+  already in the schema, unreferenced in code, 0 populated. Reused directly (no new column for it).
+- **New: `profiles.default_approver_id`** (uuid, self-FK, `ON DELETE SET NULL`) — optional
+  explicit approver.
+- **Module toggle** `reporting_hierarchy` in `accounts.module_settings` — **defaults OFF**
+  (unlike the others, which default on). The normalizers in `use-auth.tsx` and
+  `/api/account/module-settings` special-case it to `false` when the key is absent. Backfilled
+  on existing accounts by migration 106.
+- **4 SECURITY DEFINER functions** (the single source of truth for chain-walking; used by RLS
+  later): `get_reporting_chain(id)` (managers upward, nearest→top), `get_all_reports(id)`
+  (direct+indirect reports downward), `is_in_downline(mgr,target)` (RLS-friendly bool),
+  `get_approver(id)` (**default_approver → first ACTIVE manager up the chain → NULL**; skips
+  inactive per founder Q2). All grant EXECUTE to authenticated only.
+- **Cycle prevention:** `prevent_manager_cycle()` + trigger `trg_prevent_manager_cycle`
+  `BEFORE INSERT OR UPDATE OF manager_id ON profiles` — SECURITY DEFINER (can't be defeated by
+  RLS visibility), raises `check_violation` (23514) on direct or indirect loops. Enforced at the
+  DB, not just the UI.
+- **Web**: module card in `module-settings.tsx`; a **Reporting** card on the Employee Master
+  Details tab (`components/reporting/employee-reporting.tsx`, view-first + Edit) with manager +
+  default-approver pickers; client wrappers in `src/lib/reporting/api.ts`
+  (`updateEmployeeReporting` maps 23514 → friendly "cycle" result). The expense detail shows a
+  **display-only** "Suggested approver" line when the module is on and the expense is Pending —
+  **any admin can still approve** (founder Q1 = suggestion, NOT enforced; no expenses RLS change).
+- **Scope note:** `rbac.ts` already defines `DataScope` incl. `"team"` and the roles editor
+  offers it, but `getDataScope()` is consumed by **zero** query pages today — "team" is currently
+  unenforced. This pass ships the primitives (`get_all_reports`/`is_in_downline`); wiring `team →
+  get_all_reports` into each module's queries is a deliberate separate per-module step.
+- **`department`/`designation` are NOT dormant** (spec claimed they were): they have live
+  Employee Master fields and `designation` drives expense rate tiers (`expense-form.tsx`). Left
+  untouched, but the "dormant" premise is wrong.
+- Mobile: read-only "who approves my expense" only (see CLAUDE mobile.md).
+
+### Employee role model — unified (2026-07-31)
+
+There is now **one** role concept in the UI: the **Employee Role** (`employee_roles`, granular
+`permissions` jsonb). The old separate "System Account Role" dropdown was removed from all
+employee create/edit screens.
+
+- **`account_role`** (owner/admin/agent/viewer) is still the **security primitive** — every RLS
+  check (`is_account_member(account_id,'admin')`) and `useAuth` gate depends on it. It is NOT
+  removed; it is now **derived, not hand-picked**: on create/edit, an Employee Role whose
+  `permissions.all === true` sets `account_role='admin'`, otherwise `'agent'`. The account
+  **Owner** is never demoted (`account_role='owner'` is preserved).
+- Employee creation posts to **`/api/team/employees`** (service-role, creates the auth user +
+  upserts the profile with the derived `account_role`). The old `new/page.tsx` posted to a
+  **non-existent** `/api/admin/employees/create` — that was broken and is now fixed.
+- `team/roles/page.tsx` no longer hard-locks a role named "Admin" — all roles are fully
+  renameable/editable/deletable. The **Full Access** toggle (`permissions.all`) is what makes a
+  role's members admins.
+- **Designation removed** from employee UI (column kept, dormant). Expense rate tiers now key on
+  **`expense_rate_tiers.employee_role_id`** (already existed) instead of `designation`
+  (`expense-types-settings.tsx` + `expense-form.tsx`).
+- Reporting Manager is an **inline field** on the Employee edit form (governed by the page's
+  global Edit), not a separate card. (The `EmployeeReporting` card component was removed;
+  `lib/reporting/api.ts` remains for `getApprover`/`getApproverProfile` used by the expense page.)
+- UI terminology is "Employee", not "User" (DB table stays `profiles`; identifiers unchanged).
+
+### Area/owner-based visibility (migration 107, applied to prod 2026-08-01 — LIVE RLS change)
+
+Field employees now see only records they own or that fall in their assigned area(s).
+**This changed live SELECT RLS on `contacts` and `leads`** — test before touching again.
+
+- **`leads.territory_id`** added (nullable FK → territories). The web lead form
+  (`lead-form.tsx`) now has a Territory (Area) picker, gated on the territory module.
+  `contacts.territory_id` already existed. (Mobile lead form does NOT yet have the picker —
+  follow-up.)
+- **`employee_area_territory_ids(user_id) → uuid[]`** (SECURITY DEFINER): the user's assigned
+  territories expanded to their full subtree (a City assignment covers its Areas/Sub-Areas).
+- **`contacts_select` / `leads_select` RLS** now:
+  `is_account_member(account_id) AND ( is_account_member(account_id,'admin') OR user_id=auth.uid()
+  [OR owner_id/collaborators for leads] OR territory_id = ANY(employee_area_territory_ids(auth.uid())) )`.
+  Owner/admin unaffected (see all). Verified live: on the primary account the owner sees all 10
+  contacts; the "Sales Executive" agent (Rajkot) sees only the 1 Rajkot contact.
+- **Blast radius:** every non-admin member across ALL accounts is now limited to own+area
+  (previously saw all account records). Intended. A role that should see everything = give it
+  Full Access (→ admin). `scope: team/company/all` is still not separately wired — only
+  admin-vs-not + area/own today.
+- Applies everywhere automatically (mobile lists, web lists, visit picker) because it's RLS.
+
 ## Conventions
 
 - Route pages: `src/app/(dashboard)/<module>/page.tsx`, detail at `<module>/[id]/page.tsx`

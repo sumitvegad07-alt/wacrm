@@ -13,6 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TerritoryPicker } from "@/components/territories/territory-picker";
+import { getTerritoryRows, getAccountTerritorySettings } from "@/lib/territories/api";
+import { DEFAULT_TERRITORY_SETTINGS, enabledLevels } from "@/lib/territories/settings";
+import type { Territory, TerritorySettings } from "@/lib/territories/types";
 import { Loader2, ArrowLeft, UserPlus } from "lucide-react";
 import { logModuleActivity } from "@/lib/activities";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
@@ -29,8 +33,12 @@ interface LeadFormProps {
 }
 
 export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: LeadFormProps) {
-  const { accountId, user } = useAuth();
+  const { accountId, user, isModuleEnabled } = useAuth();
+  const territoryEnabled = isModuleEnabled('territory');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [territorySettings, setTerritorySettings] = useState<TerritorySettings>(DEFAULT_TERRITORY_SETTINGS);
+  const [territoryRows, setTerritoryRows] = useState<Territory[]>([]);
+  const [territoryId, setTerritoryId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: "", contact_person: "", whatsapp: "", email: "", source: "", industry: "", status: "",
@@ -62,9 +70,26 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
           address: "", city: "", state: "", country: "", latitude: "", longitude: ""
         });
       }
+      setTerritoryId((lead as (typeof lead) & { territory_id?: string | null })?.territory_id ?? null);
       fetchLookups();
+      if (territoryEnabled) fetchTerritoryData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lead, accountId]);
+
+  async function fetchTerritoryData() {
+    if (!accountId) return;
+    try {
+      const [s, rows] = await Promise.all([
+        getAccountTerritorySettings(accountId),
+        getTerritoryRows(accountId),
+      ]);
+      setTerritorySettings(s);
+      setTerritoryRows(rows);
+    } catch {
+      /* optional enrichment */
+    }
+  }
 
   async function fetchLookups() {
     if (!accountId) return;
@@ -148,6 +173,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       latitude: formData.latitude.trim() || null,
       longitude: formData.longitude.trim() || null,
       collaborator_ids: collaboratorIds,
+      ...(territoryEnabled ? { territory_id: territoryId } : {}),
     };
 
     let savedId = lead?.id;
@@ -288,6 +314,18 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
             return null;
           }}
         />
+
+        {territoryEnabled && enabledLevels(territorySettings).length > 0 && (
+          <div className="space-y-3 pt-2 border-t border-border/50">
+            <span className="text-xs font-medium text-muted-foreground">Territory (Area) — controls which field employee sees this lead</span>
+            <TerritoryPicker
+              rows={territoryRows}
+              settings={territorySettings}
+              value={territoryId}
+              onChange={setTerritoryId}
+            />
+          </div>
+        )}
 
         <div className="space-y-3 pt-2 border-t border-border/50">
           <span className="text-xs font-medium text-muted-foreground">GPS Coordinates (Optional)</span>

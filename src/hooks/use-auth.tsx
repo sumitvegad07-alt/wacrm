@@ -55,6 +55,7 @@ interface Profile {
 
 interface AccountSummary {
   id: string;
+  customer_id?: string | null;
   name: string;
   /** Default deal currency (ISO-4217). NOT NULL DEFAULT 'USD' in the
    *  DB (migration 021); narrowed to DEFAULT_CURRENCY when absent. */
@@ -71,6 +72,8 @@ export interface ModuleSettings {
   expense: boolean;
   dispatch: boolean;
   pending_dispatch: boolean;
+  territory: boolean;
+  reporting_hierarchy: boolean;
 }
 
 const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
@@ -79,6 +82,9 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   expense: true,
   dispatch: true,
   pending_dispatch: true,
+  territory: true,
+  // Reporting Hierarchy ships OFF by default (founder decision).
+  reporting_hierarchy: false,
 };
 
 function normalizeModuleSettings(raw: unknown): ModuleSettings {
@@ -92,6 +98,9 @@ function normalizeModuleSettings(raw: unknown): ModuleSettings {
     expense: typeof src.expense === 'boolean' ? src.expense : true,
     dispatch: typeof src.dispatch === 'boolean' ? src.dispatch : true,
     pending_dispatch: typeof src.pending_dispatch === 'boolean' ? src.pending_dispatch : true,
+    territory: typeof src.territory === 'boolean' ? src.territory : true,
+    // defaults OFF when the key is absent (unlike the others)
+    reporting_hierarchy: typeof src.reporting_hierarchy === 'boolean' ? src.reporting_hierarchy : false,
   };
 }
 
@@ -233,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .from("accounts")
             // default_currency added in migration 021; narrowed to the
             // USD fallback below for older schemas where it reads null.
-            .select("id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned")
+            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned")
             .eq("id", data.account_id)
             .maybeSingle();
           if (accountErr) {
@@ -246,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } else if (account) {
             accountRow = {
               id: account.id,
+              customer_id: (account as any).customer_id ?? null,
               name: account.name,
               default_currency: account.default_currency ?? DEFAULT_CURRENCY,
               subscription_status: account.subscription_status ?? 'active',

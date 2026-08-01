@@ -14,7 +14,7 @@ export default function CompaniesListPage() {
     async function loadCompanies() {
       const { data, error } = await supabase
         .from("accounts")
-        .select("id, name, industry, subscription_status, subscription_plan, created_at, profiles(full_name, email)")
+        .select("id, customer_id, name, industry, subscription_status, subscription_plan, created_at, profiles(full_name, email)")
         .order("created_at", { ascending: false });
         
       if (!error) {
@@ -33,10 +33,11 @@ export default function CompaniesListPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Registered Companies</h1>
       
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
         <table className="w-full text-left text-sm">
           <thead className="bg-muted border-b border-border">
             <tr>
+              <th className="px-4 py-3 font-medium text-foreground">Customer ID</th>
               <th className="px-4 py-3 font-medium text-foreground">Company Name</th>
               <th className="px-4 py-3 font-medium text-foreground">Owner</th>
               <th className="px-4 py-3 font-medium text-foreground">Industry</th>
@@ -48,6 +49,7 @@ export default function CompaniesListPage() {
           <tbody className="divide-y divide-border">
             {companies.map((c) => (
               <tr key={c.id} className="hover:bg-muted/50">
+                <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">{c.customer_id || "-"}</td>
                 <td className="px-4 py-3 text-foreground font-medium">{c.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">
                   {c.profiles?.[0]?.full_name || "Unknown"} <br />
@@ -56,7 +58,7 @@ export default function CompaniesListPage() {
                 <td className="px-4 py-3 text-muted-foreground">{c.industry || "-"}</td>
                 <td className="px-4 py-3 text-foreground">{c.subscription_plan}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${c.subscription_status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'}`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold text-white shadow-sm ${c.subscription_status === 'active' ? 'bg-emerald-600' : 'bg-red-600'}`}>
                     {c.subscription_status}
                   </span>
                 </td>

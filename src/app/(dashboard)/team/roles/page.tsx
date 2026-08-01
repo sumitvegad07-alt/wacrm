@@ -229,7 +229,10 @@ export default function RolesPage() {
     );
   }
 
-  const isAdminRole = selectedRole?.name === "Admin";
+  // All employee roles are fully configurable (rename, edit rights, delete).
+  // Security comes from account_role (derived from a role's Full Access flag),
+  // not from a role's name, so nothing needs to be hard-locked.
+  const isAdminRole = false;
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-background">
@@ -269,12 +272,7 @@ export default function RolesPage() {
                   </div>
                   {role.permissions?.all && (
                     <span className="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-sm mt-2">
-                      Full Access
-                    </span>
-                  )}
-                  {role.name === "Admin" && (
-                    <span className="inline-flex items-center rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-sm mt-2 ml-2">
-                      System Locked
+                      Admin (Full Access)
                     </span>
                   )}
                 </div>
@@ -370,7 +368,8 @@ export default function RolesPage() {
                           Full System Access (Super Admin)
                         </h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Grant this role absolute access to all modules, settings, and bypass all restrictions.
+                          Grant this role absolute access to all modules and settings. Employees given
+                          this role become <strong>account admins</strong>; every other role is a regular employee.
                         </p>
                       </div>
                       <Switch 

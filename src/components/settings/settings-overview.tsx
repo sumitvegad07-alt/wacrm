@@ -216,6 +216,11 @@ export function SettingsOverview({
       subtitle: 'Expense policies, mileage & odometer checks',
     },
     {
+      section: 'territories',
+      loading: false,
+      subtitle: 'Geography hierarchy, areas & employee assignment',
+    },
+    {
       section: 'api',
       loading: false,
       subtitle: 'API keys, webhooks & developer tokens',

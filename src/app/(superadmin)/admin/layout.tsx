@@ -30,19 +30,29 @@ function SuperAdminShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Auth check disabled temporarily for local testing
+    if (!loading && !profileLoading) {
+      if (!user) {
+        router.replace("/login?redirect=/admin");
+      } else if (!isSuperadmin) {
+        router.replace("/dashboard");
+      }
+    }
   }, [user, loading, profileLoading, isSuperadmin, router]);
 
-  // if (loading || profileLoading || !isSuperadmin) {
-  //   return (
-  //     <div className="flex h-screen items-center justify-center bg-background">
-  //       <div className="text-center space-y-2">
-  //         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-  //         <p className="text-sm text-muted-foreground">Loading Super Admin…</p>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  if (loading || profileLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-2">
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground">Verifying Super Admin Access…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || !isSuperadmin) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

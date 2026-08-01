@@ -22,6 +22,7 @@ import { AISettingsPanel } from '@/components/settings/ai-settings-panel';
 import { ExpenseTypesSettings } from '@/components/settings/expense-types-settings';
 import { ModuleSettingsPanel } from '@/components/settings/module-settings';
 import { DealPipelinesSettings } from '@/components/settings/deal-pipelines-settings';
+import { TerritoryManager } from '@/components/territories/territory-manager';
 import {
   resolveSection,
   SECTION_META,
@@ -134,6 +135,7 @@ function SettingsContent() {
     orders: <OrdersSettings />,
     pricing: <PricingSchemesSettings />,
     expense_types: <ExpenseTypesSettings />,
+    territories: <TerritoryManager />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,
     module_settings: <ModuleSettingsPanel />,

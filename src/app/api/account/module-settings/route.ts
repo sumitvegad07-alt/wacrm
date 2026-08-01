@@ -31,6 +31,8 @@ const CONFIGURABLE_MODULES = [
   "expense",
   "dispatch",
   "pending_dispatch",
+  "territory",
+  "reporting_hierarchy",
 ] as const;
 
 type ModuleKey = (typeof CONFIGURABLE_MODULES)[number];
@@ -43,6 +45,9 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   expense: true,
   dispatch: true,
   pending_dispatch: true,
+  territory: true,
+  // Reporting Hierarchy ships OFF by default (founder decision).
+  reporting_hierarchy: false,
 };
 
 function normalizeSettings(raw: unknown): ModuleSettings {
