@@ -522,6 +522,55 @@ Field employees now see only records they own or that fall in their assigned are
   admin-vs-not + area/own today.
 - Applies everywhere automatically (mobile lists, web lists, visit picker) because it's RLS.
 
+### Route Management — Phase 1 DATABASE (migrations 108–112, applied to prod 2026-08-02 — verified)
+
+Beat/Route management. **Module toggle `accounts.module_settings.route` defaults OFF** — when off,
+zero route enforcement and free-visit mode is unchanged (verified: route RPCs raise "Route Management
+is not enabled"; normal `site_visits` inserts still work). Depends on Territory Master + Reporting
+Hierarchy. Spec: `docs/engineering/specifications/route-management.md` (Rev 3). **Phase 2 (web UI) not
+built yet.**
+
+- **Tables** (all RLS-enabled, `account_id`, `update_updated_at_column` triggers):
+  - `routes` — `primary_assignee_id`(profiles.id, NOT "owner"), `status`
+    (draft/pending_approval/active/rejected/archived), `created_by`(auth.uid()), `archived_at`,
+    **`version`**(optimistic concurrency). RLS: admins see all; others see routes they created / are
+    primary assignee of / are planner-assigned to. Edit/delete = admin or creator/assignee.
+  - `route_customers` — `sequence`, `archived_at` (mirrors route archive). `UNIQUE(route_id,contact_id)`
+    + **partial `UNIQUE(account_id,contact_id) WHERE archived_at IS NULL`** = one customer, one active route.
+  - `route_plan_assignments` — the weekly Planner (salesman×ISO-weekday→route). Partial
+    `UNIQUE(account_id,assignee_id,day_of_week) WHERE end_date IS NULL AND is_active` (leaves room for
+    future temporary date-bounded reassignment). `assignee_id`=profiles.id.
+  - `route_schedules` — DORMANT (future non-weekly patterns); no UI reads it.
+  - `route_executions` (`user_id`=auth.uid(), `tracking_session_id`, unique per route/user/day) +
+    `route_execution_stops` (`planned_sequence` NULLABLE = unplanned mid-round stop, `actual_sequence`,
+    `site_visit_id`, `skip_reason`). Field-owned RLS (admin or own).
+  - `site_visits` gained nullable **`route_execution_id`** (FK) — a completed stop CREATES a site_visit
+    linked back (reuses GPS/photo/feedback). ⚠️ `site_visits.check_in_method` CHECK allows only
+    `geofence_auto|manual|qr_scan` — route stops write `'manual'`.
+- **All writes go through RPCs** (SECURITY INVOKER, WHERE-qualified for pg_safeupdate, idempotent via
+  client ids, log to `module_activities` with typed `details`, authenticated-only — grants must
+  `revoke from PUBLIC` not just anon, see migration 112). Authoring: `route_upsert`(+ `p_expected_version`
+  concurrency), `route_import_customers`/`route_add_customers` (skip ineligible), `route_remove_customer`,
+  `route_reorder_customers`, `route_update_status` (state machine + archive/restore), `route_clone`
+  (**header only — customers not copied, one-customer-one-route makes it impossible**),
+  `route_planner_set`/`_clear`/`_move` (move is atomic). Execution: `route_execution_start`
+  (**client-authoritative `p_stops`** — server does not re-derive), `route_stop_add`,
+  `route_stop_complete` (creates+links site_visit, validates contact exists), `route_stop_skip`,
+  `route_execution_complete` (blocks pending stops unless `route_settings.execution.allow_complete_with_pending`).
+  Reads: **`get_route_for(assignee,date)`** (single "today's route" resolver — future calendar/leave hook),
+  `route_health(route_id)` (non-blocking score+warnings, gated by `view_routes`).
+- **The single customer-eligibility rule** = `_route_contact_eligible()` (contact in-account + in the
+  primary assignee's `employee_area_territory_ids`); used by upsert/import/add.
+- **Config** in `accounts.settings.route_settings` (execution.skip_allowed/skip_reason_mandatory/
+  out_of_sequence_allowed/allow_complete_with_pending, capacity.{max_customers,enforcement warn|block},
+  validation.warn_*, approval_mode none|manager|admin). Backfilled on all accounts.
+- **Permission keys** (granular, flat, owner/admin bypass via `has_permission`) not yet in the roles
+  editor UI (Phase 2): view/add/edit/delete/clone/assign/approve/archive_routes,
+  add/remove/reorder_route_customers, manage_route_schedule, execute_route, skip_route_stop,
+  modify_route_sequence.
+- **Engineering mandate:** the web UI must NEVER write route tables directly — always call these RPCs;
+  no route business rule may live only in React.
+
 ## Conventions
 
 - Route pages: `src/app/(dashboard)/<module>/page.tsx`, detail at `<module>/[id]/page.tsx`
