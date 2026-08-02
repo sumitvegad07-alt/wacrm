@@ -11,6 +11,7 @@ import { Loader2, Shield, Plus, AlertCircle, Save, Trash2, Edit2, Users, Check }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { RolePermissions, DataScope } from "@/lib/auth/rbac";
+import { ROUTE_PERMISSION_GROUPS } from "@/lib/route/permissions";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 
@@ -78,6 +79,13 @@ const PERMISSION_GROUPS = [
       { id: "view_whatsapp_templates", label: "Manage Message Templates" },
       { id: "view_ai_assistant", label: "Manage AI Knowledge Base" },
     ]
+  },
+  {
+    category: "Route Management",
+    // Sourced from the Route SDK's permission definitions so keys/labels stay in one place.
+    permissions: ROUTE_PERMISSION_GROUPS.flatMap((g) =>
+      g.keys.map((k) => ({ id: k.key as string, label: `${g.group} · ${k.label}` }))
+    ),
   },
   {
     category: "Administration",

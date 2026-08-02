@@ -74,6 +74,7 @@ export interface ModuleSettings {
   pending_dispatch: boolean;
   territory: boolean;
   reporting_hierarchy: boolean;
+  route: boolean;
 }
 
 const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
@@ -85,6 +86,8 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   territory: true,
   // Reporting Hierarchy ships OFF by default (founder decision).
   reporting_hierarchy: false,
+  // Route Management ships OFF by default (route is optional; free-visit mode intact).
+  route: false,
 };
 
 function normalizeModuleSettings(raw: unknown): ModuleSettings {
@@ -101,6 +104,8 @@ function normalizeModuleSettings(raw: unknown): ModuleSettings {
     territory: typeof src.territory === 'boolean' ? src.territory : true,
     // defaults OFF when the key is absent (unlike the others)
     reporting_hierarchy: typeof src.reporting_hierarchy === 'boolean' ? src.reporting_hierarchy : false,
+    // Route Management also defaults OFF when absent.
+    route: typeof src.route === 'boolean' ? src.route : false,
   };
 }
 

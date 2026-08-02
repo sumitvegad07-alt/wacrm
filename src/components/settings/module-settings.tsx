@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
-import { FileText, Coins, Truck, PackageCheck, Map, Network } from "lucide-react";
+import { FileText, Coins, Truck, PackageCheck, Map, Network, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ── WhatsApp SVG icon (matches sidebar) ──────────────────────
@@ -76,6 +76,13 @@ const MODULES: ModuleDef[] = [
     description:
       "Enable a reporting manager + default approver per employee (set in Employee Master). Managers see their team's records and become the suggested approver for their reports' expenses.",
     Icon: Network,
+  },
+  {
+    key: "route",
+    label: "Route Management",
+    description:
+      "Enable beat/route planning — build routes from territory customers, assign them to a weekly planner, and run them on mobile with visit tracking. Off by default; when disabled, salesmen visit freely with no route enforcement.",
+    Icon: Route,
   },
 ];
 

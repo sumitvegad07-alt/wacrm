@@ -23,6 +23,7 @@ import { ExpenseTypesSettings } from '@/components/settings/expense-types-settin
 import { ModuleSettingsPanel } from '@/components/settings/module-settings';
 import { DealPipelinesSettings } from '@/components/settings/deal-pipelines-settings';
 import { TerritoryManager } from '@/components/territories/territory-manager';
+import { RouteSettings } from '@/components/settings/route-settings';
 import {
   resolveSection,
   SECTION_META,
@@ -136,6 +137,7 @@ function SettingsContent() {
     pricing: <PricingSchemesSettings />,
     expense_types: <ExpenseTypesSettings />,
     territories: <TerritoryManager />,
+    route: <RouteSettings />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,
     module_settings: <ModuleSettingsPanel />,

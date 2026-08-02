@@ -32,6 +32,24 @@ export function hasPermission(
 }
 
 /**
+ * Generic multi-key helpers — the building blocks module-specific permission APIs
+ * (e.g. route/permissions.ts) compose. Owner/admin (permissions.all) bypass via hasPermission.
+ */
+export function hasAnyPermission(
+  permissions: RolePermissions | null | undefined,
+  keys: string[]
+): boolean {
+  return keys.some((k) => hasPermission(permissions, k));
+}
+
+export function hasAllPermissions(
+  permissions: RolePermissions | null | undefined,
+  keys: string[]
+): boolean {
+  return keys.every((k) => hasPermission(permissions, k));
+}
+
+/**
  * Returns the data visibility scope for a given module.
  * Defaults to 'own' if not explicitly defined.
  */

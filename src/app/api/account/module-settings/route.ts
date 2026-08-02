@@ -33,6 +33,7 @@ const CONFIGURABLE_MODULES = [
   "pending_dispatch",
   "territory",
   "reporting_hierarchy",
+  "route",
 ] as const;
 
 type ModuleKey = (typeof CONFIGURABLE_MODULES)[number];
@@ -48,6 +49,8 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   territory: true,
   // Reporting Hierarchy ships OFF by default (founder decision).
   reporting_hierarchy: false,
+  // Route Management ships OFF by default (route is optional).
+  route: false,
 };
 
 function normalizeSettings(raw: unknown): ModuleSettings {

@@ -46,6 +46,8 @@ import {
   Palette,
   LayoutGrid,
   SlidersHorizontal,
+  Route as RouteIcon,
+  CalendarRange,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -152,7 +154,7 @@ interface NavItem {
    * Admin-configurable module key. When set, this item is only shown if
    * the admin has enabled the corresponding module in Module Settings.
    */
-  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory";
+  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route";
 }
 
 type MenuNode =
@@ -165,7 +167,7 @@ type MenuNode =
       icon: React.ComponentType<{ className?: string }>;
       items: NavItem[];
       /** Admin-configurable module key — hides the entire group if disabled */
-      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory";
+      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route";
     }
   | {
       type: "spacer";
@@ -303,6 +305,20 @@ const menuStructure: MenuNode[] = [
       { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
       { href: "/location-tracking/track-report", label: "Track report", icon: LineChart, module: "location_tracking" },
       { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
+    ],
+  },
+
+  { type: "spacer" },
+
+  // ── Routes (collapsed) — Route Management, hidden unless the module is ON ──
+  {
+    type: "group",
+    label: "Routes",
+    icon: RouteIcon,
+    configModule: "route" as const,
+    items: [
+      { href: "/routes", label: "All Routes", icon: RouteIcon, module: "routes" },
+      { href: "/routes/planner", label: "Route Planner", icon: CalendarRange, module: "routes" },
     ],
   },
 

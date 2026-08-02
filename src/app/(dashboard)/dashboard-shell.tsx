@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { AppQueryProvider } from "@/components/providers/query-provider";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
@@ -48,7 +49,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       (pathname.startsWith("/whatsapp") && (!hasWhatsApp || !isModuleEnabled("whatsapp"))) ||
       (pathname.startsWith("/quotations") && !isModuleEnabled("quotation")) ||
       (pathname.startsWith("/expenses") && !isModuleEnabled("expense")) ||
-      (pathname.startsWith("/dispatch") && !isModuleEnabled("dispatch"));
+      (pathname.startsWith("/dispatch") && !isModuleEnabled("dispatch")) ||
+      (pathname.startsWith("/routes") && !isModuleEnabled("route"));
 
     if (isRestricted) {
       router.replace("/dashboard");
@@ -137,8 +139,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider>
-      <DashboardShellInner>{children}</DashboardShellInner>
-    </AuthProvider>
+    <AppQueryProvider>
+      <AuthProvider>
+        <DashboardShellInner>{children}</DashboardShellInner>
+      </AuthProvider>
+    </AppQueryProvider>
   );
 }
