@@ -15,6 +15,7 @@ export const routeKeys = {
   detail: (routeId: string) => [...routeKeys.details(), routeId] as const,
   customers: (routeId: string) => [...routeKeys.detail(routeId), 'customers'] as const,
   health: (routeId: string) => [...routeKeys.detail(routeId), 'health'] as const,
+  history: (routeId: string) => [...routeKeys.detail(routeId), 'history'] as const,
 
   importableContacts: (accountId: string, search: string, offset: number) =>
     [...routeKeys.all, 'importable-contacts', accountId, search, offset] as const,

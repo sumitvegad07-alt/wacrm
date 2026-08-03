@@ -21,7 +21,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, X } from "lucide-react";
+import { GripVertical, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface SortableCustomer {
@@ -36,11 +36,17 @@ function Row({
   index,
   disabled,
   onRemove,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   item: SortableCustomer;
   index: number;
   disabled?: boolean;
   onRemove?: (id: string) => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -52,9 +58,23 @@ function Row({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
         "flex items-center gap-3 border-b border-border bg-card px-3 py-2 last:border-b-0",
+        selected && "bg-primary/5",
         isDragging && "opacity-60 shadow-lg"
       )}
     >
+      {selectable && (
+        <button
+          type="button"
+          onClick={() => onToggleSelect?.(item.id)}
+          aria-label={selected ? "Deselect" : "Select"}
+          className={cn(
+            "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+            selected ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background"
+          )}
+        >
+          {selected && <Check className="h-3 w-3" />}
+        </button>
+      )}
       <span className="w-6 shrink-0 text-center text-xs font-medium tabular-nums text-muted-foreground">
         {index + 1}
       </span>
@@ -99,11 +119,17 @@ export function SortableCustomerList({
   onReorder,
   disabled,
   onRemove,
+  selectable,
+  selectedIds,
+  onToggleSelect,
 }: {
   items: SortableCustomer[];
   onReorder: (orderedIds: string[]) => void;
   disabled?: boolean;
   onRemove?: (id: string) => void;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -124,7 +150,16 @@ export function SortableCustomerList({
       <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
         <ul className="overflow-hidden rounded-lg border border-border">
           {items.map((item, index) => (
-            <Row key={item.id} item={item} index={index} disabled={disabled} onRemove={onRemove} />
+            <Row
+              key={item.id}
+              item={item}
+              index={index}
+              disabled={disabled}
+              onRemove={onRemove}
+              selectable={selectable}
+              selected={selectedIds?.has(item.id)}
+              onToggleSelect={onToggleSelect}
+            />
           ))}
         </ul>
       </SortableContext>

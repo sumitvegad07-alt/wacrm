@@ -31,6 +31,7 @@ import type {
   RoutePlanAssignment,
   RouteExecution,
   RouteHealth,
+  RouteHistoryEntry,
   RouteForToday,
   RouteStatus,
   UpsertRouteInput,
@@ -184,6 +185,43 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
         .eq('account_id', accountId);
       if (error) throw mapPostgrestError(error);
       return (data ?? []) as RoutePlanAssignment[];
+    }, maxRetries);
+  }
+
+  /**
+   * Route audit history (module_activities keyed by module_name='route', record_id=routeId).
+   * Enriches the actor name via a separate profiles query — module_activities.user_id FKs
+   * auth.users (NOT profiles), so embedding it would silently return zero rows (house gotcha).
+   */
+  async function getRouteHistory(routeId: string, limit = 200): Promise<RouteHistoryEntry[]> {
+    return withRetry(async () => {
+      const { data, error } = await supabase
+        .from('module_activities')
+        .select('id, action, message, details, created_at, user_id')
+        .eq('module_name', 'route')
+        .eq('record_id', routeId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) throw mapPostgrestError(error);
+      const rows = (data ?? []) as {
+        id: string; action: string; message: string | null;
+        details: Record<string, unknown> | null; created_at: string; user_id: string | null;
+      }[];
+      const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))] as string[];
+      const names = new Map<string, string>();
+      if (userIds.length > 0) {
+        // profiles.user_id → auth.users id (matches module_activities.user_id)
+        const { data: profs } = await supabase.from('profiles').select('user_id, full_name').in('user_id', userIds);
+        (profs ?? []).forEach((p: { user_id: string; full_name: string }) => names.set(p.user_id, p.full_name));
+      }
+      return rows.map((r) => ({
+        id: r.id,
+        action: r.action,
+        message: r.message,
+        details: r.details,
+        created_at: r.created_at,
+        actor_name: r.user_id ? names.get(r.user_id) ?? null : null,
+      }));
     }, maxRetries);
   }
 
@@ -363,6 +401,7 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
     getRouteCustomers,
     getPlanner,
     getRouteHealth,
+    getRouteHistory,
     getRouteForToday,
     searchImportableContacts,
     // route authoring

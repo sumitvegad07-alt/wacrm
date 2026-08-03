@@ -157,6 +157,16 @@ export interface RouteHealth {
   checks: RouteHealthCheck[];
 }
 
+// ── audit history (History tab) ───────────────────────────────
+export interface RouteHistoryEntry {
+  id: string;
+  action: string;
+  message: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+  actor_name: string | null;
+}
+
 // ── "today's route" resolver payload ──────────────────────────
 export interface RouteTodayCustomer {
   contact_id: string;

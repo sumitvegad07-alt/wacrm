@@ -52,6 +52,15 @@ export function useRouteHealth(routeId: string | null | undefined) {
   });
 }
 
+/** Route audit history (module_activities), for the History tab. */
+export function useRouteHistory(routeId: string | null | undefined) {
+  return useQuery({
+    queryKey: routeKeys.history(routeId ?? "none"),
+    queryFn: () => getRouteSdk().getRouteHistory(routeId as string),
+    enabled: !!routeId,
+  });
+}
+
 /** Weekly planner assignments for an account. */
 export function usePlanner(accountId: string | null | undefined) {
   return useQuery({
