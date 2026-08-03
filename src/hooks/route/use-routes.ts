@@ -61,12 +61,27 @@ export function useRouteHistory(routeId: string | null | undefined) {
   });
 }
 
-/** Weekly planner assignments for an account. */
+/** All planner assignments for an account (used by the workspace, filtered client-side). */
 export function usePlanner(accountId: string | null | undefined) {
   return useQuery({
     queryKey: routeKeys.planner(accountId ?? "none"),
     queryFn: () => getRouteSdk().getPlanner(accountId as string),
     enabled: !!accountId,
+  });
+}
+
+/** Planner assignments for a specific page of salesmen (enterprise-scale board). */
+export function usePlannerAssignments(
+  accountId: string | null | undefined,
+  assigneeIds: string[] | undefined
+) {
+  const ids = assigneeIds ?? [];
+  const sig = ids.slice().sort().join(",");
+  return useQuery({
+    queryKey: routeKeys.planner(accountId ?? "none", sig || "none"),
+    queryFn: () => getRouteSdk().getPlanner(accountId as string, ids),
+    enabled: !!accountId && ids.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 

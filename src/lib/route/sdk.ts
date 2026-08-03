@@ -29,6 +29,7 @@ import type {
   RouteListResult,
   RouteCustomerWithContact,
   RoutePlanAssignment,
+  RoutePlanAssignmentWithRoute,
   RouteExecution,
   RouteHealth,
   RouteHistoryEntry,
@@ -177,14 +178,35 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
     }, maxRetries);
   }
 
-  async function getPlanner(accountId: string): Promise<RoutePlanAssignment[]> {
+  /**
+   * Planner assignments. Pass `assigneeIds` to fetch only the visible page of salesmen
+   * (enterprise scale: never loads the whole account's 3500+ assignments at once). Omit for the
+   * whole account (used by the workspace Planning tab, which filters to one route client-side).
+   */
+  async function getPlanner(
+    accountId: string,
+    assigneeIds?: string[]
+  ): Promise<RoutePlanAssignmentWithRoute[]> {
     return withRetry(async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('route_plan_assignments')
-        .select('*')
+        .select(
+          'id, account_id, route_id, assignee_id, day_of_week, start_date, end_date, is_active, ' +
+            'paused_at, created_at, updated_at, routes ( name, status )'
+        )
         .eq('account_id', accountId);
+      if (assigneeIds && assigneeIds.length > 0) q = q.in('assignee_id', assigneeIds);
+      const { data, error } = await q;
       if (error) throw mapPostgrestError(error);
-      return (data ?? []) as RoutePlanAssignment[];
+      type Row = Record<string, unknown> & { routes: { name: string; status: RouteStatus } | null };
+      return ((data ?? []) as unknown as Row[]).map((r) => {
+        const { routes, ...rest } = r;
+        return {
+          ...(rest as unknown as RoutePlanAssignment),
+          route_name: routes?.name ?? null,
+          route_status: routes?.status ?? null,
+        };
+      });
     }, maxRetries);
   }
 

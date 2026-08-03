@@ -48,6 +48,40 @@ export interface AccountEmployee {
   full_name: string | null;
 }
 
+export interface AccountEmployeesPage {
+  rows: AccountEmployee[];
+  total: number;
+}
+
+/** Paginated + searchable active employees — the Planner board's salesman rows (500+ scale). */
+export function useAccountEmployeesPaged(params: {
+  accountId: string | null | undefined;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const { accountId, search, limit = 20, offset = 0 } = params;
+  return useQuery({
+    queryKey: ["account-employees-paged", accountId ?? "none", search ?? "", limit, offset],
+    queryFn: async (): Promise<AccountEmployeesPage> => {
+      let q = createClient()
+        .from("profiles")
+        .select("id, full_name", { count: "exact" })
+        .eq("account_id", accountId as string)
+        .eq("status", "active");
+      const s = (search ?? "").trim();
+      if (s) q = q.ilike("full_name", `%${s}%`);
+      const { data, error, count } = await q
+        .order("full_name", { ascending: true })
+        .range(offset, offset + limit - 1);
+      if (error) throw error;
+      return { rows: (data ?? []) as AccountEmployee[], total: count ?? 0 };
+    },
+    enabled: !!accountId,
+    placeholderData: keepPreviousData,
+  });
+}
+
 /** Active employees (profiles) for the account — the assignee picker source. */
 export function useAccountEmployees(accountId: string | null | undefined) {
   return useQuery({

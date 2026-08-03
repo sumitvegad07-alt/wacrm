@@ -20,7 +20,9 @@ export const routeKeys = {
   importableContacts: (accountId: string, search: string, offset: number) =>
     [...routeKeys.all, 'importable-contacts', accountId, search, offset] as const,
 
-  planner: (accountId: string) => [...routeKeys.all, 'planner', accountId] as const,
+  // plannerAll is the invalidation prefix; planner(accountId, sig) caches each page/scope.
+  plannerAll: () => [...routeKeys.all, 'planner'] as const,
+  planner: (accountId: string, sig?: string) => [...routeKeys.plannerAll(), accountId, sig ?? 'all'] as const,
 
   today: (assigneeId: string, date?: string) =>
     [...routeKeys.all, 'today', assigneeId, date ?? 'current'] as const,

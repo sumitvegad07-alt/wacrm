@@ -86,6 +86,12 @@ export interface RoutePlanAssignment {
   updated_at: string;
 }
 
+/** Planner assignment enriched with the assigned route's name + status (for board chips). */
+export interface RoutePlanAssignmentWithRoute extends RoutePlanAssignment {
+  route_name: string | null;
+  route_status: RouteStatus | null;
+}
+
 export interface RouteExecution {
   id: string;
   account_id: string;

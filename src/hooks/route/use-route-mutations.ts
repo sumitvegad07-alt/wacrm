@@ -112,7 +112,7 @@ export function useUpdateRouteStatus(accountId: string | null | undefined) {
       qc.invalidateQueries({ queryKey: routeKeys.health(vars.routeId) });
       if (accountId) {
         qc.invalidateQueries({ queryKey: routeKeys.lists() });
-        qc.invalidateQueries({ queryKey: routeKeys.planner(accountId) });
+        qc.invalidateQueries({ queryKey: routeKeys.plannerAll() });
       }
     },
   });
@@ -135,7 +135,7 @@ export function usePlannerSet(accountId: string | null | undefined) {
   return useMutation({
     mutationFn: (input: PlannerSetInput) => getRouteSdk().plannerSet(input),
     onSuccess: () => {
-      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.planner(accountId) });
+      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.plannerAll() });
     },
   });
 }
@@ -146,7 +146,7 @@ export function usePlannerClear(accountId: string | null | undefined) {
     mutationFn: (vars: { assigneeId: string; dayOfWeek: IsoDayOfWeek }) =>
       getRouteSdk().plannerClear(vars.assigneeId, vars.dayOfWeek),
     onSuccess: () => {
-      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.planner(accountId) });
+      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.plannerAll() });
     },
   });
 }
@@ -156,7 +156,7 @@ export function usePlannerMove(accountId: string | null | undefined) {
   return useMutation({
     mutationFn: (input: PlannerMoveInput) => getRouteSdk().plannerMove(input),
     onSuccess: () => {
-      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.planner(accountId) });
+      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.plannerAll() });
     },
   });
 }
