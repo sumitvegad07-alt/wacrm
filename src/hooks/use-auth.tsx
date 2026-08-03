@@ -475,8 +475,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         moduleSettings,
         isModuleEnabled: (key: keyof ModuleSettings) => moduleSettings[key] ?? true,
         refreshModuleSettings,
-        hasPermission: (key: string) => hasPermission(derived.permissions, key),
-        getDataScope: (module: string) => getDataScope(derived.permissions, module),
+        hasPermission: (key: string) => {
+          if (derived.isOwner || derived.isAdmin) return true;
+          return hasPermission(derived.permissions, key);
+        },
+        getDataScope: (module: string) => {
+          if (derived.isOwner || derived.isAdmin) return "all";
+          return getDataScope(derived.permissions, module);
+        },
       }}
     >
       {children}
