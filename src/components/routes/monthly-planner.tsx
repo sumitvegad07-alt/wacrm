@@ -46,9 +46,6 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub,
   DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -148,6 +145,7 @@ const MONTH_NAMES = [
 ];
 
 const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const FULL_WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 // ── Draggable Route Card Chip ──────────────────────────────────────
 function RouteCardChip({
@@ -660,31 +658,29 @@ export function MonthlyPlannerBoard() {
           />
         </div>
 
-        <Select value={selectedSalesmanId} onValueChange={(val) => val && setSelectedSalesmanId(val)}>
-          <SelectTrigger className="h-8 w-[160px] text-xs">
-            <SelectValue placeholder="All Salesmen" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Salesmen ({employeeList.length})</SelectItem>
-            {employeeList.map((rep) => (
-              <SelectItem key={rep.id} value={rep.id}>
-                {rep.full_name || "Salesman"}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <select
+          value={selectedSalesmanId}
+          onChange={(e) => setSelectedSalesmanId(e.target.value)}
+          className="h-8 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="all">All Salesmen ({employeeList.length})</option>
+          {employeeList.map((rep) => (
+            <option key={rep.id} value={rep.id}>
+              {rep.full_name || "Salesman"}
+            </option>
+          ))}
+        </select>
 
-        <Select value={selectedStatus} onValueChange={(val) => val && setSelectedStatus(val)}>
-          <SelectTrigger className="h-8 w-[130px] text-xs">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="pending_approval">Pending</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-          </SelectContent>
-        </Select>
+        <select
+          value={selectedStatus}
+          onChange={(e) => setSelectedStatus(e.target.value)}
+          className="h-8 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="all">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="pending_approval">Pending</option>
+          <option value="draft">Draft</option>
+        </select>
 
         {(search || selectedSalesmanId !== "all" || selectedStatus !== "all") && (
           <Button
@@ -753,50 +749,49 @@ export function MonthlyPlannerBoard() {
           <div className="space-y-4 py-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Select Route</label>
-              <Select value={targetRouteId} onValueChange={(val) => val && setTargetRouteId(val)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a route..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {routeList.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.name} ({r.status})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={targetRouteId}
+                onChange={(e) => setTargetRouteId(e.target.value)}
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Select a route...</option>
+                {routeList.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.status})
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Assign to Salesman</label>
-              <Select value={targetAssigneeId} onValueChange={(val) => val && setTargetAssigneeId(val)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a salesman..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {employeeList.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      {emp.full_name || "Salesman"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={targetAssigneeId}
+                onChange={(e) => setTargetAssigneeId(e.target.value)}
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Select a salesman...</option>
+                {employeeList.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.full_name || "Salesman"}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Day of Week</label>
-              <Select value={String(addDow)} onValueChange={(val) => val && setAddDow(Number(val) as IsoDayOfWeek)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {WEEKDAY_NAMES.map((name, idx) => (
-                    <SelectItem key={name} value={String(idx + 1)}>
-                      {name}day
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={String(addDow)}
+                onChange={(e) => setAddDow(Number(e.target.value) as IsoDayOfWeek)}
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                {FULL_WEEKDAY_NAMES.map((name, idx) => (
+                  <option key={name} value={String(idx + 1)}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <DialogFooter>
@@ -822,19 +817,18 @@ export function MonthlyPlannerBoard() {
             </p>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Recurrence Pattern</label>
-              <Select value={recurrencePattern} onValueChange={(val) => val && setRecurrencePattern(val)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="one_time">One-time assignment</SelectItem>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly (Every {WEEKDAY_NAMES[(selectedRecurrenceAssignment?.day_of_week ?? 1) - 1]})</SelectItem>
-                  <SelectItem value="every_x_days">Every X days</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="custom">Custom recurrence</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                value={recurrencePattern}
+                onChange={(e) => setRecurrencePattern(e.target.value)}
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="one_time">One-time assignment</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly (Every {FULL_WEEKDAY_NAMES[(selectedRecurrenceAssignment?.day_of_week ?? 1) - 1]})</option>
+                <option value="every_x_days">Every X days</option>
+                <option value="monthly">Monthly</option>
+                <option value="custom">Custom recurrence</option>
+              </select>
             </div>
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
               <p className="font-medium text-foreground">Business Calendar Rules Active:</p>
