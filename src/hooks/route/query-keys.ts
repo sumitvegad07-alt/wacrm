@@ -26,4 +26,10 @@ export const routeKeys = {
 
   today: (assigneeId: string, date?: string) =>
     [...routeKeys.all, 'today', assigneeId, date ?? 'current'] as const,
+
+  executionsAll: () => [...routeKeys.all, 'executions'] as const,
+  executions: (accountId: string, sig: string) => [...routeKeys.executionsAll(), accountId, sig] as const,
+  executionSummary: (accountId: string, date: string) =>
+    [...routeKeys.executionsAll(), 'summary', accountId, date] as const,
+  executionStops: (executionId: string) => [...routeKeys.all, 'execution-stops', executionId] as const,
 } as const;

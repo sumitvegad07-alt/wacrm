@@ -106,6 +106,34 @@ export interface RouteExecution {
   updated_at: string;
 }
 
+/** Execution row enriched for the web monitor: route/salesman names + stop tallies. */
+export interface RouteExecutionRow extends RouteExecution {
+  route_name: string | null;
+  user_name: string | null;
+  stops_total: number;
+  stops_completed: number;
+  stops_skipped: number;
+  stops_pending: number;
+}
+export interface RouteExecutionListParams {
+  accountId: string;
+  date?: string; // execution_date filter (YYYY-MM-DD); omit for all dates
+  statuses?: ExecutionStatus[];
+  limit?: number;
+  offset?: number;
+}
+export interface RouteExecutionListResult {
+  rows: RouteExecutionRow[];
+  total: number;
+}
+
+/** Date-wide execution tallies for the monitor tiles (head counts, not per-page). */
+export interface RouteExecutionSummary {
+  total: number; // started (any status) for the date
+  running: number; // in_progress
+  completed: number;
+}
+
 export interface RouteExecutionStop {
   id: string;
   account_id: string;
@@ -119,6 +147,12 @@ export interface RouteExecutionStop {
   visited_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** An execution stop enriched with the customer's display name (monitor detail). */
+export interface RouteExecutionStopRow extends RouteExecutionStop {
+  company: string | null;
+  contact_name: string | null;
 }
 
 // ── settings (accounts.settings.route_settings) ───────────────

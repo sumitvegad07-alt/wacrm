@@ -48,6 +48,7 @@ import {
   SlidersHorizontal,
   Route as RouteIcon,
   CalendarRange,
+  Activity,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -319,6 +320,7 @@ const menuStructure: MenuNode[] = [
     items: [
       { href: "/routes", label: "All Routes", icon: RouteIcon, module: "routes" },
       { href: "/routes/planner", label: "Route Planner", icon: CalendarRange, module: "routes" },
+      { href: "/routes/executions", label: "Execution Monitor", icon: Activity, module: "routes" },
     ],
   },
 

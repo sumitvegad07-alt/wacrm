@@ -13,6 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapPostgrestError, RouteError } from './errors';
 import { withRetry } from '@/lib/sdk/retry';
 import { createDirectExecutor, type RpcExecutor, type RpcCapableClient } from '@/lib/sdk/executor';
+import { tallyStops } from './execution-ops';
 import {
   validateUpsertRoute,
   validateImportCustomers,
@@ -31,6 +32,11 @@ import type {
   RoutePlanAssignment,
   RoutePlanAssignmentWithRoute,
   RouteExecution,
+  RouteExecutionStop,
+  RouteExecutionListParams,
+  RouteExecutionListResult,
+  RouteExecutionSummary,
+  RouteExecutionStopRow,
   RouteHealth,
   RouteHistoryEntry,
   RouteForToday,
@@ -283,6 +289,111 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
     return res ?? null;
   }
 
+  /**
+   * Execution monitor list (web = read-only management view). Paginated + filterable by date /
+   * status. Enriches each row with route + salesman names and stop tallies (completed / skipped /
+   * pending), computed only for the visible page (bounded). RLS: admins see all executions,
+   * non-admins see their own (field-owned) — matches the security model.
+   */
+  async function listExecutions(params: RouteExecutionListParams): Promise<RouteExecutionListResult> {
+    const { accountId, date, statuses, limit = 25, offset = 0 } = params;
+    return withRetry(async () => {
+      let q = supabase
+        .from('route_executions')
+        .select(
+          'id, account_id, route_id, user_id, execution_date, status, started_at, completed_at, ' +
+            'tracking_session_id, created_at, updated_at, routes ( name )',
+          { count: 'exact' }
+        )
+        .eq('account_id', accountId);
+      if (date) q = q.eq('execution_date', date);
+      if (statuses && statuses.length > 0) q = q.in('status', statuses);
+      const { data, error, count } = await q
+        .order('started_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) throw mapPostgrestError(error);
+      type Row = Record<string, unknown> & { routes: { name: string } | null };
+      const raw = (data ?? []) as unknown as Row[];
+      const total = count ?? raw.length;
+      if (raw.length === 0) return { rows: [], total };
+
+      const execIds = raw.map((r) => r.id as string);
+      const { data: stops } = await supabase
+        .from('route_execution_stops')
+        .select('execution_id, status')
+        .in('execution_id', execIds);
+      const tally = tallyStops((stops ?? []) as { execution_id: string; status: string }[]);
+
+      const userIds = [...new Set(raw.map((r) => r.user_id as string).filter(Boolean))];
+      const names = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('user_id, full_name').in('user_id', userIds);
+        (profs ?? []).forEach((p: { user_id: string; full_name: string }) => names.set(p.user_id, p.full_name));
+      }
+
+      return {
+        rows: raw.map((r) => {
+          const { routes, ...rest } = r;
+          const tl = tally.get(r.id as string) ?? { total: 0, completed: 0, skipped: 0, pending: 0 };
+          return {
+            ...(rest as unknown as RouteExecution),
+            route_name: routes?.name ?? null,
+            user_name: names.get(r.user_id as string) ?? null,
+            stops_total: tl.total,
+            stops_completed: tl.completed,
+            stops_skipped: tl.skipped,
+            stops_pending: tl.pending,
+          };
+        }),
+        total,
+      };
+    }, maxRetries);
+  }
+
+  /** Date-wide execution tallies for the monitor tiles (three head counts — count only). */
+  async function getExecutionSummary(accountId: string, date?: string): Promise<RouteExecutionSummary> {
+    return withRetry(async () => {
+      const mk = (status?: string) => {
+        let q = supabase
+          .from('route_executions')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', accountId);
+        if (date) q = q.eq('execution_date', date);
+        if (status) q = q.eq('status', status);
+        return q;
+      };
+      const [t, r, c] = await Promise.all([mk(), mk('in_progress'), mk('completed')]);
+      if (t.error) throw mapPostgrestError(t.error);
+      return { total: t.count ?? 0, running: r.count ?? 0, completed: c.count ?? 0 };
+    }, maxRetries);
+  }
+
+  /** Stops of one execution (monitor detail), ordered by actual then planned sequence. */
+  async function getExecutionStops(executionId: string): Promise<RouteExecutionStopRow[]> {
+    return withRetry(async () => {
+      const { data, error } = await supabase
+        .from('route_execution_stops')
+        .select(
+          'id, account_id, execution_id, contact_id, planned_sequence, actual_sequence, status, ' +
+            'skip_reason, site_visit_id, visited_at, created_at, updated_at, contacts ( company, name )'
+        )
+        .eq('execution_id', executionId)
+        .order('actual_sequence', { ascending: true, nullsFirst: false })
+        .order('planned_sequence', { ascending: true, nullsFirst: false });
+      if (error) throw mapPostgrestError(error);
+      type Row = Record<string, unknown> & { contacts: { company: string | null; name: string | null } | null };
+      return ((data ?? []) as unknown as Row[]).map((r) => {
+        const { contacts, ...rest } = r;
+        return {
+          ...(rest as unknown as RouteExecutionStop),
+          company: contacts?.company ?? null,
+          contact_name: contacts?.name ?? null,
+        };
+      });
+    }, maxRetries);
+  }
+
   // ── writes (validated → executor → typed errors) ────────────
   async function saveRoute(input: UpsertRouteInput): Promise<Route> {
     const v = validateUpsertRoute(input);
@@ -426,6 +537,9 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
     getRouteHistory,
     getRouteForToday,
     searchImportableContacts,
+    listExecutions,
+    getExecutionSummary,
+    getExecutionStops,
     // route authoring
     saveRoute,
     importCustomers,

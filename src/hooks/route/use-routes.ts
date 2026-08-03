@@ -4,7 +4,7 @@
 // Components never call the SDK or Supabase directly — they use these hooks.
 
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { getRouteSdk, type RouteListParams } from "@/lib/route";
+import { getRouteSdk, type RouteListParams, type RouteExecutionListParams } from "@/lib/route";
 import { routeKeys } from "./query-keys";
 
 /**
@@ -82,6 +82,38 @@ export function usePlannerAssignments(
     queryFn: () => getRouteSdk().getPlanner(accountId as string, ids),
     enabled: !!accountId && ids.length > 0,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** Execution monitor list (web read-only). Paginated + date/status filtered. */
+export function useExecutions(params: RouteExecutionListParams | null | undefined) {
+  const sig = params
+    ? `${params.date ?? "all"}|${(params.statuses ?? []).join(",")}|${params.offset ?? 0}`
+    : "none";
+  return useQuery({
+    queryKey: routeKeys.executions(params?.accountId ?? "none", sig),
+    queryFn: () => getRouteSdk().listExecutions(params as RouteExecutionListParams),
+    enabled: !!params?.accountId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Date-wide execution tallies for the monitor tiles. */
+export function useExecutionSummary(accountId: string | null | undefined, date: string) {
+  return useQuery({
+    queryKey: routeKeys.executionSummary(accountId ?? "none", date),
+    queryFn: () => getRouteSdk().getExecutionSummary(accountId as string, date),
+    enabled: !!accountId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Stops of one execution (monitor detail). */
+export function useExecutionStops(executionId: string | null | undefined) {
+  return useQuery({
+    queryKey: routeKeys.executionStops(executionId ?? "none"),
+    queryFn: () => getRouteSdk().getExecutionStops(executionId as string),
+    enabled: !!executionId,
   });
 }
 
