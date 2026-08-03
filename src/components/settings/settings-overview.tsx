@@ -221,6 +221,11 @@ export function SettingsOverview({
       subtitle: 'Geography hierarchy, areas & employee assignment',
     },
     {
+      section: 'route',
+      loading: false,
+      subtitle: 'Approval mode, execution rules & capacity limits',
+    },
+    {
       section: 'api',
       loading: false,
       subtitle: 'API keys, webhooks & developer tokens',
