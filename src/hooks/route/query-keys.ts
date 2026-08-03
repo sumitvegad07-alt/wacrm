@@ -11,6 +11,12 @@ export const routeKeys = {
     filters?: { statuses?: string[]; search?: string; limit?: number; offset?: number }
   ) => [...routeKeys.lists(), accountId, filters ?? {}] as const,
 
+  approvalQueueAll: () => [...routeKeys.all, 'approvalQueue'] as const,
+  approvalQueue: (
+    accountId: string,
+    filters?: { statuses?: string[]; search?: string; limit?: number; offset?: number }
+  ) => [...routeKeys.approvalQueueAll(), accountId, filters ?? {}] as const,
+
   details: () => [...routeKeys.all, 'detail'] as const,
   detail: (routeId: string) => [...routeKeys.details(), routeId] as const,
   customers: (routeId: string) => [...routeKeys.detail(routeId), 'customers'] as const,

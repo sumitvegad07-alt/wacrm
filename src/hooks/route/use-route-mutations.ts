@@ -112,6 +112,30 @@ export function useUpdateRouteStatus(accountId: string | null | undefined) {
       qc.invalidateQueries({ queryKey: routeKeys.health(vars.routeId) });
       if (accountId) {
         qc.invalidateQueries({ queryKey: routeKeys.lists() });
+        qc.invalidateQueries({ queryKey: routeKeys.approvalQueueAll() });
+        qc.invalidateQueries({ queryKey: routeKeys.plannerAll() });
+      }
+    },
+  });
+}
+
+export function useBulkUpdateRouteStatus(accountId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      routeIds: string[];
+      status: RouteStatus;
+      reason?: string | null;
+      expectedVersion?: number | null;
+    }) => getRouteSdk().bulkUpdateStatus(vars.routeIds, vars.status, vars.reason, vars.expectedVersion),
+    onSuccess: (res) => {
+      res.ok_ids.forEach((id) => {
+        qc.invalidateQueries({ queryKey: routeKeys.detail(id) });
+        qc.invalidateQueries({ queryKey: routeKeys.health(id) });
+      });
+      if (accountId) {
+        qc.invalidateQueries({ queryKey: routeKeys.lists() });
+        qc.invalidateQueries({ queryKey: routeKeys.approvalQueueAll() });
         qc.invalidateQueries({ queryKey: routeKeys.plannerAll() });
       }
     },

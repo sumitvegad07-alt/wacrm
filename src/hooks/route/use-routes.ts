@@ -4,7 +4,7 @@
 // Components never call the SDK or Supabase directly — they use these hooks.
 
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { getRouteSdk, type RouteListParams, type RouteExecutionListParams } from "@/lib/route";
+import { getRouteSdk, type RouteListParams, type RouteExecutionListParams, type ApprovalQueueParams } from "@/lib/route";
 import { routeKeys } from "./query-keys";
 
 /**
@@ -20,6 +20,24 @@ export function useRoutes(params: RouteListParams | null | undefined) {
       offset: params?.offset,
     }),
     queryFn: () => getRouteSdk().listRoutes(params as RouteListParams),
+    enabled: !!params?.accountId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Dedicated hook for the Manager Inbox (/routes/approvals).
+ * Fetches the enriched approval queue with salesman name, creator name, next scheduled day, and bounded health score.
+ */
+export function useApprovalQueue(params: ApprovalQueueParams | null | undefined) {
+  return useQuery({
+    queryKey: routeKeys.approvalQueue(params?.accountId ?? "none", {
+      statuses: params?.statuses,
+      search: params?.search,
+      limit: params?.limit,
+      offset: params?.offset,
+    }),
+    queryFn: () => getRouteSdk().getApprovalQueue(params as ApprovalQueueParams),
     enabled: !!params?.accountId,
     placeholderData: keepPreviousData,
   });

@@ -14,10 +14,14 @@ export const ROUTE_PERMISSIONS = {
   ASSIGN: 'assign_routes',
   APPROVE: 'approve_routes',
   ARCHIVE: 'archive_routes',
+  MANAGE_CUSTOMERS: 'manage_route_customers',
   ADD_CUSTOMERS: 'add_route_customers',
   REMOVE_CUSTOMERS: 'remove_route_customers',
   REORDER_CUSTOMERS: 'reorder_route_customers',
   MANAGE_SCHEDULE: 'manage_route_schedule',
+  VIEW_APPROVALS: 'view_route_approvals',
+  VIEW_HEALTH: 'view_route_health',
+  VIEW_EXECUTIONS: 'view_route_executions',
   EXECUTE: 'execute_route',
   SKIP_STOP: 'skip_route_stop',
   MODIFY_SEQUENCE: 'modify_route_sequence',
@@ -44,6 +48,7 @@ export const ROUTE_PERMISSION_GROUPS: {
   {
     group: 'Route customers',
     keys: [
+      { key: ROUTE_PERMISSIONS.MANAGE_CUSTOMERS, label: 'Manage route customers' },
       { key: ROUTE_PERMISSIONS.ADD_CUSTOMERS, label: 'Add / import customers' },
       { key: ROUTE_PERMISSIONS.REMOVE_CUSTOMERS, label: 'Remove customers' },
       { key: ROUTE_PERMISSIONS.REORDER_CUSTOMERS, label: 'Reorder customers' },
@@ -54,12 +59,15 @@ export const ROUTE_PERMISSION_GROUPS: {
     keys: [
       { key: ROUTE_PERMISSIONS.ASSIGN, label: 'Assign in planner' },
       { key: ROUTE_PERMISSIONS.MANAGE_SCHEDULE, label: 'Manage schedule' },
+      { key: ROUTE_PERMISSIONS.VIEW_APPROVALS, label: 'View approvals queue' },
       { key: ROUTE_PERMISSIONS.APPROVE, label: 'Approve / reject routes' },
     ],
   },
   {
-    group: 'Execution',
+    group: 'Execution & health',
     keys: [
+      { key: ROUTE_PERMISSIONS.VIEW_HEALTH, label: 'View route health' },
+      { key: ROUTE_PERMISSIONS.VIEW_EXECUTIONS, label: 'View route executions' },
       { key: ROUTE_PERMISSIONS.EXECUTE, label: 'Run routes (start / complete)' },
       { key: ROUTE_PERMISSIONS.SKIP_STOP, label: 'Skip stops' },
       { key: ROUTE_PERMISSIONS.MODIFY_SEQUENCE, label: 'Visit out of sequence' },

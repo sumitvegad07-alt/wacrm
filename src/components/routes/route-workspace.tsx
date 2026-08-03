@@ -35,7 +35,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  Loader2, Pencil, Copy, Send, CheckCircle2, XCircle, Archive, RotateCcw, Undo2,
+  Loader2, Pencil, Copy, Send, CheckCircle2, XCircle, Archive, Undo2,
   Plus, Trash2, CalendarClock, Users, Route as RouteIcon,
 } from "lucide-react";
 
@@ -51,7 +51,7 @@ function nextDateForDow(dow: number): Date {
   return d;
 }
 
-export function RouteWorkspace({ routeId }: { routeId: string }) {
+export function RouteWorkspace({ routeId, readOnly = false }: { routeId: string; readOnly?: boolean }) {
   const router = useRouter();
   const { accountId, hasPermission } = useAuth();
   const [tab, setTab] = useState<TabKey>("overview");
@@ -174,32 +174,46 @@ export function RouteWorkspace({ routeId }: { routeId: string }) {
     } catch (e) { toast.error((e as RouteError).message ?? "Failed to remove"); }
   };
 
-  const StatusActions = () => (
+  const renderStatusActions = () => (
     <>
-      {route.status === "draft" && canEdit && (
+      {route?.status === "draft" && canEdit && (
         approvalMode === "none" ? (
           <Button size="sm" onClick={() => doStatus("active")}><CheckCircle2 className="h-4 w-4" /> Activate</Button>
         ) : (
           <Button size="sm" onClick={() => doStatus("pending_approval")}><Send className="h-4 w-4" /> Submit for approval</Button>
         )
       )}
-      {route.status === "pending_approval" && canApprove && (
+      {route?.status === "pending_approval" && canApprove && (
         <>
           <Button size="sm" onClick={() => doStatus("active")}><CheckCircle2 className="h-4 w-4" /> Approve</Button>
           <Button size="sm" variant="outline" onClick={onReject}><XCircle className="h-4 w-4" /> Reject</Button>
         </>
       )}
-      {route.status === "active" && canArchive && (
+      {route?.status === "active" && canArchive && (
         <Button size="sm" variant="outline" onClick={() => doStatus("archived")}><Archive className="h-4 w-4" /> Archive</Button>
       )}
-      {route.status === "rejected" && canEdit && (
-        <Button size="sm" variant="outline" onClick={() => doStatus("draft")}><Undo2 className="h-4 w-4" /> Reopen</Button>
-      )}
-      {route.status === "archived" && canArchive && (
-        <Button size="sm" onClick={() => doStatus("active")}><RotateCcw className="h-4 w-4" /> Restore</Button>
+      {route?.status === "archived" && canArchive && (
+        <Button size="sm" variant="outline" onClick={() => doStatus("active")}><Undo2 className="h-4 w-4" /> Restore</Button>
       )}
     </>
   );
+
+  if (routeQ.isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading route workspace…
+      </div>
+    );
+  }
+  if (routeQ.isError) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <p className="text-sm text-muted-foreground">{((routeQ as any).error as RouteError)?.message ?? "Failed to load route."}</p>
+        <Button size="sm" variant="outline" onClick={() => (routeQ as any).refetch()}>Retry</Button>
+      </div>
+    );
+  }
+  if (!route) return <div className="py-12 text-sm text-muted-foreground">Not found.</div>;
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: "overview", label: "Overview" },
@@ -209,35 +223,40 @@ export function RouteWorkspace({ routeId }: { routeId: string }) {
   ];
 
   return (
-    <div className="w-full space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="rounded-xl border border-border bg-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">{route.name}</h1>
-              <RouteStatusPill status={route.status} />
-              {healthQ.data && (
-                <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  Health {healthQ.data.score}%
-                </span>
-              )}
-            </div>
-            {route.description && <p className="mt-1 text-sm text-muted-foreground">{route.description}</p>}
-            <p className="mt-1 text-sm text-muted-foreground">
-              Primary assignee: <span className="text-foreground">{empName(route.primary_assignee_id) ?? "Unassigned"}</span>
-            </p>
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{route.name}</h1>
+            <RouteStatusPill status={route.status} />
+            {healthQ.data && (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs font-semibold",
+                  healthQ.data.score >= 80 ? "bg-green-500/10 text-green-600" : healthQ.data.score >= 50 ? "bg-amber-500/10 text-amber-600" : "bg-red-500/10 text-red-600"
+                )}
+              >
+                Health {healthQ.data.score}%
+              </span>
+            )}
           </div>
+          {route.description && <p className="mt-1 text-sm text-muted-foreground">{route.description}</p>}
+          <p className="mt-1 text-sm text-muted-foreground">
+            Primary assignee: <span className="text-foreground">{empName(route.primary_assignee_id) ?? "Unassigned"}</span>
+          </p>
+        </div>
+        {!readOnly && (
           <div className="flex flex-wrap items-center gap-2">
             {canEdit && !isArchived && (
               <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}><Pencil className="h-4 w-4" /> Edit</Button>
             )}
-            <StatusActions />
+            {renderStatusActions()}
             {canClone && (
               <Button size="sm" variant="ghost" onClick={onClone}><Copy className="h-4 w-4" /> Clone</Button>
             )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -287,7 +306,7 @@ export function RouteWorkspace({ routeId }: { routeId: string }) {
             <p className="text-sm text-muted-foreground">
               {custRows.length} customer{custRows.length === 1 ? "" : "s"}. Visited top to bottom.
             </p>
-            {!isArchived && (
+            {!isArchived && !readOnly && (
               <div className="flex items-center gap-2">
                 {canRemoveCust && custRows.length > 0 && (
                   <Button size="sm" variant="outline" onClick={() => { setSelectMode((s) => !s); setSelected(new Set()); }}>
@@ -312,16 +331,16 @@ export function RouteWorkspace({ routeId }: { routeId: string }) {
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12 text-center">
               <Users className="mb-2 h-8 w-8 text-muted-foreground opacity-40" />
               <p className="text-sm text-muted-foreground">No customers on this route yet.</p>
-              {canAddCust && !isArchived && (
+              {canAddCust && !isArchived && !readOnly && (
                 <Button size="sm" className="mt-3" onClick={() => setAddOpen(true)}><Plus className="h-4 w-4" /> Add customers</Button>
               )}
             </div>
           ) : (
             <SortableCustomerList
               items={sortableItems}
-              disabled={isArchived || !canReorder}
+              disabled={isArchived || readOnly || !canReorder}
               onReorder={(ids) => reorder.mutate({ routeId, orderedContactIds: ids })}
-              onRemove={!isArchived && canRemoveCust && !selectMode ? (id) => removeCustomer.mutate({ routeId, contactId: id }) : undefined}
+              onRemove={!isArchived && !readOnly && canRemoveCust && !selectMode ? (id) => removeCustomer.mutate({ routeId, contactId: id }) : undefined}
               selectable={selectMode}
               selectedIds={selected}
               onToggleSelect={(id) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
@@ -335,7 +354,9 @@ export function RouteWorkspace({ routeId }: { routeId: string }) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Weekday assignments for this route.</p>
-            <Button size="sm" variant="outline" onClick={() => router.push("/routes/planner")}>Open Planner</Button>
+            {!readOnly && (
+              <Button size="sm" variant="outline" onClick={() => router.push("/routes/planner")}>Open Planner</Button>
+            )}
           </div>
           {plannerQ.isLoading ? (
             <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>

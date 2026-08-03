@@ -25,7 +25,6 @@ import {
 } from './validation';
 import type {
   Route,
-  RouteWithMeta,
   RouteListParams,
   RouteListResult,
   RouteCustomerWithContact,
@@ -53,6 +52,9 @@ import type {
   StopCompleteInput,
   StopSkipInput,
   IsoDayOfWeek,
+  ApprovalQueueParams,
+  ApprovalQueueResult,
+  BulkUpdateStatusResult,
 } from './types';
 
 /**
@@ -134,6 +136,103 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
           ...r,
           customer_count: counts.get(r.id) ?? 0,
           primary_assignee_name: r.primary_assignee_id ? names.get(r.primary_assignee_id) ?? null : null,
+        })),
+        total,
+      };
+    }, maxRetries);
+  }
+
+  /**
+   * Dedicated reader for the Manager Inbox (/routes/approvals).
+   * Paginates routes and enriches the bounded current page (max 25 rows) with:
+   *  - Salesman display name (primary_assignee_name via profiles.id)
+   *  - Creator display name (created_by_name via profiles.user_id)
+   *  - Active customer count
+   *  - Next scheduled weekday (next_scheduled_day via route_plan_assignments)
+   *  - Bounded route health score (% integer via route_health RPC)
+   */
+  async function getApprovalQueue(params: ApprovalQueueParams): Promise<ApprovalQueueResult> {
+    const { accountId, statuses = ['pending_approval'], search, limit = 25, offset = 0 } = params;
+    return withRetry(async () => {
+      let q = supabase
+        .from('routes')
+        .select('*', { count: 'exact' })
+        .eq('account_id', accountId);
+      if (statuses && statuses.length > 0) q = q.in('status', statuses);
+      if (search && search.trim()) q = q.ilike('name', `%${search.trim()}%`);
+      const { data: routes, error, count } = await q
+        .order('updated_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) throw mapPostgrestError(error);
+      const rows = (routes ?? []) as Route[];
+      const total = count ?? rows.length;
+      if (rows.length === 0) return { rows: [], total };
+
+      const pageIds = rows.map((r) => r.id);
+
+      // 1. Customer counts for current page
+      const { data: rc, error: rcErr } = await supabase
+        .from('route_customers')
+        .select('route_id')
+        .in('route_id', pageIds)
+        .is('archived_at', null);
+      if (rcErr) throw mapPostgrestError(rcErr);
+      const counts = new Map<string, number>();
+      (rc ?? []).forEach((r: { route_id: string }) => counts.set(r.route_id, (counts.get(r.route_id) ?? 0) + 1));
+
+      // 2. Assignee names (keyed by profiles.id)
+      const assigneeIds = [...new Set(rows.map((r) => r.primary_assignee_id).filter(Boolean))] as string[];
+      const names = new Map<string, string>();
+      if (assigneeIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', assigneeIds);
+        (profs ?? []).forEach((p: { id: string; full_name: string }) => names.set(p.id, p.full_name));
+      }
+
+      // 3. Creator names (keyed by profiles.user_id / auth.users id)
+      const creatorIds = [...new Set(rows.map((r) => r.created_by).filter(Boolean))] as string[];
+      const creatorNames = new Map<string, string>();
+      if (creatorIds.length > 0) {
+        const { data: cProfs } = await supabase.from('profiles').select('user_id, full_name').in('user_id', creatorIds);
+        (cProfs ?? []).forEach((p: { user_id: string; full_name: string }) => creatorNames.set(p.user_id, p.full_name));
+      }
+
+      // 4. Next scheduled weekday for current page (earliest upcoming weekday 1..7)
+      const nextScheduled = new Map<string, number>();
+      if (pageIds.length > 0) {
+        const { data: plans } = await supabase
+          .from('route_plan_assignments')
+          .select('route_id, day_of_week')
+          .in('route_id', pageIds)
+          .eq('is_active', true);
+        (plans ?? []).forEach((p: { route_id: string; day_of_week: number }) => {
+          const cur = nextScheduled.get(p.route_id);
+          if (cur === undefined || p.day_of_week < cur) {
+            nextScheduled.set(p.route_id, p.day_of_week);
+          }
+        });
+      }
+
+      // 5. Bounded health scores for current page (<=25 items)
+      const healthScores = new Map<string, number>();
+      await Promise.all(
+        pageIds.map(async (id) => {
+          try {
+            const h = await readRpc<{ score: number }>('route_health', { p_route_id: id });
+            if (typeof h?.score === 'number') healthScores.set(id, h.score);
+          } catch {
+            // ignore non-blocking health errors
+          }
+        })
+      );
+
+      return {
+        rows: rows.map((r) => ({
+          ...r,
+          customer_count: counts.get(r.id) ?? 0,
+          primary_assignee_name: r.primary_assignee_id ? names.get(r.primary_assignee_id) ?? null : null,
+          created_by_name: r.created_by ? creatorNames.get(r.created_by) ?? null : null,
+          next_scheduled_day: nextScheduled.get(r.id) ?? null,
+          health_score: healthScores.get(r.id) ?? null,
         })),
         total,
       };
@@ -449,6 +548,20 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
   const restoreRoute = (routeId: string) => updateStatus(routeId, 'active');
   const reopenRoute = (routeId: string) => updateStatus(routeId, 'draft');
 
+  async function bulkUpdateStatus(
+    routeIds: string[],
+    newStatus: RouteStatus,
+    reason?: string | null,
+    expectedVersion?: number | null
+  ): Promise<BulkUpdateStatusResult> {
+    return executor.runRpc<BulkUpdateStatusResult>('route_bulk_update_status', {
+      p_route_ids: routeIds,
+      p_new_status: newStatus,
+      p_reason: reason ?? null,
+      p_expected_version: expectedVersion ?? null,
+    });
+  }
+
   async function cloneRoute(routeId: string, newName?: string): Promise<{ id: string }> {
     return executor.runRpc('route_clone', { p_route_id: routeId, p_new_name: newName ?? null });
   }
@@ -530,6 +643,7 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
   return {
     // reads
     listRoutes,
+    getApprovalQueue,
     getRoute,
     getRouteCustomers,
     getPlanner,
@@ -547,6 +661,7 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
     removeCustomer,
     reorderCustomers,
     updateStatus,
+    bulkUpdateStatus,
     submitRoute,
     activateRoute,
     approveRoute,

@@ -50,6 +50,37 @@ export interface RouteListResult {
   total: number;
 }
 
+/** Route row enriched specifically for the Manager Inbox (approvals queue). */
+export interface RouteApprovalRow extends RouteWithMeta {
+  created_by_name: string | null;
+  next_scheduled_day: number | null; // 1..7 ISO day of week, or null if unassigned
+  health_score: number | null; // integer 0..100, or null
+}
+
+/** Parameters for querying the Manager Inbox approval queue. */
+export interface ApprovalQueueParams {
+  accountId: string;
+  statuses?: RouteStatus[]; // default ['pending_approval']
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Paginated result for the Manager Inbox approval queue. */
+export interface ApprovalQueueResult {
+  rows: RouteApprovalRow[];
+  total: number;
+}
+
+/** Result from public.route_bulk_update_status(). */
+export interface BulkUpdateStatusResult {
+  total: number;
+  updated: number;
+  failed: number;
+  ok_ids: string[];
+  errors: { route_id: string; error: string; code?: string }[];
+}
+
 export interface RouteCustomer {
   id: string;
   account_id: string;

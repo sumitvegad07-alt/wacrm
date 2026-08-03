@@ -91,8 +91,8 @@ describe('permissions', () => {
   it('denies when permissions are null', () => {
     expect(hasRoutePermission(null, ROUTE_PERMISSIONS.VIEW)).toBe(false);
   });
-  it('exposes 15 distinct keys', () => {
-    expect(new Set(ALL_ROUTE_PERMISSION_KEYS).size).toBe(15);
+  it('exposes 19 distinct keys', () => {
+    expect(new Set(ALL_ROUTE_PERMISSION_KEYS).size).toBe(19);
   });
 });
 
@@ -120,7 +120,7 @@ function makeSdk() {
   };
   // Reads use client.rpc directly; return a canned value.
   const client = {
-    rpc: async (_fn: string, _args: Record<string, unknown>) => ({ data: { score: 100, checks: [] }, error: null }),
+    rpc: async () => ({ data: { score: 100, checks: [] }, error: null }),
   } as unknown as SupabaseClient;
   const sdk = createRouteSdk(client, { executor });
   return { sdk, calls };
@@ -171,5 +171,15 @@ describe('createRouteSdk wiring', () => {
     const { sdk } = makeSdk();
     const health = await sdk.getRouteHealth(UUID);
     expect(health.score).toBe(100);
+  });
+
+  it('bulkUpdateStatus calls route_bulk_update_status with mapped snake_case args', async () => {
+    const { sdk, calls } = makeSdk();
+    await sdk.bulkUpdateStatus([UUID, UUID2], 'active', 'Approved in batch', 5);
+    expect(calls[0].fn).toBe('route_bulk_update_status');
+    expect(calls[0].args.p_route_ids).toEqual([UUID, UUID2]);
+    expect(calls[0].args.p_new_status).toBe('active');
+    expect(calls[0].args.p_reason).toBe('Approved in batch');
+    expect(calls[0].args.p_expected_version).toBe(5);
   });
 });
