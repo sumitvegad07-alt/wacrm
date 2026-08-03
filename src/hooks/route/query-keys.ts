@@ -6,12 +6,18 @@ export const routeKeys = {
   all: ['routes'] as const,
 
   lists: () => [...routeKeys.all, 'list'] as const,
-  list: (accountId: string) => [...routeKeys.lists(), accountId] as const,
+  list: (
+    accountId: string,
+    filters?: { statuses?: string[]; search?: string; limit?: number; offset?: number }
+  ) => [...routeKeys.lists(), accountId, filters ?? {}] as const,
 
   details: () => [...routeKeys.all, 'detail'] as const,
   detail: (routeId: string) => [...routeKeys.details(), routeId] as const,
   customers: (routeId: string) => [...routeKeys.detail(routeId), 'customers'] as const,
   health: (routeId: string) => [...routeKeys.detail(routeId), 'health'] as const,
+
+  importableContacts: (accountId: string, search: string, offset: number) =>
+    [...routeKeys.all, 'importable-contacts', accountId, search, offset] as const,
 
   planner: (accountId: string) => [...routeKeys.all, 'planner', accountId] as const,
 

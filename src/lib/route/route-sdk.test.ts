@@ -99,7 +99,10 @@ describe('permissions', () => {
 // ── query keys (hierarchical / future-proof) ──────────────────
 describe('routeKeys', () => {
   it('nests list/detail/customers/health under all', () => {
-    expect(routeKeys.list('acc')).toEqual(['routes', 'list', 'acc']);
+    expect(routeKeys.list('acc')).toEqual(['routes', 'list', 'acc', {}]);
+    expect(routeKeys.list('acc', { search: 'x', offset: 25 })).toEqual([
+      'routes', 'list', 'acc', { search: 'x', offset: 25 },
+    ]);
     expect(routeKeys.customers(UUID)).toEqual(['routes', 'detail', UUID, 'customers']);
     expect(routeKeys.health(UUID)).toEqual(['routes', 'detail', UUID, 'health']);
     expect(routeKeys.detail(UUID).slice(0, 1)).toEqual(routeKeys.all);

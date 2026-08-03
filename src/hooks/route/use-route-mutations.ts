@@ -26,7 +26,7 @@ export function useSaveRoute(accountId: string | null | undefined) {
   return useMutation({
     mutationFn: (input: UpsertRouteInput) => getRouteSdk().saveRoute(input),
     onSuccess: (route) => {
-      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.list(accountId) });
+      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.lists() });
       qc.invalidateQueries({ queryKey: routeKeys.detail(route.id) });
     },
   });
@@ -39,7 +39,7 @@ export function useImportCustomers(accountId: string | null | undefined) {
     onSuccess: (_res, input) => {
       qc.invalidateQueries({ queryKey: routeKeys.customers(input.routeId) });
       qc.invalidateQueries({ queryKey: routeKeys.health(input.routeId) });
-      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.list(accountId) });
+      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.lists() });
     },
   });
 }
@@ -111,7 +111,7 @@ export function useUpdateRouteStatus(accountId: string | null | undefined) {
       qc.invalidateQueries({ queryKey: routeKeys.detail(vars.routeId) });
       qc.invalidateQueries({ queryKey: routeKeys.health(vars.routeId) });
       if (accountId) {
-        qc.invalidateQueries({ queryKey: routeKeys.list(accountId) });
+        qc.invalidateQueries({ queryKey: routeKeys.lists() });
         qc.invalidateQueries({ queryKey: routeKeys.planner(accountId) });
       }
     },
@@ -124,7 +124,7 @@ export function useCloneRoute(accountId: string | null | undefined) {
     mutationFn: (vars: { routeId: string; newName?: string }) =>
       getRouteSdk().cloneRoute(vars.routeId, vars.newName),
     onSuccess: () => {
-      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.list(accountId) });
+      if (accountId) qc.invalidateQueries({ queryKey: routeKeys.lists() });
     },
   });
 }

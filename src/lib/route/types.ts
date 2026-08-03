@@ -35,6 +35,21 @@ export interface RouteWithMeta extends Route {
   primary_assignee_name: string | null;
 }
 
+/** Server-side list params — paginated + filterable so the list scales to 500+ routes. */
+export interface RouteListParams {
+  accountId: string;
+  statuses?: RouteStatus[];
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Paginated list result. `total` is the server count for the current filter. */
+export interface RouteListResult {
+  rows: RouteWithMeta[];
+  total: number;
+}
+
 export interface RouteCustomer {
   id: string;
   account_id: string;
@@ -174,6 +189,25 @@ export interface ImportCustomersInput {
   routeId: string;
   mode: 'all' | 'select';
   contactIds?: string[];
+}
+
+/** A contact row for the "Select customers to import" picker (paginated + searchable). */
+export interface ImportableContact {
+  id: string;
+  company: string | null;
+  name: string | null;
+  territory_id: string | null;
+  needs_territory_review: boolean;
+}
+export interface ImportableContactsParams {
+  accountId: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+export interface ImportableContactsResult {
+  rows: ImportableContact[];
+  total: number;
 }
 
 export interface ImportCustomersResult {

@@ -3,16 +3,25 @@
 // Route Management — read hooks (Phase 2a). Thin React Query wrappers over the Route SDK.
 // Components never call the SDK or Supabase directly — they use these hooks.
 
-import { useQuery } from "@tanstack/react-query";
-import { getRouteSdk } from "@/lib/route";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { getRouteSdk, type RouteListParams } from "@/lib/route";
 import { routeKeys } from "./query-keys";
 
-/** List routes for an account (with customer counts + assignee names). */
-export function useRoutes(accountId: string | null | undefined) {
+/**
+ * Paginated route list. Pass filters/pagination; the key includes them so each page/filter is
+ * cached independently. `keepPreviousData` avoids a flash while paging/filtering.
+ */
+export function useRoutes(params: RouteListParams | null | undefined) {
   return useQuery({
-    queryKey: routeKeys.list(accountId ?? "none"),
-    queryFn: () => getRouteSdk().listRoutes(accountId as string),
-    enabled: !!accountId,
+    queryKey: routeKeys.list(params?.accountId ?? "none", {
+      statuses: params?.statuses,
+      search: params?.search,
+      limit: params?.limit,
+      offset: params?.offset,
+    }),
+    queryFn: () => getRouteSdk().listRoutes(params as RouteListParams),
+    enabled: !!params?.accountId,
+    placeholderData: keepPreviousData,
   });
 }
 

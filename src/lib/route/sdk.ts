@@ -25,6 +25,8 @@ import {
 import type {
   Route,
   RouteWithMeta,
+  RouteListParams,
+  RouteListResult,
   RouteCustomerWithContact,
   RoutePlanAssignment,
   RouteExecution,
@@ -34,6 +36,9 @@ import type {
   UpsertRouteInput,
   ImportCustomersInput,
   ImportCustomersResult,
+  ImportableContact,
+  ImportableContactsParams,
+  ImportableContactsResult,
   PlannerSetInput,
   PlannerMoveInput,
   ExecutionStartInput,
@@ -75,28 +80,40 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
   }
 
   // ── reads ───────────────────────────────────────────────────
-  async function listRoutes(accountId: string): Promise<RouteWithMeta[]> {
+  /**
+   * Paginated, filterable route list. Scales to 500+ routes: fetches only the requested page
+   * (server range + exact count), and resolves customer counts + assignee names ONLY for the
+   * ~pageSize routes on that page (bounded — never fetches all route_customers).
+   */
+  async function listRoutes(params: RouteListParams): Promise<RouteListResult> {
+    const { accountId, statuses, search, limit = 25, offset = 0 } = params;
     return withRetry(async () => {
-      const { data: routes, error } = await supabase
+      let q = supabase
         .from('routes')
-        .select('*')
-        .eq('account_id', accountId)
-        .order('updated_at', { ascending: false });
+        .select('*', { count: 'exact' })
+        .eq('account_id', accountId);
+      if (statuses && statuses.length > 0) q = q.in('status', statuses);
+      if (search && search.trim()) q = q.ilike('name', `%${search.trim()}%`);
+      const { data: routes, error, count } = await q
+        .order('updated_at', { ascending: false })
+        .range(offset, offset + limit - 1);
       if (error) throw mapPostgrestError(error);
       const rows = (routes ?? []) as Route[];
-      if (rows.length === 0) return [];
+      const total = count ?? rows.length;
+      if (rows.length === 0) return { rows: [], total };
 
-      // active customer counts (separate query — avoids fragile embedded-aggregate filters)
+      const pageIds = rows.map((r) => r.id);
+      // active customer counts for THIS page's routes only (bounded)
       const { data: rc, error: rcErr } = await supabase
         .from('route_customers')
         .select('route_id')
-        .eq('account_id', accountId)
+        .in('route_id', pageIds)
         .is('archived_at', null);
       if (rcErr) throw mapPostgrestError(rcErr);
       const counts = new Map<string, number>();
       (rc ?? []).forEach((r: { route_id: string }) => counts.set(r.route_id, (counts.get(r.route_id) ?? 0) + 1));
 
-      // assignee names (separate query keyed by profiles.id)
+      // assignee names for this page (keyed by profiles.id)
       const assigneeIds = [...new Set(rows.map((r) => r.primary_assignee_id).filter(Boolean))] as string[];
       const names = new Map<string, string>();
       if (assigneeIds.length > 0) {
@@ -104,11 +121,14 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
         (profs ?? []).forEach((p: { id: string; full_name: string }) => names.set(p.id, p.full_name));
       }
 
-      return rows.map((r) => ({
-        ...r,
-        customer_count: counts.get(r.id) ?? 0,
-        primary_assignee_name: r.primary_assignee_id ? names.get(r.primary_assignee_id) ?? null : null,
-      }));
+      return {
+        rows: rows.map((r) => ({
+          ...r,
+          customer_count: counts.get(r.id) ?? 0,
+          primary_assignee_name: r.primary_assignee_id ? names.get(r.primary_assignee_id) ?? null : null,
+        })),
+        total,
+      };
     }, maxRetries);
   }
 
@@ -169,6 +189,30 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
 
   async function getRouteHealth(routeId: string): Promise<RouteHealth> {
     return readRpc<RouteHealth>('route_health', { p_route_id: routeId });
+  }
+
+  /**
+   * Paginated + searchable contacts for the "Select customers" import picker. Lists account
+   * contacts (RLS-scoped); territory eligibility + already-routed filtering is enforced by the
+   * import RPC, which reports skipped counts. Bounded by range — scales to large contact books.
+   */
+  async function searchImportableContacts(
+    params: ImportableContactsParams
+  ): Promise<ImportableContactsResult> {
+    const { accountId, search, limit = 25, offset = 0 } = params;
+    return withRetry(async () => {
+      let q = supabase
+        .from('contacts')
+        .select('id, company, name, territory_id, needs_territory_review', { count: 'exact' })
+        .eq('account_id', accountId);
+      const s = (search ?? '').trim().replace(/[,()*]/g, ''); // strip PostgREST-or metachars
+      if (s) q = q.or(`company.ilike.%${s}%,name.ilike.%${s}%`);
+      const { data, error, count } = await q
+        .order('company', { ascending: true, nullsFirst: false })
+        .range(offset, offset + limit - 1);
+      if (error) throw mapPostgrestError(error);
+      return { rows: (data ?? []) as ImportableContact[], total: count ?? 0 };
+    }, maxRetries);
   }
 
   async function getRouteForToday(assigneeId: string, date?: string): Promise<RouteForToday | null> {
@@ -320,6 +364,7 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
     getPlanner,
     getRouteHealth,
     getRouteForToday,
+    searchImportableContacts,
     // route authoring
     saveRoute,
     importCustomers,
