@@ -65,15 +65,15 @@ export interface SectionMeta {
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top' },
-  profile: { id: 'profile', label: 'Profile Settings', icon: User, group: 'account' },
-  security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account' },
+  profile: { id: 'profile', label: 'Profile', icon: User, group: 'account' },
+  security: { id: 'security', label: 'Login info', icon: Shield, group: 'account' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'hidden' },
-  whatsapp: { id: 'whatsapp', label: 'WhatsApp Settings', icon: PlugZap, group: 'workspace' },
+  whatsapp: { id: 'whatsapp', label: 'Whatsapp', icon: PlugZap, group: 'workspace' },
   ai: { id: 'ai', label: 'Knowledge Base', icon: BrainCircuit, group: 'hidden' }, // hidden in rail
   templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'hidden' }, // hidden in rail
-  fields: { id: 'fields', label: 'Custom fields & tags', icon: Tags, group: 'workspace' },
+  fields: { id: 'fields', label: 'Tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Currency', icon: Coins, group: 'hidden' },
-  deal_pipelines: { id: 'deal_pipelines', label: 'Deals & Pipelines', icon: GitBranch, group: 'workspace' },
+  deal_pipelines: { id: 'deal_pipelines', label: 'Deals', icon: GitBranch, group: 'workspace' },
   leads: { id: 'leads', label: 'Leads Settings', icon: User, group: 'workspace' },
   tasks: { id: 'tasks', label: 'Task Settings', icon: FileText, group: 'workspace' },
   orders: { id: 'orders', label: 'Orders Settings', icon: ShoppingCart, group: 'workspace' },
