@@ -426,36 +426,13 @@ export default function ContactsPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title="Customers"
-        subtitle="Manage your contact list."
-        actions={
-          <>
-            <GatedButton variant="outline" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
-              <Upload className="size-4 mr-2" /> Import
-            </GatedButton>
-            <GatedButton canAct={canEdit} gateReason="add or import contacts" onClick={openAddForm} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Plus className="size-4 mr-2" /> Add Customer
-            </GatedButton>
-          </>
-        }
-      />
-
-      <PageToolbar
-        search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
-          placeholder: "Search contacts globally...",
-        }}
-      />
-
       <BulkActionBar
         selectedCount={selectedContacts.size}
         onClear={() => setSelectedContacts(new Set())}
         actions={[
           {
             label: "Delete Selected",
-            icon: <Trash2 className="size-4" />,
+            icon: <Trash2 className="size-3.5" />,
             variant: "destructive",
             onClick: () => setBulkDeleteOpen(true),
           },
@@ -465,6 +442,16 @@ export default function ContactsPage() {
       <DataTable
         columns={visibleColumns}
         data={filteredContacts}
+        actions={
+          <div className="flex items-center gap-2">
+            <GatedButton variant="outline" size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="h-7 text-xs px-2.5">
+              <Upload className="size-3 mr-1" /> Import
+            </GatedButton>
+            <GatedButton size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={openAddForm} className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Plus className="size-3 mr-1" /> Add Customer
+            </GatedButton>
+          </div>
+        }
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
         storageKey="wacrm_contacts_table_columns"

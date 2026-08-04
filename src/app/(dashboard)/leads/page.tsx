@@ -253,24 +253,6 @@ export default function LeadsPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title="Leads"
-        subtitle="Manage raw prospects before they become contacts."
-        actions={
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/leads/new')}>
-            <Plus className="mr-2 h-4 w-4" /> Add Lead
-          </Button>
-        }
-      />
-
-      <PageToolbar
-        actions={
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setImportOpen(true)}>
-            <Upload className="size-3" /> Import Leads
-          </Button>
-        }
-      />
-
       <BulkActionBar
         selectedCount={selectedLeads.size}
         onClear={() => setSelectedLeads(new Set())}
@@ -280,6 +262,16 @@ export default function LeadsPage() {
       <DataTable
         columns={visibleColumns}
         data={filteredLeads}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => setImportOpen(true)}>
+              <Upload className="size-3 mr-1" /> Import Leads
+            </Button>
+            <Button size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/leads/new')}>
+              <Plus className="size-3 mr-1" /> Add Lead
+            </Button>
+          </div>
+        }
         filterState={filterState}
         onFilterChange={handleFilterChange}
         storageKey="wacrm_leads_table_columns"

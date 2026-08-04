@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { LogOut, Menu, Settings as SettingsIcon, User, ArrowLeft } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
@@ -31,14 +31,41 @@ const pageTitles: Record<string, string> = {
   "/quotations": "Quotations",
   "/leads": "Leads",
   "/expenses": "Expenses",
+  "/products": "Products",
+  "/orders": "Orders",
+  "/dispatches": "Dispatches",
+  "/pending-dispatch": "Pending Dispatch",
+  "/location-tracking": "Location Tracking",
+  "/location-tracking/visits": "Customer Visits",
+  "/field-staff": "Field Staff",
+  "/follow-ups": "Follow-ups",
+  "/whatsapp": "WhatsApp",
+  "/routes": "Routes",
+  "/routes/planner": "Route Planner",
+  "/routes/approvals": "Route Approvals",
+  "/team/employees": "Employees",
+  "/team/attendance": "Attendance",
+  "/territories": "Territories",
+  "/catalog": "Catalog",
+  "/reports": "Reports",
+  "/activities": "Activity Report",
+  "/approval-queue": "Approval Queue",
+  "/monthly-planner": "Monthly Planner",
 };
 
 function getPageTitle(pathname: string): string {
   if (pageTitles[pathname]) return pageTitles[pathname];
   const match = Object.entries(pageTitles).find(([path]) =>
-    pathname.startsWith(path),
+    pathname.startsWith(`${path}/`) || pathname === path,
   );
-  return match ? match[1] : "Dashboard";
+  if (match) return match[1];
+
+  const segment = pathname.split("/").filter(Boolean)[0];
+  if (!segment) return "Dashboard";
+  return segment
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 interface HeaderProps {
@@ -49,6 +76,7 @@ interface HeaderProps {
 
 export function Header({ onOpenSidebar }: HeaderProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { profile, signOut } = useAuth();
   const title = getPageTitle(pathname);
 
@@ -68,6 +96,16 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
         >
           <Menu className="h-5 w-5" />
+        </button>
+        {/* Go back icon on every single page */}
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Go back"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          title="Go back"
+        >
+          <ArrowLeft className="size-4" />
         </button>
         <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
           {title}

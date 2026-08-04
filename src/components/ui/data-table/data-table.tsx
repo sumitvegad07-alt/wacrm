@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, Download } from "lucide-react";
+import { LayoutGrid, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { ColumnDef, FilterState } from "./data-table-types";
 import { DataTableHeader } from "./data-table-header";
 import { ManageColumnsDialog } from "./manage-columns-dialog";
@@ -25,6 +25,11 @@ interface DataTableProps<T> {
     onSelectAll: (checked: boolean) => void;
     onSelect: (id: string, checked: boolean) => void;
   };
+  /**
+   * Action buttons to render in the table header toolbar right before the table starts
+   * (e.g. "+ Add Customer", "Import", etc.)
+   */
+  actions?: React.ReactNode;
 }
 
 export function DataTable<T>({
@@ -38,12 +43,19 @@ export function DataTable<T>({
   rowKey,
   onRowClick,
   selection,
+  actions,
 }: DataTableProps<T>) {
   const [isManageColumnsOpen, setIsManageColumnsOpen] = useState(false);
   const [activeColumnIds, setActiveColumnIds] = useState<string[]>([]);
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(20);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const { exportToCsv } = useDataExport();
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [data.length]);
 
   // Load preferences from local storage on mount
   useEffect(() => {
@@ -93,41 +105,45 @@ export function DataTable<T>({
     .map(id => columns.find(c => c.id === id))
     .filter(Boolean) as ColumnDef<T>[];
 
-  const allOnPageSelected = data.length > 0 && data.every(row => selection?.selectedIds.has(rowKey(row)));
-  const someOnPageSelected = data.some(row => selection?.selectedIds.has(rowKey(row)));
+  const totalRecords = data.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalRecords);
+  const paginatedData = useMemo(() => {
+    return data.slice(startIndex, endIndex);
+  }, [data, startIndex, endIndex]);
+
+  const allOnPageSelected = paginatedData.length > 0 && paginatedData.every(row => selection?.selectedIds.has(rowKey(row)));
+  const someOnPageSelected = paginatedData.some(row => selection?.selectedIds.has(rowKey(row)));
 
   return (
     <div className="space-y-0">
-      {/* Integrated Koops-style Table Header Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-t-xl border border-b-0 border-border bg-muted/20 text-xs">
-        <div className="flex items-center gap-3">
-          <span className="font-medium text-muted-foreground">
-            Total: <span className="text-foreground font-semibold">{data.length}</span> records
-          </span>
+      {/* Top Table Toolbar (in that vertical line just before the starting of the table) */}
+      {(actions || data.length > 0) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-t-xl border border-b-0 border-border bg-muted/20 text-xs min-h-[44px]">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-foreground text-xs">
+              Total: {totalRecords} records
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {actions}
+            <Button 
+              type="button"
+              variant="outline" 
+              size="sm" 
+              className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted font-medium"
+              onClick={() => exportToCsv(data, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
+            >
+              <Download className="size-3" />
+              Export CSV
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted"
-            onClick={() => exportToCsv(data, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
-          >
-            <Download className="size-3" />
-            Export CSV
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted"
-            onClick={() => setIsManageColumnsOpen(true)}
-          >
-            <LayoutGrid className="size-3" />
-            Manage columns
-          </Button>
-        </div>
-      </div>
+      )}
 
-      <div className="rounded-b-xl border border-border bg-card overflow-hidden">
+      <div className="border border-border bg-card overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -164,7 +180,7 @@ export function DataTable<T>({
                   <TableSkeleton columns={visibleColumns.length + (selection ? 1 : 0)} rows={5} />
                 </TableCell>
               </TableRow>
-            ) : data.length === 0 ? (
+            ) : paginatedData.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={visibleColumns.length + (selection ? 1 : 0)} className="p-0">
                   {typeof emptyMessage === "string" ? (
@@ -175,7 +191,7 @@ export function DataTable<T>({
                 </TableCell>
               </TableRow>
             ) : (
-              data.map((row) => (
+              paginatedData.map((row) => (
                 <TableRow 
                   key={rowKey(row)}
                   className={`h-12 hover:bg-muted/50 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
@@ -201,6 +217,70 @@ export function DataTable<T>({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Koops Demo Style Bottom Footer Bar (Total Count, Rows per page, MANAGE COLUMN, Pagination) */}
+      <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-2.5 rounded-b-xl border border-t-0 border-border bg-muted/20 text-xs text-muted-foreground min-h-[48px]">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-1.5 font-medium">
+            <span>Show</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="h-7 rounded border border-border bg-background px-2 text-xs font-medium text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span>rows per page</span>
+          </div>
+          <span className="h-4 w-px bg-border hidden sm:inline-block" />
+          <Button 
+            type="button"
+            variant="outline" 
+            size="sm" 
+            className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted font-medium"
+            onClick={() => setIsManageColumnsOpen(true)}
+          >
+            <LayoutGrid className="size-3" />
+            MANAGE COLUMN
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="font-medium">
+            {totalRecords === 0 ? 0 : startIndex + 1} - {endIndex} of {totalRecords}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="h-7 px-2.5 text-xs bg-background hover:bg-muted font-medium"
+            >
+              <ChevronLeft className="size-3.5 mr-1" />
+              Prev
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="h-7 px-2.5 text-xs bg-background hover:bg-muted font-medium"
+            >
+              Next
+              <ChevronRight className="size-3.5 ml-1" />
+            </Button>
+          </div>
+        </div>
       </div>
 
       <ManageColumnsDialog

@@ -410,16 +410,6 @@ export default function ExpensesPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title="Expenses"
-        subtitle={isAdmin ? "Manage and approve employee expenses." : "Submit and track your expense claims."}
-        actions={
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/expenses/new')}>
-            <Plus className="mr-2 h-4 w-4" /> New Expense
-          </Button>
-        }
-      />
-
       <PageToolbar
         filters={
           <div className="flex items-center gap-1">
@@ -478,6 +468,11 @@ export default function ExpensesPage() {
       <DataTable
         columns={visibleColumns}
         data={filteredExpenses}
+        actions={
+          <Button size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/expenses/new')}>
+            <Plus className="size-3 mr-1" /> New Expense
+          </Button>
+        }
         filterState={filterState}
         onFilterChange={handleFilterChange}
         storageKey="wacrm_expenses_table_columns"
