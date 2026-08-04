@@ -100,14 +100,6 @@ export function DataTable<T>({
     localStorage.setItem(storageKey, JSON.stringify({ active, visible }));
   };
 
-  if (!isMounted) return null; // Avoid hydration mismatch
-
-  // Determine the ordered visible columns
-  const visibleColumns = activeColumnIds
-    .filter(id => visibleColumnIds.includes(id))
-    .map(id => safeColumns.find(c => c.id === id))
-    .filter(Boolean) as ColumnDef<T>[];
-
   const totalRecords = safeData.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
   const safePage = Math.min(currentPage, totalPages);
@@ -116,6 +108,14 @@ export function DataTable<T>({
   const paginatedData = useMemo(() => {
     return safeData.slice(startIndex, endIndex);
   }, [safeData, startIndex, endIndex]);
+
+  if (!isMounted) return null; // Avoid hydration mismatch
+
+  // Determine the ordered visible columns
+  const visibleColumns = activeColumnIds
+    .filter(id => visibleColumnIds.includes(id))
+    .map(id => safeColumns.find(c => c.id === id))
+    .filter(Boolean) as ColumnDef<T>[];
 
   const allOnPageSelected = paginatedData.length > 0 && paginatedData.every(row => selection?.selectedIds.has(rowKey(row)));
   const someOnPageSelected = paginatedData.some(row => selection?.selectedIds.has(rowKey(row)));
