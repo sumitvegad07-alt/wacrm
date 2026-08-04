@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { EmployeeAreaAssignment } from "@/components/territories/employee-area-assignment";
+import { EmployeeRouteTab } from "@/components/territories/employee-route-tab";
 import type { Employee, EmployeeRole, EmployeeDevice, CustomField } from "@/types";
 
 export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,7 +35,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"details" | "areas">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "areas" | "routes">("details");
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   // Other employees in the account (for the Reporting Manager picker).
@@ -309,6 +310,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           {([
             { id: "details", label: "Details" },
             { id: "areas", label: "Area Assignment" },
+            { id: "routes", label: "Monthly Route Plan" },
           ] as const).map((t) => (
             <button
               key={t.id}
@@ -331,7 +333,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         <EmployeeAreaAssignment employeeId={employeeId} accountId={accountId} canEdit={canEditSettings} />
       )}
 
-      <div className={"grid grid-cols-1 lg:grid-cols-3 gap-8" + (activeTab === "areas" ? " hidden" : "")}>
+      {activeTab === "routes" && isModuleEnabled("territory") && accountId && (
+        <EmployeeRouteTab employeeId={employeeId} accountId={accountId} />
+      )}
+
+      <div className={"grid grid-cols-1 lg:grid-cols-3 gap-8" + (activeTab !== "details" ? " hidden" : "")}>
         {/* Left 2 Cols: Basic Details & Business Roles */}
         <div className="lg:col-span-2 space-y-8">
           <Card className="p-6 border-border shadow-sm">

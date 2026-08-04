@@ -307,6 +307,7 @@ const menuStructure: MenuNode[] = [
       { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
       { href: "/location-tracking/track-report", label: "Track report", icon: LineChart, module: "location_tracking" },
       { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
+      { href: "/location-tracking/executions", label: "Execution Monitor", icon: Activity, module: "location_tracking" },
     ],
   },
 
@@ -322,7 +323,6 @@ const menuStructure: MenuNode[] = [
       { href: "/routes", label: "All Routes", icon: RouteIcon, module: "routes" },
       { href: "/routes/planner", label: "Route Planner", icon: CalendarRange, module: "routes" },
       { href: "/routes/approvals", label: "Approvals", icon: Inbox, module: "routes" },
-      { href: "/routes/executions", label: "Execution Monitor", icon: Activity, module: "routes" },
     ],
   },
 
