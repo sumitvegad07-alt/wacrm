@@ -16,19 +16,15 @@ import {
   ArrowDown,
   CheckCircle2,
   ArrowLeft,
-  Clock,
   Repeat,
-  AlertCircle,
   Loader2,
   CheckSquare,
   Square,
-  ShieldCheck,
   Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -80,12 +76,28 @@ interface ContactItem {
 }
 
 const DAYS_OF_WEEK = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function formatDateStr(year: number, month: number, day: number): string {
   const y = String(year);
   const m = String(month + 1).padStart(2, "0");
   const d = String(day).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function getWeekdayName(dateStr: string | null, dow: number): string {
+  if (dateStr) {
+    const d = new Date(dateStr);
+    const dayIndex = d.getDay(); // 0=Sun, 1=Mon...
+    return WEEKDAY_NAMES[dayIndex] || "Day";
+  }
+  const mapDow = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  return mapDow[dow] || "Day";
+}
+
+function getDisplayDate(dateStr: string | null, dow: number): string {
+  if (dateStr) return dateStr;
+  return `Weekly Recurring (Day ${dow})`;
 }
 
 function getMonthGrid(year: number, month: number) {
@@ -375,7 +387,10 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
   // Approve all pending assignments for the month
   const handleApproveAllPending = async () => {
-    if (pendingAssignments.length === 0) return;
+    if (pendingAssignments.length === 0) {
+      toast.info("All route assignments for this month are already approved!");
+      return;
+    }
     const ids = pendingAssignments.map((a) => a.id);
     try {
       await supabase
@@ -389,7 +404,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     }
   };
 
-  // Save Customer Sequence & Approve Route for Mobile (Save & Next Step button)
+  // Save Customer Sequence & Approve Route for Mobile (Save & Next Step button at BOTTOM only!)
   const handleSaveSequenceAndApprove = async () => {
     if (!selectedRoute) return;
     setSavingSequence(true);
@@ -427,8 +442,9 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
   // Repeat route schedule across multiple dates in the month
   const handleRepeatSchedule = async () => {
-    if (!selectedRoute || !selectedRouteDate) return;
-    const targetDates = generateRepeatDates(selectedRouteDate, repeatFrequency, year, month);
+    if (!selectedRoute) return;
+    const baseDate = selectedRouteDate || new Date().toISOString().split("T")[0];
+    const targetDates = generateRepeatDates(baseDate, repeatFrequency, year, month);
     try {
       let createdCount = 0;
       for (const dStr of targetDates) {
@@ -509,7 +525,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         }
       }
 
-      toast.success(`✓ Assigned routes to ${targetDateStr} (Pending Approval)`);
+      toast.success(`✓ Assigned areas to ${targetDateStr} (Pending Approval)`);
       setAddRouteModalOpen(false);
       await fetchData();
 
@@ -522,10 +538,10 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     }
   };
 
-  // Create new route securely via RPC (prevents RLS error) and assign immediately
+  // Create new area securely via RPC (prevents RLS error) and assign immediately
   const handleCreateAndAssignRoute = async () => {
     if (!newRouteName.trim()) {
-      toast.error("Please enter a name for the new route");
+      toast.error("Please enter a name for the new area");
       return;
     }
     setCreatingRoute(true);
@@ -539,7 +555,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         p_expected_version: null,
       });
 
-      if (createErr || !routeRes) throw createErr || new Error("Failed to create route");
+      if (createErr || !routeRes) throw createErr || new Error("Failed to create area");
 
       await supabase.from("route_plan_assignments").insert({
         account_id: accountId,
@@ -551,14 +567,14 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         is_active: false, // Starts as Pending Approval
       });
 
-      toast.success(`✓ Route "${routeRes.name}" created and assigned to ${targetDateStr} (Pending Approval)`);
+      toast.success(`✓ Area "${routeRes.name}" created and assigned to ${targetDateStr} (Pending Approval)`);
       setNewRouteName("");
       setAddRouteModalOpen(false);
       await fetchData();
 
       openRouteSheet(routeRes.id, targetDateStr);
     } catch (err: any) {
-      toast.error(err.message || "Failed to create and assign route");
+      toast.error(err.message || "Failed to create and assign area");
     } finally {
       setCreatingRoute(false);
     }
@@ -573,12 +589,12 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       const matching = existing.find((a) => a.route_id === selectedRoute.id);
       if (matching) {
         await supabase.from("route_plan_assignments").delete().eq("id", matching.id);
-        toast.success("✓ Route removed from " + selectedRouteDate);
+        toast.success("✓ Removed assignment from " + selectedRouteDate);
         setSelectedRoute(null);
         await fetchData();
       }
     } catch (err: any) {
-      toast.error(err.message || "Failed to remove route");
+      toast.error(err.message || "Failed to remove assignment");
     }
   };
 
@@ -668,7 +684,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           supabase.from("route_customers").update({ sequence: idx + 1 }).eq("id", rc.id)
         )
       );
-      toast.success("Sequence updated. Click 'Save & Approve' to make it live on mobile!");
+      toast.success("Sequence updated. Click 'Save Customer Sequence & Approve' below to make it live!");
     } catch {
       toast.error("Failed to reorder sequence");
       if (selectedRoute) fetchRouteCustomers(selectedRoute.id);
@@ -688,7 +704,11 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           (a.start_date || "").includes(q)
       );
     }
-    return list.sort((a, b) => (a.start_date || "").localeCompare(b.start_date || ""));
+    return list.sort((a, b) => {
+      const da = a.start_date || "";
+      const db = b.start_date || "";
+      return da.localeCompare(db);
+    });
   }, [assignments, tableFilter, tableSearch]);
 
   const allTableSelected =
@@ -773,17 +793,22 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           </button>
         </div>
 
-        {/* Global Approve Month's Routes Button directly in calendar view header */}
-        {pendingAssignments.length > 0 && (
-          <Button
-            size="sm"
-            onClick={handleApproveAllPending}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md px-4 h-9"
-          >
-            <CheckCircle2 className="h-4 w-4 mr-1.5" />
-            Approve Month&apos;s Routes ({pendingAssignments.length} Pending)
-          </Button>
-        )}
+        {/* Global Approve Month's Routes Button directly in calendar view header (ALWAYS VISIBLE!) */}
+        <Button
+          size="sm"
+          onClick={handleApproveAllPending}
+          className={cn(
+            "font-bold shadow-md px-4 h-9",
+            pendingAssignments.length > 0
+              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+              : "bg-muted text-muted-foreground hover:bg-muted/80"
+          )}
+        >
+          <CheckCircle2 className="h-4 w-4 mr-1.5" />
+          {pendingAssignments.length > 0
+            ? `Approve Month's Routes (${pendingAssignments.length} Pending)`
+            : `Approve Month's Routes (All Approved)`}
+        </Button>
       </div>
 
       {activeSubTab === "calendar" ? (
@@ -807,13 +832,11 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
             <div className="flex items-center gap-3">
               <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-3 py-1 font-semibold">
-                Approved: {assignments.filter((a) => a.is_active).length}
+                ✓ Approved: {assignments.filter((a) => a.is_active).length}
               </Badge>
-              {pendingAssignments.length > 0 && (
-                <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-300 px-3 py-1 font-semibold">
-                  Pending: {pendingAssignments.length}
-                </Badge>
-              )}
+              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-300 px-3 py-1 font-semibold">
+                ⏳ Pending: {pendingAssignments.length}
+              </Badge>
               <Button variant="outline" size="sm" onClick={fetchData} title="Refresh calendar">
                 <Loader2 className={cn("h-4 w-4 mr-1.5", loading && "animate-spin")} /> Refresh
               </Button>
@@ -839,7 +862,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   <div
                     key={cell.dateStr}
                     className={cn(
-                      "flex min-h-[140px] flex-col justify-between p-2.5 transition-colors hover:bg-muted/20",
+                      "flex min-h-[145px] flex-col justify-between p-2.5 transition-colors hover:bg-muted/20",
                       !cell.isCurrentMonth && "bg-muted/10 opacity-50"
                     )}
                   >
@@ -862,43 +885,49 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                       )}
                     </div>
 
-                    {/* Middle: Route Area Badges (With inline Approve button if Pending) */}
-                    <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[95px] py-1">
+                    {/* Middle: Route Area Badges (With explicit Approved / Pending badges & inline Approve button) */}
+                    <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[100px] py-1">
                       {dayAssignments.map((a) => (
                         <div
                           key={a.id}
                           className={cn(
-                            "group flex w-full items-center justify-between gap-1 rounded-lg border px-2.5 py-1.5 text-left text-xs font-semibold transition-colors",
+                            "group flex w-full items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs font-semibold transition-colors",
                             a.is_active
-                              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
-                              : "border-amber-500/40 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25"
+                              ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                              : "border-amber-500/50 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25"
                           )}
                         >
                           <button
                             type="button"
                             onClick={() => openRouteSheet(a.route_id, cell.dateStr)}
-                            className="flex-1 truncate text-left"
+                            className="flex-1 min-w-0 truncate text-left"
                             title="Click to view customers & repeat schedule"
                           >
-                            <span>{a.route_name || "Area"}</span>
-                            {!a.is_active && (
-                              <span className="block text-[9px] text-amber-300/90 uppercase font-extrabold">
-                                ⏳ Pending
-                              </span>
-                            )}
+                            <span className="truncate block">{a.route_name || "Area"}</span>
                           </button>
 
-                          {/* Inline Approve button right on the calendar card */}
-                          {!a.is_active && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleApproveAssignment(a.id, e)}
-                              className="shrink-0 p-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
-                              title="Approve this route assignment for mobile user"
-                            >
-                              <Check className="h-3 w-3" />
-                            </button>
-                          )}
+                          {/* Explicit Approved vs Pending badge directly on calendar card */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {a.is_active ? (
+                              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded text-[10px] font-extrabold shrink-0">
+                                ✓ Approved
+                              </span>
+                            ) : (
+                              <>
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded text-[10px] font-extrabold shrink-0">
+                                  ⏳ Pending
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleApproveAssignment(a.id, e)}
+                                  className="px-1.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow transition-colors"
+                                  title="Approve this route assignment for mobile user"
+                                >
+                                  Approve
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -918,7 +947,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           </div>
         </div>
       ) : (
-        /* ── TABLE VIEW (Exact Clone of Calendar Schedule with Wide Checkboxes) ── */
+        /* ── TABLE VIEW (Exact Clone of Calendar Schedule with Native Checkboxes, Employee Name, Weekday, NO BLANK DATES) ── */
         <div className="space-y-4 animate-in fade-in-50 duration-200">
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
             <div>
@@ -999,15 +1028,18 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
               <table className="w-full text-sm">
                 <thead className="bg-muted/60 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
                   <tr>
-                    <th className="w-12 px-4 py-3">
-                      <Checkbox
+                    <th className="w-12 px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
                         checked={allTableSelected}
-                        onCheckedChange={toggleTableSelectAll}
-                        className="h-5 w-5 rounded border-2 border-primary/40"
+                        onChange={toggleTableSelectAll}
+                        className="h-4 w-4 rounded border-gray-400 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500"
                         aria-label="Select all assignments"
                       />
                     </th>
                     <th className="px-4 py-3 font-semibold">Scheduled Date</th>
+                    <th className="px-4 py-3 font-semibold">Weekday</th>
+                    <th className="px-4 py-3 font-semibold">Employee Name</th>
                     <th className="px-4 py-3 font-semibold">Assigned Area (Route)</th>
                     <th className="px-4 py-3 font-semibold text-right">Customers</th>
                     <th className="px-4 py-3 font-semibold">Approval Status</th>
@@ -1017,7 +1049,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                 <tbody className="divide-y divide-border">
                   {filteredTableAssignments.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-16 text-center">
+                      <td colSpan={8} className="px-4 py-16 text-center">
                         <p className="text-base font-semibold text-foreground">
                           No route assignments match
                         </p>
@@ -1029,6 +1061,9 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   ) : (
                     filteredTableAssignments.map((a) => {
                       const isChecked = tableSelectedIds.includes(a.id);
+                      const displayDate = getDisplayDate(a.start_date, a.day_of_week);
+                      const weekdayName = getWeekdayName(a.start_date, a.day_of_week);
+
                       return (
                         <tr
                           key={a.id}
@@ -1039,20 +1074,27 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                           )}
                         >
                           <td
-                            className="px-4 py-3"
+                            className="px-4 py-3 text-center"
                             onClick={(e) => toggleTableSelectId(a.id, e)}
                           >
-                            <Checkbox
+                            <input
+                              type="checkbox"
                               checked={isChecked}
-                              onCheckedChange={() => {}}
-                              className="h-5 w-5 rounded border-2 border-primary/40"
+                              onChange={() => {}}
+                              className="h-4 w-4 rounded border-gray-400 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500"
                               aria-label={`Select ${a.route_name}`}
                             />
                           </td>
                           <td className="px-4 py-3 font-bold text-foreground">
-                            {a.start_date}
+                            {displayDate}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground font-semibold">
+                            {weekdayName}
                           </td>
                           <td className="px-4 py-3 font-semibold text-foreground">
+                            {employeeName}
+                          </td>
+                          <td className="px-4 py-3 font-bold text-emerald-400">
                             {a.route_name || "Area"}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">
@@ -1209,12 +1251,12 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         </DialogContent>
       </Dialog>
 
-      {/* ── FULL SCREEN MODAL: Route Customers & Repeat Scheduler (Wider, Broader, + Back Button, NO Abstract Route Buttons) ── */}
+      {/* ── FULL SCREEN MODAL: Route Customers & Repeat Scheduler (Wider, Broader, + Back Button, NO Abstract Route Buttons, NO Duplicate Top Button!) ── */}
       <Dialog open={!!selectedRoute} onOpenChange={(open) => !open && setSelectedRoute(null)}>
         <DialogContent className="sm:max-w-[1300px] w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-8 rounded-2xl border border-border bg-background shadow-2xl overflow-hidden">
           {selectedRoute && (
             <div className="flex-1 flex flex-col min-h-0 space-y-6">
-              {/* Top Navigation Bar with Back button and Status Badge (No Edit/Archive/Clone route name buttons!) */}
+              {/* Top Navigation Bar with Back button and Status Badge (NO duplicate Save & Approve button here!) */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
                 <div className="flex items-center gap-4">
                   <Button
@@ -1235,7 +1277,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   </p>
                 </div>
 
-                {/* Top Actions: Save Customer Sequence & Approve Route for Mobile! */}
+                {/* Top right actions: ONLY Remove from Date and Close (NO duplicate Save button!) */}
                 <div className="flex items-center gap-3">
                   {selectedRouteDate && (
                     <Button
@@ -1248,87 +1290,72 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                       <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Remove from {selectedRouteDate}
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    onClick={handleSaveSequenceAndApprove}
-                    disabled={savingSequence}
-                    className="h-9 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold shadow-md"
-                  >
-                    {savingSequence ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                    ) : (
-                      <Save className="h-4 w-4 mr-1.5" />
-                    )}
-                    Save Sequence &amp; Approve for Mobile
-                  </Button>
                 </div>
               </div>
 
-              {/* Repeat Route Assignment Section right inside Customer Screen (Daily, Weekly, 10 Days, 15 Days, Monthly) */}
-              {selectedRouteDate && (
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
-                  <div className="flex items-center gap-3">
-                    <Repeat className="h-5 w-5 text-purple-400 shrink-0" />
-                    <div>
-                      <p className="text-sm font-bold text-foreground">
-                        Repeat &amp; Schedule &quot;{selectedRoute.name}&quot; Across Month
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Select interval starting {selectedRouteDate} to auto-schedule across the month.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex rounded-lg border border-border bg-card p-1">
-                      {(
-                        [
-                          { key: "daily", label: "Daily" },
-                          { key: "weekly", label: "Weekly" },
-                          { key: "10_days", label: "Every 10 Days" },
-                          { key: "15_days", label: "Every 15 Days" },
-                          { key: "monthly", label: "Monthly" },
-                        ] as const
-                      ).map((f) => (
-                        <button
-                          key={f.key}
-                          type="button"
-                          onClick={() => setRepeatFrequency(f.key)}
-                          className={cn(
-                            "rounded-md px-3 py-1 text-xs font-bold transition-colors",
-                            repeatFrequency === f.key
-                              ? "bg-purple-600 text-white shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setRepeatApproved(!repeatApproved)}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
-                    >
-                      {repeatApproved ? (
-                        <CheckSquare className="h-4 w-4 text-emerald-400" />
-                      ) : (
-                        <Square className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      Create as Approved
-                    </button>
-
-                    <Button
-                      size="sm"
-                      onClick={handleRepeatSchedule}
-                      className="bg-purple-600 hover:bg-purple-700 text-white font-bold h-9 px-4"
-                    >
-                      Apply Repeat Schedule
-                    </Button>
+              {/* Repeat Route Assignment Section right inside Customer Screen (ALWAYS VISIBLE ON EVERY ROUTE!) */}
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
+                <div className="flex items-center gap-3">
+                  <Repeat className="h-5 w-5 text-purple-400 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-foreground">
+                      Repeat &amp; Schedule &quot;{selectedRoute.name}&quot; Across Month
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Select interval starting {selectedRouteDate || new Date().toISOString().split("T")[0]} to auto-schedule across the month.
+                    </p>
                   </div>
                 </div>
-              )}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex rounded-lg border border-border bg-card p-1">
+                    {(
+                      [
+                        { key: "daily", label: "Daily" },
+                        { key: "weekly", label: "Weekly" },
+                        { key: "10_days", label: "Every 10 Days" },
+                        { key: "15_days", label: "Every 15 Days" },
+                        { key: "monthly", label: "Monthly" },
+                      ] as const
+                    ).map((f) => (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => setRepeatFrequency(f.key)}
+                        className={cn(
+                          "rounded-md px-3 py-1 text-xs font-bold transition-colors",
+                          repeatFrequency === f.key
+                            ? "bg-purple-600 text-white shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setRepeatApproved(!repeatApproved)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    {repeatApproved ? (
+                      <CheckSquare className="h-4 w-4 text-emerald-400" />
+                    ) : (
+                      <Square className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    Create as Approved
+                  </button>
+
+                  <Button
+                    size="sm"
+                    onClick={handleRepeatSchedule}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold h-9 px-4"
+                  >
+                    Apply Repeat Schedule
+                  </Button>
+                </div>
+              </div>
 
               {/* Sub-Navigation Tabs */}
               <div className="flex items-center gap-8 border-b border-border text-sm font-semibold">
@@ -1441,7 +1468,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                     </div>
                   )}
 
-                  {/* Bottom confirmation Save & Approve button */}
+                  {/* Bottom confirmation Save & Approve button (THE ONE AND ONLY SAVE & APPROVE BUTTON!) */}
                   <div className="flex items-center justify-between border-t border-border pt-4">
                     <p className="text-xs text-muted-foreground">
                       Mobile user Dhaval Vegad will see this exact order once approved.
