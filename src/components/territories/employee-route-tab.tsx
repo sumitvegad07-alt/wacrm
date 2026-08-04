@@ -21,6 +21,9 @@ import {
   CheckSquare,
   Square,
   Save,
+  Clock,
+  ArrowUpDown,
+  Filter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,12 +80,40 @@ interface ContactItem {
 
 const DAYS_OF_WEEK = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WEEKDAY_FILTER_OPTIONS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
 
 function formatDateStr(year: number, month: number, day: number): string {
   const y = String(year);
   const m = String(month + 1).padStart(2, "0");
   const d = String(day).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+// Calculate the first matching proper date in the month for a given day of week (1=Mon..7=Sun)
+function getProperDateForDow(dow: number, year: number, month: number): string {
+  for (let day = 1; day <= 31; day++) {
+    const d = new Date(year, month, day);
+    if (d.getMonth() !== month) break;
+    let dayDow = d.getDay();
+    if (dayDow === 0) dayDow = 7;
+    if (dayDow === dow) {
+      return formatDateStr(year, month, day);
+    }
+  }
+  return formatDateStr(year, month, 1);
+}
+
+function getDisplayDate(dateStr: string | null, dow: number, year: number, month: number): string {
+  if (dateStr) return dateStr;
+  return getProperDateForDow(dow, year, month);
 }
 
 function getWeekdayName(dateStr: string | null, dow: number): string {
@@ -93,11 +124,6 @@ function getWeekdayName(dateStr: string | null, dow: number): string {
   }
   const mapDow = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   return mapDow[dow] || "Day";
-}
-
-function getDisplayDate(dateStr: string | null, dow: number): string {
-  if (dateStr) return dateStr;
-  return `Weekly Recurring (Day ${dow})`;
 }
 
 function getMonthGrid(year: number, month: number) {
@@ -235,10 +261,14 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
   const [availableContacts, setAvailableContacts] = useState<ContactItem[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
 
-  // Table View selection state (clone of calendar schedule)
+  // Table View selection, sorting & filtering state
   const [tableSelectedIds, setTableSelectedIds] = useState<string[]>([]);
   const [tableFilter, setTableFilter] = useState<"all" | "pending" | "approved">("all");
   const [tableSearch, setTableSearch] = useState("");
+  const [tableWeekdayFilter, setTableWeekdayFilter] = useState<string>("all");
+  const [tableAreaFilter, setTableAreaFilter] = useState<string>("all");
+  const [tableSortField, setTableSortField] = useState<"date" | "weekday" | "employee" | "area" | "customers" | "status">("date");
+  const [tableSortOrder, setTableSortOrder] = useState<"asc" | "desc">("asc");
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -691,25 +721,98 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     }
   };
 
-  // ── TABLE VIEW (Exact clone of Calendar schedule for the month) ──
+  // ── TABLE VIEW (Exact clone of Calendar schedule with full Filtering, Searching, & Sorting) ──
+  const toggleSort = (field: typeof tableSortField) => {
+    if (tableSortField === field) {
+      setTableSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setTableSortField(field);
+      setTableSortOrder("asc");
+    }
+  };
+
   const filteredTableAssignments = useMemo(() => {
     let list = assignments;
+
+    // Status filter
     if (tableFilter === "pending") list = list.filter((a) => !a.is_active);
     if (tableFilter === "approved") list = list.filter((a) => a.is_active);
+
+    // Weekday filter
+    if (tableWeekdayFilter !== "all") {
+      list = list.filter((a) => {
+        const w = getWeekdayName(a.start_date, a.day_of_week);
+        return w.toLowerCase() === tableWeekdayFilter.toLowerCase();
+      });
+    }
+
+    // Area filter
+    if (tableAreaFilter !== "all") {
+      list = list.filter((a) => a.route_id === tableAreaFilter);
+    }
+
+    // Text search
     if (tableSearch.trim()) {
       const q = tableSearch.toLowerCase().trim();
-      list = list.filter(
-        (a) =>
-          (a.route_name || "").toLowerCase().includes(q) ||
-          (a.start_date || "").includes(q)
-      );
+      list = list.filter((a) => {
+        const d = getDisplayDate(a.start_date, a.day_of_week, year, month);
+        const w = getWeekdayName(a.start_date, a.day_of_week);
+        const rn = a.route_name || "";
+        return (
+          d.toLowerCase().includes(q) ||
+          w.toLowerCase().includes(q) ||
+          rn.toLowerCase().includes(q) ||
+          employeeName.toLowerCase().includes(q)
+        );
+      });
     }
-    return list.sort((a, b) => {
-      const da = a.start_date || "";
-      const db = b.start_date || "";
-      return da.localeCompare(db);
+
+    // Sorting
+    return list.slice().sort((a, b) => {
+      let valA = "";
+      let valB = "";
+      let numA = 0;
+      let numB = 0;
+      let isNumeric = false;
+
+      if (tableSortField === "date") {
+        valA = getDisplayDate(a.start_date, a.day_of_week, year, month);
+        valB = getDisplayDate(b.start_date, b.day_of_week, year, month);
+      } else if (tableSortField === "weekday") {
+        valA = getWeekdayName(a.start_date, a.day_of_week);
+        valB = getWeekdayName(b.start_date, b.day_of_week);
+      } else if (tableSortField === "employee") {
+        valA = employeeName;
+        valB = employeeName;
+      } else if (tableSortField === "area") {
+        valA = a.route_name || "";
+        valB = b.route_name || "";
+      } else if (tableSortField === "customers") {
+        isNumeric = true;
+        numA = a.customer_count || 0;
+        numB = b.customer_count || 0;
+      } else if (tableSortField === "status") {
+        valA = a.is_active ? "approved" : "pending";
+        valB = b.is_active ? "approved" : "pending";
+      }
+
+      if (isNumeric) {
+        return tableSortOrder === "asc" ? numA - numB : numB - numA;
+      }
+      return tableSortOrder === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
     });
-  }, [assignments, tableFilter, tableSearch]);
+  }, [
+    assignments,
+    tableFilter,
+    tableWeekdayFilter,
+    tableAreaFilter,
+    tableSearch,
+    tableSortField,
+    tableSortOrder,
+    year,
+    month,
+    employeeName,
+  ]);
 
   const allTableSelected =
     filteredTableAssignments.length > 0 &&
@@ -763,7 +866,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
   return (
     <div className="space-y-6">
       {/* Sub-navigation tabs */}
-      <div className="flex items-center justify-between border-b border-border pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -793,18 +896,13 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           </button>
         </div>
 
-        {/* Global Approve Month's Routes Button directly in calendar view header (ALWAYS VISIBLE!) */}
+        {/* Global Approve Month's Routes Button directly in header (ALWAYS VIBRANT & HIGHLIGHTED in BOTH VIEWS!) */}
         <Button
           size="sm"
           onClick={handleApproveAllPending}
-          className={cn(
-            "font-bold shadow-md px-4 h-9",
-            pendingAssignments.length > 0
-              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-              : "bg-muted text-muted-foreground hover:bg-muted/80"
-          )}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold shadow-lg px-5 h-10 border border-emerald-400/40 transition-all hover:scale-105"
         >
-          <CheckCircle2 className="h-4 w-4 mr-1.5" />
+          <CheckCircle2 className="h-4 w-4 mr-2 text-white" />
           {pendingAssignments.length > 0
             ? `Approve Month's Routes (${pendingAssignments.length} Pending)`
             : `Approve Month's Routes (All Approved)`}
@@ -885,7 +983,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                       )}
                     </div>
 
-                    {/* Middle: Route Area Badges (With explicit Approved / Pending badges & inline Approve button) */}
+                    {/* Middle: Route Area Cards (ONLY ICONS FOR APPROVED/PENDING so Route Name has full space!) */}
                     <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[100px] py-1">
                       {dayAssignments.map((a) => (
                         <div
@@ -903,27 +1001,27 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                             className="flex-1 min-w-0 truncate text-left"
                             title="Click to view customers & repeat schedule"
                           >
-                            <span className="truncate block">{a.route_name || "Area"}</span>
+                            <span className="truncate block font-bold">{a.route_name || "Area"}</span>
                           </button>
 
-                          {/* Explicit Approved vs Pending badge directly on calendar card */}
+                          {/* ICONS ONLY for Status on Calendar Tile */}
                           <div className="flex items-center gap-1 shrink-0">
                             {a.is_active ? (
-                              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded text-[10px] font-extrabold shrink-0">
-                                ✓ Approved
+                              <span title="Approved (Live on Mobile)">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                               </span>
                             ) : (
                               <>
-                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded text-[10px] font-extrabold shrink-0">
-                                  ⏳ Pending
+                                <span title="Pending Approval">
+                                  <Clock className="h-4 w-4 text-amber-300 shrink-0" />
                                 </span>
                                 <button
                                   type="button"
                                   onClick={(e) => handleApproveAssignment(a.id, e)}
-                                  className="px-1.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow transition-colors"
-                                  title="Approve this route assignment for mobile user"
+                                  className="p-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 shadow transition-colors"
+                                  title="Click to Approve for Mobile"
                                 >
-                                  Approve
+                                  <Check className="h-3 w-3" />
                                 </button>
                               </>
                             )}
@@ -947,7 +1045,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           </div>
         </div>
       ) : (
-        /* ── TABLE VIEW (Exact Clone of Calendar Schedule with Native Checkboxes, Employee Name, Weekday, NO BLANK DATES) ── */
+        /* ── TABLE VIEW (Exact Clone of Calendar Schedule with full Sorting, Searching, Weekday/Area Filtering, & NO BLANK DATES) ── */
         <div className="space-y-4 animate-in fade-in-50 duration-200">
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
             <div>
@@ -955,12 +1053,13 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                 {monthLabel} Route Schedule Table
               </h2>
               <p className="text-xs text-muted-foreground">
-                Exact table clone of calendar assignments. Assigning is done from Calendar View only.
+                Exact table clone of calendar assignments. Click any column header to sort.
               </p>
             </div>
 
-            {/* Filter buttons & search for Table View */}
+            {/* Filter buttons, dropdowns, & search for Table View */}
             <div className="flex flex-wrap items-center gap-3">
+              {/* Status filter chips */}
               <div className="flex rounded-lg border border-border bg-muted/20 p-1">
                 {(["all", "pending", "approved"] as const).map((key) => (
                   <button
@@ -979,10 +1078,39 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                 ))}
               </div>
 
+              {/* Weekday filter dropdown */}
+              <select
+                value={tableWeekdayFilter}
+                onChange={(e) => setTableWeekdayFilter(e.target.value)}
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="all">All Days</option>
+                {WEEKDAY_FILTER_OPTIONS.map((day) => (
+                  <option key={day} value={day.toLowerCase()}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+
+              {/* Area/Route filter dropdown */}
+              <select
+                value={tableAreaFilter}
+                onChange={(e) => setTableAreaFilter(e.target.value)}
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="all">All Areas ({routes.length})</option>
+                {routes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Search bar */}
               <div className="relative w-64">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search area or date..."
+                  placeholder="Search area, date, weekday..."
                   value={tableSearch}
                   onChange={(e) => setTableSearch(e.target.value)}
                   className="pl-9 h-9 text-sm"
@@ -1022,7 +1150,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
             </div>
           )}
 
-          {/* Monthly Schedule Table */}
+          {/* Monthly Schedule Table (Sortable Headers, Native Checkboxes, PROPER DATES) */}
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1037,12 +1165,60 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                         aria-label="Select all assignments"
                       />
                     </th>
-                    <th className="px-4 py-3 font-semibold">Scheduled Date</th>
-                    <th className="px-4 py-3 font-semibold">Weekday</th>
-                    <th className="px-4 py-3 font-semibold">Employee Name</th>
-                    <th className="px-4 py-3 font-semibold">Assigned Area (Route)</th>
-                    <th className="px-4 py-3 font-semibold text-right">Customers</th>
-                    <th className="px-4 py-3 font-semibold">Approval Status</th>
+                    <th
+                      className="px-4 py-3 font-semibold cursor-pointer hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("date")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Scheduled Date
+                        <ArrowUpDown className={cn("h-3.5 w-3.5", tableSortField === "date" && "text-emerald-400")} />
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3 font-semibold cursor-pointer hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("weekday")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Weekday
+                        <ArrowUpDown className={cn("h-3.5 w-3.5", tableSortField === "weekday" && "text-emerald-400")} />
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3 font-semibold cursor-pointer hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("employee")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Employee Name
+                        <ArrowUpDown className={cn("h-3.5 w-3.5", tableSortField === "employee" && "text-emerald-400")} />
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3 font-semibold cursor-pointer hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("area")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Assigned Area (Route)
+                        <ArrowUpDown className={cn("h-3.5 w-3.5", tableSortField === "area" && "text-emerald-400")} />
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3 font-semibold text-right cursor-pointer hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("customers")}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        Customers
+                        <ArrowUpDown className={cn("h-3.5 w-3.5", tableSortField === "customers" && "text-emerald-400")} />
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3 font-semibold cursor-pointer hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("status")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Approval Status
+                        <ArrowUpDown className={cn("h-3.5 w-3.5", tableSortField === "status" && "text-emerald-400")} />
+                      </div>
+                    </th>
                     <th className="px-4 py-3 font-semibold text-right">Action</th>
                   </tr>
                 </thead>
@@ -1061,7 +1237,8 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   ) : (
                     filteredTableAssignments.map((a) => {
                       const isChecked = tableSelectedIds.includes(a.id);
-                      const displayDate = getDisplayDate(a.start_date, a.day_of_week);
+                      // ALWAYS SHOW PROPER DATE YYYY-MM-DD (No more "Weekly Recurring"!)
+                      const displayDate = getDisplayDate(a.start_date, a.day_of_week, year, month);
                       const weekdayName = getWeekdayName(a.start_date, a.day_of_week);
 
                       return (
@@ -1117,7 +1294,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                                 <Button
                                   size="sm"
                                   onClick={() => handleApproveAssignment(a.id)}
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-8 text-xs"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-8 text-xs shadow"
                                 >
                                   <Check className="h-3 w-3 mr-1" /> Approve
                                 </Button>
