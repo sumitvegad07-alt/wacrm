@@ -20,15 +20,24 @@ import {
   MapPin,
   ArrowUp,
   ArrowDown,
+  CheckCircle2,
+  ArrowLeft,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { RouteList } from "@/components/routes/route-list";
+import { RouteStatusPill } from "@/components/routes/route-status-pill";
 import { cn } from "@/lib/utils";
 
 interface EmployeeRouteTabProps {
@@ -161,22 +170,28 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
   const [assignments, setAssignments] = useState<RouteAssignment[]>([]);
   const [employeeName, setEmployeeName] = useState<string>("Employee");
 
-  // Route Customers Management Sheet modal state (Screenshot 2)
+  // Full screen Route Customers Management Modal state (Screenshot 2)
   const [selectedRoute, setSelectedRoute] = useState<RouteItem | null>(null);
   const [selectedRouteDate, setSelectedRouteDate] = useState<string | null>(null);
   const [routeCustomers, setRouteCustomers] = useState<RouteCustomerItem[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [activeSheetTab, setActiveSheetTab] = useState<"overview" | "customers" | "planning" | "history">("customers");
 
+  // Edit route modal state
+  const [editRouteModalOpen, setEditRouteModalOpen] = useState(false);
+  const [editRouteName, setEditRouteName] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // Add Route to Day Modal state
   const [addRouteModalOpen, setAddRouteModalOpen] = useState(false);
   const [targetDateStr, setTargetDateStr] = useState<string>("");
   const [targetDow, setTargetDow] = useState<number>(1);
   const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
+  const [routeSearch, setRouteSearch] = useState("");
   const [newRouteName, setNewRouteName] = useState("");
   const [creatingRoute, setCreatingRoute] = useState(false);
 
-  // Add Customers Modal state (inside Route Management Sheet)
+  // Add Customers Modal state (inside Route Management Screen)
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [availableContacts, setAvailableContacts] = useState<ContactItem[]>([]);
@@ -283,17 +298,29 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
   const daysGrid = useMemo(() => getMonthGrid(year, month), [year, month]);
 
+  // STRICT date matching so a Thursday assignment never automatically repeats on all Thursdays
   const getAssignmentsForDay = useCallback(
     (dateStr: string, dow: number) => {
       return assignments.filter((a) => {
         if (a.start_date && a.end_date) {
           return a.start_date <= dateStr && a.end_date >= dateStr;
         }
-        return a.day_of_week === dow && (!a.start_date || a.start_date <= dateStr) && (!a.end_date || a.end_date >= dateStr);
+        if (a.start_date) {
+          return a.start_date === dateStr;
+        }
+        // Do not automatically match old weekly assignments without dates in Monthly Planner
+        return false;
       });
     },
     [assignments]
   );
+
+  // Filtered routes list inside Add Route Modal
+  const filteredRoutes = useMemo(() => {
+    if (!routeSearch.trim()) return routes;
+    const q = routeSearch.toLowerCase().trim();
+    return routes.filter((r) => r.name.toLowerCase().includes(q));
+  }, [routes, routeSearch]);
 
   // Open "Assign Route to [Date]" Modal
   const openAddRouteModal = (dateStr: string, dow: number) => {
@@ -301,6 +328,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     setTargetDow(dow);
     const existing = getAssignmentsForDay(dateStr, dow).map((a) => a.route_id);
     setSelectedRouteIds(existing);
+    setRouteSearch("");
     setNewRouteName("");
     setAddRouteModalOpen(true);
   };
@@ -312,7 +340,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       const existingRouteIds = new Set(existing.map((a) => a.route_id));
       const newRouteIdSet = new Set(selectedRouteIds);
 
-      // Remove unchecked assignments
+      // Remove unchecked assignments for THIS SPECIFIC DATE
       for (const oldA of existing) {
         if (!newRouteIdSet.has(oldA.route_id)) {
           await supabase.from("route_plan_assignments").delete().eq("id", oldA.id);
@@ -334,7 +362,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         }
       }
 
-      toast.success("Route assignments updated");
+      toast.success("Route assignments updated for " + targetDateStr);
       setAddRouteModalOpen(false);
       await fetchData();
 
@@ -348,7 +376,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     }
   };
 
-  // Create new route and assign to this day immediately
+  // Create new route securely via RPC (prevents RLS error) and assign immediately
   const handleCreateAndAssignRoute = async () => {
     if (!newRouteName.trim()) {
       toast.error("Please enter a name for the new route");
@@ -356,24 +384,21 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     }
     setCreatingRoute(true);
     try {
-      const { data: newRoute, error: createErr } = await supabase
-        .from("routes")
-        .insert({
-          account_id: accountId,
-          name: newRouteName.trim(),
-          status: "active",
-          primary_assignee_id: employeeId,
-          created_by: employeeId,
-        })
-        .select("id, name, status, primary_assignee_id")
-        .single();
+      const { data: routeRes, error: createErr } = await supabase.rpc("route_upsert", {
+        p_route_id: null,
+        p_name: newRouteName.trim(),
+        p_description: null,
+        p_primary_assignee_id: employeeId,
+        p_customer_ids: null,
+        p_expected_version: null,
+      });
 
-      if (createErr || !newRoute) throw createErr || new Error("Failed to create route");
+      if (createErr || !routeRes) throw createErr || new Error("Failed to create route");
 
       // Assign to target date
       await supabase.from("route_plan_assignments").insert({
         account_id: accountId,
-        route_id: newRoute.id,
+        route_id: routeRes.id,
         assignee_id: employeeId,
         day_of_week: targetDow,
         start_date: targetDateStr,
@@ -381,13 +406,13 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         is_active: true,
       });
 
-      toast.success(`Route "${newRoute.name}" created and assigned`);
+      toast.success(`Route "${routeRes.name}" created and assigned to ${targetDateStr}`);
       setNewRouteName("");
       setAddRouteModalOpen(false);
       await fetchData();
 
       // Open Route Management screen directly as requested
-      openRouteSheet(newRoute.id, targetDateStr);
+      openRouteSheet(routeRes.id, targetDateStr);
     } catch (err: any) {
       toast.error(err.message || "Failed to create and assign route");
     } finally {
@@ -404,12 +429,108 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       const matching = existing.find((a) => a.route_id === selectedRoute.id);
       if (matching) {
         await supabase.from("route_plan_assignments").delete().eq("id", matching.id);
-        toast.success("Route removed from this date");
+        toast.success("Route removed from " + selectedRouteDate);
         setSelectedRoute(null);
         await fetchData();
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to remove route");
+    }
+  };
+
+  // Button actions in Route Management Screen (Screenshot 2)
+  const handleApproveRoute = async () => {
+    if (!selectedRoute) return;
+    try {
+      const { error } = await supabase
+        .from("routes")
+        .update({ status: "active" })
+        .eq("id", selectedRoute.id);
+      if (error) throw error;
+      toast.success(`Route "${selectedRoute.name}" approved and active!`);
+      setSelectedRoute({ ...selectedRoute, status: "active" });
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve route");
+    }
+  };
+
+  const handleArchiveRoute = async () => {
+    if (!selectedRoute) return;
+    try {
+      const { error } = await supabase
+        .from("routes")
+        .update({ status: "archived", archived_at: new Date().toISOString() })
+        .eq("id", selectedRoute.id);
+      if (error) throw error;
+      toast.success(`Route "${selectedRoute.name}" archived`);
+      setSelectedRoute(null);
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to archive route");
+    }
+  };
+
+  const handleCloneRoute = async () => {
+    if (!selectedRoute) return;
+    try {
+      const newName = `${selectedRoute.name} (Copy)`;
+      const { data: clonedRoute, error } = await supabase.rpc("route_upsert", {
+        p_route_id: null,
+        p_name: newName,
+        p_description: null,
+        p_primary_assignee_id: employeeId,
+        p_customer_ids: null,
+        p_expected_version: null,
+      });
+      if (error || !clonedRoute) throw error || new Error("Failed to clone route");
+
+      // Also clone route customers if any exist
+      if (routeCustomers.length > 0) {
+        for (const rc of routeCustomers) {
+          await supabase.from("route_customers").insert({
+            account_id: accountId,
+            route_id: clonedRoute.id,
+            contact_id: rc.contact_id,
+            sequence: rc.sequence,
+          });
+        }
+      }
+
+      toast.success(`Route cloned successfully as "${newName}"`);
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to clone route");
+    }
+  };
+
+  const handleOpenEditRouteModal = () => {
+    if (!selectedRoute) return;
+    setEditRouteName(selectedRoute.name);
+    setEditRouteModalOpen(true);
+  };
+
+  const handleSaveEditRoute = async () => {
+    if (!selectedRoute || !editRouteName.trim()) return;
+    setSavingEdit(true);
+    try {
+      const { data: res, error } = await supabase.rpc("route_upsert", {
+        p_route_id: selectedRoute.id,
+        p_name: editRouteName.trim(),
+        p_description: null,
+        p_primary_assignee_id: employeeId,
+        p_customer_ids: null,
+        p_expected_version: null,
+      });
+      if (error) throw error;
+      toast.success("Route details updated");
+      setSelectedRoute({ ...selectedRoute, name: editRouteName.trim() });
+      setEditRouteModalOpen(false);
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to edit route");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -643,139 +764,199 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         </div>
       ) : (
         <div className="animate-in fade-in-50 duration-200">
-          <RouteList hideHeader />
+          <RouteList hideHeader onSelectRoute={(id) => openRouteSheet(id)} />
         </div>
       )}
 
-      {/* ── MODAL: Assign Routes to Date (Supports Multiple Routes per Day) ── */}
+      {/* ── MODAL: Assign Routes to Date (Wider, Broader, Searchable, RLS Fixed) ── */}
       <Dialog open={addRouteModalOpen} onOpenChange={setAddRouteModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold">Assign Routes to Date</DialogTitle>
+        <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-hidden flex flex-col p-6">
+          <DialogHeader className="pb-2 border-b border-border">
+            <DialogTitle className="text-xl font-bold text-foreground">
+              Assign Routes to <span className="text-emerald-400">{targetDateStr}</span>
+            </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              Select one or multiple routes for <span className="font-semibold text-foreground">{targetDateStr}</span>.
+              Select one or multiple territory routes to schedule for this specific date.
             </p>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
-              {routes.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">No active routes found.</p>
-              ) : (
-                routes.map((r) => {
-                  const checked = selectedRouteIds.includes(r.id);
-                  return (
-                    <div
-                      key={r.id}
-                      onClick={() => {
-                        setSelectedRouteIds((prev) =>
-                          checked ? prev.filter((id) => id !== r.id) : [...prev, r.id]
-                        );
-                      }}
-                      className={cn(
-                        "flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 transition-colors",
-                        checked
-                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-                          : "border-border bg-card hover:bg-muted/50"
-                      )}
-                    >
-                      <span className="text-sm font-semibold">{r.name}</span>
-                      <div
-                        className={cn(
-                          "flex h-5 w-5 items-center justify-center rounded border transition-colors",
-                          checked
-                            ? "border-emerald-500 bg-emerald-500 text-white"
-                            : "border-muted-foreground/30"
-                        )}
-                      >
-                        {checked && <Check className="h-3.5 w-3.5" />}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Quick Create & Assign New Route inline */}
-            <div className="border-t border-border pt-3">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Or Create & Assign New Route
-              </label>
-              <div className="mt-1.5 flex gap-2">
-                <Input
-                  placeholder="e.g. Kalawad Road Beat"
-                  value={newRouteName}
-                  onChange={(e) => setNewRouteName(e.target.value)}
-                  className="h-9 text-sm"
-                />
-                <Button
-                  size="sm"
-                  onClick={handleCreateAndAssignRoute}
-                  disabled={creatingRoute || !newRouteName.trim()}
-                  className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white"
-                >
-                  {creatingRoute ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-                  Create & Assign
-                </Button>
-              </div>
+          {/* Search bar for routes */}
+          <div className="pt-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search routes by name..."
+                value={routeSearch}
+                onChange={(e) => setRouteSearch(e.target.value)}
+                className="pl-9 h-10 text-sm font-medium"
+              />
             </div>
           </div>
 
-          <DialogFooter className="flex items-center justify-end gap-2 border-t border-border pt-3">
-            <Button variant="outline" size="sm" onClick={() => setAddRouteModalOpen(false)}>
+          {/* Routes Checklist */}
+          <div className="flex-1 my-2 overflow-y-auto space-y-2 pr-1 max-h-[42vh]">
+            {filteredRoutes.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-sm font-medium text-muted-foreground">No matching routes found.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Try a different search or create a new route below.
+                </p>
+              </div>
+            ) : (
+              filteredRoutes.map((r) => {
+                const checked = selectedRouteIds.includes(r.id);
+                return (
+                  <div
+                    key={r.id}
+                    onClick={() => {
+                      setSelectedRouteIds((prev) =>
+                        checked ? prev.filter((id) => id !== r.id) : [...prev, r.id]
+                      );
+                    }}
+                    className={cn(
+                      "flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 transition-all",
+                      checked
+                        ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200 shadow-sm"
+                        : "border-border bg-card hover:bg-muted/60"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold">{r.name}</span>
+                      <RouteStatusPill status={r.status as any} />
+                    </div>
+                    <div
+                      className={cn(
+                        "flex h-5 w-5 items-center justify-center rounded border transition-colors",
+                        checked
+                          ? "border-emerald-500 bg-emerald-500 text-white"
+                          : "border-muted-foreground/30"
+                      )}
+                    >
+                      {checked && <Check className="h-3.5 w-3.5" />}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Create & Assign New Route Inline */}
+          <div className="border-t border-border pt-4">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Or Create & Assign New Route
+            </label>
+            <div className="mt-2 flex gap-2">
+              <Input
+                placeholder="e.g. Kalawad Road Beat"
+                value={newRouteName}
+                onChange={(e) => setNewRouteName(e.target.value)}
+                className="h-10 text-sm font-medium"
+              />
+              <Button
+                size="sm"
+                onClick={handleCreateAndAssignRoute}
+                disabled={creatingRoute || !newRouteName.trim()}
+                className="shrink-0 h-10 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              >
+                {creatingRoute ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                Create & Assign
+              </Button>
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-3 border-t border-border pt-4 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setAddRouteModalOpen(false)} className="h-9 px-4">
               Cancel
             </Button>
-            <Button size="sm" onClick={saveDayAssignments} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button
+              size="sm"
+              onClick={saveDayAssignments}
+              className="h-9 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
+            >
               Save Assignments ({selectedRouteIds.length})
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── SHEET: Route Customers Management Screen (Screenshot 2) ── */}
-      <Sheet open={!!selectedRoute} onOpenChange={(open) => !open && setSelectedRoute(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto border-l border-border bg-background p-6">
+      {/* ── FULL SCREEN MODAL: Route Customers Management Screen (Wider, Broader, + Back Button) ── */}
+      <Dialog open={!!selectedRoute} onOpenChange={(open) => !open && setSelectedRoute(null)}>
+        <DialogContent className="sm:max-w-[1300px] w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-8 rounded-2xl border border-border bg-background shadow-2xl overflow-hidden">
           {selectedRoute && (
-            <div className="space-y-6">
-              {/* Sheet Header (Matching Screenshot 2) */}
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-2xl font-bold text-foreground">{selectedRoute.name}</h2>
-                    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">Active</Badge>
-                    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">Health 100%</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
+            <div className="flex-1 flex flex-col min-h-0 space-y-6">
+              {/* Top Navigation Bar with Back button and Status Badge */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
+                <div className="flex items-center gap-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedRoute(null)}
+                    className="h-9 px-3 text-muted-foreground hover:text-foreground font-semibold"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-1.5" /> Back to Calendar
+                  </Button>
+                  <div className="h-5 w-px bg-border" />
+                  <h2 className="text-2xl font-extrabold text-foreground">{selectedRoute.name}</h2>
+                  <RouteStatusPill status={selectedRoute.status as any} />
+                  <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-semibold px-2.5 py-0.5">
+                    Health 100%
+                  </Badge>
+                  <p className="text-xs text-muted-foreground ml-2">
                     Primary assignee: <span className="font-semibold text-foreground">{employeeName}</span>
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="h-8">
-                    <Edit2 className="h-3.5 w-3.5 mr-1" /> Edit
+                {/* Fully Working Action Buttons (Approve, Edit, Archive, Clone, Remove from Day) */}
+                <div className="flex items-center gap-2.5">
+                  {selectedRoute.status !== "active" && (
+                    <Button
+                      size="sm"
+                      onClick={handleApproveRoute}
+                      className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-1.5" /> Approve
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpenEditRouteModal}
+                    className="h-9 font-medium"
+                  >
+                    <Edit2 className="h-3.5 w-3.5 mr-1.5" /> Edit
                   </Button>
-                  <Button variant="outline" size="sm" className="h-8">
-                    <Archive className="h-3.5 w-3.5 mr-1" /> Archive
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleArchiveRoute}
+                    className="h-9 font-medium"
+                  >
+                    <Archive className="h-3.5 w-3.5 mr-1.5" /> Archive
                   </Button>
-                  <Button variant="outline" size="sm" className="h-8">
-                    <Copy className="h-3.5 w-3.5 mr-1" /> Clone
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCloneRoute}
+                    className="h-9 font-medium"
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1.5" /> Clone
                   </Button>
                   {selectedRouteDate && (
                     <Button
                       variant="destructive"
                       size="sm"
                       onClick={removeRouteFromDay}
-                      className="h-8"
+                      className="h-9 font-medium"
                       title="Remove route assignment from this day"
                     >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove from Day
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Remove from Day
                     </Button>
                   )}
                 </div>
               </div>
 
-              {/* Sheet Sub-Navigation Tabs */}
-              <div className="flex items-center gap-6 border-b border-border text-sm font-medium">
+              {/* Sub-Navigation Tabs */}
+              <div className="flex items-center gap-8 border-b border-border text-sm font-semibold">
                 {(["overview", "customers", "planning", "history"] as const).map((t) => (
                   <button
                     key={t}
@@ -784,7 +965,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                     className={cn(
                       "pb-3 capitalize transition-colors border-b-2",
                       activeSheetTab === t
-                        ? "border-purple-500 text-foreground font-bold"
+                        ? "border-purple-500 text-foreground font-extrabold"
                         : "border-transparent text-muted-foreground hover:text-foreground"
                     )}
                   >
@@ -793,55 +974,55 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                 ))}
               </div>
 
-              {/* Customers Tab Content (Exact UI from Screenshot 2) */}
+              {/* Customers Tab Content (Exact UI from Screenshot 2, Wider & Broader) */}
               {activeSheetTab === "customers" && (
-                <div className="space-y-4">
+                <div className="flex-1 flex flex-col min-h-0 space-y-4 overflow-hidden">
                   {/* Top Banner */}
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-muted-foreground">
+                    <p className="text-sm font-semibold text-muted-foreground">
                       {routeCustomers.length} customers. Visited top to bottom.
                     </p>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" className="h-8">
+                    <div className="flex items-center gap-3">
+                      <Button variant="outline" size="sm" className="h-9 font-medium">
                         Select
                       </Button>
                       <Button
                         size="sm"
                         onClick={() => setAddCustomerModalOpen(true)}
-                        className="h-8 bg-purple-600 hover:bg-purple-700 text-white font-medium"
+                        className="h-9 px-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm"
                       >
-                        <Plus className="h-4 w-4 mr-1" /> Add customers
+                        <Plus className="h-4 w-4 mr-1.5" /> Add customers
                       </Button>
                     </div>
                   </div>
 
                   {/* Customer Sequence List */}
                   {loadingCustomers ? (
-                    <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                      <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading customers...
+                    <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading customers...
                     </div>
                   ) : routeCustomers.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 py-12 text-center">
-                      <MapPin className="h-8 w-8 text-muted-foreground mb-2" />
-                      <p className="text-sm font-semibold text-foreground">No customers on this route yet</p>
-                      <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                        Click &apos;+ Add customers&apos; above to assign customers from your territory.
+                    <div className="flex-1 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 py-16 text-center">
+                      <MapPin className="h-10 w-10 text-muted-foreground mb-3" />
+                      <p className="text-base font-bold text-foreground">No customers on this route yet</p>
+                      <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                        Click &apos;+ Add customers&apos; above to search and assign customers from your territory.
                       </p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-border rounded-xl border border-border bg-card">
+                    <div className="flex-1 overflow-y-auto divide-y divide-border rounded-xl border border-border bg-card">
                       {routeCustomers.map((rc, idx) => {
                         const contactName = rc.contacts?.company || rc.contacts?.name || "Unnamed Customer";
                         const address = rc.contacts?.address || rc.contacts?.name || "No address provided";
                         return (
                           <div
                             key={rc.id}
-                            className="flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors group"
+                            className="flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors group"
                           >
-                            <div className="flex items-center gap-4 min-w-0 flex-1">
+                            <div className="flex items-center gap-5 min-w-0 flex-1">
                               {/* Sequence & Drag handles */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="w-5 text-center text-sm font-bold text-muted-foreground tabular-nums">
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="w-7 text-center text-base font-extrabold text-muted-foreground tabular-nums">
                                   {idx + 1}
                                 </span>
                                 <div className="flex flex-col gap-0.5">
@@ -849,27 +1030,27 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                                     type="button"
                                     onClick={() => moveCustomerSequence(idx, -1)}
                                     disabled={idx === 0}
-                                    className="p-0.5 text-muted-foreground/50 hover:text-foreground disabled:opacity-20"
+                                    className="p-1 text-muted-foreground/50 hover:text-foreground disabled:opacity-20"
                                     title="Move Up"
                                   >
-                                    <ArrowUp className="h-3 w-3" />
+                                    <ArrowUp className="h-3.5 w-3.5" />
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => moveCustomerSequence(idx, 1)}
                                     disabled={idx === routeCustomers.length - 1}
-                                    className="p-0.5 text-muted-foreground/50 hover:text-foreground disabled:opacity-20"
+                                    className="p-1 text-muted-foreground/50 hover:text-foreground disabled:opacity-20"
                                     title="Move Down"
                                   >
-                                    <ArrowDown className="h-3 w-3" />
+                                    <ArrowDown className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
                               </div>
 
                               {/* Customer Details */}
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-foreground truncate">{contactName}</p>
-                                <p className="text-xs text-muted-foreground truncate">{address}</p>
+                                <p className="text-base font-bold text-foreground truncate">{contactName}</p>
+                                <p className="text-sm text-muted-foreground truncate mt-0.5">{address}</p>
                               </div>
                             </div>
 
@@ -877,10 +1058,10 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                             <button
                               type="button"
                               onClick={() => handleRemoveCustomerFromRoute(rc.contact_id)}
-                              className="p-1.5 text-muted-foreground/60 hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"
+                              className="p-2 text-muted-foreground/60 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                               title="Remove customer from route"
                             >
-                              <X className="h-4 w-4" />
+                              <X className="h-5 w-5" />
                             </button>
                           </div>
                         );
@@ -891,14 +1072,46 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
               )}
 
               {activeSheetTab !== "customers" && (
-                <div className="rounded-xl border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+                <div className="flex-1 flex items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 p-12 text-center text-sm font-medium text-muted-foreground">
                   {activeSheetTab} details view.
                 </div>
               )}
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL: Edit Route Details ── */}
+      <Dialog open={editRouteModalOpen} onOpenChange={setEditRouteModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Edit Route Name</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <label className="text-xs font-semibold text-muted-foreground uppercase">Route Name</label>
+            <Input
+              value={editRouteName}
+              onChange={(e) => setEditRouteName(e.target.value)}
+              className="h-10 text-sm font-medium"
+              placeholder="Enter new route name..."
+            />
+          </div>
+          <DialogFooter className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setEditRouteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveEditRoute}
+              disabled={savingEdit || !editRouteName.trim()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+            >
+              {savingEdit && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── MODAL: Add Customers to Route (Search & Add) ── */}
       <Dialog open={addCustomerModalOpen} onOpenChange={setAddCustomerModalOpen}>
@@ -915,11 +1128,11 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                 placeholder="Search by company, name, or address..."
                 value={contactSearch}
                 onChange={(e) => setContactSearch(e.target.value)}
-                className="pl-9 h-9 text-sm"
+                className="pl-9 h-10 text-sm font-medium"
               />
             </div>
 
-            <div className="max-h-72 overflow-y-auto divide-y divide-border rounded-lg border border-border">
+            <div className="max-h-72 overflow-y-auto divide-y divide-border rounded-xl border border-border">
               {loadingContacts ? (
                 <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading territory contacts...
@@ -932,9 +1145,9 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   const nameStr = c.company || c.name || "Unnamed Contact";
                   const addrStr = c.address || c.name || "No address";
                   return (
-                    <div key={c.id} className="flex items-center justify-between p-3 hover:bg-muted/40">
+                    <div key={c.id} className="flex items-center justify-between p-3.5 hover:bg-muted/40 transition-colors">
                       <div className="min-w-0 flex-1 mr-3">
-                        <p className="text-sm font-semibold truncate">{nameStr}</p>
+                        <p className="text-sm font-bold truncate">{nameStr}</p>
                         <p className="text-xs text-muted-foreground truncate">{addrStr}</p>
                       </div>
                       <Button
@@ -942,7 +1155,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                         variant={alreadyAdded ? "outline" : "default"}
                         disabled={alreadyAdded}
                         onClick={() => handleAddCustomerToRoute(c.id)}
-                        className="h-8 shrink-0 text-xs"
+                        className="h-8 shrink-0 text-xs font-semibold"
                       >
                         {alreadyAdded ? "Added" : "+ Add"}
                       </Button>
@@ -954,7 +1167,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           </div>
 
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setAddCustomerModalOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setAddCustomerModalOpen(false)} className="h-9 px-5">
               Done
             </Button>
           </DialogFooter>
