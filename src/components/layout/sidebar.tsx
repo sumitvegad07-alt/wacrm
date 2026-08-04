@@ -386,7 +386,6 @@ const menuStructure: MenuNode[] = [
       { href: "/settings?tab=templates", label: "Message Templates", icon: FileText },
       { href: "/settings?tab=members", label: "Team Members", icon: Users },
       { href: "/settings?tab=api", label: "API Keys & Webhooks", icon: KeyRound },
-      { href: "/settings", label: "All Settings Overview", icon: LayoutGrid },
     ],
   },
 ];

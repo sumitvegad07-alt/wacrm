@@ -8,23 +8,27 @@ import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
+import { TemplateManager } from '@/components/settings/template-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { LeadsSettings } from '@/components/settings/leads-settings';
 import { TasksSettings } from '@/components/settings/tasks-settings';
 import { OrdersSettings } from '@/components/settings/orders-settings';
 import { PricingSchemesSettings } from '@/components/settings/pricing-schemes-settings';
+import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
+import { AISettingsPanel } from '@/components/settings/ai-settings-panel';
 import { ExpenseTypesSettings } from '@/components/settings/expense-types-settings';
 import { ModuleSettingsPanel } from '@/components/settings/module-settings';
 import { DealPipelinesSettings } from '@/components/settings/deal-pipelines-settings';
 import { TerritoryManager } from '@/components/territories/territory-manager';
 import { RouteSettings } from '@/components/settings/route-settings';
 import {
+  resolveSection,
   SECTION_META,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
-import { Zap, AlertTriangle, ArrowRight, MapPin, Check } from 'lucide-react';
+import { Zap, AlertTriangle, ArrowRight, MapPin } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -35,70 +39,91 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-
-// All settings sections in logical organization order
-const SCROLLABLE_SECTIONS: { id: SettingsSection; label: string }[] = [
-  { id: 'module_settings', label: 'Organization Settings' },
-  { id: 'profile', label: 'Profile & Appearance' },
-  { id: 'security', label: 'Login & Security' },
-  { id: 'whatsapp', label: 'WhatsApp Configuration' },
-  { id: 'fields', label: 'Custom Fields & Tags' },
-  { id: 'deal_pipelines', label: 'Deals & Pipelines' },
-  { id: 'leads', label: 'Leads Settings' },
-  { id: 'tasks', label: 'Task Settings' },
-  { id: 'orders', label: 'Orders Settings' },
-  { id: 'pricing', label: 'Catalogue Settings' },
-  { id: 'expense_types', label: 'Expense Settings' },
-  { id: 'territories', label: 'Territory Master' },
-  { id: 'route', label: 'Route Settings' },
-  { id: 'api', label: 'API Keys & Webhooks' },
-];
 
 function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasWhatsApp } = useAuth();
-  const [activeSection, setActiveSection] = useState<SettingsSection>('module_settings');
+
+  const rawTab = searchParams.get('tab') || searchParams.get('section');
+  const [activeTab, setActiveTab] = useState<SettingsSection>(() => {
+    if (!rawTab || rawTab === 'overview') return 'module_settings';
+    return resolveSection(rawTab);
+  });
+
   const [manageState, setManageState] = useState<'overview' | 'downgrade'>('overview');
 
-  // Smooth scroll to section when tab param changes or on initial load
+  // Sync when tab query parameter changes
   useEffect(() => {
-    const tab = searchParams.get('tab') || searchParams.get('section') || 'module_settings';
-    if (tab) {
-      setActiveSection(tab as SettingsSection);
-      const el = document.getElementById(tab);
-      if (el) {
-        // Delay slightly for DOM hydration
-        setTimeout(() => {
-          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 50);
-      }
+    const nextTab = searchParams.get('tab') || searchParams.get('section');
+    if (!nextTab || nextTab === 'overview') {
+      setActiveTab('module_settings');
+    } else {
+      setActiveTab(resolveSection(nextTab));
     }
   }, [searchParams]);
 
-  const jumpTo = (id: SettingsSection) => {
-    setActiveSection(id);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', id);
-    params.delete('section');
-    router.replace(`/settings?${params.toString()}`, { scroll: false });
-    const el = document.getElementById(id);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  const section = activeTab;
+
+  const panel: Record<SettingsSection, ReactNode> = {
+    overview: <ModuleSettingsPanel />,
+    profile: (
+      <div className="space-y-6">
+        <ProfileForm />
+        <AppearancePanel />
+      </div>
+    ),
+    appearance: <AppearancePanel />,
+    ai: <AISettingsPanel />,
+    security: <SecurityPanel />,
+    whatsapp: hasWhatsApp ? (
+      <WhatsAppConfig />
+    ) : (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-8 py-16 text-center">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10">
+          <Zap className="h-8 w-8 text-blue-500" />
+        </div>
+        <h2 className="mb-2 text-xl font-semibold text-foreground">
+          WhatsApp API not included
+        </h2>
+        <p className="mb-6 max-w-sm text-sm text-muted-foreground">
+          Your current plan is <strong>Basic</strong>. Upgrade to{' '}
+          <strong>Pro</strong> or <strong>Enterprise</strong> to unlock WhatsApp
+          integration and shared team inbox.
+        </p>
+      </div>
+    ),
+    templates: <TemplateManager />,
+    fields: <FieldsAndTagsPanel />,
+    deals: <DealsSettings />,
+    deal_pipelines: (
+      <div className="space-y-6">
+        <DealsSettings />
+        <DealPipelinesSettings />
+      </div>
+    ),
+    leads: <LeadsSettings />,
+    tasks: <TasksSettings />,
+    orders: <OrdersSettings />,
+    pricing: <PricingSchemesSettings />,
+    expense_types: <ExpenseTypesSettings />,
+    territories: <TerritoryManager />,
+    route: <RouteSettings />,
+    members: <MembersTab />,
+    api: <ApiKeysSettings />,
+    module_settings: <ModuleSettingsPanel />,
   };
 
   return (
-    <div className="w-full space-y-6 pb-24">
-      {/* Header */}
+    <div className="w-full space-y-6">
+      {/* Header — displays title for whichever setting is open */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Settings / Organization Configuration
+            {SECTION_META[section]?.label || 'Organization Settings'}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage your active CRM modules, workspace configurations, and account settings all in one scrollable menu.
+            Manage your workspace and account configuration.
           </p>
         </div>
 
@@ -191,165 +216,9 @@ function SettingsContent() {
         </Dialog>
       </div>
 
-      {/* Sticky Quick-Jump Navigation Bar */}
-      <div className="sticky top-0 z-20 flex items-center gap-1.5 overflow-x-auto border-b border-border bg-background/95 py-2.5 backdrop-blur-md no-scrollbar">
-        {SCROLLABLE_SECTIONS.map(({ id, label }) => {
-          const isActive = activeSection === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => jumpTo(id)}
-              className={cn(
-                "inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
-                isActive
-                  ? "bg-primary text-primary-foreground shadow-2xs"
-                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── ALL SETTINGS IN ONE SCROLLABLE MENU OF SETTINGS ── */}
-      <div className="space-y-12">
-        {/* 1. Organization Settings (Modules / System config) */}
-        <div id="module_settings" className="scroll-mt-24 space-y-4">
-          <ModuleSettingsPanel />
-        </div>
-
-        {/* 2. Profile & Appearance */}
-        <div id="profile" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Profile & Appearance</h2>
-            <p className="text-sm text-muted-foreground">Manage your personal details, email, and display theme.</p>
-          </div>
-          <ProfileForm />
-          <AppearancePanel />
-        </div>
-
-        {/* 3. Login & Security */}
-        <div id="security" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Login & Security</h2>
-            <p className="text-sm text-muted-foreground">Update password, authentication methods, and security settings.</p>
-          </div>
-          <SecurityPanel />
-        </div>
-
-        {/* 4. WhatsApp Configuration */}
-        <div id="whatsapp" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">WhatsApp Configuration</h2>
-            <p className="text-sm text-muted-foreground">Configure WhatsApp Business API, messaging templates, and inbox.</p>
-          </div>
-          {hasWhatsApp ? (
-            <WhatsAppConfig />
-          ) : (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-8 py-16 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10">
-                <Zap className="h-8 w-8 text-blue-500" />
-              </div>
-              <h2 className="mb-2 text-xl font-semibold text-foreground">WhatsApp API not included</h2>
-              <p className="mb-6 max-w-sm text-sm text-muted-foreground">
-                Your current plan is <strong>Basic</strong>. Upgrade to <strong>Pro</strong> or <strong>Enterprise</strong> to unlock WhatsApp integration and shared team inbox.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* 5. Custom Fields & Tags */}
-        <div id="fields" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Custom Fields & Tags</h2>
-            <p className="text-sm text-muted-foreground">Create and manage custom data attributes and tags for your records.</p>
-          </div>
-          <FieldsAndTagsPanel />
-        </div>
-
-        {/* 6. Deals & Pipelines */}
-        <div id="deal_pipelines" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Deals & Pipelines</h2>
-            <p className="text-sm text-muted-foreground">Configure sales pipelines, stages, and currency rules.</p>
-          </div>
-          <DealsSettings />
-          <DealPipelinesSettings />
-        </div>
-
-        {/* 7. Leads Settings */}
-        <div id="leads" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Leads Settings</h2>
-            <p className="text-sm text-muted-foreground">Manage lead sources, default statuses, and assignment rules.</p>
-          </div>
-          <LeadsSettings />
-        </div>
-
-        {/* 8. Task Settings */}
-        <div id="tasks" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Task Settings</h2>
-            <p className="text-sm text-muted-foreground">Customize task categories, priorities, and workflow rules.</p>
-          </div>
-          <TasksSettings />
-        </div>
-
-        {/* 9. Orders Settings */}
-        <div id="orders" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Orders Settings</h2>
-            <p className="text-sm text-muted-foreground">Configure order numbering, prefixes, and fulfillment workflows.</p>
-          </div>
-          <OrdersSettings />
-        </div>
-
-        {/* 10. Catalogue Settings */}
-        <div id="pricing" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Catalogue Settings</h2>
-            <p className="text-sm text-muted-foreground">Manage pricing schemes, product discounts, and catalogue rules.</p>
-          </div>
-          <PricingSchemesSettings />
-        </div>
-
-        {/* 11. Expense Settings */}
-        <div id="expense_types" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Expense Settings</h2>
-            <p className="text-sm text-muted-foreground">Define expense categories, approval rules, and reporting policies.</p>
-          </div>
-          <ExpenseTypesSettings />
-        </div>
-
-        {/* 12. Territory Master */}
-        <div id="territories" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Territory Master</h2>
-            <p className="text-sm text-muted-foreground">Configure geographic hierarchy, employee areas, and territory levels.</p>
-          </div>
-          <TerritoryManager />
-        </div>
-
-        {/* 13. Route Settings */}
-        <div id="route" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">Route Settings</h2>
-            <p className="text-sm text-muted-foreground">Manage beat routes, travel rules, and salesman assignment policies.</p>
-          </div>
-          <RouteSettings />
-        </div>
-
-        {/* 14. API Keys & Webhooks */}
-        <div id="api" className="scroll-mt-24 rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-          <div className="border-b border-border/80 pb-3">
-            <h2 className="text-lg font-semibold text-foreground">API Keys & Webhooks</h2>
-            <p className="text-sm text-muted-foreground">Generate developer API tokens and configure real-time webhooks.</p>
-          </div>
-          <ApiKeysSettings />
-        </div>
+      {/* Main Panel Content — cleanly displays the active openable settings panel */}
+      <div className="mt-4 min-w-0">
+        {panel[section]}
       </div>
     </div>
   );
