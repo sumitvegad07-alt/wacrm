@@ -9,24 +9,26 @@ import {
   X,
   Check,
   Search,
-  GripVertical,
   Trash2,
-  Copy,
-  Archive,
-  Edit2,
-  AlertCircle,
-  Loader2,
   Table as TableIcon,
   MapPin,
   ArrowUp,
   ArrowDown,
   CheckCircle2,
   ArrowLeft,
-  RotateCcw,
+  Clock,
+  Repeat,
+  AlertCircle,
+  Loader2,
+  CheckSquare,
+  Square,
+  ShieldCheck,
+  Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -36,8 +38,6 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { RouteList } from "@/components/routes/route-list";
-import { RouteStatusPill } from "@/components/routes/route-status-pill";
 import { cn } from "@/lib/utils";
 
 interface EmployeeRouteTabProps {
@@ -58,9 +58,10 @@ interface RouteAssignment {
   day_of_week: number;
   start_date: string | null;
   end_date: string | null;
-  is_active: boolean;
+  is_active: boolean; // false = Pending Approval, true = Approved (Live on mobile)
   route_name?: string;
   route_status?: string;
+  customer_count?: number;
 }
 
 interface RouteCustomerItem {
@@ -159,6 +160,31 @@ function getMonthGrid(year: number, month: number) {
   return days;
 }
 
+// Generate repeating dates across a month from startDateStr
+function generateRepeatDates(
+  startDateStr: string,
+  freq: "daily" | "weekly" | "10_days" | "15_days" | "monthly",
+  year: number,
+  month: number
+): string[] {
+  const dates: string[] = [];
+  const start = new Date(startDateStr);
+  const startDay = start.getDate();
+  const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+
+  let step = 1;
+  if (freq === "daily") step = 1;
+  else if (freq === "weekly") step = 7;
+  else if (freq === "10_days") step = 10;
+  else if (freq === "15_days") step = 15;
+  else if (freq === "monthly") return [startDateStr];
+
+  for (let day = startDay; day <= lastDayOfMonth; day += step) {
+    dates.push(formatDateStr(year, month, day));
+  }
+  return dates;
+}
+
 export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<"calendar" | "table">("calendar");
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -170,19 +196,19 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
   const [assignments, setAssignments] = useState<RouteAssignment[]>([]);
   const [employeeName, setEmployeeName] = useState<string>("Employee");
 
-  // Full screen Route Customers Management Modal state (Screenshot 2)
+  // Full screen Route Customers Management state (Screenshot 2)
   const [selectedRoute, setSelectedRoute] = useState<RouteItem | null>(null);
   const [selectedRouteDate, setSelectedRouteDate] = useState<string | null>(null);
   const [routeCustomers, setRouteCustomers] = useState<RouteCustomerItem[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [savingSequence, setSavingSequence] = useState(false);
   const [activeSheetTab, setActiveSheetTab] = useState<"overview" | "customers" | "planning" | "history">("customers");
 
-  // Edit route modal state
-  const [editRouteModalOpen, setEditRouteModalOpen] = useState(false);
-  const [editRouteName, setEditRouteName] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
+  // Repeat route assignment state inside Customer screen
+  const [repeatFrequency, setRepeatFrequency] = useState<"daily" | "weekly" | "10_days" | "15_days" | "monthly">("weekly");
+  const [repeatApproved, setRepeatApproved] = useState(false);
 
-  // Add Route to Day Modal state
+  // Add Route to Date Modal state
   const [addRouteModalOpen, setAddRouteModalOpen] = useState(false);
   const [targetDateStr, setTargetDateStr] = useState<string>("");
   const [targetDow, setTargetDow] = useState<number>(1);
@@ -196,6 +222,11 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
   const [contactSearch, setContactSearch] = useState("");
   const [availableContacts, setAvailableContacts] = useState<ContactItem[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
+
+  // Table View selection state (clone of calendar schedule)
+  const [tableSelectedIds, setTableSelectedIds] = useState<string[]>([]);
+  const [tableFilter, setTableFilter] = useState<"all" | "pending" | "approved">("all");
+  const [tableSearch, setTableSearch] = useState("");
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -223,19 +254,29 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
       const routeMap = new Map(activeRoutes.map((r) => [r.id, r]));
 
-      // All assignments for this employee
+      // Fetch customer counts for each route
+      const { data: rcRows } = await supabase
+        .from("route_customers")
+        .select("route_id")
+        .is("archived_at", null);
+      const countsMap = new Map<string, number>();
+      (rcRows || []).forEach((row: any) => {
+        countsMap.set(row.route_id, (countsMap.get(row.route_id) || 0) + 1);
+      });
+
+      // All assignments for this employee (both Pending Approval is_active=false and Approved is_active=true)
       const { data: assignRows } = await supabase
         .from("route_plan_assignments")
         .select("id, route_id, day_of_week, start_date, end_date, is_active")
-        .eq("assignee_id", employeeId)
-        .eq("is_active", true);
+        .eq("assignee_id", employeeId);
 
       const enrichedAssignments = ((assignRows ?? []) as RouteAssignment[]).map((a) => {
         const r = routeMap.get(a.route_id);
         return {
           ...a,
-          route_name: r?.name ?? "Route",
+          route_name: r?.name ?? "Area Route",
           route_status: r?.status ?? "active",
+          customer_count: countsMap.get(a.route_id) || 0,
         };
       });
 
@@ -251,7 +292,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     fetchData();
   }, [fetchData]);
 
-  // Fetch customers for the selected route in Sheet (Screenshot 2)
+  // Fetch customers for the selected route in Full Screen View
   const fetchRouteCustomers = useCallback(
     async (routeId: string) => {
       setLoadingCustomers(true);
@@ -280,7 +321,6 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       if (found) {
         setSelectedRoute(found);
         setSelectedRouteDate(dateStr || null);
-        setActiveSheetTab("customers"); // opens directly to Customers tab as requested
         fetchRouteCustomers(routeId);
       }
     },
@@ -298,9 +338,9 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
   const daysGrid = useMemo(() => getMonthGrid(year, month), [year, month]);
 
-  // STRICT date matching so a Thursday assignment never automatically repeats on all Thursdays
+  // STRICT single-date matching: never repeats Thursday automatically on other Thursdays
   const getAssignmentsForDay = useCallback(
-    (dateStr: string, dow: number) => {
+    (dateStr: string, _dow: number) => {
       return assignments.filter((a) => {
         if (a.start_date && a.end_date) {
           return a.start_date <= dateStr && a.end_date >= dateStr;
@@ -308,12 +348,119 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         if (a.start_date) {
           return a.start_date === dateStr;
         }
-        // Do not automatically match old weekly assignments without dates in Monthly Planner
         return false;
       });
     },
     [assignments]
   );
+
+  const pendingAssignments = useMemo(() => {
+    return assignments.filter((a) => !a.is_active);
+  }, [assignments]);
+
+  // Approve a single assignment (from card pill or table)
+  const handleApproveAssignment = async (assignmentId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await supabase
+        .from("route_plan_assignments")
+        .update({ is_active: true })
+        .eq("id", assignmentId);
+      toast.success("✓ Route assignment approved! Live on mobile app.");
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve assignment");
+    }
+  };
+
+  // Approve all pending assignments for the month
+  const handleApproveAllPending = async () => {
+    if (pendingAssignments.length === 0) return;
+    const ids = pendingAssignments.map((a) => a.id);
+    try {
+      await supabase
+        .from("route_plan_assignments")
+        .update({ is_active: true })
+        .in("id", ids);
+      toast.success(`✓ Approved all ${ids.length} pending route assignments for the month! Live on mobile.`);
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve all assignments");
+    }
+  };
+
+  // Save Customer Sequence & Approve Route for Mobile (Save & Next Step button)
+  const handleSaveSequenceAndApprove = async () => {
+    if (!selectedRoute) return;
+    setSavingSequence(true);
+    try {
+      // Re-save sequence order explicitly
+      await Promise.all(
+        routeCustomers.map((rc, idx) =>
+          supabase.from("route_customers").update({ sequence: idx + 1 }).eq("id", rc.id)
+        )
+      );
+
+      // If opened from a specific date, approve that date's assignment
+      if (selectedRouteDate) {
+        const matching = assignments.find(
+          (a) => a.route_id === selectedRoute.id && a.start_date === selectedRouteDate
+        );
+        if (matching) {
+          await supabase
+            .from("route_plan_assignments")
+            .update({ is_active: true })
+            .eq("id", matching.id);
+        }
+      }
+
+      toast.success(
+        "✓ Saved customer sequence and approved route! Mobile user can see this exact order."
+      );
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save sequence");
+    } finally {
+      setSavingSequence(false);
+    }
+  };
+
+  // Repeat route schedule across multiple dates in the month
+  const handleRepeatSchedule = async () => {
+    if (!selectedRoute || !selectedRouteDate) return;
+    const targetDates = generateRepeatDates(selectedRouteDate, repeatFrequency, year, month);
+    try {
+      let createdCount = 0;
+      for (const dStr of targetDates) {
+        const dObj = new Date(dStr);
+        let dow = dObj.getDay();
+        if (dow === 0) dow = 7;
+
+        // Check if already assigned
+        const exists = assignments.some(
+          (a) => a.route_id === selectedRoute.id && a.start_date === dStr
+        );
+        if (!exists) {
+          await supabase.from("route_plan_assignments").insert({
+            account_id: accountId,
+            route_id: selectedRoute.id,
+            assignee_id: employeeId,
+            day_of_week: dow,
+            start_date: dStr,
+            end_date: dStr,
+            is_active: repeatApproved, // true = Approved, false = Pending Approval
+          });
+          createdCount++;
+        }
+      }
+      toast.success(
+        `✓ Scheduled "${selectedRoute.name}" across ${createdCount} dates in ${monthLabel}! (${repeatApproved ? "Approved" : "Pending Approval"})`
+      );
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to repeat schedule");
+    }
+  };
 
   // Filtered routes list inside Add Route Modal
   const filteredRoutes = useMemo(() => {
@@ -333,14 +480,14 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     setAddRouteModalOpen(true);
   };
 
-  // Save selected multiple routes to that day
+  // Save selected multiple routes to that day (as PENDING APPROVAL by default)
   const saveDayAssignments = async () => {
     try {
       const existing = getAssignmentsForDay(targetDateStr, targetDow);
       const existingRouteIds = new Set(existing.map((a) => a.route_id));
       const newRouteIdSet = new Set(selectedRouteIds);
 
-      // Remove unchecked assignments for THIS SPECIFIC DATE
+      // Remove unchecked assignments for THIS SPECIFIC DATE ONLY
       for (const oldA of existing) {
         if (!newRouteIdSet.has(oldA.route_id)) {
           await supabase.from("route_plan_assignments").delete().eq("id", oldA.id);
@@ -357,16 +504,15 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
             day_of_week: targetDow,
             start_date: targetDateStr,
             end_date: targetDateStr,
-            is_active: true,
+            is_active: false, // Starts as PENDING APPROVAL so manager can review & click Approve
           });
         }
       }
 
-      toast.success("Route assignments updated for " + targetDateStr);
+      toast.success(`✓ Assigned routes to ${targetDateStr} (Pending Approval)`);
       setAddRouteModalOpen(false);
       await fetchData();
 
-      // If a route was checked, automatically open its Route Management screen
       if (selectedRouteIds.length > 0) {
         const firstId = selectedRouteIds[selectedRouteIds.length - 1];
         openRouteSheet(firstId, targetDateStr);
@@ -395,7 +541,6 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
       if (createErr || !routeRes) throw createErr || new Error("Failed to create route");
 
-      // Assign to target date
       await supabase.from("route_plan_assignments").insert({
         account_id: accountId,
         route_id: routeRes.id,
@@ -403,15 +548,14 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         day_of_week: targetDow,
         start_date: targetDateStr,
         end_date: targetDateStr,
-        is_active: true,
+        is_active: false, // Starts as Pending Approval
       });
 
-      toast.success(`Route "${routeRes.name}" created and assigned to ${targetDateStr}`);
+      toast.success(`✓ Route "${routeRes.name}" created and assigned to ${targetDateStr} (Pending Approval)`);
       setNewRouteName("");
       setAddRouteModalOpen(false);
       await fetchData();
 
-      // Open Route Management screen directly as requested
       openRouteSheet(routeRes.id, targetDateStr);
     } catch (err: any) {
       toast.error(err.message || "Failed to create and assign route");
@@ -429,108 +573,12 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       const matching = existing.find((a) => a.route_id === selectedRoute.id);
       if (matching) {
         await supabase.from("route_plan_assignments").delete().eq("id", matching.id);
-        toast.success("Route removed from " + selectedRouteDate);
+        toast.success("✓ Route removed from " + selectedRouteDate);
         setSelectedRoute(null);
         await fetchData();
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to remove route");
-    }
-  };
-
-  // Button actions in Route Management Screen (Screenshot 2)
-  const handleApproveRoute = async () => {
-    if (!selectedRoute) return;
-    try {
-      const { error } = await supabase
-        .from("routes")
-        .update({ status: "active" })
-        .eq("id", selectedRoute.id);
-      if (error) throw error;
-      toast.success(`Route "${selectedRoute.name}" approved and active!`);
-      setSelectedRoute({ ...selectedRoute, status: "active" });
-      await fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to approve route");
-    }
-  };
-
-  const handleArchiveRoute = async () => {
-    if (!selectedRoute) return;
-    try {
-      const { error } = await supabase
-        .from("routes")
-        .update({ status: "archived", archived_at: new Date().toISOString() })
-        .eq("id", selectedRoute.id);
-      if (error) throw error;
-      toast.success(`Route "${selectedRoute.name}" archived`);
-      setSelectedRoute(null);
-      await fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to archive route");
-    }
-  };
-
-  const handleCloneRoute = async () => {
-    if (!selectedRoute) return;
-    try {
-      const newName = `${selectedRoute.name} (Copy)`;
-      const { data: clonedRoute, error } = await supabase.rpc("route_upsert", {
-        p_route_id: null,
-        p_name: newName,
-        p_description: null,
-        p_primary_assignee_id: employeeId,
-        p_customer_ids: null,
-        p_expected_version: null,
-      });
-      if (error || !clonedRoute) throw error || new Error("Failed to clone route");
-
-      // Also clone route customers if any exist
-      if (routeCustomers.length > 0) {
-        for (const rc of routeCustomers) {
-          await supabase.from("route_customers").insert({
-            account_id: accountId,
-            route_id: clonedRoute.id,
-            contact_id: rc.contact_id,
-            sequence: rc.sequence,
-          });
-        }
-      }
-
-      toast.success(`Route cloned successfully as "${newName}"`);
-      await fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to clone route");
-    }
-  };
-
-  const handleOpenEditRouteModal = () => {
-    if (!selectedRoute) return;
-    setEditRouteName(selectedRoute.name);
-    setEditRouteModalOpen(true);
-  };
-
-  const handleSaveEditRoute = async () => {
-    if (!selectedRoute || !editRouteName.trim()) return;
-    setSavingEdit(true);
-    try {
-      const { data: res, error } = await supabase.rpc("route_upsert", {
-        p_route_id: selectedRoute.id,
-        p_name: editRouteName.trim(),
-        p_description: null,
-        p_primary_assignee_id: employeeId,
-        p_customer_ids: null,
-        p_expected_version: null,
-      });
-      if (error) throw error;
-      toast.success("Route details updated");
-      setSelectedRoute({ ...selectedRoute, name: editRouteName.trim() });
-      setEditRouteModalOpen(false);
-      await fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to edit route");
-    } finally {
-      setSavingEdit(false);
     }
   };
 
@@ -620,43 +668,122 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           supabase.from("route_customers").update({ sequence: idx + 1 }).eq("id", rc.id)
         )
       );
-      toast.success("Sequence updated");
+      toast.success("Sequence updated. Click 'Save & Approve' to make it live on mobile!");
     } catch {
       toast.error("Failed to reorder sequence");
       if (selectedRoute) fetchRouteCustomers(selectedRoute.id);
     }
   };
 
+  // ── TABLE VIEW (Exact clone of Calendar schedule for the month) ──
+  const filteredTableAssignments = useMemo(() => {
+    let list = assignments;
+    if (tableFilter === "pending") list = list.filter((a) => !a.is_active);
+    if (tableFilter === "approved") list = list.filter((a) => a.is_active);
+    if (tableSearch.trim()) {
+      const q = tableSearch.toLowerCase().trim();
+      list = list.filter(
+        (a) =>
+          (a.route_name || "").toLowerCase().includes(q) ||
+          (a.start_date || "").includes(q)
+      );
+    }
+    return list.sort((a, b) => (a.start_date || "").localeCompare(b.start_date || ""));
+  }, [assignments, tableFilter, tableSearch]);
+
+  const allTableSelected =
+    filteredTableAssignments.length > 0 &&
+    tableSelectedIds.length === filteredTableAssignments.length;
+
+  const toggleTableSelectAll = () => {
+    if (allTableSelected) {
+      setTableSelectedIds([]);
+    } else {
+      setTableSelectedIds(filteredTableAssignments.map((a) => a.id));
+    }
+  };
+
+  const toggleTableSelectId = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTableSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleTableBulkApprove = async () => {
+    if (tableSelectedIds.length === 0) return;
+    try {
+      await supabase
+        .from("route_plan_assignments")
+        .update({ is_active: true })
+        .in("id", tableSelectedIds);
+      toast.success(`✓ Approved ${tableSelectedIds.length} route assignments! Live on mobile.`);
+      setTableSelectedIds([]);
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Bulk approval failed");
+    }
+  };
+
+  const handleTableBulkRemove = async () => {
+    if (tableSelectedIds.length === 0) return;
+    try {
+      await supabase
+        .from("route_plan_assignments")
+        .delete()
+        .in("id", tableSelectedIds);
+      toast.success(`Removed ${tableSelectedIds.length} assignments from calendar`);
+      setTableSelectedIds([]);
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Bulk removal failed");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Sub-navigation tabs */}
-      <div className="flex items-center gap-2 border-b border-border pb-3">
-        <button
-          type="button"
-          onClick={() => setActiveSubTab("calendar")}
-          className={cn(
-            "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-            activeSubTab === "calendar"
-              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold"
-              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-          )}
-        >
-          <CalendarIcon className="h-4 w-4" />
-          Calendar View
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveSubTab("table")}
-          className={cn(
-            "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-            activeSubTab === "table"
-              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold"
-              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-          )}
-        >
-          <TableIcon className="h-4 w-4" />
-          All Routes Table
-        </button>
+      <div className="flex items-center justify-between border-b border-border pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab("calendar")}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+              activeSubTab === "calendar"
+                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            )}
+          >
+            <CalendarIcon className="h-4 w-4" />
+            Calendar View
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab("table")}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+              activeSubTab === "table"
+                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            )}
+          >
+            <TableIcon className="h-4 w-4" />
+            Table View (Calendar Clone)
+          </button>
+        </div>
+
+        {/* Global Approve Month's Routes Button directly in calendar view header */}
+        {pendingAssignments.length > 0 && (
+          <Button
+            size="sm"
+            onClick={handleApproveAllPending}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md px-4 h-9"
+          >
+            <CheckCircle2 className="h-4 w-4 mr-1.5" />
+            Approve Month&apos;s Routes ({pendingAssignments.length} Pending)
+          </Button>
+        )}
       </div>
 
       {activeSubTab === "calendar" ? (
@@ -678,10 +805,15 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
               <h2 className="text-xl font-bold text-foreground">{monthLabel}</h2>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-3 py-1">
-                Active Routes: {routes.length}
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-3 py-1 font-semibold">
+                Approved: {assignments.filter((a) => a.is_active).length}
               </Badge>
+              {pendingAssignments.length > 0 && (
+                <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-300 px-3 py-1 font-semibold">
+                  Pending: {pendingAssignments.length}
+                </Badge>
+              )}
               <Button variant="outline" size="sm" onClick={fetchData} title="Refresh calendar">
                 <Loader2 className={cn("h-4 w-4 mr-1.5", loading && "animate-spin")} /> Refresh
               </Button>
@@ -725,26 +857,49 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                       </span>
                       {dayAssignments.length > 0 && (
                         <span className="text-[10px] text-emerald-400 font-medium">
-                          {dayAssignments.length} {dayAssignments.length === 1 ? "route" : "routes"}
+                          {dayAssignments.length} {dayAssignments.length === 1 ? "area" : "areas"}
                         </span>
                       )}
                     </div>
 
-                    {/* Middle: Route Badges (Emerald Green) */}
-                    <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[90px] py-1">
+                    {/* Middle: Route Area Badges (With inline Approve button if Pending) */}
+                    <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[95px] py-1">
                       {dayAssignments.map((a) => (
-                        <button
+                        <div
                           key={a.id}
-                          type="button"
-                          onClick={() => openRouteSheet(a.route_id, cell.dateStr)}
-                          className="group flex w-full items-center justify-between gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1.5 text-left text-xs font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/25"
-                          title="Click to view and edit route customers"
+                          className={cn(
+                            "group flex w-full items-center justify-between gap-1 rounded-lg border px-2.5 py-1.5 text-left text-xs font-semibold transition-colors",
+                            a.is_active
+                              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                              : "border-amber-500/40 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25"
+                          )}
                         >
-                          <span className="truncate">{a.route_name || "Route"}</span>
-                          <span className="shrink-0 text-[10px] text-emerald-400/80 group-hover:text-emerald-200">
-                            •
-                          </span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => openRouteSheet(a.route_id, cell.dateStr)}
+                            className="flex-1 truncate text-left"
+                            title="Click to view customers & repeat schedule"
+                          >
+                            <span>{a.route_name || "Area"}</span>
+                            {!a.is_active && (
+                              <span className="block text-[9px] text-amber-300/90 uppercase font-extrabold">
+                                ⏳ Pending
+                              </span>
+                            )}
+                          </button>
+
+                          {/* Inline Approve button right on the calendar card */}
+                          {!a.is_active && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleApproveAssignment(a.id, e)}
+                              className="shrink-0 p-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                              title="Approve this route assignment for mobile user"
+                            >
+                              <Check className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
                       ))}
                     </div>
 
@@ -763,8 +918,186 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           </div>
         </div>
       ) : (
-        <div className="animate-in fade-in-50 duration-200">
-          <RouteList hideHeader onSelectRoute={(id) => openRouteSheet(id)} />
+        /* ── TABLE VIEW (Exact Clone of Calendar Schedule with Wide Checkboxes) ── */
+        <div className="space-y-4 animate-in fade-in-50 duration-200">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">
+                {monthLabel} Route Schedule Table
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Exact table clone of calendar assignments. Assigning is done from Calendar View only.
+              </p>
+            </div>
+
+            {/* Filter buttons & search for Table View */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex rounded-lg border border-border bg-muted/20 p-1">
+                {(["all", "pending", "approved"] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setTableFilter(key)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors",
+                      tableFilter === key
+                        ? "bg-primary text-primary-foreground font-bold"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {key === "all" ? `All (${assignments.length})` : key === "pending" ? `Pending (${pendingAssignments.length})` : `Approved (${assignments.filter((a) => a.is_active).length})`}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search area or date..."
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  className="pl-9 h-9 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Table Batch Action Bar */}
+          {tableSelectedIds.length > 0 && (
+            <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 animate-in fade-in duration-200">
+              <span className="text-sm font-bold text-emerald-300">
+                {tableSelectedIds.length} {tableSelectedIds.length === 1 ? "assignment" : "assignments"} selected
+              </span>
+              <div className="flex items-center gap-3">
+                <Button
+                  size="sm"
+                  onClick={handleTableBulkApprove}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 px-4 shadow-sm"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                  Approve Selected ({tableSelectedIds.length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleTableBulkRemove}
+                  className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-9"
+                >
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Remove Selected
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setTableSelectedIds([])} className="text-xs">
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Monthly Schedule Table */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
+                  <tr>
+                    <th className="w-12 px-4 py-3">
+                      <Checkbox
+                        checked={allTableSelected}
+                        onCheckedChange={toggleTableSelectAll}
+                        className="h-5 w-5 rounded border-2 border-primary/40"
+                        aria-label="Select all assignments"
+                      />
+                    </th>
+                    <th className="px-4 py-3 font-semibold">Scheduled Date</th>
+                    <th className="px-4 py-3 font-semibold">Assigned Area (Route)</th>
+                    <th className="px-4 py-3 font-semibold text-right">Customers</th>
+                    <th className="px-4 py-3 font-semibold">Approval Status</th>
+                    <th className="px-4 py-3 font-semibold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredTableAssignments.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-16 text-center">
+                        <p className="text-base font-semibold text-foreground">
+                          No route assignments match
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Switch to the Calendar View tab to assign areas to dates.
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTableAssignments.map((a) => {
+                      const isChecked = tableSelectedIds.includes(a.id);
+                      return (
+                        <tr
+                          key={a.id}
+                          onClick={() => openRouteSheet(a.route_id, a.start_date || undefined)}
+                          className={cn(
+                            "cursor-pointer transition-colors hover:bg-muted/40",
+                            isChecked && "bg-emerald-500/5"
+                          )}
+                        >
+                          <td
+                            className="px-4 py-3"
+                            onClick={(e) => toggleTableSelectId(a.id, e)}
+                          >
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={() => {}}
+                              className="h-5 w-5 rounded border-2 border-primary/40"
+                              aria-label={`Select ${a.route_name}`}
+                            />
+                          </td>
+                          <td className="px-4 py-3 font-bold text-foreground">
+                            {a.start_date}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-foreground">
+                            {a.route_name || "Area"}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">
+                            {a.customer_count || 0}
+                          </td>
+                          <td className="px-4 py-3">
+                            {a.is_active ? (
+                              <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-semibold">
+                                ✓ Approved (Live on Mobile)
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 font-semibold">
+                                ⏳ Pending Approval
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-2">
+                              {!a.is_active && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleApproveAssignment(a.id)}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-8 text-xs"
+                                >
+                                  <Check className="h-3 w-3 mr-1" /> Approve
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openRouteSheet(a.route_id, a.start_date || undefined)}
+                                className="h-8 text-xs font-medium"
+                              >
+                                View Customers
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -776,7 +1109,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
               Assign Routes to <span className="text-emerald-400">{targetDateStr}</span>
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              Select one or multiple territory routes to schedule for this specific date.
+              Select one or multiple territory areas to schedule for this specific date. Starts as Pending Approval.
             </p>
           </DialogHeader>
 
@@ -785,7 +1118,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search routes by name..."
+                placeholder="Search areas by name..."
                 value={routeSearch}
                 onChange={(e) => setRouteSearch(e.target.value)}
                 className="pl-9 h-10 text-sm font-medium"
@@ -797,9 +1130,9 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           <div className="flex-1 my-2 overflow-y-auto space-y-2 pr-1 max-h-[42vh]">
             {filteredRoutes.length === 0 ? (
               <div className="py-12 text-center">
-                <p className="text-sm font-medium text-muted-foreground">No matching routes found.</p>
+                <p className="text-sm font-medium text-muted-foreground">No matching areas found.</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Try a different search or create a new route below.
+                  Try a different search or create a new area below.
                 </p>
               </div>
             ) : (
@@ -820,10 +1153,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                         : "border-border bg-card hover:bg-muted/60"
                     )}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-semibold">{r.name}</span>
-                      <RouteStatusPill status={r.status as any} />
-                    </div>
+                    <span className="text-sm font-bold">{r.name}</span>
                     <div
                       className={cn(
                         "flex h-5 w-5 items-center justify-center rounded border transition-colors",
@@ -840,10 +1170,10 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
             )}
           </div>
 
-          {/* Create & Assign New Route Inline */}
+          {/* Create & Assign New Area Inline */}
           <div className="border-t border-border pt-4">
             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Or Create & Assign New Route
+              Or Create & Assign New Area
             </label>
             <div className="mt-2 flex gap-2">
               <Input
@@ -879,12 +1209,12 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         </DialogContent>
       </Dialog>
 
-      {/* ── FULL SCREEN MODAL: Route Customers Management Screen (Wider, Broader, + Back Button) ── */}
+      {/* ── FULL SCREEN MODAL: Route Customers & Repeat Scheduler (Wider, Broader, + Back Button, NO Abstract Route Buttons) ── */}
       <Dialog open={!!selectedRoute} onOpenChange={(open) => !open && setSelectedRoute(null)}>
         <DialogContent className="sm:max-w-[1300px] w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-8 rounded-2xl border border-border bg-background shadow-2xl overflow-hidden">
           {selectedRoute && (
             <div className="flex-1 flex flex-col min-h-0 space-y-6">
-              {/* Top Navigation Bar with Back button and Status Badge */}
+              {/* Top Navigation Bar with Back button and Status Badge (No Edit/Archive/Clone route name buttons!) */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
                 <div className="flex items-center gap-4">
                   <Button
@@ -897,7 +1227,6 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   </Button>
                   <div className="h-5 w-px bg-border" />
                   <h2 className="text-2xl font-extrabold text-foreground">{selectedRoute.name}</h2>
-                  <RouteStatusPill status={selectedRoute.status as any} />
                   <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-semibold px-2.5 py-0.5">
                     Health 100%
                   </Badge>
@@ -906,54 +1235,100 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   </p>
                 </div>
 
-                {/* Fully Working Action Buttons (Approve, Edit, Archive, Clone, Remove from Day) */}
-                <div className="flex items-center gap-2.5">
-                  {selectedRoute.status !== "active" && (
-                    <Button
-                      size="sm"
-                      onClick={handleApproveRoute}
-                      className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
-                    >
-                      <CheckCircle2 className="h-4 w-4 mr-1.5" /> Approve
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleOpenEditRouteModal}
-                    className="h-9 font-medium"
-                  >
-                    <Edit2 className="h-3.5 w-3.5 mr-1.5" /> Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleArchiveRoute}
-                    className="h-9 font-medium"
-                  >
-                    <Archive className="h-3.5 w-3.5 mr-1.5" /> Archive
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCloneRoute}
-                    className="h-9 font-medium"
-                  >
-                    <Copy className="h-3.5 w-3.5 mr-1.5" /> Clone
-                  </Button>
+                {/* Top Actions: Save Customer Sequence & Approve Route for Mobile! */}
+                <div className="flex items-center gap-3">
                   {selectedRouteDate && (
                     <Button
                       variant="destructive"
                       size="sm"
                       onClick={removeRouteFromDay}
                       className="h-9 font-medium"
-                      title="Remove route assignment from this day"
+                      title="Remove assignment from this date"
                     >
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Remove from Day
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Remove from {selectedRouteDate}
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    onClick={handleSaveSequenceAndApprove}
+                    disabled={savingSequence}
+                    className="h-9 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold shadow-md"
+                  >
+                    {savingSequence ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1.5" />
+                    )}
+                    Save Sequence &amp; Approve for Mobile
+                  </Button>
                 </div>
               </div>
+
+              {/* Repeat Route Assignment Section right inside Customer Screen (Daily, Weekly, 10 Days, 15 Days, Monthly) */}
+              {selectedRouteDate && (
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
+                  <div className="flex items-center gap-3">
+                    <Repeat className="h-5 w-5 text-purple-400 shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-foreground">
+                        Repeat &amp; Schedule &quot;{selectedRoute.name}&quot; Across Month
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Select interval starting {selectedRouteDate} to auto-schedule across the month.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex rounded-lg border border-border bg-card p-1">
+                      {(
+                        [
+                          { key: "daily", label: "Daily" },
+                          { key: "weekly", label: "Weekly" },
+                          { key: "10_days", label: "Every 10 Days" },
+                          { key: "15_days", label: "Every 15 Days" },
+                          { key: "monthly", label: "Monthly" },
+                        ] as const
+                      ).map((f) => (
+                        <button
+                          key={f.key}
+                          type="button"
+                          onClick={() => setRepeatFrequency(f.key)}
+                          className={cn(
+                            "rounded-md px-3 py-1 text-xs font-bold transition-colors",
+                            repeatFrequency === f.key
+                              ? "bg-purple-600 text-white shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setRepeatApproved(!repeatApproved)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                    >
+                      {repeatApproved ? (
+                        <CheckSquare className="h-4 w-4 text-emerald-400" />
+                      ) : (
+                        <Square className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      Create as Approved
+                    </button>
+
+                    <Button
+                      size="sm"
+                      onClick={handleRepeatSchedule}
+                      className="bg-purple-600 hover:bg-purple-700 text-white font-bold h-9 px-4"
+                    >
+                      Apply Repeat Schedule
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Sub-Navigation Tabs */}
               <div className="flex items-center gap-8 border-b border-border text-sm font-semibold">
@@ -980,12 +1355,9 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   {/* Top Banner */}
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-muted-foreground">
-                      {routeCustomers.length} customers. Visited top to bottom.
+                      {routeCustomers.length} customers. Visited top to bottom. Drag or click arrows to order.
                     </p>
                     <div className="flex items-center gap-3">
-                      <Button variant="outline" size="sm" className="h-9 font-medium">
-                        Select
-                      </Button>
                       <Button
                         size="sm"
                         onClick={() => setAddCustomerModalOpen(true)}
@@ -1004,7 +1376,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   ) : routeCustomers.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 py-16 text-center">
                       <MapPin className="h-10 w-10 text-muted-foreground mb-3" />
-                      <p className="text-base font-bold text-foreground">No customers on this route yet</p>
+                      <p className="text-base font-bold text-foreground">No customers assigned to this area yet</p>
                       <p className="text-sm text-muted-foreground mt-1 max-w-sm">
                         Click &apos;+ Add customers&apos; above to search and assign customers from your territory.
                       </p>
@@ -1068,6 +1440,22 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                       })}
                     </div>
                   )}
+
+                  {/* Bottom confirmation Save & Approve button */}
+                  <div className="flex items-center justify-between border-t border-border pt-4">
+                    <p className="text-xs text-muted-foreground">
+                      Mobile user Dhaval Vegad will see this exact order once approved.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveSequenceAndApprove}
+                      disabled={savingSequence}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 h-10 shadow-md"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Customer Sequence &amp; Approve for Mobile
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -1081,44 +1469,12 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         </DialogContent>
       </Dialog>
 
-      {/* ── MODAL: Edit Route Details ── */}
-      <Dialog open={editRouteModalOpen} onOpenChange={setEditRouteModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold">Edit Route Name</DialogTitle>
-          </DialogHeader>
-          <div className="py-2 space-y-3">
-            <label className="text-xs font-semibold text-muted-foreground uppercase">Route Name</label>
-            <Input
-              value={editRouteName}
-              onChange={(e) => setEditRouteName(e.target.value)}
-              className="h-10 text-sm font-medium"
-              placeholder="Enter new route name..."
-            />
-          </div>
-          <DialogFooter className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setEditRouteModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSaveEditRoute}
-              disabled={savingEdit || !editRouteName.trim()}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-            >
-              {savingEdit && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* ── MODAL: Add Customers to Route (Search & Add) ── */}
       <Dialog open={addCustomerModalOpen} onOpenChange={setAddCustomerModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">Add Customers to {selectedRoute?.name}</DialogTitle>
-            <p className="text-xs text-muted-foreground">Search and assign territory customers to this route.</p>
+            <p className="text-xs text-muted-foreground">Search and assign territory customers to this area.</p>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
