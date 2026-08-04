@@ -35,6 +35,7 @@ import { GatedButton } from "@/components/ui/gated-button";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, EmptyState, StatusBadge } from "@/components/shared";
 
 const SPEC_DEFAULT_STAGES = [
   { name: "New Lead", color: "#3b82f6", position: 0 },
@@ -507,9 +508,9 @@ export default function PipelinesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+    <PageLayout>
+      <PageHeader
+        title={
           <DropdownMenu>
             <DropdownMenuTrigger
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors data-[popup-open]:bg-muted"
@@ -555,94 +556,95 @@ export default function PipelinesPage() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <GatedButton
-            variant="outline"
-            canAct={canEditSettings}
-            gateReason="manage pipelines"
-            onClick={() => router.push('/settings?tab=deal_pipelines')}
-            className="border-border bg-card text-foreground hover:bg-muted"
-          >
-            <Settings className="mr-1.5 h-4 w-4" />
-            Deal Pipelines
-          </GatedButton>
-          <GatedButton
-            canAct={canCreateDeals}
-            gateReason="create deals"
-            disabled={!selectedPipelineId || stages.length === 0}
-            onClick={() => handleAddDeal()}
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Deal
-          </GatedButton>
-          <GatedButton
-            variant="outline"
-            canAct={canCreateDeals}
-            gateReason="import deals"
-            disabled={!selectedPipelineId}
-            onClick={() => setImportDealsOpen(true)}
-            className="border-border bg-card text-foreground hover:bg-muted"
-          >
-            <Upload className="mr-1 h-4 w-4" />
-            Import
-          </GatedButton>
-        </div>
-      </div>
+        }
+        subtitle="Manage deals and sales pipelines."
+        actions={
+          <>
+            <GatedButton
+              variant="outline"
+              canAct={canEditSettings}
+              gateReason="manage pipelines"
+              onClick={() => router.push('/settings?tab=deal_pipelines')}
+              className="border-border bg-card text-foreground hover:bg-muted"
+            >
+              <Settings className="mr-1.5 h-4 w-4" />
+              Deal Pipelines
+            </GatedButton>
+            <GatedButton
+              canAct={canCreateDeals}
+              gateReason="create deals"
+              disabled={!selectedPipelineId || stages.length === 0}
+              onClick={() => handleAddDeal()}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Add Deal
+            </GatedButton>
+            <GatedButton
+              variant="outline"
+              canAct={canCreateDeals}
+              gateReason="import deals"
+              disabled={!selectedPipelineId}
+              onClick={() => setImportDealsOpen(true)}
+              className="border-border bg-card text-foreground hover:bg-muted"
+            >
+              <Upload className="mr-1 h-4 w-4" />
+              Import
+            </GatedButton>
+          </>
+        }
+      />
 
       {pipelines.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20">
-          <GitBranch className="h-12 w-12 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-medium text-foreground">
-            No pipelines yet
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Create a pipeline to start tracking deals
-          </p>
-          <GatedButton
-            canAct={canEditSettings}
-            gateReason="create pipelines"
-            onClick={() => setNewPipelineOpen(true)}
-            className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            Create Pipeline
-          </GatedButton>
-        </div>
+        <EmptyState
+          icon={<GitBranch className="h-10 w-10 text-muted-foreground" />}
+          title="No pipelines yet"
+          description="Create a pipeline to start tracking deals"
+          action={
+            <GatedButton
+              canAct={canEditSettings}
+              gateReason="create pipelines"
+              onClick={() => setNewPipelineOpen(true)}
+              className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Create Pipeline
+            </GatedButton>
+          }
+        />
       ) : (
         <>
           <PipelineAnalytics stages={stages} deals={deals} />
           
           <div className="mt-4 space-y-4">
-            {selectedDealIds.size > 0 && canCreateDeals && (
-              <div className="bg-card border border-border p-4 rounded-xl flex flex-wrap gap-4 items-center justify-between shadow-sm animate-in fade-in slide-in-from-bottom-2">
-                <div className="flex items-center gap-4">
-                  <Badge variant="secondary" className="px-3 py-1 bg-primary/10 text-primary border-primary/20">
-                    {selectedDealIds.size} selected
-                  </Badge>
-                  <span className="text-sm font-medium text-foreground">
-                    Bulk Actions
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedDealIds(new Set())}>
-                    Cancel
-                  </Button>
-                  <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white shadow-sm" onClick={handleBulkDelete}>
-                    <XCircle className="mr-2 h-4 w-4" /> Delete
-                  </Button>
-                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm" onClick={() => handleBulkStatus("lost")}>
-                    <XCircle className="mr-2 h-4 w-4" /> Mark Lost
-                  </Button>
-                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white shadow-sm" onClick={() => handleBulkStatus("won")}>
-                    <CheckCircle className="mr-2 h-4 w-4" /> Mark Won
-                  </Button>
-                  
+            {canCreateDeals && (
+              <BulkActionBar
+                selectedCount={selectedDealIds.size}
+                onClear={() => setSelectedDealIds(new Set())}
+                actions={[
+                  {
+                    label: "Delete",
+                    icon: <XCircle className="size-4" />,
+                    variant: "destructive",
+                    onClick: handleBulkDelete,
+                  },
+                  {
+                    label: "Mark Lost",
+                    icon: <XCircle className="size-4" />,
+                    variant: "outline",
+                    onClick: () => handleBulkStatus("lost"),
+                  },
+                  {
+                    label: "Mark Won",
+                    icon: <CheckCircle className="size-4" />,
+                    variant: "default",
+                    onClick: () => handleBulkStatus("won"),
+                  },
+                ]}
+                extraActions={
                   <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button size="sm" variant="outline" className="gap-2" />}>
-                      <MoreHorizontal className="h-4 w-4" /> Move Stage
+                    <DropdownMenuTrigger render={<Button size="sm" variant="outline" className="gap-2 h-7 text-xs" />}>
+                      <MoreHorizontal className="h-3.5 w-3.5" /> Move Stage
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 bg-popover border-border">
                       <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Select Stage</div>
@@ -655,8 +657,8 @@ export default function PipelinesPage() {
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
-              </div>
+                }
+              />
             )}
             
             <DataTable
@@ -762,6 +764,6 @@ export default function PipelinesPage() {
           if (selectedPipelineId) refreshDeals();
         }}
       />
-    </div>
+    </PageLayout>
   );
 }

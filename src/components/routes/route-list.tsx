@@ -12,8 +12,6 @@ import {
 import { ROUTE_PERMISSIONS, type RouteStatus, type RouteError } from "@/lib/route";
 import { RouteStatusPill } from "./route-status-pill";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,23 +22,17 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Plus,
-  Search,
   MoreHorizontal,
   Copy,
   Archive,
   RotateCcw,
-  Loader2,
-  Route as RouteIcon,
-  ChevronLeft,
-  ChevronRight,
-  AlertCircle,
   CheckCircle2,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   Edit2,
   Users,
 } from "lucide-react";
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar } from "@/components/shared";
+import { DataTable } from "@/components/ui/data-table/data-table";
+import { type ColumnDef, type FilterState } from "@/components/ui/data-table/data-table-types";
 
 const PAGE_SIZE = 25;
 
@@ -52,9 +44,6 @@ const FILTERS: { key: FilterKey; label: string; statuses?: RouteStatus[] }[] = [
   { key: "archived", label: "Archived", statuses: ["archived"] },
   { key: "all", label: "All" },
 ];
-
-type SortColumn = "name" | "assignee" | "customers" | "updated";
-type SortDirection = "asc" | "desc";
 
 export interface RouteListProps {
   hideHeader?: boolean;
@@ -72,10 +61,6 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-
-  // Sorting state
-  const [sortCol, setSortCol] = useState<SortColumn>("name");
-  const [sortDir, setSortDir] = useState<SortDirection>("asc");
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -103,23 +88,8 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
   const bulkStatusMutation = useBulkUpdateRouteStatus(accountId);
 
   const rows = useMemo(() => {
-    const base = (data?.rows ?? []).slice();
-    return base.sort((a: any, b: any) => {
-      let comparison = 0;
-      if (sortCol === "name") {
-        comparison = (a.name || "").localeCompare(b.name || "");
-      } else if (sortCol === "assignee") {
-        const aName = a.primary_assignee_name || "";
-        const bName = b.primary_assignee_name || "";
-        comparison = aName.localeCompare(bName);
-      } else if (sortCol === "customers") {
-        comparison = (a.customer_count || 0) - (b.customer_count || 0);
-      } else if (sortCol === "updated") {
-        comparison = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
-      }
-      return sortDir === "asc" ? comparison : -comparison;
-    });
-  }, [data?.rows, sortCol, sortDir]);
+    return (data?.rows ?? []).slice();
+  }, [data?.rows]);
 
   const total = data?.total ?? 0;
   const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
@@ -130,39 +100,6 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
   useEffect(() => {
     setSelectedIds([]);
   }, [filter, page, search]);
-
-  const toggleSort = (col: SortColumn) => {
-    if (sortCol === col) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortCol(col);
-      setSortDir("asc");
-    }
-  };
-
-  const renderSortIcon = (col: SortColumn) => {
-    if (sortCol !== col) return <ArrowUpDown className="ml-1 h-3 w-3 text-muted-foreground/60 inline" />;
-    return sortDir === "asc" ? (
-      <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary inline" />
-    ) : (
-      <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary inline" />
-    );
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.length === rows.length && rows.length > 0) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(rows.map((r: any) => r.id));
-    }
-  };
-
-  const toggleSelectId = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
 
   const handleBulkApprove = () => {
     if (selectedIds.length === 0) return;
@@ -242,304 +179,232 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
     );
   };
 
-  const allSelected = rows.length > 0 && selectedIds.length === rows.length;
+  const [filterState, setFilterState] = useState<FilterState>({});
 
-  return (
-    <div className="space-y-4 animate-in fade-in-50 duration-200">
-      {/* Header — ONLY displayed when hideHeader is false */}
-      {!hideHeader && (
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Routes</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Build and assign beats from your territory customers.
-            </p>
-          </div>
-          {canAdd && (
-            <Button onClick={() => router.push("/routes/new")}>
-              <Plus className="h-4 w-4 mr-1.5" /> New Route
-            </Button>
-          )}
-        </div>
-      )}
-
-      {/* Filters + search */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-card p-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => {
-                setFilter(f.key);
-                setPage(0);
-              }}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                filter === f.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative min-w-[240px] flex-1 max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search routes by name…"
-            className="pl-9 h-9"
-          />
-        </div>
-      </div>
-
-      {/* Batch Action Bar (Approve / Archive multi-select) */}
-      {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 animate-in fade-in duration-200">
-          <span className="text-sm font-semibold text-emerald-300">
-            {selectedIds.length} {selectedIds.length === 1 ? "route" : "routes"} selected
+  const columns: ColumnDef<any>[] = useMemo(() => [
+    {
+      id: "name",
+      label: "Name",
+      type: "text",
+      render: (r) => (
+        <span className="font-semibold text-foreground">{r.name}</span>
+      ),
+    },
+    {
+      id: "assignee",
+      label: "Primary Assignee",
+      type: "text",
+      render: (r) => (
+        <span className="text-muted-foreground">
+          {r.primary_assignee_name ?? <span className="italic opacity-60">Unassigned</span>}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      label: "Status",
+      type: "select",
+      options: [
+        { label: "Active", value: "active" },
+        { label: "Draft", value: "draft" },
+        { label: "Pending approval", value: "pending_approval" },
+        { label: "Archived", value: "archived" },
+      ],
+      render: (r) => <RouteStatusPill status={r.status} />,
+    },
+    {
+      id: "customers",
+      label: "Customers",
+      type: "text",
+      render: (r) => (
+        <span className="tabular-nums text-foreground font-medium">
+          {r.customer_count}
+        </span>
+      ),
+    },
+    {
+      id: "updated_at",
+      label: "Updated",
+      type: "date",
+      render: (r) => {
+        if (!r.updated_at) return <span className="text-muted-foreground">—</span>;
+        const d = new Date(r.updated_at);
+        if (isNaN(d.getTime())) return <span className="text-muted-foreground">—</span>;
+        return (
+          <span className="text-muted-foreground tabular-nums">
+            {d.toISOString().slice(0, 10)}
           </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              onClick={handleBulkApprove}
-              disabled={bulkStatusMutation.isPending}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
-            >
-              {bulkStatusMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4 mr-1.5" />
-              )}
-              Approve Selected ({selectedIds.length})
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleBulkArchive}
-              disabled={bulkStatusMutation.isPending}
-              className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-            >
-              <Archive className="h-4 w-4 mr-1.5" />
-              Archive Selected
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])} className="text-xs">
-              Clear
-            </Button>
+        );
+      },
+    },
+    {
+      id: "actions",
+      label: "",
+      visibleByDefault: true,
+      render: (r) => {
+        const isArchived = r.status === "archived";
+        const needsApproval = r.status === "pending_approval" || r.status === "draft";
+        return (
+          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+            {needsApproval && (
+              <Button
+                size="sm"
+                className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs px-2.5 shadow-sm transition-all flex items-center gap-1"
+                onClick={(e) => handleApproveSingle(r.id, r.name, e)}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Approve</span>
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Route actions"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
+                {needsApproval && (
+                  <DropdownMenuItem
+                    onClick={(e) => handleApproveSingle(r.id, r.name, e)}
+                    className="text-emerald-400 font-semibold focus:text-emerald-300 cursor-pointer"
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-400" /> Approve Route
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (onSelectRoute) onSelectRoute(r.id);
+                    else router.push(`/routes/${r.id}`);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Users className="h-4 w-4 mr-2" /> Manage Customers
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => router.push(`/routes/${r.id}`)}
+                  className="cursor-pointer"
+                >
+                  <Edit2 className="h-4 w-4 mr-2" /> Edit Details
+                </DropdownMenuItem>
+                {canClone && (
+                  <DropdownMenuItem onClick={() => onClone(r.id, r.name)} className="cursor-pointer">
+                    <Copy className="h-4 w-4 mr-2" /> Clone
+                  </DropdownMenuItem>
+                )}
+                {canArchive && (
+                  <DropdownMenuItem onClick={() => onArchive(r.id, isArchived)} className="cursor-pointer">
+                    {isArchived ? (
+                      <>
+                        <RotateCcw className="h-4 w-4 mr-2" /> Restore
+                      </>
+                    ) : (
+                      <>
+                        <Archive className="h-4 w-4 mr-2 text-red-400" /> Archive
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </div>
+        );
+      },
+    },
+  ], [onSelectRoute, router, canClone, canArchive]);
+
+  const content = (
+    <>
+      {!hideHeader && (
+        <PageHeader
+          title="Routes"
+          subtitle="Build and assign beats from your territory customers."
+          actions={
+            canAdd ? (
+              <Button onClick={() => router.push("/routes/new")} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Plus className="h-4 w-4" /> New Route
+              </Button>
+            ) : undefined
+          }
+        />
       )}
 
-      {/* Table / states */}
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/60 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
-              <tr>
-                <th className="w-10 px-4 py-3">
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={toggleSelectAll}
-                    aria-label="Select all routes"
-                  />
-                </th>
-                <th
-                  className="px-4 py-3 font-semibold cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => toggleSort("name")}
-                >
-                  Name {renderSortIcon("name")}
-                </th>
-                <th
-                  className="px-4 py-3 font-semibold cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => toggleSort("assignee")}
-                >
-                  Primary assignee {renderSortIcon("assignee")}
-                </th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th
-                  className="px-4 py-3 font-semibold text-right cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => toggleSort("customers")}
-                >
-                  Customers {renderSortIcon("customers")}
-                </th>
-                <th
-                  className="px-4 py-3 font-semibold cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => toggleSort("updated")}
-                >
-                  Updated {renderSortIcon("updated")}
-                </th>
-                <th className="w-12 px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {isLoading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    <td className="px-4 py-3"><div className="h-4 w-4 rounded bg-muted" /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-40 rounded bg-muted" /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-24 rounded bg-muted" /></td>
-                    <td className="px-4 py-3"><div className="h-5 w-16 rounded-full bg-muted" /></td>
-                    <td className="px-4 py-3"><div className="ml-auto h-4 w-8 rounded bg-muted" /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-20 rounded bg-muted" /></td>
-                    <td className="px-4 py-3" />
-                  </tr>
-                ))
-              ) : isError ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center">
-                    <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
-                      <AlertCircle className="h-8 w-8 text-red-500" />
-                      <p className="text-sm text-muted-foreground">
-                        {(error as RouteError)?.message ?? "Failed to load routes."}
-                      </p>
-                      <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
-                    </div>
-                  </td>
-                </tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-16 text-center">
-                    <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-                        <RouteIcon className="h-7 w-7 text-primary" />
-                      </div>
-                      <p className="text-base font-semibold text-foreground">
-                        {search || filter !== "active_draft" ? "No routes match" : "No routes yet"}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {search || filter !== "active_draft"
-                          ? "Try a different filter or search term."
-                          : "Create your first beat from your territory customers."}
-                      </p>
-                      {/* ONLY show New Route button if header is visible (not inside employee route panel) */}
-                      {canAdd && !search && filter === "active_draft" && !hideHeader && (
-                        <Button onClick={() => router.push("/routes/new")} className="mt-2">
-                          <Plus className="h-4 w-4 mr-1.5" /> New Route
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r: any) => {
-                  const isArchived = r.status === "archived";
-                  const isChecked = selectedIds.includes(r.id);
-                  const needsApproval = r.status === "pending_approval" || r.status === "draft";
-
-                  return (
-                    <tr
-                      key={r.id}
-                      onClick={() => {
-                        if (onSelectRoute) {
-                          onSelectRoute(r.id);
-                        } else {
-                          router.push(`/routes/${r.id}`);
-                        }
-                      }}
-                      className={cn(
-                        "cursor-pointer transition-colors hover:bg-muted/40",
-                        isChecked && "bg-emerald-500/5"
-                      )}
-                    >
-                      <td className="px-4 py-3" onClick={(e) => toggleSelectId(r.id, e)}>
-                        <Checkbox
-                          checked={isChecked}
-                          onCheckedChange={() => {}}
-                          aria-label={`Select route ${r.name}`}
-                        />
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-foreground">{r.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {r.primary_assignee_name ?? <span className="italic opacity-60">Unassigned</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <RouteStatusPill status={r.status} />
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">
-                        {r.customer_count}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {new Date(r.updated_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                            aria-label="Route actions"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            {needsApproval && (
-                              <DropdownMenuItem
-                                onClick={(e) => handleApproveSingle(r.id, r.name, e)}
-                                className="text-emerald-400 font-semibold focus:text-emerald-300"
-                              >
-                                <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-400" /> Approve Route
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem
-                              onClick={() => {
-                                if (onSelectRoute) onSelectRoute(r.id);
-                                else router.push(`/routes/${r.id}`);
-                              }}
-                            >
-                              <Users className="h-4 w-4 mr-2" /> Manage Customers
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => router.push(`/routes/${r.id}`)}
-                            >
-                              <Edit2 className="h-4 w-4 mr-2" /> Edit Details
-                            </DropdownMenuItem>
-                            {canClone && (
-                              <DropdownMenuItem onClick={() => onClone(r.id, r.name)}>
-                                <Copy className="h-4 w-4 mr-2" /> Clone
-                              </DropdownMenuItem>
-                            )}
-                            {canArchive && (
-                              <DropdownMenuItem onClick={() => onArchive(r.id, isArchived)}>
-                                {isArchived ? (
-                                  <>
-                                    <RotateCcw className="h-4 w-4 mr-2" /> Restore
-                                  </>
-                                ) : (
-                                  <>
-                                    <Archive className="h-4 w-4 mr-2 text-red-400" /> Archive
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {!isLoading && !isError && total > 0 && (
-          <div className="flex items-center justify-between border-t border-border bg-card px-4 py-3 text-sm">
-            <span className="text-muted-foreground">
-              {from}–{to} of {total}
-              {isFetching && <Loader2 className="ml-2 inline h-3 w-3 animate-spin" />}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-              </Button>
-              <Button variant="outline" size="sm" disabled={!hasNext} onClick={() => setPage((p) => p + 1)}>
-                Next <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
+      <PageToolbar
+        search={{
+          value: searchInput,
+          onChange: setSearchInput,
+          placeholder: "Search routes by name...",
+        }}
+        actions={
+          <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-card p-1">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => {
+                  setFilter(f.key);
+                  setPage(0);
+                }}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  filter === f.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
-    </div>
+        }
+      />
+
+      <BulkActionBar
+        selectedCount={selectedIds.length}
+        onClear={() => setSelectedIds([])}
+        actions={[
+          {
+            label: `Approve (${selectedIds.length})`,
+            icon: <CheckCircle2 className="size-4" />,
+            variant: "default",
+            onClick: handleBulkApprove,
+            disabled: bulkStatusMutation.isPending,
+          },
+          {
+            label: "Archive",
+            icon: <Archive className="size-4" />,
+            variant: "outline",
+            onClick: handleBulkArchive,
+            disabled: bulkStatusMutation.isPending,
+          },
+        ]}
+      />
+
+      <DataTable
+        columns={columns}
+        data={rows}
+        filterState={filterState}
+        onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
+        storageKey="wacrm_routes_table_columns"
+        isLoading={isLoading}
+        rowKey={(route) => route.id}
+        onRowClick={(route) => {
+          if (onSelectRoute) onSelectRoute(route.id);
+          else router.push(`/routes/${route.id}`);
+        }}
+        selection={{
+          selectedIds: new Set(selectedIds),
+          onSelectAll: (checked) => setSelectedIds(checked ? rows.map((r: any) => r.id) : []),
+          onSelect: (id, checked) => setSelectedIds(prev => {
+            if (checked) {
+              return prev.includes(id) ? prev : [...prev, id];
+            } else {
+              return prev.filter(x => x !== id);
+            }
+          }),
+        }}
+      />
+    </>
   );
+
+  return hideHeader ? <div className="space-y-4">{content}</div> : <PageLayout>{content}</PageLayout>;
 }

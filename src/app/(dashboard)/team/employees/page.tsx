@@ -15,6 +15,9 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageLayout, PageHeader, PageToolbar, StatusBadge } from "@/components/shared";
+import { DataTable } from "@/components/ui/data-table/data-table";
+import { ColumnDef } from "@/components/ui/data-table/data-table-types";
 
 interface Employee {
   id: string;
@@ -223,75 +226,85 @@ export default function EmployeesPage() {
     e.employee_code?.toLowerCase().includes(search.toLowerCase())
   );
 
-  return (
-    <div className="p-8 w-full max-w-none space-y-6">
-      <div className="flex items-center justify-between">
+  const columns: ColumnDef<Employee>[] = [
+    {
+      id: "employee",
+      label: "Employee",
+      type: "text",
+      render: (emp) => (
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Employees</h1>
-          <p className="text-muted-foreground">Manage your team, credentials, and device access.</p>
+          <div className="font-medium text-foreground">{emp.full_name || "Unknown"}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{emp.email} {emp.employee_code && `• ${emp.employee_code}`}</div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input 
-              placeholder="Search employees..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 w-64 bg-card"
-            />
-          </div>
-          <Button onClick={() => router.push('/team/employees/new')}>
+      ),
+    },
+    {
+      id: "role",
+      label: "Employee Role",
+      type: "text",
+      render: (emp) => (
+        <div className="flex items-center gap-2">
+          <StatusBadge status="assigned" label={emp.employee_roles?.name || "Unassigned"} />
+          {(emp.account_role === "admin" || emp.account_role === "owner") && (
+            <span className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-500 font-semibold capitalize">{emp.account_role}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      label: "Status",
+      type: "select",
+      options: [
+        { label: "Active", value: "active" },
+        { label: "Inactive", value: "inactive" },
+      ],
+      render: (emp) => (
+        <StatusBadge status={emp.status === "active" ? "active" : "inactive"} label={emp.status || "active"} />
+      ),
+    },
+    {
+      id: "actions",
+      label: "Actions",
+      type: "text",
+      render: (emp) => (
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/team/employees/${emp.id}`); }}>
+          <Edit className="w-4 h-4 mr-2" />
+          Manage
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <PageLayout>
+      <PageHeader
+        title="Employees"
+        subtitle="Manage your team, credentials, and device access."
+        actions={
+          <Button onClick={() => router.push('/team/employees/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <UserPlus className="w-4 h-4 mr-2" />
             Add Employee
           </Button>
-        </div>
-      </div>
+        }
+      />
 
-      {loading ? (
-        <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
-      ) : (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-muted/50 border-b font-medium text-muted-foreground">
-              <tr>
-                <th className="px-6 py-4">Employee</th>
-                <th className="px-6 py-4">Employee Role</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.map(emp => (
-                <tr key={emp.id} onClick={() => router.push(`/team/employees/${emp.id}`)} className="hover:bg-muted/30 transition-colors cursor-pointer">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-foreground">{emp.full_name || "Unknown"}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{emp.email} {emp.employee_code && `• ${emp.employee_code}`}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <Badge className="font-semibold bg-blue-600 text-white shadow-sm border-transparent">
-                      {emp.employee_roles?.name || "Unassigned"}
-                    </Badge>
-                    {(emp.account_role === "admin" || emp.account_role === "owner") && (
-                      <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-500 font-semibold capitalize">{emp.account_role}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <Badge className={emp.status === 'active' ? 'bg-emerald-600 text-white shadow-sm border-transparent font-medium capitalize' : 'bg-red-600 text-white shadow-sm border-transparent font-medium capitalize'}>
-                      {emp.status || 'active'}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/team/employees/${emp.id}`); }}>
-                      <Edit className="w-4 h-4 mr-2" />
-                      Manage
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <PageToolbar
+        search={{
+          value: search,
+          onChange: setSearch,
+          placeholder: "Search employees...",
+        }}
+      />
+
+      <DataTable
+        columns={columns}
+        data={filtered}
+        storageKey="wacrm_employees_table_columns"
+        isLoading={loading}
+        rowKey={(emp) => emp.id}
+        onRowClick={(emp) => router.push(`/team/employees/${emp.id}`)}
+      />
 
       {/* Add Employee Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
@@ -483,7 +496,6 @@ export default function EmployeesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-    </div>
+    </PageLayout>
   );
 }

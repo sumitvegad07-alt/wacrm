@@ -19,6 +19,16 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        success:
+          "bg-success/15 text-success border-success/30 [a]:hover:bg-success/25",
+        warning:
+          "bg-warning/15 text-warning border-warning/30 [a]:hover:bg-warning/25",
+        info:
+          "bg-info/15 text-info border-info/30 [a]:hover:bg-info/25",
+        pending:
+          "bg-pending/15 text-pending border-pending/30 [a]:hover:bg-pending/25",
+        neutral:
+          "bg-muted text-muted-foreground border-border [a]:hover:bg-muted/80",
       },
     },
     defaultVariants: {

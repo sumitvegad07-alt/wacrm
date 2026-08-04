@@ -11,6 +11,7 @@ import Link from "next/link";
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
+import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
 
 export default function CustomerVisitsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -228,30 +229,27 @@ export default function CustomerVisitsPage() {
   }, [searchQuery, visitsData, filterState]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">Customer Visits</h1>
-        <div className="flex items-center gap-2">
+    <PageLayout>
+      <PageHeader
+        title="Customer Visits"
+        subtitle="Track field visits, feedback, and check-in times."
+        actions={
           <Input 
             type="date" 
             value={selectedDate} 
             onChange={(e) => setSelectedDate(e.target.value)} 
             className="w-auto h-9"
           />
-        </div>
-      </div>
+        }
+      />
 
-      <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by customer or employee..."
-            className="pl-9 bg-background border-border"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
+      <PageToolbar
+        search={{
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: "Search by customer or employee...",
+        }}
+      />
 
       <DataTable
         columns={columns}
@@ -262,6 +260,6 @@ export default function CustomerVisitsPage() {
         isLoading={isLoading}
         rowKey={(row) => row.id}
       />
-    </div>
+    </PageLayout>
   );
 }

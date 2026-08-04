@@ -38,6 +38,7 @@ import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { isDateInFilter } from "@/lib/date-filters";
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -236,9 +237,7 @@ export default function QuotationsPage() {
       type: "select",
       options: Object.keys(STATUS_COLORS).map(s => ({ label: s, value: s })),
       render: (quotation) => (
-        <Badge variant="outline" className={`font-normal ${STATUS_COLORS[quotation.status] || ''}`}>
-          {quotation.status}
-        </Badge>
+        <StatusBadge status={quotation.status.toLowerCase()} label={quotation.status} />
       )
     },
     {
@@ -389,89 +388,88 @@ export default function QuotationsPage() {
   }, [quotations, filterState, globalSearch, customFields]);
 
   return (
-    <div className="flex flex-col h-full space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Quotations</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage and track your quotations.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {process.env.NODE_ENV === 'development' && (
+    <PageLayout>
+      <PageHeader
+        title="Quotations"
+        subtitle="Manage and track your quotations."
+        actions={
+          <>
+            {process.env.NODE_ENV === 'development' && (
+              <Button 
+                variant="secondary"
+                className="gap-2" 
+                onClick={async () => {
+                  toast.loading('Seeding 20 quotations...', { id: 'seed' });
+                  const { data: contacts } = await supabase.from('contacts').select('id').limit(1);
+                  if (!contacts || contacts.length === 0) {
+                    toast.error('Create a contact first', { id: 'seed' });
+                    return;
+                  }
+                  const contactId = contacts[0].id;
+                  
+                  const { data: userData } = await supabase.auth.getUser();
+                  if (!userData?.user) return;
+                  
+                  const { data: member } = await supabase.from('profiles').select('account_id').eq('user_id', userData.user.id).single();
+                  if (!member) {
+                    toast.error('Failed to get account information', { id: 'seed' });
+                    return;
+                  }
+                  
+                  const dummyQuotations = Array.from({ length: 20 }).map((_, i) => ({
+                    account_id: member.account_id,
+                    user_id: userData.user.id,
+                    contact_id: contactId,
+                    date: new Date().toISOString().split('T')[0],
+                    status: ['Pending', 'Sent', 'Approved', 'Rejected'][Math.floor(Math.random() * 4)],
+                    sub_total: 100 * (i + 1),
+                    total_amount: 100 * (i + 1),
+                  }));
+                  
+                  const { error } = await supabase.from('quotations').insert(dummyQuotations);
+                  if (error) {
+                    toast.error('Failed to seed quotations', { id: 'seed' });
+                  } else {
+                    toast.success('20 dummy quotations created!', { id: 'seed' });
+                    fetchQuotations();
+                  }
+                }}
+              >
+                Seed Dummy
+              </Button>
+            )}
             <Button 
-              variant="secondary"
-              className="gap-2" 
-              onClick={async () => {
-                toast.loading('Seeding 20 quotations...', { id: 'seed' });
-                const { data: contacts } = await supabase.from('contacts').select('id').limit(1);
-                if (!contacts || contacts.length === 0) {
-                  toast.error('Create a contact first', { id: 'seed' });
-                  return;
-                }
-                const contactId = contacts[0].id;
-                
-                const { data: userData } = await supabase.auth.getUser();
-                if (!userData?.user) return;
-                
-                const { data: member } = await supabase.from('profiles').select('account_id').eq('user_id', userData.user.id).single();
-                if (!member) {
-                  toast.error('Failed to get account information', { id: 'seed' });
-                  return;
-                }
-                
-                const dummyQuotations = Array.from({ length: 20 }).map((_, i) => ({
-                  account_id: member.account_id,
-                  user_id: userData.user.id,
-                  contact_id: contactId,
-                  date: new Date().toISOString().split('T')[0],
-                  status: ['Pending', 'Sent', 'Approved', 'Rejected'][Math.floor(Math.random() * 4)],
-                  sub_total: 100 * (i + 1),
-                  total_amount: 100 * (i + 1),
-                }));
-                
-                const { error } = await supabase.from('quotations').insert(dummyQuotations);
-                if (error) {
-                  toast.error('Failed to seed quotations', { id: 'seed' });
-                } else {
-                  toast.success('20 dummy quotations created!', { id: 'seed' });
-                  fetchQuotations();
-                }
-              }}
+              className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={() => router.push('/quotations/new')}
             >
-              Seed Dummy
+              <Plus className="size-4" />
+              New Quotation
             </Button>
-          )}
-          <Button 
-            className="gap-2"
-            onClick={() => router.push('/quotations/new')}
-          >
-            <Plus className="size-4" />
-            New Quotation
-          </Button>
-        </div>
-      </header>
+          </>
+        }
+      />
 
-      <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
-            placeholder="Search by number or contact..."
-            className="pl-9 bg-background border-border"
-          />
-        </div>
-        
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2 ml-auto shrink-0 bg-primary/10 border border-primary/20 rounded-md p-1 px-3">
-            <span className="text-sm font-medium text-primary mr-2 hidden sm:inline-block">
-              {selectedIds.size} selected
-            </span>
-            <Button variant="destructive" size="sm" className="h-8" disabled={bulkActionLoading} onClick={handleBulkDelete}>
-              {bulkActionLoading ? <Loader2 className="size-3.5 animate-spin mr-2" /> : <Trash2 className="size-3.5 mr-2" />} Delete
-            </Button>
-          </div>
-        )}
-      </div>
+      <PageToolbar
+        search={{
+          value: globalSearch,
+          onChange: setGlobalSearch,
+          placeholder: "Search by number or contact...",
+        }}
+      />
+
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          {
+            label: "Delete",
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            onClick: handleBulkDelete,
+            disabled: bulkActionLoading,
+          },
+        ]}
+      />
 
       <DataTable
         columns={visibleColumns}
@@ -534,6 +532,6 @@ export default function QuotationsPage() {
           }}
         />
       )}
-    </div>
+    </PageLayout>
   );
 }

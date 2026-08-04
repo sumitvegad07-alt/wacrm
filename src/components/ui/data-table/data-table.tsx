@@ -8,12 +8,13 @@ import { ColumnDef, FilterState } from "./data-table-types";
 import { DataTableHeader } from "./data-table-header";
 import { ManageColumnsDialog } from "./manage-columns-dialog";
 import { useDataExport } from "@/hooks/use-data-export";
+import { TableSkeleton, EmptyState } from "@/components/shared";
 
 interface DataTableProps<T> {
   columns: ColumnDef<T>[];
   data: T[];
-  filterState: FilterState;
-  onFilterChange: (columnId: string, value: any) => void;
+  filterState?: FilterState;
+  onFilterChange?: (columnId: string, value: any) => void;
   storageKey: string;
   isLoading?: boolean;
   emptyMessage?: React.ReactNode;
@@ -29,8 +30,8 @@ interface DataTableProps<T> {
 export function DataTable<T>({
   columns,
   data,
-  filterState,
-  onFilterChange,
+  filterState = {},
+  onFilterChange = () => {},
   storageKey,
   isLoading,
   emptyMessage = "No data found.",
@@ -152,21 +153,25 @@ export function DataTable<T>({
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length + (selection ? 1 : 0)} className="text-center py-12 text-muted-foreground">
-                  Loading...
+                <TableCell colSpan={visibleColumns.length + (selection ? 1 : 0)} className="p-0">
+                  <TableSkeleton columns={visibleColumns.length + (selection ? 1 : 0)} rows={5} />
                 </TableCell>
               </TableRow>
             ) : data.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length + (selection ? 1 : 0)} className="text-center py-12 text-muted-foreground">
-                  {emptyMessage}
+                <TableCell colSpan={visibleColumns.length + (selection ? 1 : 0)} className="p-0">
+                  {typeof emptyMessage === "string" ? (
+                    <EmptyState title={emptyMessage} className="border-0 rounded-none bg-transparent my-4" />
+                  ) : (
+                    <div className="py-8 text-center text-muted-foreground">{emptyMessage}</div>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
               data.map((row) => (
                 <TableRow 
                   key={rowKey(row)}
-                  className={`hover:bg-muted/50 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
+                  className={`h-12 hover:bg-muted/50 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
                   onClick={() => onRowClick?.(row)}
                 >
                   {selection && (

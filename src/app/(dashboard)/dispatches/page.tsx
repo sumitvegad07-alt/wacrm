@@ -13,6 +13,7 @@ import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
+import { PageLayout, PageHeader, PageToolbar } from '@/components/shared';
 
 interface DispatchRow {
   id: string;
@@ -112,23 +113,26 @@ export default function DispatchesPage() {
   }), [rows, filterState, globalSearch, customFields]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><Truck className="size-6" /> Dispatches</h1>
-          <p className="text-sm text-muted-foreground mt-1">Shipments recorded against your approved orders.</p>
-        </div>
-        {canCreate && (
-          <Button onClick={() => router.push('/dispatches/new')} className="gap-2"><Plus className="size-4" /> Create Dispatch</Button>
-        )}
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Dispatches"
+        subtitle="Shipments recorded against your approved orders."
+        actions={
+          canCreate ? (
+            <Button onClick={() => router.push('/dispatches/new')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Plus className="size-4" /> Create Dispatch
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search by dispatch #, order #, or customer..." className="pl-9 bg-background border-border" value={globalSearch} onChange={(e) => setGlobalSearch(e.target.value)} />
-        </div>
-      </div>
+      <PageToolbar
+        search={{
+          value: globalSearch,
+          onChange: setGlobalSearch,
+          placeholder: "Search by dispatch #, order #, or customer...",
+        }}
+      />
 
       <DataTable
         columns={visibleColumns}
@@ -140,6 +144,6 @@ export default function DispatchesPage() {
         rowKey={(d) => d.id}
         onRowClick={(d) => router.push(`/dispatches/${d.id}`)}
       />
-    </div>
+    </PageLayout>
   );
 }

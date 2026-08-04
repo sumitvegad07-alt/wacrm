@@ -50,7 +50,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ChevronLeft, ChevronRight, Search, Plus, MoreVertical,
-  Copy, Trash2, Repeat, Users, GripVertical, Layers,
+  Copy, Trash2, Repeat, Users, GripVertical, Layers, Clock, CheckCircle2,
 } from "lucide-react";
 
 type Assignment = RoutePlanAssignmentWithRoute;
@@ -194,10 +194,19 @@ function RouteCardChip({
         <button
           type="button"
           onClick={onOpenRoute}
-          className="min-w-0 flex-1 truncate text-left font-semibold text-foreground hover:underline"
-          title={a.route_name ?? "Route"}
+          className="min-w-0 flex-1 truncate text-left font-semibold text-foreground hover:underline flex items-center gap-1"
+          title={`${a.route_name ?? "Route"} (${a.route_status ?? "active"})`}
         >
-          {a.route_name ?? "Route"}
+          {a.route_status === "pending_approval" || a.route_status === "draft" ? (
+            <span title="Pending approval" className="shrink-0 flex items-center">
+              <Clock className="h-3 w-3 text-amber-500" />
+            </span>
+          ) : a.route_status === "active" ? (
+            <span title="Approved / Active" className="shrink-0 flex items-center">
+              <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+            </span>
+          ) : null}
+          <span className="truncate">{a.route_name ?? "Route"}</span>
         </button>
       </div>
 

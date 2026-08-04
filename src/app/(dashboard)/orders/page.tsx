@@ -16,6 +16,7 @@ import { formatCurrency } from '@/lib/currency';
 import { OrderForm } from '@/components/orders/order-form';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
 
 interface OrderRow {
   id: string;
@@ -222,9 +223,7 @@ export default function OrdersPage() {
       type: 'select',
       options: ALL_STATUSES.map((s) => ({ label: s, value: s })),
       render: (o) => (
-        <Badge variant="outline" className={`text-xs ${STATUS_BADGE[o.status] || 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}>
-          {o.status}
-        </Badge>
+        <StatusBadge status={o.status.toLowerCase()} label={o.status} />
       ),
     },
     {
@@ -275,54 +274,52 @@ export default function OrdersPage() {
   }, [orders, filterState, globalSearch, customFields]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Orders</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Orders placed by your field team. Update status and create dispatches here.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {(isAdmin || isOwner) && (
-            <Button variant="outline" className="gap-2" onClick={() => router.push('/orders/sync-health')}>
-              <TrendingUp className="size-4" /> Sync Health
-            </Button>
-          )}
-          {canCreateOrder && (
-            <Button onClick={() => router.push('/orders/new')} className="gap-2">
-              <Plus className="size-4" /> Create Order
-            </Button>
-          )}
-        </div>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Orders"
+        subtitle="Orders placed by your field team. Update status and create dispatches here."
+        actions={
+          <>
+            {(isAdmin || isOwner) && (
+              <Button variant="outline" className="gap-2" onClick={() => router.push('/orders/sync-health')}>
+                <TrendingUp className="size-4" /> Sync Health
+              </Button>
+            )}
+            {canCreateOrder && (
+              <Button onClick={() => router.push('/orders/new')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Plus className="size-4" /> Create Order
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by order #, customer, or salesman..."
-            className="pl-9 bg-background border-border"
-            value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
-          />
-        </div>
+      <PageToolbar
+        search={{
+          value: globalSearch,
+          onChange: setGlobalSearch,
+          placeholder: "Search by order #, customer, or salesman...",
+        }}
+      />
 
-        {/* Bulk status bar — appears when rows are selected (needs manage_order_status) */}
-        {canManageStatus && selectedIds.size > 0 && (
-          <div className="flex flex-wrap items-center gap-2 sm:ml-auto shrink-0 bg-primary/10 border border-primary/20 rounded-md p-1.5 px-3">
-            <span className="text-sm font-medium text-primary mr-1">{selectedIds.size} selected</span>
-            {BULK_ACTIONS.map((a) => {
-              const Icon = a.icon;
-              return (
-                <Button key={a.to} variant={a.variant} size="sm" className="h-8 gap-1.5" disabled={bulkLoading} onClick={() => handleBulkStatus(a.to)}>
-                  {bulkLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Icon className="size-3.5" />} {a.label}
-                </Button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={
+          canManageStatus
+            ? BULK_ACTIONS.map((a) => {
+                const Icon = a.icon;
+                return {
+                  label: a.label,
+                  icon: <Icon className="size-4" />,
+                  variant: a.variant,
+                  onClick: () => handleBulkStatus(a.to),
+                  disabled: bulkLoading,
+                };
+              })
+            : []
+        }
+      />
 
       <DataTable
         columns={visibleColumns}
@@ -351,6 +348,6 @@ export default function OrdersPage() {
         onOpenChange={(o) => { if (!o) setEditOrderId(null); }}
         onSaved={fetchData}
       />
-    </div>
+    </PageLayout>
   );
 }

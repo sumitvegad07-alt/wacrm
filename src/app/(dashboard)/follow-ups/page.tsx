@@ -23,6 +23,7 @@ import type { Task } from "@/types";
 import { cn } from "@/lib/utils";
 import { isBefore, startOfToday, isToday, isTomorrow, isThisWeek, isThisMonth } from "date-fns";
 import Link from "next/link";
+import { PageLayout, PageHeader } from "@/components/shared";
 
 // Extend Task type for this component to include joined relations
 type FollowUpTask = Task & {
@@ -308,18 +309,16 @@ export default function FollowUpsPage() {
   };
 
   return (
-    <div className="flex flex-col h-full space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Follow-ups & Activities</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage all your scheduled tasks and activities.</p>
-        </div>
-        <div className="flex items-center gap-2">
+    <PageLayout>
+      <PageHeader
+        title="Follow-ups & Activities"
+        subtitle="Manage all your scheduled tasks and activities."
+        actions={
           <Button onClick={handleAddActivity} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <Plus className="size-4 mr-2" /> Schedule Activity
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       <div className="flex flex-col gap-4 bg-card p-4 rounded-xl border border-border">
         <div className="flex flex-wrap items-end gap-3">
@@ -434,6 +433,6 @@ export default function FollowUpsPage() {
       </div>
 
       <TaskForm open={formOpen} onOpenChange={setFormOpen} task={selectedTask} onSaved={fetchTasks} />
-    </div>
+    </PageLayout>
   );
 }

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { isDateInFilter } from "@/lib/date-filters";
@@ -312,13 +313,7 @@ export default function ExpensesPage() {
         { label: "Rejected", value: "Rejected" }
       ],
       render: (expense) => (
-        <span className={`px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-sm ${
-          expense.status === "Approved" ? "bg-green-600" :
-          expense.status === "Rejected" ? "bg-red-600" :
-          "bg-amber-600"
-        }`}>
-          {expense.status}
-        </span>
+        <StatusBadge status={expense.status.toLowerCase()} label={expense.status} />
       )
     },
     {
@@ -417,61 +412,49 @@ export default function ExpensesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Expenses</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {isAdmin ? "Manage and approve employee expenses." : "Submit and track your expense claims."}
-          </p>
-        </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/expenses/new')}>
-          <Plus className="mr-2 h-4 w-4" /> New Expense
-        </Button>
-      </div>
-
-      <div className="flex items-center gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search expenses..." 
-            className="pl-9"
-            value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2">
-            <Filter className="h-4 w-4" /> Filter
+    <PageLayout>
+      <PageHeader
+        title="Expenses"
+        subtitle={isAdmin ? "Manage and approve employee expenses." : "Submit and track your expense claims."}
+        actions={
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/expenses/new')}>
+            <Plus className="mr-2 h-4 w-4" /> New Expense
           </Button>
-        </div>
-      </div>
+        }
+      />
 
-      {selectedExpenseIds.size > 0 && isAdmin && (
-        <div className="bg-card border border-border p-4 rounded-xl flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-bottom-2">
-          <div className="flex items-center gap-4">
-            <Badge variant="secondary" className="px-3 py-1 bg-primary/10 text-primary border-primary/20">
-              {selectedExpenseIds.size} selected
-            </Badge>
-            <span className="text-sm font-medium text-foreground">
-              Bulk Actions
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => setSelectedExpenseIds(new Set())}>
-              Cancel
-            </Button>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white shadow-sm" onClick={handleBulkDelete}>
-              <XCircle className="mr-2 h-4 w-4" /> Delete Selected
-            </Button>
-            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm" onClick={handleBulkReject}>
-              <XCircle className="mr-2 h-4 w-4" /> Reject Selected
-            </Button>
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white shadow-sm" onClick={handleBulkApprove}>
-              <CheckCircle className="mr-2 h-4 w-4" /> Approve Selected
-            </Button>
-          </div>
-        </div>
+      <PageToolbar
+        search={{
+          value: globalSearch,
+          onChange: setGlobalSearch,
+          placeholder: "Search expenses...",
+        }}
+      />
+
+      {isAdmin && (
+        <BulkActionBar
+          selectedCount={selectedExpenseIds.size}
+          onClear={() => setSelectedExpenseIds(new Set())}
+          actions={[
+            {
+              label: "Approve Selected",
+              icon: <CheckCircle className="size-4" />,
+              onClick: handleBulkApprove,
+            },
+            {
+              label: "Reject Selected",
+              icon: <XCircle className="size-4" />,
+              variant: "outline",
+              onClick: handleBulkReject,
+            },
+            {
+              label: "Delete Selected",
+              icon: <XCircle className="size-4" />,
+              variant: "destructive",
+              onClick: handleBulkDelete,
+            },
+          ]}
+        />
       )}
 
       <DataTable
@@ -507,6 +490,6 @@ export default function ExpensesPage() {
         expense={selectedExpense}
         onSaved={loadExpenses}
       />
-    </div>
+    </PageLayout>
   );
 }

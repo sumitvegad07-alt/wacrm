@@ -41,6 +41,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, ConfirmDialog } from '@/components/shared';
 
 interface ContactWithData extends Contact {
   tags?: Tag[];
@@ -424,43 +425,42 @@ export default function ContactsPage() {
   }, [contacts, filterState, globalSearch]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Customers</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage your contact list.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <GatedButton variant="outline" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
-            <Upload className="size-4 mr-2" /> Import
-          </GatedButton>
-          <GatedButton canAct={canEdit} gateReason="add or import contacts" onClick={openAddForm} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Plus className="size-4 mr-2" /> Add Customer
-          </GatedButton>
-        </div>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Customers"
+        subtitle="Manage your contact list."
+        actions={
+          <>
+            <GatedButton variant="outline" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
+              <Upload className="size-4 mr-2" /> Import
+            </GatedButton>
+            <GatedButton canAct={canEdit} gateReason="add or import contacts" onClick={openAddForm} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Plus className="size-4 mr-2" /> Add Customer
+            </GatedButton>
+          </>
+        }
+      />
 
-      <div className="flex items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search contacts globally..." 
-            className="pl-9"
-            value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
-          />
-        </div>
-        {selectedContacts.size > 0 && (
-          <div className="flex items-center gap-2">
-             <span className="text-sm font-medium">{selectedContacts.size} selected</span>
-             <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
-               <Trash2 className="size-4 mr-2" /> Delete Selected
-             </Button>
-          </div>
-        )}
-      </div>
+      <PageToolbar
+        search={{
+          value: globalSearch,
+          onChange: setGlobalSearch,
+          placeholder: "Search contacts globally...",
+        }}
+      />
+
+      <BulkActionBar
+        selectedCount={selectedContacts.size}
+        onClear={() => setSelectedContacts(new Set())}
+        actions={[
+          {
+            label: "Delete Selected",
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            onClick: () => setBulkDeleteOpen(true),
+          },
+        ]}
+      />
 
       <DataTable
         columns={visibleColumns}
@@ -485,39 +485,31 @@ export default function ContactsPage() {
       <ContactForm open={formOpen} onOpenChange={setFormOpen} contact={editContact} contactTags={editContactTags} onSaved={fetchData} onViewExisting={(id) => { setFormOpen(false); router.push(`/contacts/${id}`); }} />
       <ImportModal open={importOpen} onOpenChange={setImportOpen} onImported={fetchData} />
 
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete Customer</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete <span className="font-medium text-popover-foreground">{deleteTarget?.name || deleteTarget?.phone}</span>? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting && <Loader2 className="size-4 animate-spin mr-2" />} Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete Customer"
+        description={
+          <>
+            Are you sure you want to delete <span className="font-medium text-foreground">{deleteTarget?.name || deleteTarget?.phone}</span>? This action cannot be undone.
+          </>
+        }
+        variant="danger"
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
 
-      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
-        <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete {selectedContacts.size} Customers</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedContacts.size} contacts? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleBulkDelete} disabled={deleting}>
-              {deleting && <Loader2 className="size-4 animate-spin mr-2" />} Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title={`Delete ${selectedContacts.size} Customers`}
+        description={`Are you sure you want to delete ${selectedContacts.size} contacts? This action cannot be undone.`}
+        variant="danger"
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={handleBulkDelete}
+      />
+    </PageLayout>
   );
 }

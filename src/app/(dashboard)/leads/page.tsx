@@ -16,6 +16,7 @@ import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-ty
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
 import { isDateInFilter } from "@/lib/date-filters";
 import { CustomField } from "@/types";
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
 
 interface Lead {
   id: string;
@@ -135,11 +136,10 @@ export default function LeadsPage() {
       type: "select",
       options: leadStatuses.map(s => ({ label: s.name, value: s.name })),
       render: (lead) => (
-        <span className={`capitalize px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-sm ${
-          lead.is_converted ? 'bg-green-600' : 'bg-blue-600'
-        }`}>
-          {lead.is_converted ? "Converted" : lead.status}
-        </span>
+        <StatusBadge
+          status={lead.is_converted ? "converted" : lead.status || "new"}
+          label={lead.is_converted ? "Converted" : lead.status}
+        />
       )
     },
     {
@@ -252,38 +252,40 @@ export default function LeadsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Leads</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage raw prospects before they become contacts.
-          </p>
-        </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/leads/new')}>
-          <Plus className="mr-2 h-4 w-4" /> Add Lead
-        </Button>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Leads"
+        subtitle="Manage raw prospects before they become contacts."
+        actions={
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/leads/new')}>
+            <Plus className="mr-2 h-4 w-4" /> Add Lead
+          </Button>
+        }
+      />
 
-      <div className="flex items-center gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search leads globally..." 
-            className="pl-9"
-            value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2">
-            <Filter className="h-4 w-4" /> Filter
-          </Button>
-          <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
-            <Upload className="h-4 w-4" /> Import Leads
-          </Button>
-        </div>
-      </div>
+      <PageToolbar
+        search={{
+          value: globalSearch,
+          onChange: setGlobalSearch,
+          placeholder: "Search leads globally...",
+        }}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2">
+              <Filter className="h-4 w-4" /> Filter
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" /> Import Leads
+            </Button>
+          </div>
+        }
+      />
+
+      <BulkActionBar
+        selectedCount={selectedLeads.size}
+        onClear={() => setSelectedLeads(new Set())}
+        actions={[]}
+      />
 
       <DataTable
         columns={visibleColumns}
@@ -312,6 +314,6 @@ export default function LeadsPage() {
         onOpenChange={setImportOpen}
         onSuccess={loadLeads}
       />
-    </div>
+    </PageLayout>
   );
 }

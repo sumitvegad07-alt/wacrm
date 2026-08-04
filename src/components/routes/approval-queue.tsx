@@ -373,12 +373,13 @@ export function ApprovalQueue() {
                             <>
                               <Button
                                 size="sm"
-                                className="h-8 bg-green-600 px-2.5 text-white hover:bg-green-700"
+                                className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs px-3 shadow-sm transition-all flex items-center gap-1.5"
                                 onClick={() => inlineAction(r.id, "active")}
                                 disabled={setStatus.isPending}
                                 title="Approve route"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
+                                <span>Approve</span>
                               </Button>
                               <Button
                                 size="sm"

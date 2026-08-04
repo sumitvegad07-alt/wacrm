@@ -6,11 +6,11 @@ import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Truck, PackageCheck } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
+import { PageLayout, PageHeader, PageToolbar, StatusBadge } from '@/components/shared';
 
 interface PendingRow {
   id: string;
@@ -79,7 +79,7 @@ export default function PendingDispatchPage() {
     {
       id: 'status', label: 'Status', type: 'select',
       options: [{ label: 'Approved', value: 'Approved' }, { label: 'Part Dispatch', value: 'Part Dispatch' }],
-      render: (o) => <Badge variant="outline" className={`text-xs ${STATUS_BADGE[o.status] || ''}`}>{o.status}</Badge>,
+      render: (o) => <StatusBadge status={o.status.toLowerCase()} label={o.status} />,
     },
     { id: 'ordered', label: 'Ordered', type: 'text', render: (o) => <span className="text-sm">{o.ordered}</span> },
     { id: 'delivered', label: 'Delivered', type: 'text', render: (o) => <span className="text-sm text-emerald-600">{o.delivered}</span> },
@@ -110,20 +110,19 @@ export default function PendingDispatchPage() {
   }), [rows, filterState, globalSearch]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><PackageCheck className="size-6" /> Pending Dispatch</h1>
-          <p className="text-sm text-muted-foreground mt-1">Approved orders still awaiting full dispatch. Difference = ordered − delivered.</p>
-        </div>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Pending Dispatch"
+        subtitle="Approved orders still awaiting full dispatch. Difference = ordered − delivered."
+      />
 
-      <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search by order # or customer..." className="pl-9 bg-background border-border" value={globalSearch} onChange={(e) => setGlobalSearch(e.target.value)} />
-        </div>
-      </div>
+      <PageToolbar
+        search={{
+          value: globalSearch,
+          onChange: setGlobalSearch,
+          placeholder: "Search by order # or customer...",
+        }}
+      />
 
       <DataTable
         columns={columns}
@@ -135,6 +134,6 @@ export default function PendingDispatchPage() {
         rowKey={(o) => o.id}
         onRowClick={(o) => router.push(`/orders/${o.id}`)}
       />
-    </div>
+    </PageLayout>
   );
 }

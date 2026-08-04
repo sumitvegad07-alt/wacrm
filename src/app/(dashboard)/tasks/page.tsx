@@ -42,7 +42,7 @@ import {
 import { TaskForm } from '@/components/tasks/task-form';
 import { ImportTasksModal } from '@/components/tasks/import-tasks-modal';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
@@ -224,13 +224,9 @@ export default function TasksPage() {
       options: Object.keys(STATUS_COLORS).map(s => ({ label: s, value: s })),
       render: (task) => (
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className={`font-normal ${STATUS_COLORS[task.status] || ''}`}>
-            {task.status}
-          </Badge>
+          <StatusBadge status={task.status.toLowerCase()} label={task.status} />
           {isOverdue(task) && (
-            <Badge variant="destructive" className="font-normal text-[10px] px-1.5 py-0">
-              Overdue
-            </Badge>
+            <StatusBadge status="overdue" label="Overdue" />
           )}
         </div>
       )
@@ -241,9 +237,7 @@ export default function TasksPage() {
       type: "select",
       options: Object.keys(PRIORITY_COLORS).map(s => ({ label: s, value: s })),
       render: (task) => (
-        <Badge variant="outline" className={`font-normal ${PRIORITY_COLORS[task.priority] || ''}`}>
-          {task.priority}
-        </Badge>
+        <StatusBadge status={task.priority.toLowerCase()} label={task.priority} />
       )
     },
     {
@@ -364,66 +358,68 @@ export default function TasksPage() {
   }, [tasks, filterState, globalSearch, hideCompleted, customFields]);
 
   return (
-    <div className="flex flex-col h-full space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Tasks</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage your tasks and to-dos.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
-            <Upload className="size-4 mr-2" /> Import
-          </Button>
-          <Button onClick={() => router.push('/tasks/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Plus className="size-4 mr-2" /> New Task
-          </Button>
-        </div>
-      </header>
-
-      <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
-            placeholder="Search tasks..."
-            className="pl-9 bg-background border-border"
-          />
-        </div>
-
-        <label className="flex items-center gap-2 text-sm text-foreground bg-background border border-border px-3 rounded-md cursor-pointer hover:bg-muted h-10 w-fit">
-          <Checkbox 
-            checked={hideCompleted} 
-            onCheckedChange={(checked) => setHideCompleted(checked === true)} 
-          />
-          Hide Completed
-        </label>
-        
-        {selectedTaskIds.size > 0 && (
-          <div className="flex items-center gap-2 ml-auto shrink-0 bg-primary/10 border border-primary/20 rounded-md p-1 px-3">
-            <span className="text-sm font-medium text-primary mr-2 hidden sm:inline-block">
-              {selectedTaskIds.size} selected
-            </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button variant="outline" size="sm" className="h-8 bg-background hover:bg-muted text-foreground" disabled={bulkActionLoading} />}
-              >
-                Change Status
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {Object.keys(STATUS_COLORS).map(s => (
-                  <DropdownMenuItem key={s} onClick={() => handleBulkStatusChange(s)}>
-                    Mark as {s}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button variant="destructive" size="sm" className="h-8" disabled={bulkActionLoading} onClick={handleBulkDelete}>
-              {bulkActionLoading ? <Loader2 className="size-3.5 animate-spin mr-2" /> : <Trash2 className="size-3.5 mr-2" />} Delete
+    <PageLayout>
+      <PageHeader
+        title="Tasks"
+        subtitle="Manage your tasks and to-dos."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
+              <Upload className="size-4 mr-2" /> Import
             </Button>
-          </div>
-        )}
-      </div>
+            <Button onClick={() => router.push('/tasks/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Plus className="size-4 mr-2" /> New Task
+            </Button>
+          </>
+        }
+      />
+
+      <PageToolbar
+        search={{
+          value: globalSearch,
+          onChange: setGlobalSearch,
+          placeholder: "Search tasks...",
+        }}
+        actions={
+          <label className="flex items-center gap-2 text-sm text-foreground bg-background border border-border px-3 rounded-md cursor-pointer hover:bg-muted h-9 w-fit">
+            <Checkbox 
+              checked={hideCompleted} 
+              onCheckedChange={(checked) => setHideCompleted(checked === true)} 
+            />
+            Hide Completed
+          </label>
+        }
+      />
+
+      <BulkActionBar
+        selectedCount={selectedTaskIds.size}
+        onClear={() => setSelectedTaskIds(new Set())}
+        actions={[
+          {
+            label: "Delete",
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            onClick: handleBulkDelete,
+            disabled: bulkActionLoading,
+          },
+        ]}
+        extraActions={
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button variant="outline" size="sm" className="h-8 bg-background hover:bg-muted text-foreground" disabled={bulkActionLoading} />}
+            >
+              Change Status
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {Object.keys(STATUS_COLORS).map(s => (
+                <DropdownMenuItem key={s} onClick={() => handleBulkStatusChange(s)}>
+                  Mark as {s}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
+      />
 
       <DataTable
         columns={visibleColumns}
@@ -467,6 +463,6 @@ export default function TasksPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageLayout>
   );
 }

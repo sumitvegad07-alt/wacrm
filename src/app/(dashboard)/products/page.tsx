@@ -33,8 +33,8 @@ import {
 } from 'lucide-react';
 import { ProductForm } from '@/components/products/product-form';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 import { ImportProductsModal } from '@/components/products/import-products-modal';
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
 import { useCan } from '@/hooks/use-can';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
@@ -215,11 +215,10 @@ export default function ProductsPage() {
       type: "select",
       options: [{ label: 'Active', value: 'true' }, { label: 'Inactive', value: 'false' }],
       render: (product) => (
-        product.active ? (
-          <Badge className="bg-emerald-600 text-white shadow-sm border-transparent font-medium">Active</Badge>
-        ) : (
-          <Badge className="bg-slate-600 text-white shadow-sm border-transparent font-medium">Inactive</Badge>
-        )
+        <StatusBadge
+          status={product.active ? "active" : "inactive"}
+          label={product.active ? "Active" : "Inactive"}
+        />
       )
     },
     {
@@ -312,34 +311,29 @@ export default function ProductsPage() {
   }, [products, filterState, globalSearch, hideInactive, customFields]);
 
   return (
-    <div className="flex h-full flex-col space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Products</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage your product and service catalog.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
-            <Upload className="size-4 mr-2" /> Import
-          </Button>
-          <Button onClick={() => router.push('/products/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Plus className="size-4 mr-2" /> New Product
-          </Button>
-        </div>
-      </header>
+    <PageLayout>
+      <PageHeader
+        title="Products"
+        subtitle="Manage your product and service catalog."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
+              <Upload className="size-4 mr-2" /> Import
+            </Button>
+            <Button onClick={() => router.push('/products/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Plus className="size-4 mr-2" /> New Product
+            </Button>
+          </>
+        }
+      />
 
-      <div className="flex items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border">
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name or SKU..."
-              value={globalSearch}
-              onChange={(e) => setGlobalSearch(e.target.value)}
-              className="pl-9 w-full bg-background border-border"
-            />
-          </div>
-          
+      <PageToolbar
+        search={{
+          value: globalSearch,
+          onChange: setGlobalSearch,
+          placeholder: "Search by name or SKU...",
+        }}
+        actions={
           <div className="flex items-center space-x-2">
             <Checkbox 
               id="hideInactive" 
@@ -350,25 +344,36 @@ export default function ProductsPage() {
               Hide inactive
             </label>
           </div>
-          
-          {selectedProductIds.size > 0 && (
-            <div className="flex items-center gap-2 ml-auto">
-              <span className="text-sm font-medium mr-2 hidden sm:inline-block">
-                {selectedProductIds.size} selected
-              </span>
-              <Button variant="secondary" size="sm" onClick={() => handleBulkToggleActive(true)} disabled={bulkActionLoading}>
-                <CheckCircle className="size-4 mr-2" /> Active
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => handleBulkToggleActive(false)} disabled={bulkActionLoading}>
-                <Ban className="size-4 mr-2" /> Inactive
-              </Button>
-              <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={bulkActionLoading}>
-                {bulkActionLoading ? <Loader2 className="size-4 animate-spin mr-2" /> : <Trash2 className="size-4 mr-2" />} Delete
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+        }
+      />
+
+      <BulkActionBar
+        selectedCount={selectedProductIds.size}
+        onClear={() => setSelectedProductIds(new Set())}
+        actions={[
+          {
+            label: "Active",
+            icon: <CheckCircle className="size-4" />,
+            variant: "outline",
+            onClick: () => handleBulkToggleActive(true),
+            disabled: bulkActionLoading,
+          },
+          {
+            label: "Inactive",
+            icon: <Ban className="size-4" />,
+            variant: "outline",
+            onClick: () => handleBulkToggleActive(false),
+            disabled: bulkActionLoading,
+          },
+          {
+            label: "Delete",
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            onClick: handleBulkDelete,
+            disabled: bulkActionLoading,
+          },
+        ]}
+      />
 
       <DataTable
         columns={visibleColumns}
@@ -419,6 +424,6 @@ export default function ProductsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageLayout>
   );
 }

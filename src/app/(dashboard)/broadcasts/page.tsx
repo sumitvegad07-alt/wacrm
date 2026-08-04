@@ -5,14 +5,9 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Broadcast } from '@/types';
 import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { PageLayout, PageHeader, StatusBadge } from '@/components/shared';
+import { DataTable } from '@/components/ui/data-table/data-table';
+import { ColumnDef } from '@/components/ui/data-table/data-table-types';
 import { Radio, Plus, Loader2 } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
@@ -147,8 +142,63 @@ export default function BroadcastsPage() {
     );
   }
 
+  const columns: ColumnDef<Broadcast>[] = [
+    {
+      id: "name",
+      label: "Name",
+      type: "text",
+      render: (b) => <span className="font-medium text-foreground">{b.name}</span>,
+    },
+    {
+      id: "template_name",
+      label: "Template",
+      type: "text",
+      render: (b) => <span className="text-muted-foreground">{b.template_name}</span>,
+    },
+    {
+      id: "total_recipients",
+      label: "Recipients",
+      type: "text",
+      render: (b) => <span className="tabular-nums">{b.total_recipients}</span>,
+    },
+    {
+      id: "delivery",
+      label: "Delivery",
+      type: "text",
+      render: (b) => <RateCell value={b.delivered_count} total={b.total_recipients} color="bg-primary" />,
+    },
+    {
+      id: "read",
+      label: "Read",
+      type: "text",
+      render: (b) => <RateCell value={b.read_count} total={b.total_recipients} color="bg-blue-500" />,
+    },
+    {
+      id: "status",
+      label: "Status",
+      type: "select",
+      options: [
+        { label: "Draft", value: "draft" },
+        { label: "Scheduled", value: "scheduled" },
+        { label: "Sending", value: "sending" },
+        { label: "Completed", value: "completed" },
+        { label: "Failed", value: "failed" },
+      ],
+      render: (b) => {
+        const status = getBroadcastStatus(b.status);
+        return <StatusBadge status={b.status.toLowerCase()} label={status.label} />;
+      },
+    },
+    {
+      id: "date",
+      label: "Date",
+      type: "date",
+      render: (b) => <span className="text-muted-foreground">{new Date(b.created_at).toLocaleDateString()}</span>,
+    },
+  ];
+
   return (
-    <div className="space-y-6">
+    <PageLayout>
       {/* Top indeterminate progress bar: only visible while a broadcast
           is mid-send. Pure CSS animation so no extra deps. */}
       {anySending && (
@@ -176,24 +226,21 @@ export default function BroadcastsPage() {
           `}</style>
         </div>
       )}
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Broadcasts</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Send bulk messages to your contacts using approved templates.
-          </p>
-        </div>
-        <GatedButton
-          canAct={canCreate}
-          gateReason="create broadcasts"
-          onClick={() => router.push('/broadcasts/new')}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          New Broadcast
-        </GatedButton>
-      </div>
+      <PageHeader
+        title="Broadcasts"
+        subtitle="Send bulk messages to your contacts using approved templates."
+        actions={
+          <GatedButton
+            canAct={canCreate}
+            gateReason="create broadcasts"
+            onClick={() => router.push('/broadcasts/new')}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            New Broadcast
+          </GatedButton>
+        }
+      />
 
       {broadcasts.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-border bg-card">
@@ -213,76 +260,15 @@ export default function BroadcastsPage() {
           </GatedButton>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="text-muted-foreground">Name</TableHead>
-                <TableHead className="hidden text-muted-foreground md:table-cell">Template</TableHead>
-                <TableHead className="hidden text-right text-muted-foreground sm:table-cell">
-                  Recipients
-                </TableHead>
-                <TableHead className="hidden text-muted-foreground lg:table-cell">Delivery</TableHead>
-                <TableHead className="hidden text-muted-foreground lg:table-cell">Read</TableHead>
-                <TableHead className="text-muted-foreground">Status</TableHead>
-                <TableHead className="hidden text-muted-foreground sm:table-cell">Date</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {broadcasts.map((broadcast) => {
-                const status = getBroadcastStatus(broadcast.status);
-                return (
-                  <TableRow
-                    key={broadcast.id}
-                    className="cursor-pointer border-border hover:bg-muted/50"
-                    onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
-                  >
-                    <TableCell className="font-medium text-foreground">
-                      {broadcast.name}
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">
-                      {broadcast.template_name}
-                    </TableCell>
-                    <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
-                      {broadcast.total_recipients}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <RateCell
-                        value={broadcast.delivered_count}
-                        total={broadcast.total_recipients}
-                        color="bg-primary"
-                      />
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <RateCell
-                        value={broadcast.read_count}
-                        total={broadcast.total_recipients}
-                        color="bg-blue-500"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}
-                      >
-                        {status.pulse && (
-                          <span className="relative flex h-1.5 w-1.5">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
-                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-400" />
-                          </span>
-                        )}
-                        {status.label}
-                      </span>
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground sm:table-cell">
-                      {new Date(broadcast.created_at).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable
+          columns={columns}
+          data={broadcasts}
+          storageKey="wacrm_broadcasts_table_columns"
+          isLoading={loading}
+          rowKey={(b) => b.id}
+          onRowClick={(b) => router.push(`/broadcasts/${b.id}`)}
+        />
       )}
-    </div>
+    </PageLayout>
   );
 }

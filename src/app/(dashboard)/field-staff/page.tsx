@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useLocationPresence, type LocationStatus } from '@/hooks/use-location-presence';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { MapPin, Navigation, SignalHigh, Clock, UserX } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { PageLayout, PageHeader, StatusBadge } from '@/components/shared';
 
 
 interface StaffProfile {
@@ -41,39 +41,14 @@ export default function FieldStaffPage() {
     fetchProfiles();
   }, [accountId]);
 
-  const StatusBadge = ({ status }: { status: LocationStatus }) => {
-    switch (status) {
-      case 'active':
-        return (
-          <Badge className="bg-emerald-600 text-white shadow-sm border-transparent font-medium">
-            <SignalHigh className="size-3 mr-1" /> Active
-          </Badge>
-        );
-      case 'stale':
-        return (
-          <Badge className="bg-amber-600 text-white shadow-sm border-transparent font-medium">
-            <Clock className="size-3 mr-1" /> Stale
-          </Badge>
-        );
-      case 'offline':
-        return (
-          <Badge className="bg-slate-600 text-white shadow-sm border-transparent font-medium">
-            <UserX className="size-3 mr-1" /> Offline
-          </Badge>
-        );
-    }
-  };
-
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center justify-between border-b border-border bg-card px-6 py-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Field Staff</h1>
-          <p className="text-sm text-muted-foreground">Monitor real-time location and visits.</p>
-        </div>
-      </header>
+    <PageLayout>
+      <PageHeader
+        title="Field Staff"
+        subtitle="Monitor real-time location and visits."
+      />
 
-      <div className="flex-1 overflow-auto bg-muted/20 p-6">
+      <div className="flex-1 overflow-auto">
         <div className="mx-auto flex max-w-6xl flex-col lg:flex-row gap-6">
           
           {/* Staff List */}
@@ -120,7 +95,7 @@ export default function FieldStaffPage() {
                       </div>
                       
                       <div className="flex flex-col items-end gap-1">
-                        <StatusBadge status={status} />
+                        <StatusBadge status={status} label={status.charAt(0).toUpperCase() + status.slice(1)} />
                         <span className="text-xs text-muted-foreground">
                           {minsDiff < 1 ? 'Just now' : `${minsDiff}m ago`}
                         </span>
@@ -149,6 +124,6 @@ export default function FieldStaffPage() {
 
         </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }
