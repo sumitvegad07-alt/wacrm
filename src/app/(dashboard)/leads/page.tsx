@@ -264,20 +264,10 @@ export default function LeadsPage() {
       />
 
       <PageToolbar
-        search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
-          placeholder: "Search leads globally...",
-        }}
         actions={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2">
-              <Filter className="h-4 w-4" /> Filter
-            </Button>
-            <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
-              <Upload className="h-4 w-4" /> Import Leads
-            </Button>
-          </div>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setImportOpen(true)}>
+            <Upload className="size-3" /> Import Leads
+          </Button>
         }
       />
 

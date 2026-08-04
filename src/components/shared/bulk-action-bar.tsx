@@ -72,7 +72,7 @@ export function BulkActionBar({
     <div
       data-slot="bulk-action-bar"
       className={cn(
-        "flex items-center justify-between gap-4 px-4 py-2.5 rounded-xl border border-border bg-card shadow-md animate-in fade-in-0 slide-in-from-bottom-2 duration-200",
+        "flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-lg border border-primary/30 bg-primary/10 text-xs shadow-sm animate-in fade-in-0 duration-150",
         className
       )}
       {...props}

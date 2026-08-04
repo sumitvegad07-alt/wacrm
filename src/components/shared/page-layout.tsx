@@ -22,9 +22,9 @@ export function PageLayout({
   ...props
 }: PageLayoutProps) {
   const spacingMap = {
-    default: "space-y-6",
-    tight: "space-y-4",
-    loose: "space-y-8",
+    default: "space-y-3",
+    tight: "space-y-2",
+    loose: "space-y-6",
     none: "",
   };
 
@@ -32,7 +32,7 @@ export function PageLayout({
     <div
       data-slot="page-layout"
       className={cn(
-        "mx-auto w-full max-w-[1440px] px-4 sm:px-6 py-6",
+        "mx-auto w-full max-w-[1440px] px-4 sm:px-6 py-3",
         spacingMap[spacing],
         className
       )}

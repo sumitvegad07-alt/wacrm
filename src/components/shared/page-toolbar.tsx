@@ -53,36 +53,24 @@ export function PageToolbar({
   className,
   ...props
 }: PageToolbarProps) {
+  if (!filters && !actions && !onExportCsv && !onRefresh) {
+    return null;
+  }
+
   return (
     <div
       data-slot="page-toolbar"
       className={cn(
-        "flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card",
+        "flex flex-wrap items-center justify-between gap-3 py-2 px-3 rounded-t-lg border border-b-0 border-border bg-muted/30 text-xs min-h-[44px]",
         className
       )}
       {...props}
     >
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 min-w-0">
-        {search && (
-          <div className="relative w-full sm:w-72 shrink-0">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-            <Input
-              type="text"
-              value={search.value}
-              onChange={(e) => search.onChange(e.target.value)}
-              placeholder={search.placeholder || "Search..."}
-              className="pl-9 h-9 w-full"
-            />
-          </div>
-        )}
-        {filters && (
-          <div className="flex items-center gap-2 flex-wrap">
-            {filters}
-          </div>
-        )}
+      <div className="flex items-center gap-2 flex-wrap min-w-0">
+        {filters}
       </div>
 
-      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         {actions}
         {onExportCsv && (
           <Button
@@ -90,9 +78,9 @@ export function PageToolbar({
             variant="outline"
             size="sm"
             onClick={onExportCsv}
-            className="h-9 gap-1.5"
+            className="h-8 gap-1.5 text-xs"
           >
-            <DownloadIcon className="size-3.5" />
+            <DownloadIcon className="size-3" />
             <span className="hidden sm:inline">Export CSV</span>
           </Button>
         )}
@@ -100,10 +88,10 @@ export function PageToolbar({
           <Button
             type="button"
             variant="outline"
-            size="icon-sm"
+            size="sm"
             onClick={onRefresh}
             disabled={refreshing}
-            className="h-9 w-9 shrink-0"
+            className="h-8 w-8 p-0 shrink-0"
             title="Refresh data"
           >
             <RefreshCwIcon

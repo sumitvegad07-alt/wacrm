@@ -97,30 +97,37 @@ export function DataTable<T>({
   const someOnPageSelected = data.some(row => selection?.selectedIds.has(rowKey(row)));
 
   return (
-    <div className="space-y-4">
-      {/* Top Bar for Table Controls */}
-      <div className="flex justify-end gap-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="text-xs h-8 text-muted-foreground gap-1.5"
-          onClick={() => exportToCsv(data, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
-        >
-          <Download className="size-3.5" />
-          Export CSV
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="text-xs h-8 text-muted-foreground gap-1.5"
-          onClick={() => setIsManageColumnsOpen(true)}
-        >
-          <LayoutGrid className="size-3.5" />
-          Manage columns
-        </Button>
+    <div className="space-y-0">
+      {/* Integrated Koops-style Table Header Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-t-xl border border-b-0 border-border bg-muted/20 text-xs">
+        <div className="flex items-center gap-3">
+          <span className="font-medium text-muted-foreground">
+            Total: <span className="text-foreground font-semibold">{data.length}</span> records
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted"
+            onClick={() => exportToCsv(data, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
+          >
+            <Download className="size-3" />
+            Export CSV
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted"
+            onClick={() => setIsManageColumnsOpen(true)}
+          >
+            <LayoutGrid className="size-3" />
+            Manage columns
+          </Button>
+        </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="rounded-b-xl border border-border bg-card overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>

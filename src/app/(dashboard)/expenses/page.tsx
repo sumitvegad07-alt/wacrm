@@ -339,25 +339,22 @@ export default function ExpensesPage() {
       type: "text",
       render: (expense) => {
         return (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            {expense.status === "Pending" && (
-              <>
-                <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700 text-white shadow-sm" onClick={() => handleStatusUpdate(expense.id, "Approved")}>
-                  <CheckCircle className="h-4 w-4 mr-1" /> Approve
-                </Button>
-                <Button size="sm" className="h-8 bg-red-600 hover:bg-red-700 text-white shadow-sm" onClick={() => {
-                  const reason = prompt("Enter rejection reason:");
-                  if (reason !== null) handleStatusUpdate(expense.id, "Rejected", reason);
-                }}>
-                  <XCircle className="h-4 w-4 mr-1" /> Reject
-                </Button>
-              </>
-            )}
-            <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-sm" onClick={() => { setSelectedExpense(expense); setFormOpen(true); }}>
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2.5 text-xs font-medium"
+              onClick={() => { setSelectedExpense(expense); setFormOpen(true); }}
+            >
               Edit
             </Button>
             {expense.status === "Pending" && (
-              <Button size="sm" className="h-8 bg-red-600 hover:bg-red-700 text-white shadow-sm" onClick={() => handleDelete(expense.id)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10"
+                onClick={() => handleDelete(expense.id)}
+              >
                 Delete
               </Button>
             )}
@@ -424,11 +421,32 @@ export default function ExpensesPage() {
       />
 
       <PageToolbar
-        search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
-          placeholder: "Search expenses...",
-        }}
+        filters={
+          <div className="flex items-center gap-1">
+            {["All", "Pending", "Approved", "Rejected"].map((status) => {
+              const active = status === "All"
+                ? !filterState["status"] || (Array.isArray(filterState["status"]) && filterState["status"].length === 0)
+                : Array.isArray(filterState["status"]) && filterState["status"].includes(status);
+              return (
+                <Button
+                  key={status}
+                  size="sm"
+                  variant={active ? "default" : "ghost"}
+                  className="h-7 px-3 text-xs font-medium"
+                  onClick={() => {
+                    if (status === "All") {
+                      handleFilterChange("status", []);
+                    } else {
+                      handleFilterChange("status", [status]);
+                    }
+                  }}
+                >
+                  {status}
+                </Button>
+              );
+            })}
+          </div>
+        }
       />
 
       {isAdmin && (
@@ -438,18 +456,18 @@ export default function ExpensesPage() {
           actions={[
             {
               label: "Approve Selected",
-              icon: <CheckCircle className="size-4" />,
+              icon: <CheckCircle className="size-3.5" />,
               onClick: handleBulkApprove,
             },
             {
               label: "Reject Selected",
-              icon: <XCircle className="size-4" />,
+              icon: <XCircle className="size-3.5" />,
               variant: "outline",
               onClick: handleBulkReject,
             },
             {
               label: "Delete Selected",
-              icon: <XCircle className="size-4" />,
+              icon: <XCircle className="size-3.5" />,
               variant: "destructive",
               onClick: handleBulkDelete,
             },

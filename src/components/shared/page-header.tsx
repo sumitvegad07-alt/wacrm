@@ -40,35 +40,29 @@ export function PageHeader({
   className,
   ...props
 }: PageHeaderProps) {
+  if (!breadcrumbs && !badge && !actions) {
+    return null;
+  }
+
   return (
     <div
       data-slot="page-header"
       className={cn(
-        "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between",
+        "flex items-center justify-between gap-3 py-1",
         className
       )}
       {...props}
     >
-      <div className="flex flex-col gap-1 min-w-0">
+      <div className="flex items-center gap-2 min-w-0">
         {breadcrumbs && (
-          <div className="text-xs text-muted-foreground mb-0.5">
+          <div className="text-xs text-muted-foreground">
             {breadcrumbs}
           </div>
         )}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">
-            {title}
-          </h1>
-          {badge}
-        </div>
-        {subtitle && (
-          <p className="text-sm text-muted-foreground max-w-2xl">
-            {subtitle}
-          </p>
-        )}
+        {badge}
       </div>
       {actions && (
-        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+        <div className="flex items-center gap-2 shrink-0">
           {actions}
         </div>
       )}
