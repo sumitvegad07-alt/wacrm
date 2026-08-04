@@ -53,7 +53,7 @@ export function RouteHealthSummary({
         </div>
       ) : (
         <ul className="mt-3 space-y-2">
-          {warnings.map((c) => {
+          {warnings.filter((c) => c.code !== "capacity_exceeded").map((c) => {
             const info = CHECK_INFO[c.code];
             return (
               <li key={c.code} className="flex items-start gap-2 rounded-lg bg-amber-500/5 p-2">

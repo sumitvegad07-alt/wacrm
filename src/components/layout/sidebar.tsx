@@ -307,22 +307,7 @@ const menuStructure: MenuNode[] = [
       { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
       { href: "/location-tracking/track-report", label: "Track report", icon: LineChart, module: "location_tracking" },
       { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
-      { href: "/location-tracking/executions", label: "Execution Monitor", icon: Activity, module: "location_tracking" },
-    ],
-  },
-
-  { type: "spacer" },
-
-  // ── Routes (collapsed) — Route Management, hidden unless the module is ON ──
-  {
-    type: "group",
-    label: "Routes",
-    icon: RouteIcon,
-    configModule: "route" as const,
-    items: [
-      { href: "/routes", label: "All Routes", icon: RouteIcon, module: "routes" },
-      { href: "/routes/planner", label: "Route Planner", icon: CalendarRange, module: "routes" },
-      { href: "/routes/approvals", label: "Approvals", icon: Inbox, module: "routes" },
+      { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking" },
     ],
   },
 

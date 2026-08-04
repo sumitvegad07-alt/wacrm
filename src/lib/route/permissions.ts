@@ -25,6 +25,7 @@ export const ROUTE_PERMISSIONS = {
   EXECUTE: 'execute_route',
   SKIP_STOP: 'skip_route_stop',
   MODIFY_SEQUENCE: 'modify_route_sequence',
+  RESTRICT_OFF_ROUTE: 'restrict_off_route_visits',
 } as const;
 
 export type RoutePermissionKey = (typeof ROUTE_PERMISSIONS)[keyof typeof ROUTE_PERMISSIONS];
@@ -69,8 +70,7 @@ export const ROUTE_PERMISSION_GROUPS: {
       { key: ROUTE_PERMISSIONS.VIEW_HEALTH, label: 'View route health' },
       { key: ROUTE_PERMISSIONS.VIEW_EXECUTIONS, label: 'View route executions' },
       { key: ROUTE_PERMISSIONS.EXECUTE, label: 'Run routes (start / complete)' },
-      { key: ROUTE_PERMISSIONS.SKIP_STOP, label: 'Skip stops' },
-      { key: ROUTE_PERMISSIONS.MODIFY_SEQUENCE, label: 'Visit out of sequence' },
+      { key: ROUTE_PERMISSIONS.RESTRICT_OFF_ROUTE, label: 'Restrict off-route visits' },
     ],
   },
 ];

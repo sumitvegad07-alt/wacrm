@@ -45,7 +45,7 @@ const FILTERS: { key: FilterKey; label: string; statuses?: RouteStatus[] }[] = [
   { key: "all", label: "All" },
 ];
 
-export function RouteList() {
+export function RouteList({ hideHeader }: { hideHeader?: boolean } = {}) {
   const router = useRouter();
   const { accountId, hasPermission } = useAuth();
   const canAdd = hasPermission(ROUTE_PERMISSIONS.ADD);
@@ -100,19 +100,28 @@ export function RouteList() {
   return (
     <div className="w-full space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Routes</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Build and assign beats from your territory customers.
-          </p>
+      {!hideHeader && (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Routes</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Build and assign beats from your territory customers.
+            </p>
+          </div>
+          {canAdd && (
+            <Button onClick={() => router.push("/routes/new")}>
+              <Plus className="h-4 w-4" /> New Route
+            </Button>
+          )}
         </div>
-        {canAdd && (
-          <Button onClick={() => router.push("/routes/new")}>
+      )}
+      {hideHeader && canAdd && (
+        <div className="flex justify-end">
+          <Button onClick={() => router.push("/routes/new")} size="sm">
             <Plus className="h-4 w-4" /> New Route
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Filters + search */}
       <div className="flex flex-wrap items-center gap-3">

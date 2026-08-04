@@ -70,7 +70,7 @@ export function ExecutionMonitor() {
   return (
     <div className="w-full space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Execution Monitor</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Route Monitor</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Live field visibility — who started, who&apos;s running, who completed, who skipped. Read-only;
           routes are run on the mobile app.

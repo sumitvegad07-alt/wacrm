@@ -78,33 +78,35 @@ function Chip({
       ref={setNodeRef}
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : undefined}
       className={cn(
-        "group flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-xs",
+        "group flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1.5 text-xs font-medium text-emerald-300 shadow-sm transition-colors hover:bg-emerald-500/20",
         isDragging && "opacity-70 shadow-lg"
       )}
     >
       {canEdit && (
-        <button {...attributes} {...listeners} className="cursor-grab touch-none text-primary/60 active:cursor-grabbing" aria-label="Drag route">
-          <GripVertical className="h-3 w-3" />
+        <button {...attributes} {...listeners} className="cursor-grab touch-none text-emerald-400/80 hover:text-emerald-300 active:cursor-grabbing" aria-label="Drag route">
+          <GripVertical className="h-3.5 w-3.5" />
         </button>
       )}
-      <button onClick={onOpen} className="min-w-0 flex-1 truncate text-left font-medium text-foreground" title={a.route_name ?? ""}>
+      <button onClick={onOpen} className="min-w-0 flex-1 truncate text-left font-semibold text-emerald-200 hover:underline" title={a.route_name ?? ""}>
         {a.route_name ?? "Route"}
       </button>
       {canEdit && (
         <DropdownMenu>
-          <DropdownMenuTrigger className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Route actions">
-            <MoreVertical className="h-3 w-3" />
+          <DropdownMenuTrigger className="shrink-0 text-emerald-400/70 hover:text-emerald-200" aria-label="Route actions">
+            <MoreVertical className="h-3.5 w-3.5" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={onOpen}>View Route Details</DropdownMenuItem>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger><Copy className="h-4 w-4" /> Copy to day</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger>Copy to Day...</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 {DAYS.filter((d) => d.dow !== a.day_of_week).map((d) => (
                   <DropdownMenuItem key={d.dow} onClick={() => onCopyToDay(d.dow)}>{d.long}</DropdownMenuItem>
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuItem onClick={onClear}><X className="h-4 w-4" /> Clear</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => toast.info("Recurrence settings can be managed in Route details")}>Set Recurrence...</DropdownMenuItem>
+            <DropdownMenuItem onClick={onClear} className="text-red-500 focus:text-red-500">Remove Assignment</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -151,7 +153,7 @@ function Cell({
   );
 }
 
-export function PlannerBoard() {
+export function PlannerBoard({ initialAssigneeId }: { initialAssigneeId?: string } = {}) {
   const router = useRouter();
   const qc = useQueryClient();
   const { accountId, hasPermission } = useAuth();
@@ -163,9 +165,16 @@ export function PlannerBoard() {
   const [assignTarget, setAssignTarget] = useState<{ assigneeId: string; dow: IsoDayOfWeek } | null>(null);
   const [copyWeekOpen, setCopyWeekOpen] = useState(false);
 
+  const allEmps = useAccountEmployees(accountId);
   const emps = useAccountEmployeesPaged({ accountId, search, limit: PAGE, offset: page * PAGE });
-  const rows = emps.data?.rows ?? [];
-  const total = emps.data?.total ?? 0;
+  const rows = useMemo(() => {
+    if (initialAssigneeId && allEmps.data) {
+      const found = allEmps.data.find((e) => e.id === initialAssigneeId);
+      if (found) return [found];
+    }
+    return emps.data?.rows ?? [];
+  }, [initialAssigneeId, allEmps.data, emps.data?.rows]);
+  const total = initialAssigneeId ? rows.length : (emps.data?.total ?? 0);
   const assigneeIds = useMemo(() => rows.map((r) => r.id), [rows]);
   const sig = assigneeIds.slice().sort().join(",");
   const boardKey = routeKeys.planner(accountId ?? "none", sig || "none");
@@ -235,22 +244,26 @@ export function PlannerBoard() {
 
   return (
     <div className="w-full space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Route Planner</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Assign active routes to each salesman&apos;s week.</p>
-        </div>
-        {canEdit && (
-          <Button variant="outline" size="sm" onClick={() => setCopyWeekOpen(true)}>
-            <CalendarRange className="h-4 w-4" /> Copy week
-          </Button>
-        )}
-      </div>
+      {!initialAssigneeId && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">Route Planner</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Assign active routes to each salesman&apos;s week.</p>
+            </div>
+            {canEdit && (
+              <Button variant="outline" size="sm" onClick={() => setCopyWeekOpen(true)}>
+                <CalendarRange className="h-4 w-4" /> Copy week
+              </Button>
+            )}
+          </div>
 
-      <div className="relative max-w-xs">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} placeholder="Search salesmen…" className="pl-9" />
-      </div>
+          <div className="relative max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} placeholder="Search salesmen…" className="pl-9" />
+          </div>
+        </>
+      )}
 
       {error ? (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">

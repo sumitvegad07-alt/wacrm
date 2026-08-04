@@ -78,10 +78,9 @@ export function RouteWizard() {
       : null
   );
 
-  const maxCustomers = settings.data?.capacity.max_customers ?? 50;
   const approvalMode = settings.data?.approval_mode ?? "none";
   const custRows = customers.data ?? [];
-  const overCapacity = custRows.length > maxCustomers;
+  const overCapacity = false; // No customer limit per route
 
   const sortableItems: SortableCustomer[] = useMemo(
     () =>
@@ -317,9 +316,6 @@ export function RouteWizard() {
             <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm">
               <span className="font-medium text-foreground">{custRows.length}</span>{" "}
               <span className="text-muted-foreground">customer{custRows.length === 1 ? "" : "s"} on this route</span>
-              {overCapacity && (
-                <span className="ml-2 text-amber-600 dark:text-amber-400">— over the {maxCustomers} capacity guideline</span>
-              )}
             </div>
 
             <div className="flex justify-between pt-2">
