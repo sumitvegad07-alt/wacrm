@@ -53,9 +53,12 @@ export function DataTable<T>({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const { exportToCsv } = useDataExport();
 
+  const safeData = data || [];
+  const safeColumns = columns || [];
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [data.length]);
+  }, [safeData.length]);
 
   // Load preferences from local storage on mount
   useEffect(() => {
@@ -66,14 +69,14 @@ export function DataTable<T>({
         const parsed = JSON.parse(stored);
         if (parsed.active && parsed.visible) {
           // Reconcile stored columns with current columns (in case new columns were added)
-          const newColIds = columns.map(c => c.id).filter(id => !parsed.active.includes(id));
+          const newColIds = safeColumns.map(c => c.id).filter(id => !parsed.active.includes(id));
           const allActive = [...parsed.active, ...newColIds];
           
           setActiveColumnIds(allActive);
           
           // New columns should be visible if visibleByDefault !== false
           const newVisibleCols = newColIds.filter(id => {
-             const c = columns.find(col => col.id === id);
+             const c = safeColumns.find(col => col.id === id);
              return c && c.visibleByDefault !== false;
           });
           setVisibleColumnIds([...parsed.visible, ...newVisibleCols]);
@@ -85,11 +88,11 @@ export function DataTable<T>({
     }
     
     // Default fallback
-    const defaultIds = columns.map(c => c.id);
-    const defaultVisible = columns.filter(c => c.visibleByDefault !== false).map(c => c.id);
+    const defaultIds = safeColumns.map(c => c.id);
+    const defaultVisible = safeColumns.filter(c => c.visibleByDefault !== false).map(c => c.id);
     setActiveColumnIds(defaultIds);
     setVisibleColumnIds(defaultVisible);
-  }, [columns, storageKey]);
+  }, [safeColumns, storageKey]);
 
   const handleSaveColumns = (active: string[], visible: string[]) => {
     setActiveColumnIds(active);
@@ -102,17 +105,17 @@ export function DataTable<T>({
   // Determine the ordered visible columns
   const visibleColumns = activeColumnIds
     .filter(id => visibleColumnIds.includes(id))
-    .map(id => columns.find(c => c.id === id))
+    .map(id => safeColumns.find(c => c.id === id))
     .filter(Boolean) as ColumnDef<T>[];
 
-  const totalRecords = data.length;
+  const totalRecords = safeData.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalRecords);
   const paginatedData = useMemo(() => {
-    return data.slice(startIndex, endIndex);
-  }, [data, startIndex, endIndex]);
+    return safeData.slice(startIndex, endIndex);
+  }, [safeData, startIndex, endIndex]);
 
   const allOnPageSelected = paginatedData.length > 0 && paginatedData.every(row => selection?.selectedIds.has(rowKey(row)));
   const someOnPageSelected = paginatedData.some(row => selection?.selectedIds.has(rowKey(row)));
@@ -120,7 +123,7 @@ export function DataTable<T>({
   return (
     <div className="space-y-0">
       {/* Top Table Toolbar (in that vertical line just before the starting of the table) */}
-      {(actions || data.length > 0) && (
+      {(actions || safeData.length > 0) && (
         <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-t-xl border border-b-0 border-border bg-muted/20 text-xs min-h-[44px]">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-foreground text-xs">
@@ -134,7 +137,7 @@ export function DataTable<T>({
               variant="outline" 
               size="sm" 
               className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted font-medium"
-              onClick={() => exportToCsv(data, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
+              onClick={() => exportToCsv(safeData, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
             >
               <Download className="size-3" />
               Export CSV

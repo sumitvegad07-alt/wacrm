@@ -53,7 +53,8 @@ const pageTitles: Record<string, string> = {
   "/monthly-planner": "Monthly Planner",
 };
 
-function getPageTitle(pathname: string): string {
+function getPageTitle(pathname: string | null | undefined): string {
+  if (!pathname) return "Dashboard";
   if (pageTitles[pathname]) return pageTitles[pathname];
   const match = Object.entries(pageTitles).find(([path]) =>
     pathname.startsWith(`${path}/`) || pathname === path,
