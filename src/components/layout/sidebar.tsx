@@ -370,7 +370,7 @@ const menuStructure: MenuNode[] = [
     icon: Settings,
     items: [
       { href: "/settings", label: "All Settings", icon: LayoutGrid },
-      { href: "/settings?tab=module_settings", label: "Module Settings", icon: Settings },
+      { href: "/settings?tab=module_settings", label: "Organization Settings", icon: Settings },
     ],
   },
 ];

@@ -193,7 +193,7 @@ export function SettingsOverview({
     {
       section: 'module_settings',
       loading: false,
-      subtitle: 'Enable or disable CRM modules for your team',
+      subtitle: 'Modules, system config & organization-wide features',
     },
     {
       section: 'tasks',

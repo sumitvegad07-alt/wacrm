@@ -83,7 +83,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   route: { id: 'route', label: 'Route Settings', icon: Route, group: 'workspace' },
   members: { id: 'members', label: 'Team', icon: UsersRound, group: 'hidden' },
   api: { id: 'api', label: 'API Settings', icon: KeyRound, group: 'workspace' },
-  module_settings: { id: 'module_settings', label: 'Module Settings', icon: ToggleRight, group: 'workspace' },
+  module_settings: { id: 'module_settings', label: 'Organization Settings', icon: ToggleRight, group: 'workspace' },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [
