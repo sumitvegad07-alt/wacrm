@@ -312,41 +312,6 @@ export default function ProductsPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title="Products"
-        subtitle="Manage your product and service catalog."
-        actions={
-          <>
-            <Button variant="outline" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
-              <Upload className="size-4 mr-2" /> Import
-            </Button>
-            <Button onClick={() => router.push('/products/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Plus className="size-4 mr-2" /> New Product
-            </Button>
-          </>
-        }
-      />
-
-      <PageToolbar
-        search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
-          placeholder: "Search by name or SKU...",
-        }}
-        actions={
-          <div className="flex items-center space-x-2">
-            <Checkbox 
-              id="hideInactive" 
-              checked={hideInactive} 
-              onCheckedChange={(checked) => setHideInactive(checked === true)} 
-            />
-            <label htmlFor="hideInactive" className="text-sm font-medium leading-none text-foreground cursor-pointer">
-              Hide inactive
-            </label>
-          </div>
-        }
-      />
-
       <BulkActionBar
         selectedCount={selectedProductIds.size}
         onClear={() => setSelectedProductIds(new Set())}
@@ -384,6 +349,37 @@ export default function ProductsPage() {
         isLoading={loading}
         rowKey={(product) => product.id}
         onRowClick={(product) => router.push(`/products/${product.id}`)}
+        actions={
+          <Button 
+            onClick={() => router.push('/products/new')} 
+            size="sm"
+            className="h-7 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium px-2.5"
+          >
+            <Plus className="size-3.5 mr-1" /> New Product
+          </Button>
+        }
+        menuActions={
+          <>
+            <DropdownMenuItem onClick={() => setImportOpen(true)} className="cursor-pointer gap-2">
+              <Upload className="size-3.5" />
+              Import Products
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={(e) => {
+                e.preventDefault();
+                setHideInactive(!hideInactive);
+              }}
+              className="cursor-pointer gap-2 justify-between"
+            >
+              <span>Hide inactive</span>
+              <Checkbox 
+                checked={hideInactive} 
+                onCheckedChange={(checked) => setHideInactive(checked === true)}
+                className="size-3.5 pointer-events-none" 
+              />
+            </DropdownMenuItem>
+          </>
+        }
         selection={{
           selectedIds: selectedProductIds,
           onSelectAll: (checked) => setSelectedProductIds(checked ? new Set(filteredProducts.map(p => p.id)) : new Set()),

@@ -3,7 +3,14 @@
 import { useState, useEffect, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutGrid, Download, ChevronLeft, ChevronRight, Menu } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "./data-table-types";
 import { DataTableHeader } from "./data-table-header";
 import { ManageColumnsDialog } from "./manage-columns-dialog";
@@ -30,6 +37,11 @@ interface DataTableProps<T> {
    * (e.g. "+ Add Customer", "Import", etc.)
    */
   actions?: React.ReactNode;
+  /**
+   * Menu action items to render under the three-lines More Menu button
+   * (e.g. Import Products, Hide Inactive toggle, etc.)
+   */
+  menuActions?: React.ReactNode;
 }
 
 export function DataTable<T>({
@@ -44,12 +56,13 @@ export function DataTable<T>({
   onRowClick,
   selection,
   actions,
+  menuActions,
 }: DataTableProps<T>) {
   const [isManageColumnsOpen, setIsManageColumnsOpen] = useState(false);
   const [activeColumnIds, setActiveColumnIds] = useState<string[]>([]);
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>([]);
   const [isMounted, setIsMounted] = useState(false);
-  const [pageSize, setPageSize] = useState<number>(20);
+  const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const { exportToCsv } = useDataExport();
 
@@ -132,16 +145,26 @@ export function DataTable<T>({
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {actions}
-            <Button 
-              type="button"
-              variant="outline" 
-              size="sm" 
-              className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted font-medium"
-              onClick={() => exportToCsv(safeData, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
-            >
-              <Download className="size-3" />
-              Export CSV
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label="More table actions"
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none"
+                title="Table actions menu"
+              >
+                <Menu className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 text-xs">
+                {menuActions}
+                {menuActions && <DropdownMenuSeparator />}
+                <DropdownMenuItem
+                  onClick={() => exportToCsv(safeData, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
+                  className="cursor-pointer gap-2"
+                >
+                  <Download className="size-3.5" />
+                  Export CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       )}
