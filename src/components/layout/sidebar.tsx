@@ -50,6 +50,7 @@ import {
   CalendarRange,
   Activity,
   Inbox,
+  Filter,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -369,8 +370,23 @@ const menuStructure: MenuNode[] = [
     label: "Settings",
     icon: Settings,
     items: [
-      { href: "/settings", label: "All Settings", icon: LayoutGrid },
       { href: "/settings?tab=module_settings", label: "Organization Settings", icon: Settings },
+      { href: "/settings?tab=profile", label: "Profile & Appearance", icon: User },
+      { href: "/settings?tab=security", label: "Login & Security", icon: Shield },
+      { href: "/settings?tab=whatsapp", label: "WhatsApp Configuration", icon: MessageSquare },
+      { href: "/settings?tab=fields", label: "Custom Fields & Tags", icon: Tags },
+      { href: "/settings?tab=deal_pipelines", label: "Deals & Pipelines", icon: Briefcase },
+      { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter },
+      { href: "/settings?tab=tasks", label: "Task Settings", icon: CheckSquare },
+      { href: "/settings?tab=orders", label: "Orders Settings", icon: ShoppingCart },
+      { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent },
+      { href: "/settings?tab=expense_types", label: "Expense Settings", icon: Wallet },
+      { href: "/settings?tab=territories", label: "Territory Master", icon: Map },
+      { href: "/settings?tab=route", label: "Route Settings", icon: RouteIcon },
+      { href: "/settings?tab=templates", label: "Message Templates", icon: FileText },
+      { href: "/settings?tab=members", label: "Team Members", icon: Users },
+      { href: "/settings?tab=api", label: "API Keys & Webhooks", icon: KeyRound },
+      { href: "/settings", label: "All Settings Overview", icon: LayoutGrid },
     ],
   },
 ];
@@ -681,7 +697,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                   </button>
 
                   {isOpen && (
-                    <ul className="flex flex-col gap-1 ml-7 my-1">
+                    <ul className="flex flex-col gap-1 ml-7 my-1 max-h-[340px] overflow-y-auto pr-1 scrollbar-thin">
                       {node.items.map((item) => (
                         <li key={`${item.href}-${item.label}`}>
                           {renderNavLink(item, false)}
