@@ -2,8 +2,19 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Layers, GripVertical, Trash2, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+interface HierarchyLevel {
+  position: number;
+  name: string;
+  color?: string;
+}
+
+const LEVEL_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
 // ── Koops Screenshot Radio Button Toggle (No / Yes) ─────────────
 function KoopsRadioToggle({
@@ -72,21 +83,106 @@ function KoopsRadioToggle({
   );
 }
 
+// ── Koops Multi-Option Toggle ─────────────
+function KoopsOptionToggle<T extends string>({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: { label: string; value: T }[];
+  value: T;
+  onChange: (v: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-6 mt-2">
+      {options.map((opt) => {
+        const isSelected = value === opt.value;
+        return (
+          <label
+            key={opt.value}
+            onClick={() => !disabled && onChange(opt.value)}
+            className={cn(
+              "flex items-center gap-2 cursor-pointer select-none text-xs font-medium",
+              disabled && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            <span
+              className={cn(
+                "flex h-4 w-4 items-center justify-center rounded-full border transition-colors shrink-0",
+                isSelected
+                  ? "border-primary bg-primary/10"
+                  : "border-muted-foreground/40 bg-background"
+              )}
+            >
+              {isSelected && <span className="h-2 w-2 rounded-full bg-primary" />}
+            </span>
+            <span
+              className={cn(
+                isSelected ? "text-foreground font-semibold" : "text-muted-foreground"
+              )}
+            >
+              {opt.label}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────
 export function ModuleSettingsPanel() {
-  const { moduleSettings, canEditSettings, refreshModuleSettings } = useAuth();
+  const supabase = createClient();
+  const { accountId, moduleSettings, canEditSettings, refreshModuleSettings } = useAuth();
 
   const [draft, setDraft] = useState<ModuleSettings>({ ...moduleSettings });
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{
+  const [toastMsg, setToastMsg] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  // Settings JSONB data
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [assignmentMode, setAssignmentMode] = useState<'area' | 'direct'>('area');
+  const [hierarchyEnabled, setHierarchyEnabled] = useState(false);
+  const [levels, setLevels] = useState<HierarchyLevel[]>([]);
+  const [originalSettings, setOriginalSettings] = useState<any>({});
 
   // Sync draft when moduleSettings change externally
   useEffect(() => {
     setDraft({ ...moduleSettings });
   }, [moduleSettings]);
+
+  // Load account settings JSONB
+  useEffect(() => {
+    if (!accountId) return;
+    let active = true;
+    (async () => {
+      setLoadingSettings(true);
+      const { data } = await supabase.from("accounts").select("settings").eq("id", accountId).single();
+      if (active && data) {
+        const s = data.settings || {};
+        setOriginalSettings(s);
+        setAssignmentMode(s.assignment_mode === 'direct' ? 'direct' : 'area');
+        
+        const os = s.order_settings || {};
+        setHierarchyEnabled(!!os.hierarchy_enabled);
+        setLevels(
+          Array.isArray(os.levels) && os.levels.length > 0
+            ? os.levels.map((l: HierarchyLevel, i: number) => ({ ...l, color: l.color || LEVEL_COLORS[i % LEVEL_COLORS.length] }))
+            : [
+                { position: 1, name: "Distributor", color: LEVEL_COLORS[0] },
+                { position: 2, name: "Dealer", color: LEVEL_COLORS[1] },
+              ]
+        );
+      }
+      if (active) setLoadingSettings(false);
+    })();
+    return () => { active = false; };
+  }, [accountId, supabase]);
 
   const handleModuleToggle = (key: keyof ModuleSettings, value: boolean) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -98,7 +194,7 @@ export function ModuleSettingsPanel() {
 
   const handleSave = useCallback(async () => {
     setSaving(true);
-    setToast(null);
+    setToastMsg(null);
     try {
       const res = await fetch("/api/account/module-settings", {
         method: "PATCH",
@@ -110,24 +206,83 @@ export function ModuleSettingsPanel() {
         throw new Error(json.error ?? "Failed to save");
       }
       await refreshModuleSettings();
-      setToast({
+
+      // Save extra settings (JSONB)
+      const cleanLevels = levels
+        .filter((l) => l.name.trim())
+        .map((l, i) => ({ position: i + 1, name: l.name.trim(), color: l.color || LEVEL_COLORS[i % LEVEL_COLORS.length] }));
+      
+      const newSettings = {
+        ...originalSettings,
+        assignment_mode: assignmentMode,
+        order_settings: {
+          ...originalSettings?.order_settings,
+          hierarchy_enabled: hierarchyEnabled,
+          levels: cleanLevels,
+        }
+      };
+
+      const { error } = await supabase
+        .from("accounts")
+        .update({ settings: newSettings })
+        .eq("id", accountId);
+
+      if (error) throw new Error("Failed to save extra settings");
+      setOriginalSettings(newSettings);
+      
+      // Update localStorage so sidebar immediately responds to Assignment Mode changes
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('wacrm_assignment_mode', assignmentMode);
+        window.dispatchEvent(new Event('wacrm_extra_settings_changed'));
+      }
+
+      setToastMsg({
         type: "success",
         message: "Organization settings saved successfully.",
       });
     } catch (err) {
-      setToast({
+      setToastMsg({
         type: "error",
         message: err instanceof Error ? err.message : "An error occurred.",
       });
     } finally {
       setSaving(false);
     }
-  }, [draft, refreshModuleSettings]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, levels, originalSettings, refreshModuleSettings, supabase]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
-    setToast(null);
+    setAssignmentMode(originalSettings.assignment_mode === 'direct' ? 'direct' : 'area');
+    setHierarchyEnabled(!!originalSettings.order_settings?.hierarchy_enabled);
+    const osLevels = originalSettings.order_settings?.levels;
+    setLevels(
+      Array.isArray(osLevels) && osLevels.length > 0
+        ? osLevels.map((l: HierarchyLevel, i: number) => ({ ...l, color: l.color || LEVEL_COLORS[i % LEVEL_COLORS.length] }))
+        : [
+            { position: 1, name: "Distributor", color: LEVEL_COLORS[0] },
+            { position: 2, name: "Dealer", color: LEVEL_COLORS[1] },
+          ]
+    );
+    setToastMsg(null);
   };
+
+  function updateLevel(i: number, val: string) {
+    const next = [...levels];
+    next[i] = { ...next[i], name: val };
+    setLevels(next);
+  }
+  function addLevel() {
+    if (levels.length >= 5) { setToastMsg({ type: 'error', message: "Maximum 5 levels" }); return; }
+    setLevels([...levels, { position: levels.length + 1, name: "", color: LEVEL_COLORS[levels.length % LEVEL_COLORS.length] }]);
+  }
+  function updateLevelColor(i: number, color: string) {
+    const next = [...levels];
+    next[i] = { ...next[i], color };
+    setLevels(next);
+  }
+  function removeLevel(i: number) {
+    setLevels(levels.filter((_, idx) => idx !== i));
+  }
 
   return (
     <div className="space-y-8 pb-12">
@@ -175,16 +330,16 @@ export function ModuleSettingsPanel() {
       )}
 
       {/* Toast */}
-      {toast && (
+      {toastMsg && (
         <div
           className={cn(
             "rounded-lg px-4 py-3 text-sm font-medium",
-            toast.type === "success"
+            toastMsg.type === "success"
               ? "border border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400"
               : "border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400"
           )}
         >
-          {toast.message}
+          {toastMsg.message}
         </div>
       )}
 
@@ -298,6 +453,104 @@ export function ModuleSettingsPanel() {
             />
           </div>
         </div>
+      </div>
+
+      {/* ── SECTION 1B: EXTRA SETTINGS (HIERARCHY & ASSIGNMENT) ── */}
+      <div className="rounded-xl border border-border bg-card p-6 shadow-xs">
+        <div className="border-b border-border/80 pb-3 mb-6">
+          <h3 className="text-base font-semibold text-foreground">
+            Extra Settings
+          </h3>
+        </div>
+
+        {loadingSettings ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Loading extra settings...
+          </div>
+        ) : (
+          <div className="space-y-10">
+            {/* Customer & Lead Assignment to Employee */}
+            <div>
+              <div className="mb-2">
+                <p className="text-sm font-medium text-foreground">
+                  Customer &amp; Lead Assignment to Employee
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Choose how you assign customers and leads to your employees.
+                </p>
+              </div>
+              <KoopsOptionToggle
+                options={[
+                  { label: "Assign Area Wise", value: "area" },
+                  { label: "Direct Assignment", value: "direct" },
+                ]}
+                value={assignmentMode}
+                onChange={setAssignmentMode}
+                disabled={!canEditSettings}
+              />
+            </div>
+
+            {/* Enable Customer Hierarchy */}
+            <div>
+              <div className="mb-2">
+                <p className="text-sm font-medium text-foreground">
+                  Enable customer hierarchy
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Off: every order is a simple direct order. On: orders are classified primary/secondary from the customer&apos;s level.
+                </p>
+              </div>
+              <KoopsRadioToggle
+                enabled={hierarchyEnabled}
+                onChange={setHierarchyEnabled}
+                disabled={!canEditSettings}
+              />
+
+              {hierarchyEnabled && (
+                <div className="mt-4 max-w-xl space-y-3 p-4 border border-border rounded-lg bg-background">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Layers className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-medium">Levels (Level 1 = top of chain)</p>
+                  </div>
+                  {levels.map((lvl, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-muted/30 p-1 pr-2 border border-border rounded-md">
+                      <div className="p-2 text-muted-foreground/50"><GripVertical className="size-4" /></div>
+                      <span className="text-xs text-muted-foreground w-14">Level {i + 1}</span>
+                      <Input
+                        type="color"
+                        value={lvl.color || LEVEL_COLORS[i % LEVEL_COLORS.length]}
+                        onChange={(e) => updateLevelColor(i, e.target.value)}
+                        disabled={!canEditSettings}
+                        className="h-8 w-10 p-1 shrink-0 bg-transparent border-0"
+                        title="Badge color"
+                      />
+                      <Input
+                        value={lvl.name}
+                        onChange={(e) => updateLevel(i, e.target.value)}
+                        placeholder="e.g. Super Stockist"
+                        disabled={!canEditSettings}
+                        className="h-8 flex-1 bg-background"
+                      />
+                      {canEditSettings && (
+                        <Button variant="ghost" size="sm" onClick={() => removeLevel(i)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {canEditSettings && levels.length < 5 && (
+                    <Button variant="outline" size="sm" onClick={addLevel} className="mt-2 text-xs h-8">
+                      <Plus className="size-3 mr-1" /> Add level
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Orders from a Level 1 customer are tagged Primary; all others Secondary.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── SECTION 2: FIXED MODULES (ALWAYS ENABLED) ── */}

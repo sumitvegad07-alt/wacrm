@@ -375,7 +375,6 @@ function getMenuStructure(
       icon: Settings,
       items: [
         { href: "/settings?tab=module_settings", label: "Organization Settings", icon: Settings },
-        { href: "/settings?tab=extra_settings", label: "Extra Settings", icon: SlidersHorizontal },
         { href: "/settings?tab=profile", label: "Profile", icon: User },
         { href: "/settings?tab=security", label: "Login info", icon: Shield },
         ...(!moduleSettings || moduleSettings.whatsapp !== false

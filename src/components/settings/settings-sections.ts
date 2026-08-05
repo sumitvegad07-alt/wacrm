@@ -50,7 +50,6 @@ export const SETTINGS_SECTIONS = [
   'territories',
   'route',
   'module_settings',
-  'extra_settings',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -86,7 +85,6 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   members: { id: 'members', label: 'Team', icon: UsersRound, group: 'hidden' },
   api: { id: 'api', label: 'API Settings', icon: KeyRound, group: 'workspace' },
   module_settings: { id: 'module_settings', label: 'Organization Settings', icon: ToggleRight, group: 'workspace' },
-  extra_settings: { id: 'extra_settings', label: 'Extra Settings', icon: SlidersHorizontal, group: 'workspace' },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [
