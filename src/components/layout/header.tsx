@@ -122,7 +122,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
 
       {showExpiryWarning && (
         <div className="hidden flex-1 items-center justify-center px-4 md:flex">
-          <div className="rounded-full border border-warning/30 bg-warning/15 px-4 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+          <div className="rounded-full border border-destructive/30 bg-destructive/15 px-4 py-1.5 text-xs font-semibold text-destructive dark:text-red-400">
             Your subscription is expiring on {expiryDate?.toLocaleDateString('en-GB').replace(/\//g, '-')}. Reach us today !!!
           </div>
         </div>

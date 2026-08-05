@@ -147,7 +147,11 @@ export default function NewEmployeePage() {
     if (key === 'employee_role_id') {
       return (
         <Select value={form.employee_role_id} onValueChange={v => setForm({...form, employee_role_id: v || ""})}>
-          <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a role">
+              {form.employee_role_id ? roles.find(r => r.id === form.employee_role_id)?.name || "Select a role" : undefined}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
           </SelectContent>
@@ -191,8 +195,8 @@ export default function NewEmployeePage() {
         toast.error('Unsupported image type. Use PNG, JPG, WebP, or GIF.');
         return;
       }
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('Image is too large. Maximum 2 MB.');
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Image is too large. Maximum 10 MB.');
         return;
       }
 
@@ -267,7 +271,7 @@ export default function NewEmployeePage() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Recommended size: 256x256px.<br />
-                  Max file size: 2MB.
+                  Max file size: 10MB.
                 </p>
               </div>
             </div>

@@ -274,7 +274,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     if (key === 'employee_role_id') {
       return (
         <Select value={form.employee_role_id} onValueChange={v => setForm({...form, employee_role_id: v || ""})}>
-          <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a role">
+              {form.employee_role_id ? roles.find(r => r.id === form.employee_role_id)?.name || "Select a role" : undefined}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
           </SelectContent>
