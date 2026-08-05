@@ -151,6 +151,21 @@ export default function EmployeesPage() {
     }
   };
 
+  const handleDeactivate = async (empId: string) => {
+    if (!confirm("Are you sure you want to deactivate this employee?")) return;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status: "inactive" })
+      .eq("id", empId);
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Employee marked as inactive");
+      fetchData();
+    }
+  };
+
   const handleCreateEmployee = async () => {
     if (!addForm.full_name || !addForm.email || !addForm.password || !addForm.employee_role_id) {
       toast.error("Please fill all required fields (Name, Email, Password, Role)");
@@ -242,14 +257,17 @@ export default function EmployeesPage() {
       id: "role",
       label: "Employee Role",
       type: "text",
-      render: (emp) => (
-        <div className="flex items-center gap-2">
-          <StatusBadge status="assigned" label={emp.employee_roles?.name || "Unassigned"} />
-          {(emp.account_role === "admin" || emp.account_role === "owner") && (
-            <span className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-500 font-semibold capitalize">{emp.account_role}</span>
-          )}
-        </div>
-      ),
+      render: (emp) => {
+        const displayRole = emp.account_role === "owner" ? "admin" : emp.account_role;
+        return (
+          <div className="flex items-center gap-2">
+            <StatusBadge status="assigned" label={emp.employee_roles?.name || "Unassigned"} />
+            {(displayRole === "admin") && (
+              <span className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-500 font-semibold capitalize">{displayRole}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: "status",
@@ -267,12 +285,29 @@ export default function EmployeesPage() {
       id: "actions",
       label: "Actions",
       type: "text",
-      render: (emp) => (
-        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/team/employees/${emp.id}`); }}>
-          <Edit className="w-4 h-4 mr-2" />
-          Manage
-        </Button>
-      ),
+      render: (emp) => {
+        const isAdmin = emp.account_role === 'admin' || emp.account_role === 'owner';
+        return (
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/team/employees/${emp.id}`); }}>
+              <Edit className="w-4 h-4 mr-2" />
+              Manage
+            </Button>
+            {emp.status !== "inactive" && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={isAdmin}
+                onClick={(e) => { e.stopPropagation(); handleDeactivate(emp.id); }}
+                title={isAdmin ? "Admins cannot be deactivated" : "Deactivate employee"}
+              >
+                Deactivate
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
