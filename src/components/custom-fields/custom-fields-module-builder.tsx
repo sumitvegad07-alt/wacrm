@@ -963,7 +963,7 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                 <label className={`flex items-center gap-2 text-sm cursor-pointer select-none ${isProtectedRequired ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <input
                     type="checkbox"
-                    checked={fieldIsRequired || isProtectedRequired}
+                    checked={fieldIsRequired || !!isProtectedRequired}
                     disabled={!!isProtectedRequired}
                     onChange={(e) => {
                       if (!isProtectedRequired) {
