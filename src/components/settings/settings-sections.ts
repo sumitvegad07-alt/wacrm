@@ -107,7 +107,6 @@ function isSection(value: string | null): value is SettingsSection {
  */
 export function resolveSection(raw: string | null): SettingsSection {
   if (raw === 'tags' || raw === 'custom-fields') return 'fields';
-  if (raw === 'appearance') return 'profile';
   if (raw === 'deals') return 'deal_pipelines';
   if (isSection(raw)) return raw;
   return DEFAULT_SECTION;

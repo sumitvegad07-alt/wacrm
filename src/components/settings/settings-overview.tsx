@@ -146,14 +146,14 @@ export function SettingsOverview({
     subtitle: ReactNode;
   }[] = [
     {
-      section: 'profile',
+      section: 'company_profile',
       loading: false,
-      subtitle: 'Personal details, appearance & currency',
+      subtitle: 'Company profile details & configuration',
     },
     {
-      section: 'security',
+      section: 'subscription',
       loading: false,
-      subtitle: 'Password, 2FA & session management',
+      subtitle: 'Account subscription and usage details',
     },
     {
       section: 'whatsapp',

@@ -126,7 +126,7 @@ export function ContactForm({
           is_required: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        } as CustomField
+        } as unknown as CustomField
       ];
     }
     return fields;
