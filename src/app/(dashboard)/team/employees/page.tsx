@@ -52,6 +52,9 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active");
+  const [roleFilter, setRoleFilter] = useState("all");
+  
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   
@@ -153,6 +156,10 @@ export default function EmployeesPage() {
 
   const handleDeactivate = async (empId: string) => {
     if (!confirm("Are you sure you want to deactivate this employee?")) return;
+    
+    // Optimistically update UI so it disappears immediately
+    setEmployees(prev => prev.map(e => e.id === empId ? { ...e, status: "inactive" } : e));
+    
     const { error } = await supabase
       .from("profiles")
       .update({ status: "inactive" })
@@ -160,9 +167,9 @@ export default function EmployeesPage() {
     
     if (error) {
       toast.error(error.message);
+      fetchData(); // Revert on error
     } else {
       toast.success("Employee marked as inactive");
-      fetchData();
     }
   };
 
@@ -235,11 +242,17 @@ export default function EmployeesPage() {
     );
   }
 
-  const filtered = employees.filter(e => 
-    e.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    e.email?.toLowerCase().includes(search.toLowerCase()) ||
-    e.employee_code?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = employees.filter(e => {
+    const matchesSearch = e.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      e.email?.toLowerCase().includes(search.toLowerCase()) ||
+      e.employee_code?.toLowerCase().includes(search.toLowerCase());
+      
+    const matchesStatus = statusFilter === "all" || e.status === statusFilter;
+    
+    const matchesRole = roleFilter === "all" || e.employee_role_id === roleFilter;
+    
+    return matchesSearch && matchesStatus && matchesRole;
+  });
 
   const columns: ColumnDef<Employee>[] = [
     {
@@ -330,6 +343,31 @@ export default function EmployeesPage() {
           onChange: setSearch,
           placeholder: "Search employees...",
         }}
+        filters={
+          <>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v || "all")}>
+              <SelectTrigger className="w-[130px] h-8 text-xs">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v || "all")}>
+              <SelectTrigger className="w-[150px] h-8 text-xs">
+                <SelectValue placeholder="Role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {roles.map(r => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        }
       />
 
       <DataTable

@@ -128,6 +128,38 @@ export async function POST(req: Request) {
       await supabase.from('custom_fields').insert(fieldsToInsert);
     }
 
+    // Create Default Roles
+    const { data: adminRole } = await supabase
+      .from('employee_roles')
+      .insert({
+        account_id,
+        name: 'Admin',
+        description: 'Full administrative access',
+        permissions: { all: true }
+      })
+      .select('id')
+      .single();
+
+    const { data: agentRole } = await supabase
+      .from('employee_roles')
+      .insert({
+        account_id,
+        name: 'Field Agent',
+        description: 'Default field staff access',
+        permissions: { location_tracking: { view: true }, leads: { view: true, add: true, edit: true, scope: 'own' } }
+      })
+      .select('id')
+      .single();
+
+    // Assign Admin role to the creator
+    if (adminRole && userId) {
+      await supabase
+        .from('profiles')
+        .update({ employee_role_id: adminRole.id })
+        .eq('user_id', userId)
+        .eq('account_id', account_id);
+    }
+
     // Mark as provisioned
     await supabase.from('accounts').update({ is_provisioned: true }).eq('id', account_id);
 
