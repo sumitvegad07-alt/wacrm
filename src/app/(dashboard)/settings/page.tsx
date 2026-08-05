@@ -4,8 +4,9 @@ import { Suspense, useState, useEffect, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/hooks/use-auth';
-import { ProfileForm } from '@/components/settings/profile-form';
-import { SecurityPanel } from '@/components/settings/security-panel';
+import { CompanyProfilePanel } from '@/components/settings/company-profile-panel';
+import { SubscriptionPanel } from '@/components/settings/subscription-panel';
+import { PasswordForm } from '@/components/settings/password-form';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { TemplateManager } from '@/components/settings/template-manager';
@@ -67,15 +68,11 @@ function SettingsContent() {
 
   const panel: Record<SettingsSection, ReactNode> = {
     overview: <ModuleSettingsPanel />,
-    profile: (
-      <div className="space-y-6">
-        <ProfileForm />
-        <AppearancePanel />
-      </div>
-    ),
+    company_profile: <CompanyProfilePanel />,
+    subscription: <SubscriptionPanel />,
+    password: <PasswordForm />,
     appearance: <AppearancePanel />,
     ai: <AISettingsPanel />,
-    security: <SecurityPanel />,
     whatsapp: hasWhatsApp ? (
       <WhatsAppConfig />
     ) : (

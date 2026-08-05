@@ -106,16 +106,32 @@ export function ContactForm({
   // fields are replaced by the Territory picker — hide them from the shared
   // custom-fields renderer (Customer form only; the shared renderer is untouched).
   const GEO_SYSTEM_KEYS = ['country', 'state', 'city', 'area'];
-  const renderedCustomFields = useMemo(
-    () =>
-      territoryEnabled
-        ? customFields.filter(
-            (f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)),
-          )
-        : customFields,
+  const renderedCustomFields = useMemo(() => {
+    let fields = territoryEnabled
+      ? customFields.filter((f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)))
+      : customFields;
+
+    if (assignmentMode === 'direct') {
+      fields = [
+        ...fields,
+        {
+          id: 'sys-employee_id',
+          account_id: accountId || '',
+          module_name: 'contact',
+          name: 'Assign Employee',
+          system_key: 'employee_id',
+          field_type: 'select',
+          is_system: true,
+          is_active: true,
+          is_required: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as CustomField
+      ];
+    }
+    return fields;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [customFields, territoryEnabled],
-  );
+  }, [customFields, territoryEnabled, assignmentMode, accountId]);
 
   useEffect(() => {
     if (open && accountId) {
@@ -427,24 +443,25 @@ export function ContactForm({
                   </select>
                 );
               }
+              if (fld.system_key === 'employee_id') {
+                return (
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-xs">Assign Employee</Label>
+                    <SearchableSelect
+                      value={employeeId}
+                      onChange={setEmployeeId}
+                      options={profiles.map((p) => ({
+                        label: p.full_name || p.email,
+                        value: p.id,
+                      }))}
+                      placeholder="Select employee..."
+                    />
+                  </div>
+                );
+              }
               return null;
             }}
           />
-
-          {assignmentMode === 'direct' && (
-            <div className="space-y-3 pt-2 border-t border-border/50">
-              <Label className="text-xs font-medium text-muted-foreground">Assign Employee</Label>
-              <SearchableSelect
-                value={employeeId}
-                onChange={setEmployeeId}
-                options={profiles.map(p => ({
-                  label: p.full_name || p.email,
-                  value: p.id,
-                }))}
-                placeholder="Select employee..."
-              />
-            </div>
-          )}
 
           {territoryEnabled && enabledLevels(territorySettings).length > 0 && (
             <div className="space-y-3 pt-2 border-t border-border/50">

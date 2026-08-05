@@ -16,6 +16,7 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
+import { SettingsPanelHead } from './settings-panel-head';
 
 const MIN_PASSWORD = 8;
 
@@ -81,19 +82,20 @@ export function PasswordForm() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-foreground">
-          <KeyRound className="size-4 text-primary" />
-          Password
-        </CardTitle>
-        <CardDescription className="text-muted-foreground">
-          Use at least {MIN_PASSWORD} characters. You will stay signed in on
-          this device after changing it.
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent>
+    <section className="w-full animate-in fade-in-50 duration-200">
+      <SettingsPanelHead title="Change Password" />
+      <Card className="border-border shadow-sm mt-6 max-w-2xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <KeyRound className="size-4 text-primary" />
+            Password
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Use at least {MIN_PASSWORD} characters. You will stay signed in on
+            this device after changing it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="current-password" className="text-foreground">
@@ -167,5 +169,6 @@ export function PasswordForm() {
         </form>
       </CardContent>
     </Card>
+    </section>
   );
 }

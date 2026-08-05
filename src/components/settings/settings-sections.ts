@@ -31,9 +31,10 @@ import {
  */
 export const SETTINGS_SECTIONS = [
   'overview',
-  'profile',
-  'security',
+  'company_profile',
+  'subscription',
   'appearance',
+  'password',
   'whatsapp',
   'ai',
   'templates',
@@ -66,9 +67,10 @@ export interface SectionMeta {
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top' },
-  profile: { id: 'profile', label: 'Profile', icon: User, group: 'account' },
-  security: { id: 'security', label: 'Login info', icon: Shield, group: 'account' },
-  appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'hidden' },
+  company_profile: { id: 'company_profile', label: 'Company Profile', icon: User, group: 'account' },
+  subscription: { id: 'subscription', label: 'Subscription', icon: Shield, group: 'account' },
+  appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
+  password: { id: 'password', label: 'Change Password', icon: KeyRound, group: 'hidden' },
   whatsapp: { id: 'whatsapp', label: 'Whatsapp', icon: PlugZap, group: 'workspace' },
   ai: { id: 'ai', label: 'Knowledge Base', icon: BrainCircuit, group: 'hidden' }, // hidden in rail
   templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'hidden' }, // hidden in rail
