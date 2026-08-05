@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Calendar, CheckSquare, FileText, CheckCircle, XCircle, Copy, FilePlus2, Plus, MessageSquare, Phone, MapPin, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -34,9 +34,29 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
   const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [filter, setFilter] = useState('all'); // all, activities, notes, changelog
+  const [enrichedActivities, setEnrichedActivities] = useState<any[]>(activities);
 
   const supabase = createClient();
   const { user } = useAuth();
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const userIds = [...new Set(activities.filter(a => a.user_id && !a.user).map(a => a.user_id))];
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('user_id, full_name, avatar_url').in('user_id', userIds);
+        if (profiles) {
+          const profileMap = Object.fromEntries(profiles.map(p => [p.user_id, p]));
+          setEnrichedActivities(activities.map(a => ({
+            ...a,
+            user: a.user || profileMap[a.user_id]
+          })));
+          return;
+        }
+      }
+      setEnrichedActivities(activities);
+    };
+    fetchUsers();
+  }, [activities]);
 
   const toggleTaskStatus = async (task: any, e: React.MouseEvent) => {
     e.preventDefault();
@@ -155,7 +175,7 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
   }
 
   // Process activities to categorize into 'activity' (business logic) vs 'changelog' (field updates)
-  const processedActivities = activities.map(a => ({
+  const processedActivities = enrichedActivities.map(a => ({
     type: a.action === 'updated' ? 'changelog' : 'activity',
     date: new Date(a.created_at),
     data: a
