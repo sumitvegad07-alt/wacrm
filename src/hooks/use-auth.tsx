@@ -268,6 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               subscription_plan: account.subscription_plan ?? 'Basic',
               industry: account.industry ?? 'Other',
               is_provisioned: account.is_provisioned ?? false,
+              subscription_expires_at: (account as any).subscription_expires_at ?? null,
             };
 
             // Fetch module_settings separately — added in migration 090.
