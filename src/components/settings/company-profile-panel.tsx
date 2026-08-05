@@ -9,9 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Upload, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { SettingsPanelHead } from './settings-panel-head';
-import { Upload, Trash2 } from 'lucide-react';
+import { TerritoryPicker } from '@/components/territories/territory-picker';
+import { getTerritoryRows, getAccountTerritorySettings } from '@/lib/territories/api';
+import type { Territory, TerritorySettings } from '@/lib/territories/types';
+import { DEFAULT_TERRITORY_SETTINGS } from '@/lib/territories/settings';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -21,15 +25,10 @@ interface CompanyProfileData {
   website: string;
   registered_email: string;
   registered_contact_no: string;
-  fax: string;
   contact_person_name: string;
-  support_person_name: string;
-  support_contact_no: string;
   address: string;
   pincode: string;
-  country: string;
-  state: string;
-  city: string;
+  territory_id: string | null;
   logo_url?: string;
 }
 
@@ -38,15 +37,10 @@ const DEFAULT_PROFILE: CompanyProfileData = {
   website: '',
   registered_email: '',
   registered_contact_no: '',
-  fax: '',
   contact_person_name: '',
-  support_person_name: '',
-  support_contact_no: '',
   address: '',
   pincode: '',
-  country: '',
-  state: '',
-  city: '',
+  territory_id: null,
 };
 
 export function CompanyProfilePanel() {
@@ -62,6 +56,9 @@ export function CompanyProfilePanel() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [removeLogo, setRemoveLogo] = useState(false);
 
+  const [territoryRows, setTerritoryRows] = useState<Territory[]>([]);
+  const [territorySettings, setTerritorySettings] = useState<TerritorySettings>(DEFAULT_TERRITORY_SETTINGS);
+
   const currentLogo = previewUrl ?? (!removeLogo ? data.logo_url ?? null : null);
   const initial = (data.name || profile?.full_name || 'C').charAt(0).toUpperCase();
 
@@ -71,13 +68,18 @@ export function CompanyProfilePanel() {
     async function loadData() {
       if (!accountId) return;
       try {
-        const { data: acct, error } = await supabase
-          .from('accounts')
-          .select('settings')
-          .eq('id', accountId)
-          .single();
+        // Fetch territory data alongside account settings
+        const [acctResponse, rowsData, settingsData] = await Promise.all([
+          supabase.from('accounts').select('settings').eq('id', accountId).single(),
+          getTerritoryRows(accountId),
+          getAccountTerritorySettings(accountId)
+        ]);
 
-        if (error) throw error;
+        if (acctResponse.error) throw acctResponse.error;
+        const acct = acctResponse.data;
+        
+        setTerritoryRows(rowsData);
+        setTerritorySettings(settingsData);
         
         let loadedData = { ...DEFAULT_PROFILE };
         
@@ -85,6 +87,7 @@ export function CompanyProfilePanel() {
         if (!acct?.settings?.company_profile?.name && profile) {
            loadedData.name = profile.full_name || '';
            loadedData.registered_email = profile.email || '';
+           loadedData.contact_person_name = profile.full_name || '';
         }
         
         if (acct?.settings?.company_profile) {
@@ -145,7 +148,7 @@ export function CompanyProfilePanel() {
 
       if (pendingLogo && user) {
         const ext = pendingLogo.name.split('.').pop()?.toLowerCase() || 'png';
-        const path = `${accountId}/company-logo-${Date.now()}.${ext}`;
+        const path = `${user.id}/company-logo-${Date.now()}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(path, pendingLogo, {
@@ -295,15 +298,6 @@ export function CompanyProfilePanel() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Fax</Label>
-              <Input
-                value={data.fax}
-                onChange={(e) => handleChange('fax', e.target.value)}
-                disabled={!canEdit}
-                placeholder="Fax number"
-              />
-            </div>
-            <div className="space-y-2">
               <Label>Contact Person Name</Label>
               <Input
                 value={data.contact_person_name}
@@ -312,74 +306,42 @@ export function CompanyProfilePanel() {
                 placeholder="Name"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Support Person Name</Label>
-              <Input
-                value={data.support_person_name}
-                onChange={(e) => handleChange('support_person_name', e.target.value)}
-                disabled={!canEdit}
-                placeholder="Name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Support Contact No</Label>
-              <Input
-                value={data.support_contact_no}
-                onChange={(e) => handleChange('support_contact_no', e.target.value)}
-                disabled={!canEdit}
-                placeholder="+1 234 567 8900"
-              />
-            </div>
           </div>
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-medium text-muted-foreground border-b border-border pb-2">Address Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="space-y-2 md:col-span-2 lg:col-span-4">
-              <Label>Address</Label>
-              <Textarea
-                value={data.address}
-                onChange={(e) => handleChange('address', e.target.value)}
-                disabled={!canEdit}
-                placeholder="Full address"
-                className="min-h-[80px]"
-              />
+          <h3 className="text-sm font-medium text-muted-foreground border-b border-border pb-2">Address Info</h3>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label>Address</Label>
+                <Textarea
+                  value={data.address}
+                  onChange={(e) => handleChange('address', e.target.value)}
+                  disabled={!canEdit}
+                  placeholder="Full address"
+                  className="min-h-[80px]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Pincode</Label>
+                <Input
+                  value={data.pincode}
+                  onChange={(e) => handleChange('pincode', e.target.value)}
+                  disabled={!canEdit}
+                  placeholder="Pincode"
+                />
+              </div>
             </div>
+
             <div className="space-y-2">
-              <Label>City</Label>
-              <Input
-                value={data.city}
-                onChange={(e) => handleChange('city', e.target.value)}
+              <Label className="mb-2 block">Area / Territory</Label>
+              <TerritoryPicker
+                rows={territoryRows}
+                settings={territorySettings}
+                value={data.territory_id}
+                onChange={(id) => handleChange('territory_id', id || '')}
                 disabled={!canEdit}
-                placeholder="City"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>State</Label>
-              <Input
-                value={data.state}
-                onChange={(e) => handleChange('state', e.target.value)}
-                disabled={!canEdit}
-                placeholder="State"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Country</Label>
-              <Input
-                value={data.country}
-                onChange={(e) => handleChange('country', e.target.value)}
-                disabled={!canEdit}
-                placeholder="Country"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Pincode</Label>
-              <Input
-                value={data.pincode}
-                onChange={(e) => handleChange('pincode', e.target.value)}
-                disabled={!canEdit}
-                placeholder="Pincode"
               />
             </div>
           </div>
