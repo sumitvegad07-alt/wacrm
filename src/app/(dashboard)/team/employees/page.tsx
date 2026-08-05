@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
@@ -17,7 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout, PageHeader, PageToolbar, StatusBadge } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
-import { ColumnDef } from "@/components/ui/data-table/data-table-types";
+import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 
 interface Employee {
   id: string;
@@ -52,8 +52,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("active");
-  const [roleFilter, setRoleFilter] = useState("all");
+  const [filterState, setFilterState] = useState<FilterState>({ status: ["active"] });
   
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -243,18 +242,27 @@ export default function EmployeesPage() {
   }
 
   const filtered = employees.filter(e => {
+    // Global search
     const matchesSearch = e.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       e.email?.toLowerCase().includes(search.toLowerCase()) ||
       e.employee_code?.toLowerCase().includes(search.toLowerCase());
       
-    const matchesStatus = statusFilter === "all" || e.status === statusFilter;
+    // Column filter: Employee name (text)
+    const empFilter = filterState.employee as string;
+    const matchesEmp = !empFilter || e.full_name?.toLowerCase().includes(empFilter.toLowerCase());
+      
+    // Column filter: Status (select array)
+    const statusFilters = filterState.status as string[] | undefined;
+    const matchesStatus = !statusFilters || statusFilters.length === 0 || statusFilters.includes(e.status);
     
-    const matchesRole = roleFilter === "all" || e.employee_role_id === roleFilter;
+    // Column filter: Role (select array)
+    const roleFilters = filterState.role as string[] | undefined;
+    const matchesRole = !roleFilters || roleFilters.length === 0 || roleFilters.includes(e.employee_role_id);
     
-    return matchesSearch && matchesStatus && matchesRole;
+    return matchesSearch && matchesEmp && matchesStatus && matchesRole;
   });
 
-  const columns: ColumnDef<Employee>[] = [
+  const columns: ColumnDef<Employee>[] = useMemo(() => [
     {
       id: "employee",
       label: "Employee",
@@ -269,7 +277,8 @@ export default function EmployeesPage() {
     {
       id: "role",
       label: "Employee Role",
-      type: "text",
+      type: "select",
+      options: roles.map(r => ({ label: r.name, value: r.id })),
       render: (emp) => {
         const displayRole = emp.account_role === "owner" ? "admin" : emp.account_role;
         return (
@@ -322,7 +331,7 @@ export default function EmployeesPage() {
         );
       },
     },
-  ];
+  ], [roles, router]);
 
   return (
     <PageLayout>
@@ -343,36 +352,13 @@ export default function EmployeesPage() {
           onChange: setSearch,
           placeholder: "Search employees...",
         }}
-        filters={
-          <>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v || "all")}>
-              <SelectTrigger className="w-[130px] h-8 text-xs">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="all">All Status</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v || "all")}>
-              <SelectTrigger className="w-[150px] h-8 text-xs">
-                <SelectValue placeholder="Role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                {roles.map(r => (
-                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </>
-        }
       />
 
       <DataTable
         columns={columns}
         data={filtered}
+        filterState={filterState}
+        onFilterChange={(id, value) => setFilterState(prev => ({ ...prev, [id]: value }))}
         storageKey="wacrm_employees_table_columns"
         isLoading={loading}
         rowKey={(emp) => emp.id}
