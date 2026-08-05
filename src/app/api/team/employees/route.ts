@@ -136,20 +136,48 @@ export async function PATCH(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // Using admin client to bypass RLS since users cannot update other profiles' statuses
-    const { data: updatedProfile, error } = await supabaseAdmin
-      .from("profiles")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Profile update error:", error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    // If password is being updated, we need to update the Auth user
+    if (updates.password) {
+      // Get the auth user_id from the profile
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("user_id")
+        .eq("id", id)
+        .single();
+      
+      if (profile?.user_id) {
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+          profile.user_id,
+          { password: updates.password }
+        );
+        if (authError) {
+          console.error("Auth password update error:", authError);
+          return NextResponse.json({ error: authError.message }, { status: 400 });
+        }
+      }
+      
+      // Remove password fields so they don't try to save to the profiles table
+      delete updates.password;
+      delete updates.repassword;
     }
 
-    return NextResponse.json({ success: true, profile: updatedProfile });
+    // Using admin client to bypass RLS since users cannot update other profiles' statuses
+    if (Object.keys(updates).length > 0) {
+      const { data: updatedProfile, error } = await supabaseAdmin
+        .from("profiles")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Profile update error:", error);
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      return NextResponse.json({ success: true, profile: updatedProfile });
+    }
+
+    return NextResponse.json({ success: true });
 
   } catch (error: any) {
     console.error("Employee update exception:", error);

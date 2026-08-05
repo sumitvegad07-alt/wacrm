@@ -15,6 +15,7 @@ interface CustomFieldsSectionRendererProps {
   formData?: Record<string, any>;
   onFormDataChange?: (key: string, value: any) => void;
   renderCustomSystemField?: (field: CustomField) => React.ReactNode | null;
+  isEditing?: boolean;
 }
 
 export function CustomFieldsSectionRenderer({
@@ -26,6 +27,7 @@ export function CustomFieldsSectionRenderer({
   formData,
   onFormDataChange,
   renderCustomSystemField,
+  isEditing = true,
 }: CustomFieldsSectionRendererProps) {
   const [sections, setSections] = useState<CustomFieldSection[]>([]);
   const supabase = createClient();
@@ -121,6 +123,10 @@ export function CustomFieldsSectionRenderer({
                     </Label>
                     {customNode ? (
                       customNode
+                    ) : isEditing === false ? (
+                      <p className="font-medium text-foreground text-base">
+                        {value || "—"}
+                      </p>
                     ) : (
                       <CustomFieldInput
                         field={field}

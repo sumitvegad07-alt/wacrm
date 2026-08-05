@@ -890,11 +890,17 @@ export interface EmployeeRole {
 
 export interface EmployeeDevice {
   id: string;
+  profile_id?: string;
+  device_id?: string;
   device_name?: string;
   device_model?: string;
-  os_version?: string;
-  app_version?: string;
-  last_active?: string;
-  is_active?: boolean;
+  os?: string;
+  status?: 'approved' | 'blocked' | 'pending';
+  last_login?: string;
+  created_at?: string;
+  updated_at?: string;
+  application_version?: string;
+  database_version?: string;
+  last_seen_at?: string;
   [key: string]: any;
 }

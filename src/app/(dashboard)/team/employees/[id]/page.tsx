@@ -12,16 +12,59 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
-  ArrowLeft, User, Shield, Mail, Phone, Building2, Briefcase, 
-  Smartphone, Lock, Unlock, Key, Trash2, Edit2, CheckCircle2, 
-  XCircle, AlertCircle, Loader2, Save, MapPin, RefreshCw 
+  ArrowLeft, Edit2, Loader2, Save, Trash2, Smartphone, Lock, Unlock, CheckCircle2, XCircle, Camera
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
-import { EmployeeAreaAssignment } from "@/components/territories/employee-area-assignment";
-import { EmployeeRouteTab } from "@/components/territories/employee-route-tab";
+import { Timeline } from "@/components/shared/timeline";
 import type { Employee, EmployeeRole, EmployeeDevice, CustomField } from "@/types";
+
+function AvatarUploader({ url, onUpload, isEditing }: { url?: string | null; onUpload: (url: string) => void; isEditing: boolean }) {
+  const [uploading, setUploading] = useState(false);
+  const supabase = createClient();
+
+  const handleUpload = async (event: any) => {
+    try {
+      setUploading(true);
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage.from('profile_avatars').upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('profile_avatars').getPublicUrl(filePath);
+      onUpload(data.publicUrl);
+    } catch (error: any) {
+      toast.error(error.message || "Error uploading image");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-4 py-4 w-full justify-center">
+      <div className="relative h-32 w-32 rounded-full overflow-hidden border-4 border-muted bg-muted/50 flex items-center justify-center">
+        {url ? (
+          <img src={url} alt="Avatar" className="h-full w-full object-cover" />
+        ) : (
+          <User className="h-12 w-12 text-muted-foreground" />
+        )}
+        {isEditing && (
+          <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
+            {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Camera className="h-6 w-6" />}
+            <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+          </label>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">{isEditing ? "Click to upload a new profile picture" : "Profile Picture"}</p>
+    </div>
+  );
+}
 
 export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -29,20 +72,22 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const router = useRouter();
   const supabase = createClient();
 
-  const { accountId, canEditSettings, isModuleEnabled } = useAuth();
+  const { accountId, isSuperadmin, accountRole } = useAuth();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<EmployeeDevice[]>([]);
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"details" | "areas" | "routes">("details");
+  
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
-  // Other employees in the account (for the Reporting Manager picker).
-  const [employees, setEmployees] = useState<{ id: string; full_name: string | null; email: string; status: string | null }[]>([]);
+  
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
 
-  // Edit form state
+  // Edit form state for core fields
   const [form, setForm] = useState({
     full_name: "",
     employee_code: "",
@@ -51,19 +96,15 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     department: "",
     employee_role_id: "",
     manager_id: "",
-    status: "active"
+    status: "active",
+    avatar_url: "",
+    password: "", // Only populated when Admin resets
+    repassword: ""
   });
-
-  const [passwordForm, setPasswordForm] = useState({
-    new_password: "",
-    confirm_password: ""
-  });
-  const [resettingPassword, setResettingPassword] = useState(false);
 
   const fetchEmployeeData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch employee details
       const { data: empData, error: empErr } = await supabase
         .from("profiles")
         .select("*, employee_roles(id, name, permissions)")
@@ -85,43 +126,27 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         department: empData.department || "",
         employee_role_id: empData.employee_role_id || "",
         manager_id: empData.manager_id || "",
-        status: empData.status || "active"
+        status: empData.status || "active",
+        avatar_url: empData.avatar_url || "",
+        password: "",
+        repassword: ""
       });
 
-      // Fetch employee roles
-      const { data: rolesData } = await supabase
-        .from("employee_roles")
-        .select("*")
-        .order("name", { ascending: true });
+      const { data: rolesData } = await supabase.from("employee_roles").select("*").order("name", { ascending: true });
       if (rolesData) setRoles(rolesData as EmployeeRole[]);
 
-      // Other employees (for the Reporting Manager picker)
-      const { data: empList } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, status")
-        .eq("account_id", empData.account_id)
-        .order("full_name", { ascending: true });
-      if (empList) setEmployees(empList.filter((e) => e.id !== employeeId));
-
-      // Fetch devices
-      const { data: devData } = await supabase
-        .from("employee_devices")
-        .select("*")
-        .eq("user_id", employeeId)
-        .order("last_seen_at", { ascending: false });
+      const { data: devData } = await supabase.from("employee_devices").select("*").eq("profile_id", employeeId).order("last_seen_at", { ascending: false });
       if (devData) setDevices(devData as EmployeeDevice[]);
+      else {
+        // Try fallback to user_id if profile_id fails (older DB schema)
+        const { data: devDataLegacy } = await supabase.from("employee_devices").select("*").eq("user_id", employeeId).order("last_login", { ascending: false });
+        if (devDataLegacy) setDevices(devDataLegacy as EmployeeDevice[]);
+      }
 
-      const { data: fieldsData } = await supabase
-        .from("custom_fields")
-        .select("*")
-        .eq("module_name", "user")
-        .order("created_at");
+      const { data: fieldsData } = await supabase.from("custom_fields").select("*").eq("module_name", "user").order("created_at");
       if (fieldsData) setCustomFields(fieldsData);
 
-      const { data: cvData } = await supabase
-        .from("user_custom_values")
-        .select("*")
-        .eq("user_id", employeeId);
+      const { data: cvData } = await supabase.from("user_custom_values").select("*").eq("user_id", employeeId);
       if (cvData) {
         const vals: Record<string, string> = {};
         cvData.forEach((row: any) => { vals[row.custom_field_id] = row.value; });
@@ -129,6 +154,14 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       } else {
         setCustomValues({});
       }
+
+      // Fetch Timeline
+      const { data: timelineActs } = await supabase.from("activities").select("*").eq("module_name", "user").eq("record_id", employeeId).order("created_at", { ascending: false });
+      if (timelineActs) setActivities(timelineActs);
+      
+      const { data: timelineTasks } = await supabase.from("tasks").select("*").eq("module_name", "user").eq("record_id", employeeId).order("created_at", { ascending: false });
+      if (timelineTasks) setTasks(timelineTasks);
+
     } catch (err) {
       console.error(err);
       toast.error("Failed to load employee details");
@@ -146,45 +179,43 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       toast.error("Full Name is required");
       return;
     }
+    if (form.password && form.password !== form.repassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
     setSaving(true);
     try {
-      // One role: derive the security level from the chosen Employee Role's Full
-      // Access flag. Never demote the account Owner.
       const selectedRole = roles.find((r) => r.id === form.employee_role_id);
-      const derivedAccountRole =
-        employee?.account_role === "owner"
-          ? "owner"
-          : selectedRole?.permissions?.all === true
-          ? "admin"
-          : "agent";
+      const derivedAccountRole = employee?.account_role === "owner" ? "owner" : selectedRole?.permissions?.all === true ? "admin" : "agent";
+
+      const updates: any = {
+        full_name: form.full_name.trim(),
+        employee_code: form.employee_code.trim() || null,
+        mobile: form.mobile.trim() || null,
+        department: form.department.trim() || null,
+        employee_role_id: form.employee_role_id || null,
+        manager_id: form.manager_id || null,
+        account_role: derivedAccountRole,
+        status: form.status,
+        avatar_url: form.avatar_url || null
+      };
+      if (form.password) {
+        updates.password = form.password;
+        updates.repassword = form.repassword;
+      }
 
       const res = await fetch("/api/team/employees", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: employeeId,
-          updates: {
-            full_name: form.full_name.trim(),
-            employee_code: form.employee_code.trim() || null,
-            mobile: form.mobile.trim() || null,
-            department: form.department.trim() || null,
-            employee_role_id: form.employee_role_id || null,
-            manager_id: form.manager_id || null,
-            account_role: derivedAccountRole,
-            status: form.status
-          }
+          updates
         })
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        if (data.error && data.error.includes("23514")) {
-          toast.error("Invalid reporting hierarchy (circular reference detected).");
-          setSaving(false);
-          return;
-        }
-        throw new Error(data.error || "Failed to update profile");
-      }
+      if (!res.ok) throw new Error(data.error || "Failed to update profile");
+
       if (employeeId && Object.keys(customValues).length > 0) {
         await supabase.from("user_custom_values").delete().eq("user_id", employeeId);
         const toInsert = Object.entries(customValues)
@@ -210,28 +241,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     }
   };
 
-  const handleClearDeviceLock = async () => {
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ device_lock_id: null })
-        .eq("id", employeeId);
-
-      if (error) throw error;
-      toast.success("Device lock cleared successfully");
-      fetchEmployeeData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to clear device lock");
-    }
-  };
-
   const handleDeviceStatusChange = async (deviceId: string, status: 'approved' | 'blocked' | 'pending') => {
     try {
-      const { error } = await supabase
-        .from("employee_devices")
-        .update({ status })
-        .eq("id", deviceId);
-
+      const { error } = await supabase.from("employee_devices").update({ status }).eq("id", deviceId);
       if (error) throw error;
       toast.success(`Device ${status}`);
       fetchEmployeeData();
@@ -240,30 +252,77 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     }
   };
 
-  const handleDeleteDevice = async (deviceId: string) => {
-    if (!confirm("Remove this device from registered devices?")) return;
-    try {
-      const { error } = await supabase
-        .from("employee_devices")
-        .delete()
-        .eq("id", deviceId);
+  const renderCustomSystemField = (field: CustomField) => {
+    if (!field.system_key) return null;
 
-      if (error) throw error;
-      toast.success("Device removed");
-      fetchEmployeeData();
-    } catch (err: any) {
-      toast.error("Failed to remove device");
+    if (!isEditing) {
+      let val = form[field.system_key as keyof typeof form] || "—";
+      if (field.system_key === 'password' || field.system_key === 'repassword') return null; // hide entirely in read mode
+      if (field.system_key === 'employee_role_id') val = roles.find(r => r.id === form.employee_role_id)?.name || "—";
+      return (
+        <div className="space-y-1">
+          <Label className="text-muted-foreground text-xs uppercase tracking-wider">{field.field_name}</Label>
+          <p className="font-medium text-foreground text-base capitalize">{val}</p>
+        </div>
+      );
     }
+
+    const key = field.system_key as keyof typeof form;
+    
+    if (key === 'employee_role_id') {
+      return (
+        <div className="space-y-2">
+          <Label>{field.field_name}</Label>
+          <Select value={form.employee_role_id} onValueChange={v => setForm({...form, employee_role_id: v || ""})}>
+            <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
+            <SelectContent>
+              {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    }
+
+    if (key === 'status') {
+      return (
+        <div className="space-y-3">
+          <Label>{field.field_name}</Label>
+          <RadioGroup value={form.status} onValueChange={(v) => setForm({...form, status: v})} className="flex flex-col space-y-1">
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="active" id="status-active" />
+              <Label htmlFor="status-active" className="cursor-pointer font-normal">Active</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="inactive" id="status-inactive" />
+              <Label htmlFor="status-inactive" className="cursor-pointer font-normal">Inactive</Label>
+            </div>
+          </RadioGroup>
+        </div>
+      );
+    }
+
+    if (key === 'password' || key === 'repassword') {
+      const isAdmin = accountRole === 'admin' || accountRole === 'owner' || isSuperadmin;
+      if (!isAdmin) return null;
+      return (
+        <div className="space-y-2">
+          <Label>{field.field_name} (Admin Only)</Label>
+          <Input type="password" value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} placeholder="Reset Password..." />
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-2">
+        <Label>{field.field_name}</Label>
+        <Input type={field.field_type === 'email' ? 'email' : 'text'} value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} />
+      </div>
+    );
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <div className="flex items-center justify-center h-full min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
-
   if (!employee) return null;
 
   return (
@@ -277,291 +336,112 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">{employee.full_name || "Employee Profile"}</h1>
-              <Badge className={employee.status === "active" ? "bg-emerald-600 text-white shadow-sm border-transparent font-medium capitalize" : "bg-red-600 text-white shadow-sm border-transparent font-medium capitalize"}>
+              <Badge className={employee.status === "active" ? "bg-emerald-600 text-white shadow-sm border-transparent" : "bg-red-600 text-white shadow-sm border-transparent"}>
                 {employee.status || "active"}
               </Badge>
-              {(employee.account_role === "admin" || employee.account_role === "owner") && (
-                <Badge className="bg-amber-600 text-white shadow-sm border-transparent font-medium capitalize">{employee.account_role}</Badge>
-              )}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
               {employee.email} {employee.employee_code && `• ID: ${employee.employee_code}`}
             </p>
           </div>
         </div>
-
         <div className="flex items-center gap-3">
           {!isEditing ? (
-            <Button onClick={() => setIsEditing(true)} className="gap-2">
-              <Edit2 className="w-4 h-4" />
-              Edit Employee
-            </Button>
+            <Button onClick={() => setIsEditing(true)} className="gap-2"><Edit2 className="w-4 h-4" />Edit Employee</Button>
           ) : (
             <>
               <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
               <Button onClick={handleSaveEmployee} disabled={saving} className="gap-2">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                <Save className="w-4 h-4" />
-                Save Changes
+                <Save className="w-4 h-4" /> Save Changes
               </Button>
             </>
           )}
         </div>
       </div>
 
-      {/* Tabs */}
-      {isModuleEnabled("territory") && (
-        <div className="flex items-center gap-1 border-b border-border">
-          {([
-            { id: "details", label: "Details" },
-            { id: "areas", label: "Area Assignment" },
-            { id: "routes", label: "Monthly Route Plan" },
-          ] as const).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setActiveTab(t.id)}
-              className={
-                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors " +
-                (activeTab === t.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground")
-              }
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {activeTab === "areas" && isModuleEnabled("territory") && accountId && (
-        <EmployeeAreaAssignment employeeId={employeeId} accountId={accountId} canEdit={canEditSettings} />
-      )}
-
-      {activeTab === "routes" && isModuleEnabled("territory") && accountId && (
-        <EmployeeRouteTab employeeId={employeeId} accountId={accountId} />
-      )}
-
-      <div className={"grid grid-cols-1 lg:grid-cols-3 gap-8" + (activeTab !== "details" ? " hidden" : "")}>
-        {/* Left 2 Cols: Basic Details & Business Roles */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Col: Details & Devices */}
         <div className="lg:col-span-2 space-y-8">
           <Card className="p-6 border-border shadow-sm">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Business Information</h2>
-            
-            {!isEditing ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                <div>
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Full Name</span>
-                  <p className="font-medium text-foreground text-base">{employee.full_name || "—"}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Employee ID / Code</span>
-                  <p className="font-medium text-foreground text-base">{employee.employee_code || "—"}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Email Address (Login ID)</span>
-                  <p className="font-medium text-foreground text-base">{employee.email}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Mobile Number</span>
-                  <p className="font-medium text-foreground text-base">{employee.mobile || "—"}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Employee Role</span>
-                  <p className="font-medium text-primary text-base">
-                    {employee.employee_roles?.name || "No role assigned"}
-                    {employee.account_role === "owner" ? " · Owner" : employee.account_role === "admin" ? " · Admin" : ""}
-                  </p>
-                </div>
-                {isModuleEnabled("reporting_hierarchy") && (
-                  <div>
-                    <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">Reporting Manager</span>
-                    <p className="font-medium text-foreground text-base">
-                      {form.manager_id
-                        ? (employees.find((e) => e.id === form.manager_id)?.full_name || employees.find((e) => e.id === form.manager_id)?.email || "—")
-                        : "Not set"}
-                    </p>
-                  </div>
-                )}
-                {customFields.map((field) => (
-                  <div key={field.id}>
-                    <span className="text-muted-foreground block text-xs uppercase tracking-wider mb-1">
-                      {field.field_name}
-                    </span>
-                    <p className="font-medium text-foreground text-base">
-                      {customValues[field.id] || "—"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Full Name *</Label>
-                    <Input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} placeholder="Full Name" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Employee ID / Code</Label>
-                    <Input value={form.employee_code} onChange={e => setForm({...form, employee_code: e.target.value})} placeholder="e.g. EMP-001" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Mobile Number</Label>
-                    <Input value={form.mobile} onChange={e => setForm({...form, mobile: e.target.value})} placeholder="+1 234 567 8900" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Employee Role</Label>
-                    <Select
-                      value={form.employee_role_id}
-                      onValueChange={v => setForm({...form, employee_role_id: v || ""})}
-                      items={Object.fromEntries(roles.map(r => [r.id, r.name]))}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
-                      <SelectContent>
-                        {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">A role with Full Access makes this employee an admin.</p>
-                  </div>
-                  {isModuleEnabled("reporting_hierarchy") && (
-                    <div className="space-y-2">
-                      <Label>Reporting Manager</Label>
-                      <Select
-                        value={form.manager_id || "__none__"}
-                        onValueChange={v => setForm({...form, manager_id: v && v !== "__none__" ? v : ""})}
-                        items={{ __none__: "— None —", ...Object.fromEntries(employees.map(e => [e.id, (e.full_name || e.email) + (e.status === "inactive" ? " (inactive)" : "")])) }}
-                      >
-                        <SelectTrigger><SelectValue placeholder="Select a manager" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">— None —</SelectItem>
-                          {employees.map(e => (
-                            <SelectItem key={e.id} value={e.id}>
-                              {(e.full_name || e.email) + (e.status === "inactive" ? " (inactive)" : "")}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div className="space-y-3">
-                    <Label>Status</Label>
-                    <RadioGroup 
-                      value={form.status} 
-                      onValueChange={(v) => setForm({...form, status: v})}
-                      className="flex flex-col space-y-1"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="active" id="status-active" />
-                        <Label htmlFor="status-active" className="cursor-pointer font-normal">Active</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="inactive" id="status-inactive" />
-                        <Label htmlFor="status-inactive" className="cursor-pointer font-normal">Inactive</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                </div>
-                {customFields.length > 0 && (
-                  <div className="pt-4 border-t border-border mt-4">
-                    <CustomFieldsSectionRenderer
-                      accountId={accountId || ""}
-                      moduleName="user"
-                      customFields={customFields}
-                      customValues={customValues}
-                      onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+            <AvatarUploader url={form.avatar_url} onUpload={(url) => setForm({...form, avatar_url: url})} isEditing={isEditing} />
+            <CustomFieldsSectionRenderer
+              accountId={accountId || ""}
+              moduleName="user"
+              customFields={customFields}
+              customValues={customValues}
+              onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
+              renderCustomSystemField={renderCustomSystemField}
+              isEditing={isEditing} // We'll need to patch CustomFieldsSectionRenderer for this prop if missing, but it handles inputs normally. Wait, CustomFieldsSectionRenderer always renders Inputs. I will need to patch it or just handle it.
+            />
           </Card>
 
-          {/* Quick Shortcuts */}
-          <Card className="p-6 border-border shadow-sm">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Location & Attendance</h2>
-            <div className="flex flex-wrap gap-4">
-              <Link href={`/location-tracking/attendance`}>
-                <Button variant="outline" className="gap-2">
-                  <MapPin className="w-4 h-4 text-primary" />
-                  View Attendance History
-                </Button>
-              </Link>
-              <Link href={`/location-tracking/all-locations`}>
-                <Button variant="outline" className="gap-2">
-                  <RefreshCw className="w-4 h-4 text-primary" />
-                  Live Location Feed
-                </Button>
-              </Link>
+          <Card className="border-border shadow-sm overflow-hidden">
+            <div className="p-4 border-b bg-muted/20">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-primary" /> User Devices
+              </h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-muted-foreground bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Device Name</th>
+                    <th className="px-4 py-3 font-medium">Device ID</th>
+                    <th className="px-4 py-3 font-medium">Application Version</th>
+                    <th className="px-4 py-3 font-medium">Database Version</th>
+                    <th className="px-4 py-3 font-medium">Last Active Session</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {devices.map(device => (
+                    <tr key={device.id} className="hover:bg-muted/30">
+                      <td className="px-4 py-3 font-medium text-foreground">{device.device_name || "-"}</td>
+                      <td className="px-4 py-3 font-mono text-xs">{device.device_id || "-"}</td>
+                      <td className="px-4 py-3">{device.application_version || "-"}</td>
+                      <td className="px-4 py-3">{device.database_version || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {device.last_seen_at || device.last_login ? new Date(device.last_seen_at || device.last_login!).toLocaleString() : "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge className={
+                          device.status === 'approved' ? 'bg-emerald-600' :
+                          device.status === 'blocked' ? 'bg-red-600' : 'bg-amber-600'
+                        }>{device.status}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        {device.status !== 'blocked' && (
+                          <Button variant="secondary" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'blocked')}>INACTIVATE</Button>
+                        )}
+                        {device.status === 'blocked' && (
+                          <Button variant="outline" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'approved')}>ACTIVATE</Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {devices.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No devices registered.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </Card>
-
         </div>
 
-        {/* Right Col: Devices & Login Controls */}
+        {/* Right Col: Timeline */}
         <div className="space-y-8">
-          <Card className="p-6 border-border shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b pb-4">
-              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-primary" />
-                Registered Devices
-              </h2>
-              {employee.device_lock_id && (
-                <Button variant="outline" size="sm" onClick={handleClearDeviceLock} className="text-xs">
-                  <Unlock className="w-3.5 h-3.5 mr-1" />
-                  Clear Lock
-                </Button>
-              )}
-            </div>
-
-            {devices.length === 0 ? (
-              <div className="text-center py-6 text-muted-foreground text-sm">
-                No devices registered for this employee yet.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {devices.map(device => (
-                  <div key={device.id} className="p-4 rounded-lg bg-muted/40 border border-border flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="font-medium text-sm flex items-center gap-2 text-foreground">
-                        {device.device_name || "Unknown Device"}
-                        <Badge className={
-                          device.status === 'approved' ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] uppercase font-bold' :
-                          device.status === 'blocked' ? 'bg-red-600 text-white shadow-sm border-transparent text-[10px] uppercase font-bold' :
-                          'bg-amber-600 text-white shadow-sm border-transparent text-[10px] uppercase font-bold'
-                        }>
-                          {device.status}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground font-mono">
-                        ID: {device.device_id?.slice(0, 16)}...
-                      </p>
-                      {device.last_seen_at && (
-                        <p className="text-[11px] text-muted-foreground">
-                          Last active: {new Date(device.last_seen_at).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {device.status !== 'approved' && (
-                        <Button variant="ghost" size="icon" onClick={() => handleDeviceStatusChange(device.id, 'approved')} title="Approve device">
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
-                        </Button>
-                      )}
-                      {device.status !== 'blocked' && (
-                        <Button variant="ghost" size="icon" onClick={() => handleDeviceStatusChange(device.id, 'blocked')} title="Block device">
-                          <XCircle className="w-4 h-4 text-red-600" />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteDevice(device.id)} title="Remove device">
-                        <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
+          <Timeline 
+            moduleName="user"
+            recordId={employeeId}
+            tasks={tasks}
+            activities={activities}
+            notes={notes}
+            onRefresh={fetchEmployeeData}
+          />
         </div>
       </div>
     </div>
