@@ -265,10 +265,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       if (field.system_key === 'password' || field.system_key === 'repassword') return null; // hide entirely in read mode
       if (field.system_key === 'employee_role_id') val = roles.find(r => r.id === form.employee_role_id)?.name || "—";
       return (
-        <div className="space-y-1">
-          <Label className="text-muted-foreground text-xs uppercase tracking-wider">{field.field_name}</Label>
-          <p className="font-medium text-foreground text-base capitalize">{val}</p>
-        </div>
+        <p className="font-medium text-foreground text-base capitalize">{val}</p>
       );
     }
 
@@ -276,33 +273,27 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     
     if (key === 'employee_role_id') {
       return (
-        <div className="space-y-2">
-          <Label>{field.field_name}</Label>
-          <Select value={form.employee_role_id} onValueChange={v => setForm({...form, employee_role_id: v || ""})}>
-            <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
-            <SelectContent>
-              {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={form.employee_role_id} onValueChange={v => setForm({...form, employee_role_id: v || ""})}>
+          <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
+          <SelectContent>
+            {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
       );
     }
 
     if (key === 'status') {
       return (
-        <div className="space-y-3">
-          <Label>{field.field_name}</Label>
-          <RadioGroup value={form.status} onValueChange={(v) => setForm({...form, status: v})} className="flex flex-col space-y-1">
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="active" id="status-active" />
-              <Label htmlFor="status-active" className="cursor-pointer font-normal">Active</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="inactive" id="status-inactive" />
-              <Label htmlFor="status-inactive" className="cursor-pointer font-normal">Inactive</Label>
-            </div>
-          </RadioGroup>
-        </div>
+        <RadioGroup value={form.status} onValueChange={(v) => setForm({...form, status: v})} className="flex flex-col space-y-1">
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="active" id="status-active" />
+            <Label htmlFor="status-active" className="cursor-pointer font-normal">Active</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="inactive" id="status-inactive" />
+            <Label htmlFor="status-inactive" className="cursor-pointer font-normal">Inactive</Label>
+          </div>
+        </RadioGroup>
       );
     }
 
@@ -310,18 +301,12 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       const isAdmin = accountRole === 'admin' || accountRole === 'owner' || isSuperadmin;
       if (!isAdmin) return null;
       return (
-        <div className="space-y-2">
-          <Label>{field.field_name} (Admin Only)</Label>
-          <Input type="password" value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} placeholder="Reset Password..." />
-        </div>
+        <Input type="password" value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} placeholder={key === 'password' ? "Reset Password..." : "Re-enter Password..."} />
       );
     }
 
     return (
-      <div className="space-y-2">
-        <Label>{field.field_name}</Label>
-        <Input type={field.field_type === 'email' ? 'email' : 'text'} value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} />
-      </div>
+      <Input type={field.field_type === 'email' ? 'email' : 'text'} value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} />
     );
   };
 

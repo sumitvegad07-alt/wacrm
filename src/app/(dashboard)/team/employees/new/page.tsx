@@ -9,17 +9,19 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ArrowLeft, UserPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
+import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import type { EmployeeRole, CustomField } from "@/types";
 
 export default function NewEmployeePage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const { accountId } = useAuth();
+  const { accountId, user, isSuperadmin, accountRole: authRole } = useAuth();
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [creating, setCreating] = useState(false);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -28,37 +30,51 @@ export default function NewEmployeePage() {
     full_name: "",
     email: "",
     password: "",
+    repassword: "",
     employee_code: "",
     mobile: "",
     department: "",
     employee_role_id: "",
+    status: "active",
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadRoles() {
+    async function loadData() {
+      if (!accountId || !user?.id) return;
+      
       const { data } = await supabase
         .from("employee_roles")
         .select("*")
         .order("name", { ascending: true });
       if (data) setRoles(data as EmployeeRole[]);
+
+      await ensureDefaultSectionsAndFields(accountId, "user", user.id, supabase);
+
       const { data: fieldsData } = await supabase
         .from("custom_fields")
         .select("*")
         .eq("module_name", "user")
         .order("created_at");
       if (fieldsData) setCustomFields(fieldsData);
+      
+      setLoading(false);
     }
-    loadRoles();
-  }, [supabase]);
+    loadData();
+  }, [supabase, accountId, user?.id]);
 
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.full_name.trim() || !form.email.trim() || !form.password.trim()) {
-      toast.error("Please fill in all required fields (*)");
+      toast.error("Please fill in all required fields (Name, Email, Password)");
       return;
     }
     if (form.password.length < 6) {
       toast.error("Password must be at least 6 characters long");
+      return;
+    }
+    if (form.password !== form.repassword) {
+      toast.error("Passwords do not match");
       return;
     }
 
@@ -69,8 +85,6 @@ export default function NewEmployeePage() {
 
     setCreating(true);
     try {
-      // One role: the security level (account_role) is derived from whether the
-      // chosen Employee Role has Full Access — admins never pick a system role.
       const selectedRole = roles.find((r) => r.id === form.employee_role_id);
       const account_role = selectedRole?.permissions?.all === true ? "admin" : "agent";
 
@@ -86,6 +100,7 @@ export default function NewEmployeePage() {
           mobile: form.mobile.trim() || undefined,
           department: form.department.trim() || undefined,
           employee_role_id: form.employee_role_id || undefined,
+          status: form.status,
           account_role,
         }),
       });
@@ -120,9 +135,53 @@ export default function NewEmployeePage() {
     }
   };
 
+  const renderCustomSystemField = (field: CustomField) => {
+    if (!field.system_key) return null;
+    const key = field.system_key as keyof typeof form;
+    
+    if (key === 'employee_role_id') {
+      return (
+        <Select value={form.employee_role_id} onValueChange={v => setForm({...form, employee_role_id: v || ""})}>
+          <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
+          <SelectContent>
+            {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      );
+    }
+
+    if (key === 'status') {
+      return (
+        <RadioGroup value={form.status} onValueChange={(v) => setForm({...form, status: v})} className="flex flex-col space-y-1">
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="active" id="status-active" />
+            <Label htmlFor="status-active" className="cursor-pointer font-normal">Active</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="inactive" id="status-inactive" />
+            <Label htmlFor="status-inactive" className="cursor-pointer font-normal">Inactive</Label>
+          </div>
+        </RadioGroup>
+      );
+    }
+
+    if (key === 'password' || key === 'repassword') {
+      return (
+        <Input type="password" value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} placeholder={key === 'password' ? "Enter Password..." : "Re-enter Password..."} />
+      );
+    }
+
+    return (
+      <Input type={field.field_type === 'email' ? 'email' : 'text'} value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} placeholder={`Enter ${field.field_name}...`} />
+    );
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-full min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
+
   return (
     <div className="p-8 w-full max-w-none space-y-8">
-      {/* Top Header */}
       <div className="flex items-center justify-between pb-6 border-b border-border">
         <div className="flex items-center gap-4">
           <Link href="/team/employees">
@@ -143,103 +202,17 @@ export default function NewEmployeePage() {
       </div>
 
       <form onSubmit={handleCreateEmployee} className="space-y-8">
-        <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Basic Information & Credentials</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="full_name">Full Name *</Label>
-              <Input
-                id="full_name"
-                value={form.full_name}
-                onChange={e => setForm({ ...form, full_name: e.target.value })}
-                placeholder="e.g. John Doe"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="employee_code">Employee ID / Code</Label>
-              <Input
-                id="employee_code"
-                value={form.employee_code}
-                onChange={e => setForm({ ...form, employee_code: e.target.value })}
-                placeholder="e.g. EMP-001"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Login ID *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-                placeholder="e.g. ramesh.sales@company.com"
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Used to sign in. Must be in email format, but it does <strong>not</strong> have to be a real, working inbox.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password *</Label>
-              <Input
-                id="password"
-                type="text"
-                value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-                placeholder="********"
-                required
-              />
-              <p className="text-xs text-muted-foreground">At least 6 characters required.</p>
-            </div>
-          </div>
+        <Card className="p-6 border-border shadow-sm">
+          <CustomFieldsSectionRenderer
+            accountId={accountId || ""}
+            moduleName="user"
+            customFields={customFields}
+            customValues={customValues}
+            onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
+            renderCustomSystemField={renderCustomSystemField}
+            isEditing={true}
+          />
         </Card>
-
-        <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Role & Organization Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label>Employee Role *</Label>
-              <Select
-                value={form.employee_role_id}
-                onValueChange={v => setForm({ ...form, employee_role_id: v || "" })}
-                items={Object.fromEntries(roles.map(r => [r.id, r.name]))}
-              >
-                <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
-                <SelectContent>
-                  {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                The role decides this employee&apos;s rights. A role with Full Access makes them an admin.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="mobile">Mobile Number</Label>
-              <Input
-                id="mobile"
-                value={form.mobile}
-                onChange={e => setForm({ ...form, mobile: e.target.value })}
-                placeholder="+1 234 567 8900"
-              />
-            </div>
-          </div>
-        </Card>
-
-        {customFields.length > 0 && (
-          <Card className="p-6 border-border shadow-sm">
-            <CustomFieldsSectionRenderer
-              accountId={accountId || ""}
-              moduleName="user"
-              customFields={customFields}
-              customValues={customValues}
-              onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
-            />
-          </Card>
-        )}
 
         <div className="flex items-center justify-end gap-4 pt-4">
           <Link href="/team/employees">
