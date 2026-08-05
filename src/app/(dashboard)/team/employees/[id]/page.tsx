@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
-  ArrowLeft, Edit2, Loader2, Save, Trash2, Smartphone, Lock, Unlock, CheckCircle2, XCircle, Camera
+  ArrowLeft, Edit2, Loader2, Save, Trash2, Smartphone, Lock, Unlock, CheckCircle2, XCircle, Camera, User
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
