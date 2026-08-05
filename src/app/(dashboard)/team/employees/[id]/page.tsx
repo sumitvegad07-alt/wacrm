@@ -237,14 +237,16 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         }
       }
 
-      if (employee?.status !== form.status) {
-        await logModuleActivity(supabase, {
-          moduleName: 'user',
-          recordId: employeeId as string,
-          action: 'status_updated',
-          message: `Employee status changed to ${form.status}`
-        });
-      }
+      const message = employee?.status !== form.status 
+        ? `Employee details updated (Status changed to ${form.status})` 
+        : `Employee details updated`;
+
+      await logModuleActivity(supabase, {
+        moduleName: 'user',
+        recordId: employeeId as string,
+        action: 'updated',
+        message
+      });
 
       toast.success("Employee details updated");
       setIsEditing(false);
