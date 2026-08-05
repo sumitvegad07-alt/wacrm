@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, UserPlus, Loader2 } from "lucide-react";
+import { ArrowLeft, UserPlus, Loader2, Upload, Trash2 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
@@ -36,8 +37,11 @@ export default function NewEmployeePage() {
     department: "",
     employee_role_id: "",
     status: "active",
+    avatar_url: "",
   });
   const [loading, setLoading] = useState(true);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -102,6 +106,7 @@ export default function NewEmployeePage() {
           employee_role_id: form.employee_role_id || undefined,
           status: form.status,
           account_role,
+          avatar_url: form.avatar_url || undefined,
         }),
       });
 
@@ -176,6 +181,38 @@ export default function NewEmployeePage() {
     );
   };
 
+  const handleUploadImage = async (event: any) => {
+    try {
+      setUploadingImage(true);
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+        toast.error('Unsupported image type. Use PNG, JPG, WebP, or GIF.');
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image is too large. Maximum 2 MB.');
+        return;
+      }
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage.from('profile_avatars').upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('profile_avatars').getPublicUrl(filePath);
+      setForm({ ...form, avatar_url: data.publicUrl });
+    } catch (error: any) {
+      toast.error(error.message || "Error uploading image");
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-full min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
@@ -202,6 +239,49 @@ export default function NewEmployeePage() {
       </div>
 
       <form onSubmit={handleCreateEmployee} className="space-y-8">
+        <Card className="p-6 border-border shadow-sm space-y-6">
+          <div className="flex flex-col gap-4">
+            <Label className="text-base font-semibold">Profile Picture</Label>
+            <div className="flex flex-col sm:flex-row sm:items-start gap-6">
+              <Avatar className="h-24 w-24 rounded-lg border border-border shadow-sm">
+                {form.avatar_url ? (
+                  <AvatarImage src={form.avatar_url} className="object-cover" />
+                ) : (
+                  <AvatarFallback className="rounded-lg text-3xl font-medium bg-muted text-muted-foreground">
+                    {form.full_name ? form.full_name.charAt(0).toUpperCase() : 'U'}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              <div className="flex flex-col gap-2 pt-1">
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploadingImage}>
+                    {uploadingImage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                    Upload Photo
+                  </Button>
+                  {form.avatar_url && (
+                    <Button type="button" variant="destructive" size="sm" onClick={() => setForm({...form, avatar_url: ""})} disabled={uploadingImage}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Recommended size: 256x256px.<br />
+                  Max file size: 2MB.
+                </p>
+              </div>
+            </div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={handleUploadImage}
+              disabled={uploadingImage}
+            />
+          </div>
+        </Card>
+
         <Card className="p-6 border-border shadow-sm">
           <CustomFieldsSectionRenderer
             accountId={accountId || ""}
