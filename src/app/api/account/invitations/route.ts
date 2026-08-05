@@ -178,6 +178,27 @@ export async function POST(request: Request) {
     );
     if (!limit.success) return rateLimitResponse(limit);
 
+    // Enforce user_count limit
+    const { data: acct } = await ctx.supabase
+      .from("accounts")
+      .select("user_count")
+      .eq("id", ctx.accountId)
+      .single();
+
+    if (acct?.user_count) {
+      const { count } = await ctx.supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("account_id", ctx.accountId);
+
+      if (count !== null && count >= acct.user_count) {
+        return NextResponse.json(
+          { error: `User limit (${acct.user_count}) reached. Cannot invite more users.` },
+          { status: 403 }
+        );
+      }
+    }
+
     const body = (await request.json().catch(() => null)) as
       | { role?: unknown; expiresInDays?: unknown; label?: unknown }
       | null;

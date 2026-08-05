@@ -81,8 +81,38 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Enforce user limit before redeeming
+  const tokenHash = hashInviteToken(token);
+  const { data: invite } = await supabase
+    .from("account_invitations")
+    .select("account_id")
+    .eq("token_hash", tokenHash)
+    .single();
+
+  if (invite) {
+    const { data: acct } = await supabase
+      .from("accounts")
+      .select("user_count")
+      .eq("id", invite.account_id)
+      .single();
+
+    if (acct?.user_count) {
+      const { count } = await supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("account_id", invite.account_id);
+
+      if (count !== null && count >= acct.user_count) {
+        return NextResponse.json(
+          { error: `The account has reached its user limit (${acct.user_count}). Cannot accept invitation.` },
+          { status: 403 }
+        );
+      }
+    }
+  }
+
   const { data: accountId, error } = await supabase.rpc("redeem_invitation", {
-    p_token_hash: hashInviteToken(token),
+    p_token_hash: tokenHash,
   });
 
   if (error) return rpcErrorToResponse(error);

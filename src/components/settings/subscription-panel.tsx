@@ -10,7 +10,7 @@ interface SubscriptionData {
   customerId: string;
   startDate: string;
   expiryDate: string;
-  customerCreated: number;
+  userLimit: number;
   staffCreated: number;
 }
 
@@ -24,10 +24,9 @@ export function SubscriptionPanel() {
     async function loadData() {
       if (!accountId) return;
       try {
-        const [acctRes, profilesRes, contactsRes] = await Promise.all([
-          supabase.from('accounts').select('created_at, customer_id, subscription_expires_at').eq('id', accountId).single(),
+        const [acctRes, profilesRes] = await Promise.all([
+          supabase.from('accounts').select('created_at, customer_id, subscription_expires_at, user_count').eq('id', accountId).single(),
           supabase.from('profiles').select('id', { count: 'exact' }).eq('account_id', accountId),
-          supabase.from('contacts').select('id', { count: 'exact' }).eq('account_id', accountId),
         ]);
 
         const createdAt = acctRes.data?.created_at ? new Date(acctRes.data.created_at) : new Date();
@@ -43,8 +42,8 @@ export function SubscriptionPanel() {
           customerId: acctRes.data?.customer_id || '-',
           startDate: createdAt.toLocaleDateString('en-GB').replace(/\//g, '-'),
           expiryDate: expiryDate.toLocaleDateString('en-GB').replace(/\//g, '-'),
+          userLimit: acctRes.data?.user_count || 1,
           staffCreated: profilesRes.count || 0,
-          customerCreated: contactsRes.count || 0,
         });
       } catch (err) {
         console.error('Failed to load subscription data:', err);
@@ -101,24 +100,19 @@ export function SubscriptionPanel() {
           <h3 className="text-sm font-medium text-foreground border-b border-border pb-2 mb-4">
             User Limit Detail
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
-            <div className="bg-muted/30 border border-border p-4 rounded-md">
-              <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Customer</p>
-              <p className="text-[10px] text-muted-foreground mb-1">( Created / Limit )</p>
-              <p className="text-xl font-bold">
-                <span className="text-success">{data.customerCreated}</span>
-                <span className="text-muted-foreground mx-1">/</span>
-                <span className="text-danger">50</span>
+          <div className="bg-muted/30 border border-border p-6 rounded-md flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+              <p className="font-semibold text-lg">Staff Users</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                You have created <span className="font-semibold text-foreground">{data.staffCreated}</span> out of{' '}
+                <span className="font-semibold text-foreground">{data.userLimit}</span> allowed users.
               </p>
             </div>
-            <div className="bg-muted/30 border border-border p-4 rounded-md">
-              <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Staff User</p>
-              <p className="text-[10px] text-muted-foreground mb-1">( Created / Limit )</p>
-              <p className="text-xl font-bold">
-                <span className="text-success">{data.staffCreated}</span>
-                <span className="text-muted-foreground mx-1">/</span>
-                <span className="text-danger">20</span>
-              </p>
+            <div className="flex flex-col items-end">
+              <span className="text-3xl font-bold text-primary">
+                {data.staffCreated} / {data.userLimit}
+              </span>
+              <span className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">Users created</span>
             </div>
           </div>
         </div>
