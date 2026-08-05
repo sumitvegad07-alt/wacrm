@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag, CustomField } from '@/types';
+import type { Contact, Tag, ContactTag, CustomField, Profile } from '@/types';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { TerritoryPicker } from '@/components/territories/territory-picker';
 import { getTerritoryRows, getAccountTerritorySettings } from '@/lib/territories/api';
 import { enabledLevels } from '@/lib/territories/settings';
@@ -89,6 +90,11 @@ export function ContactForm({
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string }[] }>({ enabled: false, levels: [] });
   const [hierarchyLevel, setHierarchyLevel] = useState<number | null>(null);
 
+  // Assignment Mode config
+  const [assignmentMode, setAssignmentMode] = useState<'area' | 'direct'>('area');
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [employeeId, setEmployeeId] = useState<string>('');
+
   // Territory Master — the configured geography hierarchy that replaces the flat
   // country/state/city/area text fields (rendered dynamically, no hardcoded fields).
   const [territorySettings, setTerritorySettings] = useState<TerritorySettings>(DEFAULT_TERRITORY_SETTINGS);
@@ -126,11 +132,12 @@ export function ContactForm({
       setLatitude(contact?.latitude != null ? String(contact.latitude) : '');
       setLongitude(contact?.longitude != null ? String(contact.longitude) : '');
       setHierarchyLevel(contact?.hierarchy_level ?? null);
+      setEmployeeId(contact?.employee_id ?? '');
       setDupMatch(null);
       setTerritoryId((contact as Contact & { territory_id?: string | null })?.territory_id ?? null);
       setNeedsTerritoryReview(!!(contact as Contact & { needs_territory_review?: boolean })?.needs_territory_review);
       fetchCustomFields();
-      fetchHierarchyConfig();
+      fetchSettingsConfig();
       if (territoryEnabled) fetchTerritoryData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,11 +157,16 @@ export function ContactForm({
     }
   }
 
-  async function fetchHierarchyConfig() {
+  async function fetchSettingsConfig() {
     if (!accountId) return;
-    const { data: acct } = await supabase.from('accounts').select('settings').eq('id', accountId).single();
-    const os = acct?.settings?.order_settings;
+    const [acctRes, profRes] = await Promise.all([
+      supabase.from('accounts').select('settings').eq('id', accountId).single(),
+      supabase.from('profiles').select('*').order('full_name')
+    ]);
+    const os = acctRes.data?.settings?.order_settings;
     setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? os.levels : [] });
+    setAssignmentMode(acctRes.data?.settings?.assignment_mode || 'area');
+    setProfiles((profRes.data || []) as Profile[]);
   }
 
   // Look up an existing contact with this number (new contacts only).
@@ -229,6 +241,7 @@ export function ContactForm({
       state: stateField,
       country,
       pincode,
+      employee_id: assignmentMode === 'direct' ? (employeeId || null) : null,
     };
 
     const cfError = validateRequiredCustomFields(renderedCustomFields, customValues, formDataMap);
@@ -417,6 +430,21 @@ export function ContactForm({
               return null;
             }}
           />
+
+          {assignmentMode === 'direct' && (
+            <div className="space-y-3 pt-2 border-t border-border/50">
+              <Label className="text-xs font-medium text-muted-foreground">Assign Employee</Label>
+              <SearchableSelect
+                value={employeeId}
+                onChange={setEmployeeId}
+                options={profiles.map(p => ({
+                  label: p.full_name || p.email,
+                  value: p.id,
+                }))}
+                placeholder="Select employee..."
+              />
+            </div>
+          )}
 
           {territoryEnabled && enabledLevels(territorySettings).length > 0 && (
             <div className="space-y-3 pt-2 border-t border-border/50">

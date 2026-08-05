@@ -82,6 +82,7 @@ export default function OrdersPage() {
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [hierarchyEnabled, setHierarchyEnabled] = useState(false);
   const canCreateOrder = hasPermission('add_orders');
   const canEditOrder = hasPermission('edit_orders');
   const canManageStatus = hasPermission('manage_order_status');
@@ -90,7 +91,7 @@ export default function OrdersPage() {
     if (!accountId) return;
     setLoading(true);
 
-    const [{ data: orderData }, { data: profiles }, { data: fieldsData }] = await Promise.all([
+    const [{ data: orderData }, { data: profiles }, { data: fieldsData }, { data: acctData }] = await Promise.all([
       supabase
         .from('orders')
         .select('*, order_items(count), contacts(company, name), leads(name)')
@@ -98,8 +99,10 @@ export default function OrdersPage() {
         .order('created_at', { ascending: false }),
       supabase.from('profiles').select('id, full_name').eq('account_id', accountId),
       supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'order'),
+      supabase.from('accounts').select('settings').eq('id', accountId).single(),
     ]);
 
+    setHierarchyEnabled(!!acctData?.settings?.order_settings?.hierarchy_enabled);
     setCustomFields(fieldsData || []);
 
     let orderValues: any[] = [];
@@ -202,21 +205,20 @@ export default function OrdersPage() {
       type: 'text',
       render: (o) => <span className="font-medium">{formatCurrency(o.total_amount, defaultCurrency)}</span>,
     },
-    {
+    ...(hierarchyEnabled ? [{
       id: 'classification',
-      label: 'Type',
-      type: 'select',
+      label: 'Sales Type',
+      type: 'select' as const,
       options: [
-        { label: 'Direct', value: 'direct' },
         { label: 'Primary', value: 'primary' },
         { label: 'Secondary', value: 'secondary' },
       ],
-      render: (o) => (
+      render: (o: OrderRow) => (
         <Badge variant="outline" className={`capitalize text-xs ${CLASS_BADGE[o.classification]}`}>
           {o.classification}
         </Badge>
       ),
-    },
+    }] : []),
     {
       id: 'status',
       label: 'Status',

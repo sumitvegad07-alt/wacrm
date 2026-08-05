@@ -28,7 +28,7 @@ import {
   SECTION_META,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
-import { Zap, AlertTriangle, ArrowRight, MapPin } from 'lucide-react';
+import { Zap, AlertTriangle, ArrowRight, ArrowLeft, MapPin } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -118,13 +118,13 @@ function SettingsContent() {
     <div className="w-full space-y-6">
       {/* Header — displays title for whichever setting is open */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">
             {SECTION_META[section]?.label || 'Organization Settings'}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage your workspace and account configuration.
-          </p>
         </div>
 
         {/* Downgrade/Cancel Modal */}

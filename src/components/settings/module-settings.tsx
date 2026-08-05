@@ -286,17 +286,8 @@ export function ModuleSettingsPanel() {
 
   return (
     <div className="space-y-8 pb-12">
-      {/* Top Banner / Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Organization Settings
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Configure active CRM modules, system toggles, and organization-wide
-            rules for your team.
-          </p>
-        </div>
+      {/* Top Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4 border-b border-border pb-5">
 
         {/* Action buttons at top right for immediate access */}
         {canEditSettings && (
@@ -553,35 +544,7 @@ export function ModuleSettingsPanel() {
         )}
       </div>
 
-      {/* ── SECTION 2: FIXED MODULES (ALWAYS ENABLED) ── */}
-      <div className="rounded-xl border border-border/60 bg-muted/20 px-6 py-4">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-          Fixed Modules (Always Enabled)
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {[
-            "My Activity",
-            "Dashboard",
-            "Customer",
-            "Product",
-            "Order",
-            "Lead",
-            "Deal",
-            "Report",
-            "User",
-            "Settings",
-            "Location Tracking",
-          ].map((item) => (
-            <span
-              key={item}
-              className="inline-flex items-center gap-1.5 rounded-full bg-background border border-border px-3 py-1 text-xs font-medium text-foreground shadow-2xs"
-            >
-              <CheckCircle2 className="size-3.5 text-green-600 dark:text-green-400" />
-              {item}
-            </span>
-          ))}
-        </div>
-      </div>
+      {/* Fixed modules removed as per request */}
     </div>
   );
 }

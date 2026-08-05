@@ -100,6 +100,7 @@ export interface Contact {
   email?: string;
   company?: string;
   avatar_url?: string;
+  employee_id?: string | null;
   /** Address capture (city/state/country + lat/lng from migrations 055/056,
    *  address/area/pincode from 069). Lat/lng are set by mobile GPS geo-tag
    *  or manually by an admin on web. */

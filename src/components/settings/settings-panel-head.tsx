@@ -18,24 +18,11 @@ export function SettingsPanelHead({
   action?: ReactNode;
   className?: string;
 }) {
+  if (!action) return null;
+
   return (
-    <div
-      className={cn(
-        'mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between',
-        className,
-      )}
-    >
-      <div className="min-w-0">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">
-          {title}
-        </h2>
-        {description ? (
-          <p className="mt-1 max-w-[62ch] text-sm text-muted-foreground">
-            {description}
-          </p>
-        ) : null}
-      </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+    <div className={cn('mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-end', className)}>
+      <div className="shrink-0">{action}</div>
     </div>
   );
 }
