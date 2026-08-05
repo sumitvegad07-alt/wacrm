@@ -78,8 +78,15 @@ interface HeaderProps {
 export function Header({ onOpenSidebar }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, account } = useAuth();
   const title = getPageTitle(pathname);
+
+  const now = new Date();
+  const expiryDate = account?.subscription_expires_at ? new Date(account.subscription_expires_at) : null;
+  const isTimeExpired = expiryDate ? expiryDate < now : false;
+  const isExpired = account && (account.subscription_status === 'expired' || account.subscription_status === 'deactivated' || isTimeExpired);
+  const daysUntilExpiry = expiryDate ? Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+  const showExpiryWarning = !isExpired && daysUntilExpiry !== null && daysUntilExpiry <= 7 && daysUntilExpiry >= 0;
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??
@@ -112,6 +119,14 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           {title}
         </h1>
       </div>
+
+      {showExpiryWarning && (
+        <div className="hidden flex-1 items-center justify-center px-4 md:flex">
+          <div className="rounded-full border border-warning/20 bg-warning/10 px-4 py-1.5 text-xs font-medium text-warning-foreground">
+            Your subscription is expiring on {expiryDate?.toLocaleDateString('en-GB').replace(/\//g, '-')}. Reach us today !!!
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-1 sm:gap-2">
         <ModeToggle />

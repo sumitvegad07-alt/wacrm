@@ -36,6 +36,32 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
+    // Fetch the account to get user_count limit
+    const { data: acct, error: acctErr } = await supabaseAdmin
+      .from("accounts")
+      .select("user_count")
+      .eq("id", account_id)
+      .single();
+
+    if (acctErr || !acct) {
+      return NextResponse.json({ error: "Account not found." }, { status: 404 });
+    }
+
+    // Only enforce limit if user_count is set (not null)
+    if (acct.user_count !== null) {
+      const { count } = await supabaseAdmin
+        .from("profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("account_id", account_id);
+      
+      if (count !== null && count >= acct.user_count) {
+        return NextResponse.json(
+          { error: "your user/employee limit has reached. Reach us to increase user limit." },
+          { status: 403 }
+        );
+      }
+    }
+
     // 1. Create the user in Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
