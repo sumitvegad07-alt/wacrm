@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import { Timeline } from "@/components/shared/timeline";
+import { logModuleActivity } from "@/lib/activities";
 import type { Employee, EmployeeRole, EmployeeDevice, CustomField } from "@/types";
 
 function AvatarUploader({ url, onUpload, isEditing }: { url?: string | null; onUpload: (url: string) => void; isEditing: boolean }) {
@@ -161,7 +162,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       }
 
       // Fetch Timeline
-      const { data: timelineActs } = await supabase.from("activities").select("*").eq("module_name", "user").eq("record_id", employeeId).order("created_at", { ascending: false });
+      const { data: timelineActs } = await supabase.from("module_activities").select("*").eq("module_name", "user").eq("record_id", employeeId).order("created_at", { ascending: false });
       if (timelineActs) setActivities(timelineActs);
       
       const { data: timelineTasks } = await supabase.from("tasks").select("*").eq("module_name", "user").eq("record_id", employeeId).order("created_at", { ascending: false });
@@ -235,6 +236,16 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           await supabase.from("user_custom_values").insert(toInsert);
         }
       }
+
+      if (employee?.status !== form.status) {
+        await logModuleActivity(supabase, {
+          moduleName: 'user',
+          recordId: employeeId as string,
+          action: 'status_updated',
+          message: `Employee status changed to ${form.status}`
+        });
+      }
+
       toast.success("Employee details updated");
       setIsEditing(false);
       fetchEmployeeData();

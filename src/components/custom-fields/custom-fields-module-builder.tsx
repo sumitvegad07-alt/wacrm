@@ -833,8 +833,8 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
 
             <div className="space-y-2">
               <Label htmlFor="fldType">Field Type</Label>
-              <Select value={fieldTypeInput} onValueChange={(val: any) => setFieldTypeInput(val || 'text')}>
-                <SelectTrigger id="fldType">
+              <Select disabled={!!editingField?.system_key} value={fieldTypeInput} onValueChange={(val: any) => setFieldTypeInput(val || 'text')}>
+                <SelectTrigger disabled={!!editingField?.system_key} id="fldType">
                   <SelectValue placeholder="Select type">
                     {FIELD_TYPES.find((t) => t.value === fieldTypeInput)?.label || 'Select type'}
                   </SelectValue>
@@ -1023,6 +1023,7 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
               <Button
                 type="button"
                 variant={editingField.is_active !== false ? "outline" : "default"}
+                disabled={!!editingField.system_key}
                 onClick={() => {
                   handleToggleFieldStatus(editingField);
                   setFieldModalOpen(false);
