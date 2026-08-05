@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
+import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import { Timeline } from "@/components/shared/timeline";
 import type { Employee, EmployeeRole, EmployeeDevice, CustomField } from "@/types";
 
@@ -72,7 +73,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const router = useRouter();
   const supabase = createClient();
 
-  const { accountId, isSuperadmin, accountRole } = useAuth();
+  const { user, accountId, isSuperadmin, accountRole } = useAuth();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<EmployeeDevice[]>([]);
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
@@ -141,6 +142,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         // Try fallback to user_id if profile_id fails (older DB schema)
         const { data: devDataLegacy } = await supabase.from("employee_devices").select("*").eq("user_id", employeeId).order("last_login", { ascending: false });
         if (devDataLegacy) setDevices(devDataLegacy as EmployeeDevice[]);
+      }
+
+      if (accountId && user?.id) {
+        await ensureDefaultSectionsAndFields(accountId, "user", user.id, supabase);
       }
 
       const { data: fieldsData } = await supabase.from("custom_fields").select("*").eq("module_name", "user").order("created_at");

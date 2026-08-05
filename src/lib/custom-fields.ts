@@ -140,14 +140,47 @@ export const DEFAULT_MODULE_SECTIONS_AND_FIELDS: Record<string, DefaultSectionDe
   ],
   task: [
     {
-      name: 'Primary Details',
+      name: 'Schedule & Priority',
       position: 0,
       fields: [
-        { system_key: 'title', field_name: 'Title', field_type: 'text', is_required: true, show_in_table: true, position: 0 },
-        { system_key: 'due_date', field_name: 'Scheduled Date', field_type: 'date', is_required: false, show_in_table: true, position: 1 },
-        { system_key: 'priority', field_name: 'Priority', field_type: 'text', is_required: true, show_in_table: true, position: 2 },
+        { system_key: 'due_date', field_name: 'Scheduled Date', field_type: 'date', is_required: false, show_in_table: true, position: 0 },
+        { system_key: 'priority', field_name: 'Priority', field_type: 'text', is_required: true, show_in_table: true, position: 1 },
       ],
     },
+  ],
+  user: [
+    {
+      name: 'Profile',
+      position: 0,
+      fields: [
+        { system_key: 'full_name', field_name: 'Name', field_type: 'text', is_required: true, show_in_table: true, position: 0 },
+        { system_key: 'employee_code', field_name: 'Employee Code', field_type: 'text', is_required: false, show_in_table: true, position: 1 },
+        { system_key: 'employee_role_id', field_name: 'Employee Role', field_type: 'select', is_required: false, show_in_table: true, position: 2 },
+        { system_key: 'status', field_name: 'Status', field_type: 'radio', is_required: true, show_in_table: true, position: 3 },
+      ]
+    },
+    {
+      name: 'Login Details',
+      position: 10,
+      fields: [
+        { system_key: 'email', field_name: 'Email', field_type: 'email', is_required: true, show_in_table: true, position: 0 },
+        { system_key: 'password', field_name: 'Password', field_type: 'text', is_required: false, show_in_table: false, position: 1 },
+        { system_key: 'repassword', field_name: 'Re-password', field_type: 'text', is_required: false, show_in_table: false, position: 2 },
+      ]
+    },
+    {
+      name: 'Contact Details',
+      position: 20,
+      fields: [
+        { system_key: 'address', field_name: 'Address', field_type: 'textarea', is_required: false, show_in_table: false, position: 0 },
+        { system_key: 'pincode', field_name: 'Pincode', field_type: 'text', is_required: false, show_in_table: false, position: 1 },
+        { system_key: 'country', field_name: 'Country', field_type: 'text', is_required: false, show_in_table: false, position: 2 },
+        { system_key: 'state', field_name: 'State', field_type: 'text', is_required: false, show_in_table: false, position: 3 },
+        { system_key: 'city', field_name: 'City', field_type: 'text', is_required: false, show_in_table: false, position: 4 },
+        { system_key: 'area', field_name: 'Area', field_type: 'text', is_required: false, show_in_table: false, position: 5 },
+        { system_key: 'mobile', field_name: 'Contact Number', field_type: 'phone', is_required: false, show_in_table: true, position: 6 },
+      ]
+    }
   ],
   expense: [
     {

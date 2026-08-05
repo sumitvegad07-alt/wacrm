@@ -369,7 +369,11 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
         defaultExpenseId={moduleName === 'expense' ? recordId : undefined}
         defaultOrderId={moduleName === 'order' ? recordId : undefined}
         defaultDispatchId={moduleName === 'dispatch' ? recordId : undefined}
-        onSaved={onRefresh}
+        defaultEmployeeId={moduleName === 'user' ? recordId : undefined}
+        onSaved={() => {
+          setTaskFormOpen(false);
+          onRefresh();
+        }}
       />
     </div>
   );

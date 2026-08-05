@@ -49,6 +49,7 @@ interface TaskFormProps {
   defaultExpenseId?: string;
   defaultOrderId?: string;
   defaultDispatchId?: string;
+  defaultEmployeeId?: string;
   onSaved: () => void;
 }
 
@@ -69,6 +70,7 @@ export function TaskForm({
   defaultExpenseId,
   defaultOrderId,
   defaultDispatchId,
+  defaultEmployeeId,
   onSaved,
 }: TaskFormProps) {
   const supabase = createClient();
@@ -91,8 +93,9 @@ export function TaskForm({
   const [expenseId, setExpenseId] = useState("");
   const [orderId, setOrderId] = useState("");
   const [dispatchId, setDispatchId] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
 
-  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead"|"Expense"|"Order"|"Dispatch">("None");
+  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead"|"Expense"|"Order"|"Dispatch"|"Employee">("None");
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -149,6 +152,7 @@ export function TaskForm({
         setExpenseId(task.expense_id || "");
         setOrderId(task.order_id || "");
         setDispatchId(task.dispatch_id || "");
+        setEmployeeId(task.employee_id || "");
         if (task.contact_id) setLinkedModule("Contact");
         else if (task.lead_id) setLinkedModule("Lead");
         else if (task.expense_id) setLinkedModule("Expense");
@@ -158,6 +162,7 @@ export function TaskForm({
         else if (task.conversation_id) setLinkedModule("Conversation");
         else if (task.order_id) setLinkedModule("Order");
         else if (task.dispatch_id) setLinkedModule("Dispatch");
+        else if (task.employee_id) setLinkedModule("Employee");
         else setLinkedModule("None");
       } else {
         setDescription("");
@@ -176,6 +181,7 @@ export function TaskForm({
         setExpenseId(defaultExpenseId || "");
         setOrderId(defaultOrderId || "");
         setDispatchId(defaultDispatchId || "");
+        setEmployeeId(defaultEmployeeId || "");
 
         if (defaultContactId) setLinkedModule("Contact");
         else if (defaultLeadId) setLinkedModule("Lead");
@@ -186,6 +192,7 @@ export function TaskForm({
         else if (defaultConversationId) setLinkedModule("Conversation");
         else if (defaultOrderId) setLinkedModule("Order");
         else if (defaultDispatchId) setLinkedModule("Dispatch");
+        else if (defaultEmployeeId) setLinkedModule("Employee");
         else setLinkedModule("None");
       }
     }
@@ -286,6 +293,7 @@ export function TaskForm({
       expense_id: linkedModule === "Expense" ? expenseId : null,
       order_id: linkedModule === "Order" ? orderId : null,
       dispatch_id: linkedModule === "Dispatch" ? dispatchId : null,
+      employee_id: linkedModule === "Employee" ? employeeId : null,
     };
 
     let savedTaskId = task?.id;
@@ -488,6 +496,7 @@ export function TaskForm({
                     <option value="Expense">Expense</option>
                     <option value="Order">Order</option>
                     <option value="Dispatch">Dispatch</option>
+                    <option value="Employee">Employee/User</option>
                   </select>
                 </div>
 
@@ -575,6 +584,16 @@ export function TaskForm({
                         placeholder="Select Dispatch..."
                         searchPlaceholder="Search dispatches..."
                         options={dispatches.map((d) => ({ value: d.id, label: `${d.dispatch_number || 'Dispatch'}${d.order?.order_number ? ` - ${d.order.order_number}` : ''}` }))}
+                        className="h-10 bg-background"
+                      />
+                    )}
+                    {linkedModule === "Employee" && (
+                      <SearchableSelect
+                        value={employeeId}
+                        onChange={setEmployeeId}
+                        placeholder="Select Employee..."
+                        searchPlaceholder="Search employees..."
+                        options={profiles.map((p) => ({ value: p.id, label: p.full_name || p.email }))}
                         className="h-10 bg-background"
                       />
                     )}
