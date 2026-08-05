@@ -453,6 +453,10 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
   const currentSectionFields = fields.filter(
     (f) => f.section_id === activeSectionId || (!f.section_id && activeSectionId === sections[0]?.id)
   );
+  const isProtectedRequired = 
+    moduleName === 'user' && 
+    editingField?.system_key && 
+    ['full_name', 'employee_role_id', 'email', 'password', 'repassword'].includes(editingField.system_key);
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -956,14 +960,21 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                 Validation & Data Table Settings
               </Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/30 p-3 rounded-lg border border-border/50">
-                <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <label className={`flex items-center gap-2 text-sm cursor-pointer select-none ${isProtectedRequired ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <input
                     type="checkbox"
-                    checked={fieldIsRequired}
-                    onChange={(e) => setFieldIsRequired(e.target.checked)}
-                    className="size-4 accent-primary rounded cursor-pointer"
+                    checked={fieldIsRequired || isProtectedRequired}
+                    disabled={!!isProtectedRequired}
+                    onChange={(e) => {
+                      if (!isProtectedRequired) {
+                        setFieldIsRequired(e.target.checked);
+                      }
+                    }}
+                    className={`size-4 accent-primary rounded ${isProtectedRequired ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   />
-                  <span className="font-medium text-foreground">Required Field</span>
+                  <span className="font-medium text-foreground">
+                    Required Field {isProtectedRequired && '(Compulsory)'}
+                  </span>
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
                   <input

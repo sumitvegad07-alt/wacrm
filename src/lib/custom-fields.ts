@@ -155,7 +155,7 @@ export const DEFAULT_MODULE_SECTIONS_AND_FIELDS: Record<string, DefaultSectionDe
       fields: [
         { system_key: 'full_name', field_name: 'Name', field_type: 'text', is_required: true, show_in_table: true, position: 0 },
         { system_key: 'employee_code', field_name: 'Employee Code', field_type: 'text', is_required: false, show_in_table: true, position: 1 },
-        { system_key: 'employee_role_id', field_name: 'Employee Role', field_type: 'select', is_required: false, show_in_table: true, position: 2 },
+        { system_key: 'employee_role_id', field_name: 'Employee Role', field_type: 'select', is_required: true, show_in_table: true, position: 2 },
         { system_key: 'status', field_name: 'Status', field_type: 'radio', is_required: true, show_in_table: true, position: 3 },
       ]
     },
@@ -164,8 +164,8 @@ export const DEFAULT_MODULE_SECTIONS_AND_FIELDS: Record<string, DefaultSectionDe
       position: 10,
       fields: [
         { system_key: 'email', field_name: 'Email', field_type: 'email', is_required: true, show_in_table: true, position: 0 },
-        { system_key: 'password', field_name: 'Password', field_type: 'text', is_required: false, show_in_table: false, position: 1 },
-        { system_key: 'repassword', field_name: 'Re-password', field_type: 'text', is_required: false, show_in_table: false, position: 2 },
+        { system_key: 'password', field_name: 'Password', field_type: 'text', is_required: true, show_in_table: false, position: 1 },
+        { system_key: 'repassword', field_name: 'Re-password', field_type: 'text', is_required: true, show_in_table: false, position: 2 },
       ]
     },
     {
