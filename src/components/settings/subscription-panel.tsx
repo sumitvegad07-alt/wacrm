@@ -25,20 +25,22 @@ export function SubscriptionPanel() {
       if (!accountId) return;
       try {
         const [acctRes, profilesRes, contactsRes] = await Promise.all([
-          supabase.from('accounts').select('created_at').eq('id', accountId).single(),
+          supabase.from('accounts').select('created_at, customer_id, subscription_expires_at').eq('id', accountId).single(),
           supabase.from('profiles').select('id', { count: 'exact' }).eq('account_id', accountId),
           supabase.from('contacts').select('id', { count: 'exact' }).eq('account_id', accountId),
         ]);
 
         const createdAt = acctRes.data?.created_at ? new Date(acctRes.data.created_at) : new Date();
-        const expiryDate = new Date(createdAt);
-        expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-
-        // Mock Customer ID for now as requested
-        const mockCustomerId = '541563';
+        const expiryDate = acctRes.data?.subscription_expires_at 
+          ? new Date(acctRes.data.subscription_expires_at) 
+          : new Date(createdAt);
+        
+        if (!acctRes.data?.subscription_expires_at) {
+          expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+        }
 
         setData({
-          customerId: mockCustomerId,
+          customerId: acctRes.data?.customer_id || '-',
           startDate: createdAt.toLocaleDateString('en-GB').replace(/\//g, '-'),
           expiryDate: expiryDate.toLocaleDateString('en-GB').replace(/\//g, '-'),
           staffCreated: profilesRes.count || 0,
@@ -67,7 +69,7 @@ export function SubscriptionPanel() {
     <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead title="Subscription" />
       
-      <div className="mt-6 space-y-6 max-w-4xl">
+      <div className="mt-6 space-y-6 w-full">
         <div className="bg-muted/30 border border-border p-6 rounded-md text-center">
           <p className="text-sm font-semibold uppercase text-muted-foreground tracking-wide">
             Your Unique Customer ID Is
