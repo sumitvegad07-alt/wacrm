@@ -701,6 +701,8 @@ export interface Task {
   expense?: any; // To avoid circular ref before it's fully defined, or just use any
   order_id?: string | null;
   dispatch_id?: string | null;
+  employee_id?: string | null;
+  employee?: Profile;
 }
 
 export interface TaskComment {
