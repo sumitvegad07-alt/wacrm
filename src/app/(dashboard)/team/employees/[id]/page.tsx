@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   ArrowLeft, User, Shield, Mail, Phone, Building2, Briefcase, 
   Smartphone, Lock, Unlock, Key, Trash2, Edit2, CheckCircle2, 
@@ -157,28 +158,32 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           ? "admin"
           : "agent";
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: form.full_name.trim(),
-          employee_code: form.employee_code.trim() || null,
-          mobile: form.mobile.trim() || null,
-          department: form.department.trim() || null,
-          employee_role_id: form.employee_role_id || null,
-          manager_id: form.manager_id || null,
-          account_role: derivedAccountRole as any,
-          status: form.status
+      const res = await fetch("/api/team/employees", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: employeeId,
+          updates: {
+            full_name: form.full_name.trim(),
+            employee_code: form.employee_code.trim() || null,
+            mobile: form.mobile.trim() || null,
+            department: form.department.trim() || null,
+            employee_role_id: form.employee_role_id || null,
+            manager_id: form.manager_id || null,
+            account_role: derivedAccountRole,
+            status: form.status
+          }
         })
-        .eq("id", employeeId);
+      });
 
-      if (error) {
-        // Cycle-prevention trigger (23514) → show the specific loop message.
-        if ((error as { code?: string }).code === "23514") {
-          toast.error(error.message);
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.error && data.error.includes("23514")) {
+          toast.error("Invalid reporting hierarchy (circular reference detected).");
           setSaving(false);
           return;
         }
-        throw error;
+        throw new Error(data.error || "Failed to update profile");
       }
       if (employeeId && Object.keys(customValues).length > 0) {
         await supabase.from("user_custom_values").delete().eq("user_id", employeeId);
@@ -438,15 +443,22 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                       </Select>
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <Label>Account Status</Label>
-                    <Select value={form.status} onValueChange={v => setForm({...form, status: v || "active"})}>
-                      <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-3">
+                    <Label>Status</Label>
+                    <RadioGroup 
+                      value={form.status} 
+                      onValueChange={(v) => setForm({...form, status: v})}
+                      className="flex flex-col space-y-1"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="active" id="status-active" />
+                        <Label htmlFor="status-active" className="cursor-pointer font-normal">Active</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="inactive" id="status-inactive" />
+                        <Label htmlFor="status-inactive" className="cursor-pointer font-normal">Inactive</Label>
+                      </div>
+                    </RadioGroup>
                   </div>
                 </div>
                 {customFields.length > 0 && (

@@ -159,16 +159,18 @@ export default function EmployeesPage() {
     // Optimistically update UI so it disappears immediately
     setEmployees(prev => prev.map(e => e.id === empId ? { ...e, status: "inactive" } : e));
     
-    const { error } = await supabase
-      .from("profiles")
-      .update({ status: "inactive" })
-      .eq("id", empId);
-    
-    if (error) {
-      toast.error(error.message);
-      fetchData(); // Revert on error
-    } else {
+    try {
+      const res = await fetch("/api/team/employees", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: empId, updates: { status: "inactive" } })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to deactivate");
       toast.success("Employee marked as inactive");
+    } catch (err: any) {
+      toast.error(err.message);
+      fetchData(); // Revert on error
     }
   };
 
