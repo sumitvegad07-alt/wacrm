@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
+import { useExtraSettings, type AssignmentMode } from "@/hooks/use-extra-settings";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import {
   Crown,
@@ -13,6 +14,7 @@ import {
   LogOut,
   MessageSquare,
   Radio,
+  SlidersHorizontal,
   Settings,
   Shield,
   User,
@@ -45,7 +47,6 @@ import {
   Wallet,
   Palette,
   LayoutGrid,
-  SlidersHorizontal,
   Route as RouteIcon,
   CalendarRange,
   Activity,
@@ -169,223 +170,235 @@ type MenuNode =
       label: string;
       icon: React.ComponentType<{ className?: string }>;
       items: NavItem[];
-      /** Admin-configurable module key — hides the entire group if disabled */
       configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route";
     }
   | {
       type: "spacer";
     };
 
-const menuStructure: MenuNode[] = [
-  // ── My Activity, Dashboard, WhatsApp ──
-  {
-    type: "link",
-    href: "/follow-ups",
-    label: "My Activity",
-    icon: FileText,
-    module: "activities",
-  },
-  {
-    type: "link",
-    href: "/dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    module: "dashboard",
-  },
-  {
-    type: "group",
-    label: "WhatsApp",
-    icon: WhatsAppIcon,
-    configModule: "whatsapp" as const,
-    items: [
-      { href: "/inbox", label: "Inbox", icon: MessageSquare, module: "whatsapp" },
-      { href: "/whatsapp/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "whatsapp" },
-      { href: "/broadcasts", label: "Broadcasts", icon: Radio, module: "whatsapp_broadcasts" },
-      { href: "/automations", label: "Automations", icon: Zap, module: "whatsapp_automations" },
-      { href: "/flows", label: "Flows", icon: Workflow, beta: true, module: "whatsapp_flows" },
-      { href: "/settings?tab=templates", label: "Templates", icon: FileText, module: "whatsapp_templates" },
-      { href: "/settings?tab=ai", label: "Knowledge base", icon: Bot, module: "ai_assistant" },
-    ],
-  },
+function getMenuStructure(
+  moduleSettings: ModuleSettings | undefined,
+  assignmentMode: AssignmentMode
+): MenuNode[] {
+  return [
+    // ── My Activity, Dashboard, WhatsApp ──
+    {
+      type: "link",
+      href: "/follow-ups",
+      label: "My Activity",
+      icon: FileText,
+      module: "activities",
+    },
+    {
+      type: "link",
+      href: "/dashboard",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      module: "dashboard",
+    },
+    {
+      type: "group",
+      label: "WhatsApp",
+      icon: WhatsAppIcon,
+      configModule: "whatsapp" as const,
+      items: [
+        { href: "/inbox", label: "Inbox", icon: MessageSquare, module: "whatsapp" },
+        { href: "/whatsapp/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "whatsapp" },
+        { href: "/broadcasts", label: "Broadcasts", icon: Radio, module: "whatsapp_broadcasts" },
+        { href: "/automations", label: "Automations", icon: Zap, module: "whatsapp_automations" },
+        { href: "/flows", label: "Flows", icon: Workflow, beta: true, module: "whatsapp_flows" },
+        { href: "/settings?tab=templates", label: "Templates", icon: FileText, module: "whatsapp_templates" },
+        { href: "/settings?tab=ai", label: "Knowledge base", icon: Bot, module: "ai_assistant" },
+      ],
+    },
 
-  { type: "spacer" },
+    { type: "spacer" },
 
-  // ── Customer ──
-  {
-    type: "link",
-    href: "/contacts",
-    label: "Customer",
-    icon: Users,
-    module: "contacts",
-  },
-  { type: "spacer" },
+    // ── Customer ──
+    {
+      type: "link",
+      href: "/contacts",
+      label: "Customer",
+      icon: Users,
+      module: "contacts",
+    },
+    { type: "spacer" },
 
-  // ── Product, Quotation ──
-  {
-    type: "link",
-    href: "/products",
-    label: "Product",
-    icon: Package,
-    module: "products",
-  },
-  {
-    type: "link",
-    href: "/quotations",
-    label: "Quotation",
-    icon: FileText,
-    module: "orders",
-    configModule: "quotation" as const,
-  },
+    // ── Product, Quotation ──
+    {
+      type: "link",
+      href: "/products",
+      label: "Product",
+      icon: Package,
+      module: "products",
+    },
+    {
+      type: "link",
+      href: "/quotations",
+      label: "Quotation",
+      icon: FileText,
+      module: "orders",
+      configModule: "quotation" as const,
+    },
 
-  { type: "spacer" },
+    { type: "spacer" },
 
-  // ── Expense ──
-  {
-    type: "link",
-    href: "/expenses",
-    label: "Expense",
-    icon: Coins,
-    module: "expenses",
-    configModule: "expense" as const,
-  },
+    // ── Expense ──
+    {
+      type: "link",
+      href: "/expenses",
+      label: "Expense",
+      icon: Coins,
+      module: "expenses",
+      configModule: "expense" as const,
+    },
 
-  { type: "spacer" },
+    { type: "spacer" },
 
-  // ── Order, Dispatch, Pending Dispatch ──
-  {
-    type: "link",
-    href: "/orders",
-    label: "Order",
-    icon: ShoppingCart,
-    module: "orders",
-  },
-  {
-    type: "link",
-    href: "/dispatches",
-    label: "Dispatch",
-    icon: Truck,
-    module: "orders",
-    configModule: "dispatch" as const,
-  },
-  {
-    type: "link",
-    href: "/pending-dispatch",
-    label: "Pending Dispatch",
-    icon: PackageCheck,
-    module: "orders",
-    configModule: "pending_dispatch" as const,
-  },
+    // ── Order, Dispatch, Pending Dispatch ──
+    {
+      type: "link",
+      href: "/orders",
+      label: "Order",
+      icon: ShoppingCart,
+      module: "orders",
+    },
+    {
+      type: "link",
+      href: "/dispatches",
+      label: "Dispatch",
+      icon: Truck,
+      module: "orders",
+      configModule: "dispatch" as const,
+    },
+    {
+      type: "link",
+      href: "/pending-dispatch",
+      label: "Pending Dispatch",
+      icon: PackageCheck,
+      module: "orders",
+      configModule: "pending_dispatch" as const,
+    },
 
-  { type: "spacer" },
+    { type: "spacer" },
 
-  // ── Lead, Deal ──
-  {
-    type: "link",
-    href: "/leads",
-    label: "Lead",
-    icon: UserPlus,
-    module: "leads",
-  },
-  {
-    type: "link",
-    href: "/pipelines",
-    label: "Deal",
-    icon: GitBranch,
-    module: "deals",
-  },
+    // ── Lead, Deal ──
+    {
+      type: "link",
+      href: "/leads",
+      label: "Lead",
+      icon: UserPlus,
+      module: "leads",
+    },
+    {
+      type: "link",
+      href: "/pipelines",
+      label: "Deal",
+      icon: GitBranch,
+      module: "deals",
+    },
 
-  { type: "spacer" },
+    { type: "spacer" },
 
-  // ── Location Tracking (collapsed) ──
-  {
-    type: "group",
-    label: "Location Tracking",
-    icon: MapPin,
-    items: [
-      { href: "/location-tracking/overview", label: "Overview", icon: LayoutDashboard, module: "location_tracking" },
-      { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin, module: "location_tracking" },
-      { href: "/location-tracking/all-locations", label: "All Locations", icon: Map, module: "location_tracking" },
-      { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
-      { href: "/location-tracking/track-report", label: "Track report", icon: LineChart, module: "location_tracking" },
-      { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
-      { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking" },
-    ],
-  },
+    // ── Location Tracking (collapsed) ──
+    {
+      type: "group",
+      label: "Location Tracking",
+      icon: MapPin,
+      items: [
+        { href: "/location-tracking/overview", label: "Overview", icon: LayoutDashboard, module: "location_tracking" },
+        { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin, module: "location_tracking" },
+        { href: "/location-tracking/all-locations", label: "All Locations", icon: Map, module: "location_tracking" },
+        { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
+        { href: "/location-tracking/track-report", label: "Track report", icon: LineChart, module: "location_tracking" },
+        { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
+        { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking" },
+      ],
+    },
 
-  { type: "spacer" },
+    { type: "spacer" },
 
-  // ── Report (collapsed) ──
-  {
-    type: "group",
-    label: "Report",
-    icon: LineChart,
-    items: [
-      { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
-      { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },
-      { href: "/expenses", label: "Expenses Report", icon: Coins, module: "expenses" },
-      { href: "/location-tracking/track-report", label: "Location Reports", icon: MapPin, module: "location_tracking" },
-    ],
-  },
+    // ── Report (collapsed) ──
+    {
+      type: "group",
+      label: "Report",
+      icon: LineChart,
+      items: [
+        { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
+        { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },
+        { href: "/expenses", label: "Expenses Report", icon: Coins, module: "expenses" },
+        { href: "/location-tracking/track-report", label: "Location Reports", icon: MapPin, module: "location_tracking" },
+      ],
+    },
 
-  { type: "spacer" },
+    { type: "spacer" },
 
-  // ── Employees (collapsed) ──
-  {
-    type: "group",
-    label: "Employees",
-    icon: User,
-    items: [
-      { href: "/team/employees", label: "Employees", icon: User, module: "team_management" },
-      { href: "/team/roles", label: "Employee Roles", icon: Shield, module: "team_management" },
-    ],
-  },
+    // ── Employees (collapsed) ──
+    {
+      type: "group",
+      label: "Employees",
+      icon: User,
+      items: [
+        { href: "/team/employees", label: "Employees", icon: User, module: "team_management" },
+        { href: "/team/roles", label: "Employee Roles", icon: Shield, module: "team_management" },
+      ],
+    },
 
-  { type: "spacer" },
+    { type: "spacer" },
 
-  // ── Custom Fields (collapsed) ──
-  {
-    type: "group",
-    label: "Custom Fields",
-    icon: SlidersHorizontal,
-    items: [
-      { href: "/custom-fields/user", label: "User", icon: User },
-      { href: "/custom-fields/contact", label: "Customer", icon: Users },
-      { href: "/custom-fields/product", label: "Product", icon: Package },
-      { href: "/custom-fields/quotation", label: "Sale Quotation", icon: FileText },
-      { href: "/custom-fields/lead", label: "Lead", icon: UserPlus },
-      { href: "/custom-fields/deal", label: "Deal", icon: GitBranch },
-      { href: "/custom-fields/customer_visit", label: "Customer Visit", icon: Building2 },
-      { href: "/custom-fields/lead_visit", label: "Lead Visit", icon: MapPin },
-      { href: "/custom-fields/order", label: "Order", icon: ShoppingCart },
-      { href: "/custom-fields/dispatch", label: "Dispatch", icon: Truck },
-      { href: "/custom-fields/expense", label: "Expense", icon: Coins },
-    ],
-  },
+    // ── Custom Fields (collapsed) ──
+    {
+      type: "group",
+      label: "Custom Fields",
+      icon: SlidersHorizontal,
+      items: [
+        { href: "/custom-fields/user", label: "User", icon: User },
+        { href: "/custom-fields/contact", label: "Customer", icon: Users },
+        { href: "/custom-fields/product", label: "Product", icon: Package },
+        { href: "/custom-fields/quotation", label: "Sale Quotation", icon: FileText },
+        { href: "/custom-fields/lead", label: "Lead", icon: UserPlus },
+        { href: "/custom-fields/deal", label: "Deal", icon: GitBranch },
+        { href: "/custom-fields/customer_visit", label: "Customer Visit", icon: Building2 },
+        { href: "/custom-fields/lead_visit", label: "Lead Visit", icon: MapPin },
+        { href: "/custom-fields/order", label: "Order", icon: ShoppingCart },
+        { href: "/custom-fields/dispatch", label: "Dispatch", icon: Truck },
+        { href: "/custom-fields/expense", label: "Expense", icon: Coins },
+      ],
+    },
 
-  { type: "spacer" },
+    { type: "spacer" },
 
-  // ── Settings (collapsed) ──
-  {
-    type: "group",
-    label: "Settings",
-    icon: Settings,
-    items: [
-      { href: "/settings?tab=module_settings", label: "Organization Settings", icon: Settings },
-      { href: "/settings?tab=profile", label: "Profile", icon: User },
-      { href: "/settings?tab=security", label: "Login info", icon: Shield },
-      { href: "/settings?tab=whatsapp", label: "Whatsapp", icon: MessageSquare },
-      { href: "/settings?tab=fields", label: "Tags", icon: Tags },
-      { href: "/settings?tab=deal_pipelines", label: "Deals", icon: Briefcase },
-      { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter },
-      { href: "/settings?tab=tasks", label: "Task Settings", icon: CheckSquare },
-      { href: "/settings?tab=orders", label: "Orders Settings", icon: ShoppingCart },
-      { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent },
-      { href: "/settings?tab=expense_types", label: "Expense Settings", icon: Wallet },
-      { href: "/settings?tab=territories", label: "Territory Master", icon: Map },
-      { href: "/settings?tab=api", label: "API Keys & Webhooks", icon: KeyRound },
-    ],
-  },
-];
+    // ── Settings (collapsed) ──
+    {
+      type: "group",
+      label: "Settings",
+      icon: Settings,
+      items: [
+        { href: "/settings?tab=module_settings", label: "Organization Settings", icon: Settings },
+        { href: "/settings?tab=extra_settings", label: "Extra Settings", icon: SlidersHorizontal },
+        { href: "/settings?tab=profile", label: "Profile", icon: User },
+        { href: "/settings?tab=security", label: "Login info", icon: Shield },
+        ...(!moduleSettings || moduleSettings.whatsapp !== false
+          ? [{ href: "/settings?tab=whatsapp", label: "Whatsapp", icon: MessageSquare }]
+          : []),
+        { href: "/settings?tab=fields", label: "Tags", icon: Tags },
+        { href: "/settings?tab=deal_pipelines", label: "Deals", icon: Briefcase },
+        { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter },
+        { href: "/settings?tab=tasks", label: "Task Settings", icon: CheckSquare },
+        ...(!moduleSettings || moduleSettings.quotation !== false
+          ? [{ href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent }]
+          : []),
+        ...(!moduleSettings || moduleSettings.expense === true
+          ? [{ href: "/settings?tab=expense_types", label: "Expense Settings", icon: Wallet }]
+          : []),
+        ...(assignmentMode === 'area' && (!moduleSettings || moduleSettings.territory !== false)
+          ? [{ href: "/settings?tab=territories", label: "Territory Master", icon: Map }]
+          : []),
+        { href: "/settings?tab=api", label: "API Keys & Webhooks", icon: KeyRound },
+      ],
+    },
+  ];
+}
 
 interface SidebarProps {
   /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
@@ -409,8 +422,15 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     hasLocationTracking,
     hasPermission,
     isModuleEnabled,
+    moduleSettings,
   } = useAuth();
+  const { assignmentMode } = useExtraSettings();
   const totalUnread = useTotalUnread();
+
+  const menuStructure = useMemo(
+    () => getMenuStructure(moduleSettings, assignmentMode),
+    [moduleSettings, assignmentMode]
+  );
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     WhatsApp: false,
@@ -432,7 +452,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
         }
       }
     });
-  }, [pathname, searchParams]);
+  }, [pathname, searchParams, menuStructure]);
 
   const toggleGroup = (label: string) => {
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
