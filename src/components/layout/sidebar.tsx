@@ -52,6 +52,9 @@ import {
   Activity,
   Inbox,
   Filter,
+  ArrowUpRight,
+  PieChart,
+  Target,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -366,6 +369,22 @@ function getMenuStructure(
       ],
     },
 
+    // ── Company Profile ──
+    {
+      type: "link",
+      href: "/company-profile",
+      label: "Company Profile",
+      icon: Building2,
+    },
+    
+    // ── Subscription ──
+    {
+      type: "link",
+      href: "/subscription",
+      label: "Subscription",
+      icon: Shield,
+    },
+
     { type: "spacer" },
 
     // ── Settings (collapsed) ──
@@ -375,8 +394,7 @@ function getMenuStructure(
       icon: Settings,
       items: [
         { href: "/settings?tab=module_settings", label: "Organization Settings", icon: Settings },
-        { href: "/settings?tab=profile", label: "Profile", icon: User },
-        { href: "/settings?tab=security", label: "Login info", icon: Shield },
+        { href: "/settings?tab=appearance", label: "Appearance", icon: Palette },
         ...(!moduleSettings || moduleSettings.whatsapp !== false
           ? [{ href: "/settings?tab=whatsapp", label: "Whatsapp", icon: MessageSquare }]
           : []),

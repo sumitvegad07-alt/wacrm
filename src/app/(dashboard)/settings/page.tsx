@@ -2,10 +2,7 @@
 
 import { Suspense, useState, useEffect, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-
 import { useAuth } from '@/hooks/use-auth';
-import { CompanyProfilePanel } from '@/components/settings/company-profile-panel';
-import { SubscriptionPanel } from '@/components/settings/subscription-panel';
 import { PasswordForm } from '@/components/settings/password-form';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
@@ -68,8 +65,6 @@ function SettingsContent() {
 
   const panel: Record<SettingsSection, ReactNode> = {
     overview: <ModuleSettingsPanel />,
-    company_profile: <CompanyProfilePanel />,
-    subscription: <SubscriptionPanel />,
     password: <PasswordForm />,
     appearance: <AppearancePanel />,
     ai: <AISettingsPanel />,

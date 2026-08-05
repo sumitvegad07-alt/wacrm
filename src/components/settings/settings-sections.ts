@@ -31,8 +31,6 @@ import {
  */
 export const SETTINGS_SECTIONS = [
   'overview',
-  'company_profile',
-  'subscription',
   'appearance',
   'password',
   'whatsapp',
@@ -67,8 +65,6 @@ export interface SectionMeta {
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top' },
-  company_profile: { id: 'company_profile', label: 'Company Profile', icon: User, group: 'account' },
-  subscription: { id: 'subscription', label: 'Subscription', icon: Shield, group: 'account' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
   password: { id: 'password', label: 'Change Password', icon: KeyRound, group: 'hidden' },
   whatsapp: { id: 'whatsapp', label: 'Whatsapp', icon: PlugZap, group: 'workspace' },
