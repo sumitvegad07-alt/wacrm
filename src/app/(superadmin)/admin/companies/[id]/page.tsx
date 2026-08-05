@@ -42,6 +42,7 @@ export default function CompanyDetailPage() {
   const [status, setStatus] = useState("");
   const [plan, setPlan] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  const [userCount, setUserCount] = useState<number | "">("");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export default function CompanyDetailPage() {
             ? c.subscription_expires_at.substring(0, 10)
             : ""
         );
+        setUserCount(c.user_count || "");
         setNotes(c.notes || "");
       }
       setMembers(membersRes.data || []);
@@ -83,6 +85,7 @@ export default function CompanyDetailPage() {
         subscription_status: status,
         subscription_plan: plan,
         subscription_expires_at: expiresAt || null,
+        user_count: userCount === "" ? null : Number(userCount),
       })
       .eq("id", id);
 
@@ -199,6 +202,20 @@ export default function CompanyDetailPage() {
           <p className="text-xs text-muted-foreground">
             Leave blank for no expiry. Setting status to &quot;Expired&quot; or
             &quot;Deactivated&quot; locks out all users immediately.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Max User Limit</Label>
+          <Input
+            type="number"
+            min="1"
+            value={userCount}
+            onChange={(e) => setUserCount(e.target.value === "" ? "" : Number(e.target.value))}
+            placeholder="e.g. 5"
+          />
+          <p className="text-xs text-muted-foreground">
+            Maximum number of staff members this account can have. Leave blank for no limit.
           </p>
         </div>
 
