@@ -93,7 +93,15 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   if (!user) return null;
 
-  if (account && (account.subscription_status === 'expired' || account.subscription_status === 'deactivated')) {
+  const now = new Date();
+  const expiryDate = account?.subscription_expires_at ? new Date(account.subscription_expires_at) : null;
+  const isTimeExpired = expiryDate ? expiryDate < now : false;
+  const isExpired = account && (account.subscription_status === 'expired' || account.subscription_status === 'deactivated' || isTimeExpired);
+  
+  const daysUntilExpiry = expiryDate ? Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+  const showExpiryWarning = !isExpired && daysUntilExpiry !== null && daysUntilExpiry <= 7 && daysUntilExpiry >= 0;
+
+  if (isExpired) {
     return (
       <div className="flex h-screen items-center justify-center bg-background px-4">
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
@@ -102,7 +110,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           </div>
           <h2 className="mb-2 text-xl font-semibold text-foreground">Subscription Expired</h2>
           <p className="mb-6 text-sm text-muted-foreground">
-            Your subscription to the CRM is currently {account.subscription_status}. Please renew it or contact support to restore access to your workspace.
+            Your subscription to the CRM has expired. Please renew it or contact support to restore access to your workspace.
           </p>
         </div>
       </div>
@@ -128,6 +136,16 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               <Button size="sm" variant="destructive" className="shrink-0" onClick={() => router.push('/settings?tab=overview')}>
                 Keep My Features
               </Button>
+            </div>
+          )}
+          {showExpiryWarning && (
+            <div className="mb-6 rounded-xl border border-warning/20 bg-warning/10 p-4 text-sm text-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-2">
+              <div>
+                <span className="font-bold text-warning-foreground">
+                  Your account is expiring on {expiryDate?.toLocaleDateString("en-IN")}.
+                </span>
+                <span className="ml-0 sm:ml-2 mt-1 sm:mt-0 block sm:inline">Please reach out to support or renew your subscription to avoid service interruption.</span>
+              </div>
             </div>
           )}
           {children}

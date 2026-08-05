@@ -193,7 +193,7 @@ export async function POST(request: Request) {
 
       if (count !== null && count >= acct.user_count) {
         return NextResponse.json(
-          { error: `User limit (${acct.user_count}) reached. Cannot invite more users.` },
+          { error: "your user/employee limit has reached. Reach us to increase user limit." },
           { status: 403 }
         );
       }

@@ -64,6 +64,7 @@ interface AccountSummary {
   subscription_plan: string;
   industry: string;
   is_provisioned: boolean;
+  subscription_expires_at: string | null;
 }
 
 export interface ModuleSettings {
@@ -247,7 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .from("accounts")
             // default_currency added in migration 021; narrowed to the
             // USD fallback below for older schemas where it reads null.
-            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned")
+            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned, subscription_expires_at")
             .eq("id", data.account_id)
             .maybeSingle();
           if (accountErr) {
