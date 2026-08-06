@@ -135,15 +135,17 @@ export function AnnouncementForm({ initialData }: AnnouncementFormProps) {
               <div className="space-y-2 flex flex-col">
                 <Label>Expiry Date</Label>
                 <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn("justify-start text-left font-normal", !expiryDate && "text-muted-foreground")}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {expiryDate ? format(expiryDate, "dd/MM/yyyy") : <span>Select Expiry Date...</span>}
-                    </Button>
-                  </PopoverTrigger>
+                  <PopoverTrigger 
+                    render={
+                      <Button
+                        variant="outline"
+                        className={cn("justify-start text-left font-normal", !expiryDate && "text-muted-foreground")}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {expiryDate ? format(expiryDate, "dd/MM/yyyy") : <span>Select Expiry Date...</span>}
+                      </Button>
+                    }
+                  />
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar mode="single" selected={expiryDate} onSelect={setExpiryDate} />
                   </PopoverContent>
