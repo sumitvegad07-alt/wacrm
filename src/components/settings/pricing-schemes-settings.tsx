@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { SettingsPanelHead } from "./settings-panel-head";
+import { ProductCategoriesSettings } from "./product-categories-settings";
+import { ProductUnitsSettings } from "./product-units-settings";
 
 /**
  * Settings -> Pricing & Schemes.
@@ -371,6 +373,9 @@ export function PricingSchemesSettings() {
           </div>
         </div>
       </div>
+
+      <ProductCategoriesSettings />
+      <ProductUnitsSettings />
     </section>
   );
 }

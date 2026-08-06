@@ -80,7 +80,7 @@ export default function ProductsPage() {
     setLoading(true);
     
     const [{ data: productsData }, { data: fieldsData }] = await Promise.all([
-      supabase.from('products').select('*').order('created_at', { ascending: false }),
+      supabase.from('products').select('*, category_rel:product_categories(name), unit_rel:product_units(name, short_name)').order('created_at', { ascending: false }),
       supabase.from('custom_fields').select('*').eq('module_name', 'product')
     ]);
 
@@ -190,7 +190,7 @@ export default function ProductsPage() {
       id: "category",
       label: "Category",
       type: "text",
-      render: (product) => <span className="text-muted-foreground">{product.category || '—'}</span>
+      render: (product) => <span className="text-muted-foreground">{product.category_rel?.name || product.category || '—'}</span>
     },
     {
       id: "sku",
@@ -202,12 +202,15 @@ export default function ProductsPage() {
       id: "price",
       label: "Price",
       type: "text",
-      render: (product) => (
-        <span>
-          {product.price != null ? formatCurrency(product.price, account?.default_currency) : '—'}
-          {product.unit && <span className="text-muted-foreground text-xs ml-1">/ {product.unit}</span>}
-        </span>
-      )
+      render: (product) => {
+        const unitName = product.unit_rel?.short_name || product.unit_rel?.name || product.unit;
+        return (
+          <span>
+            {product.price != null ? formatCurrency(product.price, account?.default_currency) : '—'}
+            {unitName && <span className="text-muted-foreground text-xs ml-1">/ {unitName}</span>}
+          </span>
+        );
+      }
     },
     {
       id: "active",

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
-import type { Product, CustomField } from '@/types';
+import type { Product, CustomField, ProductCategory, ProductUnit } from '@/types';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
@@ -64,6 +64,13 @@ export function ProductForm({
   const [minPrice, setMinPrice] = useState('');
   const [taxSlabs, setTaxSlabs] = useState<{ id: string; name: string; rate: number }[]>([]);
 
+  // Category and Unit
+  const [categoryId, setCategoryId] = useState('');
+  const [unitId, setUnitId] = useState('');
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [units, setUnits] = useState<ProductUnit[]>([]);
+  const [levelNames, setLevelNames] = useState({ l1: 'Category', l2: 'Sub-Category', l3: 'Brand' });
+
   useEffect(() => {
     if (open && accountId) {
       setConfirmDelete(false);
@@ -72,6 +79,9 @@ export function ProductForm({
       setSku(product?.sku ?? '');
       setPrice(product?.price?.toString() ?? '');
       setImage(product?.image ?? '');
+      setCategoryId(product?.category_id ?? '');
+      setUnitId(product?.unit_id ?? '');
+      // Fallback for legacy text values if needed
       setCategory(product?.category ?? '');
       setUnit(product?.unit ?? '');
       setStock(product?.stock?.toString() ?? '');
@@ -81,8 +91,27 @@ export function ProductForm({
       setActive(product?.active ?? true);
       fetchCustomFields();
       fetchTaxSlabs();
+      fetchCategoriesAndUnits();
     }
   }, [open, product, accountId]);
+
+  async function fetchCategoriesAndUnits() {
+    if (!accountId) return;
+    const [acctRes, catRes, unitRes] = await Promise.all([
+      supabase.from('accounts').select('settings').eq('id', accountId).single(),
+      supabase.from('product_categories').select('*').eq('account_id', accountId).order('level'),
+      supabase.from('product_units').select('*').eq('account_id', accountId).order('name')
+    ]);
+    
+    const ps = acctRes.data?.settings?.product_settings ?? {};
+    setLevelNames({
+      l1: ps.level_1_name || 'Category',
+      l2: ps.level_2_name || 'Sub-Category',
+      l3: ps.level_3_name || 'Brand'
+    });
+    setCategories((catRes.data as ProductCategory[]) ?? []);
+    setUnits((unitRes.data as ProductUnit[]) ?? []);
+  }
 
   async function fetchTaxSlabs() {
     if (!accountId) return;
@@ -171,8 +200,10 @@ export function ProductForm({
         sku: sku.trim() || null,
         price: price ? parseFloat(price) : null,
         image: finalImageUrl,
-        category: category.trim() || null,
-        unit: unit.trim() || null,
+        category: null,
+        category_id: categoryId || null,
+        unit: null,
+        unit_id: unitId || null,
         stock: stock !== '' ? parseFloat(stock) : null,
         // Empty string must become null, never '' — a uuid column rejects ''.
         tax_slab_id: taxSlabId || null,
@@ -288,6 +319,52 @@ export function ProductForm({
                 if (key === 'min_price') setMinPrice(val);
               }}
               renderCustomSystemField={(fld) => {
+                if (fld.system_key === 'category') {
+                  const level1 = categories.filter(c => c.level === 1);
+                  const level2 = categories.filter(c => c.level === 2);
+                  const level3 = categories.filter(c => c.level === 3);
+
+                  return (
+                    <div className="grid gap-1">
+                      <select
+                        value={categoryId}
+                        onChange={(e) => setCategoryId(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">Select {levelNames.l1}</option>
+                        {level1.map(l1 => (
+                          <optgroup key={l1.id} label={l1.name}>
+                            <option value={l1.id}>{l1.name} ({levelNames.l1})</option>
+                            {level2.filter(c => c.parent_id === l1.id).map(l2 => (
+                              <optgroup key={l2.id} label={`-- ${l2.name}`}>
+                                <option value={l2.id}>{l2.name} ({levelNames.l2})</option>
+                                {level3.filter(c => c.parent_id === l2.id).map(l3 => (
+                                  <option key={l3.id} value={l3.id}>---- {l3.name} ({levelNames.l3})</option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
+                if (fld.system_key === 'unit') {
+                  return (
+                    <div className="grid gap-1">
+                      <select
+                        value={unitId}
+                        onChange={(e) => setUnitId(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">Select Unit</option>
+                        {units.map(u => (
+                          <option key={u.id} value={u.id}>{u.name} {u.short_name ? `(${u.short_name})` : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
                 if (fld.system_key === 'min_price') {
                   return (
                     <div className="grid gap-1">

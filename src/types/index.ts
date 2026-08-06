@@ -365,6 +365,29 @@ export interface PipelineStage {
 // PRODUCTS
 // ============================================================
 
+export interface ProductCategory {
+  id: string;
+  account_id: string;
+  name: string;
+  level: number;
+  parent_id?: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  parent?: ProductCategory | null;
+  children?: ProductCategory[];
+}
+
+export interface ProductUnit {
+  id: string;
+  account_id: string;
+  name: string;
+  short_name?: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Product {
   id: string;
   user_id: string;
@@ -375,7 +398,9 @@ export interface Product {
   price?: number | null;
   image?: string | null;
   category?: string | null;
+  category_id?: string | null;
   unit?: string | null;
+  unit_id?: string | null;
   stock?: number | null;
   active: boolean;
   created_at: string;

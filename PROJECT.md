@@ -228,9 +228,11 @@ capitalised strings `'Customer'` and `'Lead'`.
 
 - **`tax_slabs`** (`id`, `account_id`, `name`, `rate`, `is_default`, `position`) — account-scoped
   configurable rates, same lookup pattern as `order_statuses`. Call it **tax**, never GST.
-- **`products` has NO `tax_rate` column** and never did. The rate comes from
+- **`product_categories`** (`id`, `account_id`, `name`, `level`, `parent_id`) — Configurable up to 3 levels tree hierarchy (names defined in `accounts.settings.product_settings.level_X_name`).
+- **`product_units`** (`id`, `account_id`, `name`, `short_name`) — Configurable unit settings.
+- **`products`** has NO `tax_rate` column and never did. The rate comes from
   `products.tax_slab_id → tax_slabs.rate`. FK `products_tax_slab_id_fkey` exists, so PostgREST
-  can embed `tax_slabs(rate)`.
+  can embed `tax_slabs(rate)`. It also contains `category_id` and `unit_id` linking to their respective configurable tables.
 - `products.min_price` — hard floor; no stack of discounts may cross it. NULL = no floor.
 - `order_items` gained `catalogue_price`, `price_list_price`, `scheme_discount_amount`,
   `discount_type`, `discount_value`, `discount_amount`, `order_discount_share`,
