@@ -14,17 +14,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { MessageSquare, CheckCircle, UsersRound } from "lucide-react";
 
-// `useSearchParams` opts the component out of static prerendering
-// unless wrapped in Suspense — same pattern as /login.
 export default function SignupPage() {
   return (
     <Suspense fallback={null}>
@@ -35,18 +26,14 @@ export default function SignupPage() {
 
 function SignupPageInner() {
   const searchParams = useSearchParams();
-  // When the user lands here from `/join/<token>` we carry the
-  // invite token in the query so it survives the signup → email
-  // verification → redirect round-trip. `emailRedirectTo` below
-  // points back at /join/<token> so the user lands on the redeem
-  // step after verifying instead of being dropped on /dashboard.
   const inviteToken = searchParams.get("invite");
 
   const [fullName, setFullName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [salesUsers, setSalesUsers] = useState<string>("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [industry, setIndustry] = useState("");
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -56,11 +43,6 @@ function SignupPageInner() {
     e.preventDefault();
     setError(null);
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
     if (password.length < 6) {
       setError("Password must be at least 6 characters");
       return;
@@ -68,10 +50,6 @@ function SignupPageInner() {
 
     setLoading(true);
 
-    // If we have an invite token, point Supabase's verification
-    // email back at the join page so the user can accept after
-    // verifying. Without a token, Supabase uses its default
-    // redirect (the app root).
     const emailRedirectTo = inviteToken
       ? `${window.location.origin}/join/${encodeURIComponent(inviteToken)}`
       : undefined;
@@ -82,7 +60,9 @@ function SignupPageInner() {
       options: {
         data: {
           full_name: fullName,
-          industry: industry || "Other",
+          company_name: companyName,
+          sales_users: salesUsers ? parseInt(salesUsers, 10) : null,
+          phone: phone,
         },
         ...(emailRedirectTo ? { emailRedirectTo } : {}),
       },
@@ -137,7 +117,7 @@ function SignupPageInner() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="items-center text-center">
           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
@@ -166,7 +146,7 @@ function SignupPageInner() {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="fullName" className="text-muted-foreground">
-                Full name
+                Your Name
               </Label>
               <Input
                 id="fullName"
@@ -174,6 +154,37 @@ function SignupPageInner() {
                 placeholder="John Doe"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                required
+                className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="companyName" className="text-muted-foreground">
+                Company name
+              </Label>
+              <Input
+                id="companyName"
+                type="text"
+                placeholder="Acme Corp"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                required
+                className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="salesUsers" className="text-muted-foreground">
+                No. of sales user
+              </Label>
+              <Input
+                id="salesUsers"
+                type="number"
+                min="1"
+                placeholder="e.g. 5"
+                value={salesUsers}
+                onChange={(e) => setSalesUsers(e.target.value)}
                 required
                 className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
               />
@@ -193,25 +204,20 @@ function SignupPageInner() {
                 className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
               />
             </div>
-
+            
             <div className="flex flex-col gap-2">
-              <Label htmlFor="industry" className="text-muted-foreground">
-                Industry
+              <Label htmlFor="phone" className="text-muted-foreground">
+                Contact number
               </Label>
-              <Select value={industry} onValueChange={(v) => setIndustry(v || "")} required>
-                <SelectTrigger id="industry" className="border-border bg-muted text-foreground">
-                  <SelectValue placeholder="Select your industry" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Retail & E-commerce">Retail & E-commerce</SelectItem>
-                  <SelectItem value="Real Estate">Real Estate</SelectItem>
-                  <SelectItem value="Healthcare & Dental">Healthcare & Dental</SelectItem>
-                  <SelectItem value="Education">Education</SelectItem>
-                  <SelectItem value="IT & Software">IT & Software</SelectItem>
-                  <SelectItem value="Agency & Consulting">Agency & Consulting</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+1 (555) 000-0000"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+                className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+              />
             </div>
 
             <div className="flex flex-col gap-2">
@@ -224,21 +230,6 @@ function SignupPageInner() {
                 placeholder="At least 6 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
-                className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="confirmPassword" className="text-muted-foreground">
-                Confirm password
-              </Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Repeat your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
               />
