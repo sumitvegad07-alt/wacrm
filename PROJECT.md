@@ -2726,3 +2726,12 @@ If a user prompts you with a request that violates the 18-Vector Framework (e.g.
 5. **Wait:** Require the user to confirm the correct approach before proceeding.
 
 **Protect the Codebase. Protect the Product. Protect WACRM.**
+
+### Announcements Module (Added 06 Aug 2026)
+
+- **Purpose**: Allows tenant admins to broadcast news and updates to their field mobile team.
+- **Table**: 	enant_announcements (id, ccount_id, 	itle, content, expiry_date, send_to_sales_app, employee_id, employee_role_id, ttachment_url).
+- **Web UI**: Located at /announcements. Features a list view and a creation form with a Tiptap rich text editor and file upload.
+- **Mobile UI**: Features a ScrollingNewsBanner on all screens via pp/_layout.tsx that rotates through unexpired announcements every 15 minutes. There is also an Announcements list screen and a detail screen.
+- **Attachments**: Stored in the nnouncements Supabase storage bucket.
+- Note: This is separate from the nnouncements page under (superadmin) which was intended for system-wide notices.

@@ -55,6 +55,7 @@ import {
   ArrowUpRight,
   PieChart,
   Target,
+  Megaphone,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -198,6 +199,13 @@ function getMenuStructure(
       label: "Dashboard",
       icon: LayoutDashboard,
       module: "dashboard",
+    },
+    {
+      type: "link",
+      href: "/announcements",
+      label: "Announcement",
+      icon: Megaphone,
+      // No specific module needed or use "announcements" if defined in RBAC. For now, leave it without module to show for all members, or use a new key.
     },
     {
       type: "group",
