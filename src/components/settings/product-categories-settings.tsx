@@ -17,6 +17,7 @@ export function ProductCategoriesSettings() {
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   
   // Config
+  const [levelsCount, setLevelsCount] = useState<1 | 2 | 3>(3);
   const [level1Name, setLevel1Name] = useState("Category");
   const [level2Name, setLevel2Name] = useState("Sub-Category");
   const [level3Name, setLevel3Name] = useState("Brand");
@@ -37,6 +38,7 @@ export function ProductCategoriesSettings() {
     ]);
 
     const ps = acctRes.data?.settings?.product_settings ?? {};
+    setLevelsCount(ps.levels_count || 3);
     setLevel1Name(ps.level_1_name || "Category");
     setLevel2Name(ps.level_2_name || "Sub-Category");
     setLevel3Name(ps.level_3_name || "Brand");
@@ -58,6 +60,7 @@ export function ProductCategoriesSettings() {
         ...settings,
         product_settings: {
           ...productSettings,
+          levels_count: levelsCount,
           level_1_name: level1Name,
           level_2_name: level2Name,
           level_3_name: level3Name,
@@ -123,23 +126,40 @@ export function ProductCategoriesSettings() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-muted/20 p-4 rounded-lg border">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-muted/20 p-4 rounded-lg border">
+        <div className="space-y-2">
+          <Label>Number of Levels</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={levelsCount}
+            onChange={e => setLevelsCount(Number(e.target.value) as 1 | 2 | 3)}
+            disabled={!canEditSettings}
+          >
+            <option value={1}>1 Level</option>
+            <option value={2}>2 Levels</option>
+            <option value={3}>3 Levels</option>
+          </select>
+        </div>
         <div className="space-y-2">
           <Label>Level 1 Name</Label>
           <Input value={level1Name} onChange={e => setLevel1Name(e.target.value)} disabled={!canEditSettings} />
         </div>
-        <div className="space-y-2">
-          <Label>Level 2 Name</Label>
-          <Input value={level2Name} onChange={e => setLevel2Name(e.target.value)} disabled={!canEditSettings} />
-        </div>
-        <div className="space-y-2">
-          <Label>Level 3 Name</Label>
-          <Input value={level3Name} onChange={e => setLevel3Name(e.target.value)} disabled={!canEditSettings} />
-        </div>
+        {levelsCount >= 2 && (
+          <div className="space-y-2">
+            <Label>Level 2 Name</Label>
+            <Input value={level2Name} onChange={e => setLevel2Name(e.target.value)} disabled={!canEditSettings} />
+          </div>
+        )}
+        {levelsCount >= 3 && (
+          <div className="space-y-2">
+            <Label>Level 3 Name</Label>
+            <Input value={level3Name} onChange={e => setLevel3Name(e.target.value)} disabled={!canEditSettings} />
+          </div>
+        )}
         {canEditSettings && (
-          <div className="md:col-span-3 flex justify-end">
+          <div className="md:col-span-4 flex justify-end">
             <Button size="sm" onClick={saveSettings} disabled={savingSettings}>
-              {savingSettings && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Save Names
+              {savingSettings && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Save Configuration
             </Button>
           </div>
         )}
@@ -161,9 +181,9 @@ export function ProductCategoriesSettings() {
                 setNewParentId(null);
               }}
             >
-              <option value={1}>{level1Name}</option>
-              <option value={2}>{level2Name}</option>
-              <option value={3}>{level3Name}</option>
+              <option value={1}>{level1Name || "Level 1"}</option>
+              {levelsCount >= 2 && <option value={2}>{level2Name || "Level 2"}</option>}
+              {levelsCount >= 3 && <option value={3}>{level3Name || "Level 3"}</option>}
             </select>
           </div>
           {newLevel > 1 && (

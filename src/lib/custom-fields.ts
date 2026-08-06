@@ -299,13 +299,13 @@ export async function ensureDefaultSectionsAndFields(
         .delete()
         .eq('account_id', accountId)
         .eq('module_name', 'product')
-        .in('system_key', ['min_price', 'stock_quantity', 'status', 'unit']);
+        .in('system_key', ['min_price', 'stock_quantity', 'status']);
       await supabase
         .from('custom_fields')
         .delete()
         .eq('account_id', accountId)
         .eq('module_name', 'product')
-        .in('field_name', ['Minimum Floor Price (₹)', 'Stock Quantity', 'Product Status', 'Minimum price', 'Stock', 'Status', 'Product status', 'Unit of Measure', 'Unit of measure', 'Unit']);
+        .in('field_name', ['Minimum Floor Price (₹)', 'Stock Quantity', 'Product Status', 'Minimum price', 'Stock', 'Status', 'Product status']);
       await supabase
         .from('custom_fields')
         .update({ field_name: 'SKU' })

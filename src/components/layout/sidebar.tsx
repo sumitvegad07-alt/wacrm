@@ -402,9 +402,7 @@ function getMenuStructure(
         { href: "/settings?tab=deal_pipelines", label: "Deals", icon: Briefcase },
         { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter },
         { href: "/settings?tab=tasks", label: "Task Settings", icon: CheckSquare },
-        ...(!moduleSettings || moduleSettings.quotation !== false
-          ? [{ href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent }]
-          : []),
+        { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent },
         ...(!moduleSettings || moduleSettings.expense === true
           ? [{ href: "/settings?tab=expense_types", label: "Expense Settings", icon: Wallet }]
           : []),

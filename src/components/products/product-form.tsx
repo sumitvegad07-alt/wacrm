@@ -64,11 +64,14 @@ export function ProductForm({
   const [minPrice, setMinPrice] = useState('');
   const [taxSlabs, setTaxSlabs] = useState<{ id: string; name: string; rate: number }[]>([]);
 
-  // Category and Unit
   const [categoryId, setCategoryId] = useState('');
+  const [l1Id, setL1Id] = useState('');
+  const [l2Id, setL2Id] = useState('');
+  const [l3Id, setL3Id] = useState('');
   const [unitId, setUnitId] = useState('');
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [units, setUnits] = useState<ProductUnit[]>([]);
+  const [levelsCount, setLevelsCount] = useState<1 | 2 | 3>(3);
   const [levelNames, setLevelNames] = useState({ l1: 'Category', l2: 'Sub-Category', l3: 'Brand' });
 
   useEffect(() => {
@@ -104,13 +107,37 @@ export function ProductForm({
     ]);
     
     const ps = acctRes.data?.settings?.product_settings ?? {};
+    setLevelsCount(ps.levels_count || 3);
     setLevelNames({
       l1: ps.level_1_name || 'Category',
       l2: ps.level_2_name || 'Sub-Category',
       l3: ps.level_3_name || 'Brand'
     });
-    setCategories((catRes.data as ProductCategory[]) ?? []);
+    
+    const cats = (catRes.data as ProductCategory[]) ?? [];
+    setCategories(cats);
     setUnits((unitRes.data as ProductUnit[]) ?? []);
+    
+    // Backtrack category hierarchy for existing product
+    if (product?.category_id && cats.length > 0) {
+      const targetCat = cats.find(c => c.id === product.category_id);
+      if (targetCat) {
+        if (targetCat.level === 3) {
+          setL3Id(targetCat.id);
+          setL2Id(targetCat.parent_id || '');
+          const pCat = cats.find(c => c.id === targetCat.parent_id);
+          setL1Id(pCat?.parent_id || '');
+        } else if (targetCat.level === 2) {
+          setL2Id(targetCat.id);
+          setL1Id(targetCat.parent_id || '');
+          setL3Id('');
+        } else if (targetCat.level === 1) {
+          setL1Id(targetCat.id);
+          setL2Id('');
+          setL3Id('');
+        }
+      }
+    }
   }
 
   async function fetchTaxSlabs() {
@@ -201,7 +228,7 @@ export function ProductForm({
         price: price ? parseFloat(price) : null,
         image: finalImageUrl,
         category: null,
-        category_id: categoryId || null,
+        category_id: l3Id || l2Id || l1Id || null,
         unit: null,
         unit_id: unitId || null,
         stock: stock !== '' ? parseFloat(stock) : null,
@@ -321,31 +348,56 @@ export function ProductForm({
               renderCustomSystemField={(fld) => {
                 if (fld.system_key === 'category') {
                   const level1 = categories.filter(c => c.level === 1);
-                  const level2 = categories.filter(c => c.level === 2);
-                  const level3 = categories.filter(c => c.level === 3);
+                  const level2 = categories.filter(c => c.level === 2 && c.parent_id === l1Id);
+                  const level3 = categories.filter(c => c.level === 3 && c.parent_id === l2Id);
 
                   return (
-                    <div className="grid gap-1">
+                    <div className="grid gap-2">
                       <select
-                        value={categoryId}
-                        onChange={(e) => setCategoryId(e.target.value)}
+                        value={l1Id}
+                        onChange={(e) => {
+                          setL1Id(e.target.value);
+                          setL2Id('');
+                          setL3Id('');
+                        }}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
                         <option value="">Select {levelNames.l1}</option>
-                        {level1.map(l1 => (
-                          <optgroup key={l1.id} label={l1.name}>
-                            <option value={l1.id}>{l1.name} ({levelNames.l1})</option>
-                            {level2.filter(c => c.parent_id === l1.id).map(l2 => (
-                              <optgroup key={l2.id} label={`-- ${l2.name}`}>
-                                <option value={l2.id}>{l2.name} ({levelNames.l2})</option>
-                                {level3.filter(c => c.parent_id === l2.id).map(l3 => (
-                                  <option key={l3.id} value={l3.id}>---- {l3.name} ({levelNames.l3})</option>
-                                ))}
-                              </optgroup>
-                            ))}
-                          </optgroup>
+                        {level1.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
+                      
+                      {levelsCount >= 2 && (
+                        <select
+                          value={l2Id}
+                          onChange={(e) => {
+                            setL2Id(e.target.value);
+                            setL3Id('');
+                          }}
+                          disabled={!l1Id}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                        >
+                          <option value="">Select {levelNames.l2}</option>
+                          {level2.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      )}
+                      
+                      {levelsCount >= 3 && (
+                        <select
+                          value={l3Id}
+                          onChange={(e) => setL3Id(e.target.value)}
+                          disabled={!l2Id}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                        >
+                          <option value="">Select {levelNames.l3}</option>
+                          {level3.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   );
                 }
