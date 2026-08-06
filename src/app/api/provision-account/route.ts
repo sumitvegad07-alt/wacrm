@@ -140,16 +140,7 @@ export async function POST(req: Request) {
       .select('id')
       .single();
 
-    const { data: agentRole } = await supabase
-      .from('employee_roles')
-      .insert({
-        account_id,
-        name: 'Field Agent',
-        description: 'Default field staff access',
-        permissions: { location_tracking: { view: true }, leads: { view: true, add: true, edit: true, scope: 'own' } }
-      })
-      .select('id')
-      .single();
+
 
     // Assign Admin role to the creator
     if (adminRole && userId) {

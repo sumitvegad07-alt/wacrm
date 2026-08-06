@@ -31,7 +31,7 @@ import { QuickActions } from '@/components/dashboard/quick-actions'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
 import { TodaysTasks } from '@/components/dashboard/todays-tasks'
-import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
+
 import { LeadsSourceChart } from '@/components/dashboard/leads-source-chart'
 import { LeadsStatusChart } from '@/components/dashboard/leads-status-chart'
 import { ContactJourneyMatrix } from '@/components/dashboard/contact-journey-matrix'
@@ -90,7 +90,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <OnboardingChecklist />
+
 
       <div>
         <h1 className="text-2xl font-bold text-foreground">CRM Analytics</h1>
