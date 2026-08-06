@@ -367,26 +367,6 @@ export default function RolesPage() {
               <div className="flex-1 overflow-y-auto p-6 bg-muted/20">
                 <div className="w-full max-w-none space-y-8">
                   
-                  {/* Super Admin Override */}
-                  <Card className={`p-4 transition-colors ${permissions.all ? 'border-primary bg-primary/5' : ''}`}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold flex items-center gap-2">
-                          <Shield className="w-4 h-4" />
-                          Full System Access (Super Admin)
-                        </h3>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Grant this role absolute access to all modules and settings. Employees given
-                          this role become <strong>account admins</strong>; every other role is a regular employee.
-                        </p>
-                      </div>
-                      <Switch 
-                        checked={permissions.all === true} 
-                        onCheckedChange={(c) => setPermissions({ ...permissions, all: c })}
-                        disabled={!isEditing || isAdminRole}
-                      />
-                    </div>
-                  </Card>
 
                   {/* General Data Scope Setting */}
                   {!permissions.all && (

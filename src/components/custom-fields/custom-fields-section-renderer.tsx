@@ -14,7 +14,7 @@ interface CustomFieldsSectionRendererProps {
   onChange: (fieldId: string, value: any) => void;
   formData?: Record<string, any>;
   onFormDataChange?: (key: string, value: any) => void;
-  renderCustomSystemField?: (field: CustomField) => React.ReactNode | null;
+  renderCustomSystemField?: (field: CustomField) => React.ReactNode | null | undefined;
   isEditing?: boolean;
 }
 
@@ -99,7 +99,9 @@ export function CustomFieldsSectionRenderer({
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {sectionFields.map((field) => {
-                const customNode = renderCustomSystemField?.(field);
+                const customNode = renderCustomSystemField ? renderCustomSystemField(field) : undefined;
+                if (customNode === null) return null; // Component explicitly requested to be hidden
+                
                 const isSystem = Boolean(field.system_key);
                 const value = isSystem && formData && field.system_key
                   ? formData[field.system_key] ?? ''
@@ -121,7 +123,7 @@ export function CustomFieldsSectionRenderer({
                         <span className="text-destructive font-bold">*</span>
                       )}
                     </Label>
-                    {customNode ? (
+                    {customNode !== undefined ? (
                       customNode
                     ) : isEditing === false ? (
                       <p className="font-medium text-foreground text-base">

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { SEED_COUNTRIES, SEED_INDIA_STATES, SEED_INDIA_DISTRICTS } from "@/lib/territories/seed-data.generated";
 
 export async function POST(req: Request) {
   try {
@@ -16,10 +17,17 @@ export async function POST(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Check if already provisioned to prevent double-provisioning
-    const { data: acc } = await supabase.from('accounts').select('is_provisioned').eq('id', account_id).single();
-    if (acc?.is_provisioned) {
-      return NextResponse.json({ message: "Already provisioned" });
+    // Atomically claim the provisioning rights
+    const { data: updatedAcc, error: updateErr } = await supabase
+      .from('accounts')
+      .update({ is_provisioned: true })
+      .eq('id', account_id)
+      .eq('is_provisioned', false)
+      .select('id')
+      .single();
+
+    if (!updatedAcc || updateErr) {
+      return NextResponse.json({ message: "Already provisioned or provisioning in progress" });
     }
 
     const { data: firstUser } = await supabase.from('profiles').select('user_id').eq('account_id', account_id).limit(1).single();
@@ -143,6 +151,7 @@ export async function POST(req: Request) {
 
 
     // Assign Admin role to the creator
+    // Assign Admin role to the creator
     if (adminRole && userId) {
       await supabase
         .from('profiles')
@@ -151,8 +160,13 @@ export async function POST(req: Request) {
         .eq('account_id', account_id);
     }
 
-    // Mark as provisioned
-    await supabase.from('accounts').update({ is_provisioned: true }).eq('id', account_id);
+    // Load default Indian territories
+    await supabase.rpc('territory_bulk_seed', { 
+      p_account_id: account_id, 
+      p_countries: SEED_COUNTRIES, 
+      p_states: SEED_INDIA_STATES, 
+      p_districts: SEED_INDIA_DISTRICTS 
+    });
 
     return NextResponse.json({ message: "Account provisioned successfully" });
   } catch (error: any) {
