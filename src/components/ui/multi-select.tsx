@@ -60,10 +60,15 @@ export function MultiSelect({
                     className="text-xs py-0.5 px-2 gap-1 bg-primary/10 text-primary hover:bg-primary/20"
                   >
                     {option?.label || val}
-                    <X
-                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                    <div
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       onClick={(e) => removeOption(val, e)}
-                    />
+                    >
+                      <X className="h-3 w-3 cursor-pointer hover:text-destructive" />
+                    </div>
                   </Badge>
                 );
               })
