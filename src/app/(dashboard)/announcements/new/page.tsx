@@ -17,6 +17,7 @@ import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { MultiSelect } from "@/components/ui/multi-select";
 
 export default function NewAnnouncementPage() {
   const { accountId } = useAuth();
@@ -149,33 +150,23 @@ export default function NewAnnouncementPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2 flex flex-col">
                 <Label>Employee</Label>
-                <select
-                  multiple
-                  value={employeeIds}
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions, option => option.value);
-                    setEmployeeIds(selected);
-                  }}
-                  className="flex min-h-[100px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                >
-                  {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
-                </select>
-                <p className="text-[10px] text-muted-foreground">Hold Ctrl/Cmd to select multiple</p>
+                <MultiSelect
+                  options={employees.map(e => ({ label: e.full_name, value: e.id }))}
+                  selectedValues={employeeIds}
+                  onChange={setEmployeeIds}
+                  placeholder="Select users..."
+                  emptyMessage="No users found."
+                />
               </div>
               <div className="space-y-2 flex flex-col">
                 <Label>Employee Role</Label>
-                <select
-                  multiple
-                  value={employeeRoleIds}
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions, option => option.value);
-                    setEmployeeRoleIds(selected);
-                  }}
-                  className="flex min-h-[100px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                >
-                  {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-                <p className="text-[10px] text-muted-foreground">Hold Ctrl/Cmd to select multiple</p>
+                <MultiSelect
+                  options={roles.map(r => ({ label: r.name, value: r.id }))}
+                  selectedValues={employeeRoleIds}
+                  onChange={setEmployeeRoleIds}
+                  placeholder="Select roles..."
+                  emptyMessage="No roles found."
+                />
               </div>
             </div>
           </div>
