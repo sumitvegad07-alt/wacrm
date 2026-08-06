@@ -154,7 +154,7 @@ export default function NewAnnouncementPage() {
                   options={employees.map(e => ({ label: e.full_name, value: e.id }))}
                   selectedValues={employeeIds}
                   onChange={setEmployeeIds}
-                  placeholder="Select users..."
+                  placeholder="All Users (Default)"
                   emptyMessage="No users found."
                 />
               </div>
@@ -164,7 +164,7 @@ export default function NewAnnouncementPage() {
                   options={roles.map(r => ({ label: r.name, value: r.id }))}
                   selectedValues={employeeRoleIds}
                   onChange={setEmployeeRoleIds}
-                  placeholder="Select roles..."
+                  placeholder="All Roles (Default)"
                   emptyMessage="No roles found."
                 />
               </div>
