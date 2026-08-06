@@ -32,7 +32,7 @@ export default function AnnouncementsPage() {
     
     const query = supabase
       .from("tenant_announcements")
-      .select("*, employee:profiles!tenant_announcements_employee_id_fkey(name), role:employee_roles!tenant_announcements_employee_role_id_fkey(name)")
+      .select("*")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false });
       
@@ -79,8 +79,11 @@ export default function AnnouncementsPage() {
         id: "target",
         label: "Target Audience",
         render: (row) => {
-          if (row.employee?.name) return <Badge variant="outline">User: {row.employee.name}</Badge>;
-          if (row.role?.name) return <Badge variant="outline">Role: {row.role.name}</Badge>;
+          const hasUsers = row.employee_ids && row.employee_ids.length > 0;
+          const hasRoles = row.employee_role_ids && row.employee_role_ids.length > 0;
+          if (hasUsers && hasRoles) return <Badge variant="outline">Specific Users & Roles</Badge>;
+          if (hasUsers) return <Badge variant="outline">Specific Users</Badge>;
+          if (hasRoles) return <Badge variant="outline">Specific Roles</Badge>;
           return <Badge variant="secondary">All Users</Badge>;
         }
       },
@@ -99,11 +102,7 @@ export default function AnnouncementsPage() {
           );
         }
       },
-      {
-        id: "send_to_sales_app",
-        label: "Mobile App",
-        render: (row) => (row.send_to_sales_app ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-muted-foreground" />)
-      },
+
       {
         id: "created_at",
         label: "Created On",

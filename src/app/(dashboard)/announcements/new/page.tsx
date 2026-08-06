@@ -31,16 +31,15 @@ export default function NewAnnouncementPage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [expiryDate, setExpiryDate] = useState<Date>();
-  const [sendToSalesApp, setSendToSalesApp] = useState(true);
-  const [employeeId, setEmployeeId] = useState("");
-  const [employeeRoleId, setEmployeeRoleId] = useState("");
+  const [employeeIds, setEmployeeIds] = useState<string[]>([]);
+  const [employeeRoleIds, setEmployeeRoleIds] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
 
   useEffect(() => {
     async function loadLookups() {
       if (!accountId) return;
       const [{ data: empData }, { data: roleData }] = await Promise.all([
-        supabase.from("profiles").select("id, name").eq("account_id", accountId),
+        supabase.from("profiles").select("id, full_name").eq("account_id", accountId),
         supabase.from("employee_roles").select("id, name").eq("account_id", accountId),
       ]);
       setEmployees(empData || []);
@@ -85,10 +84,9 @@ export default function NewAnnouncementPage() {
         title,
         content,
         expiry_date: expiryDate ? expiryDate.toISOString() : null,
-        send_to_sales_app: sendToSalesApp,
         attachment_url: attachmentUrl,
-        employee_id: employeeId || null,
-        employee_role_id: employeeRoleId || null,
+        employee_ids: employeeIds,
+        employee_role_ids: employeeRoleIds,
       };
 
       const { error } = await supabase.from("tenant_announcements").insert(payload);
@@ -148,39 +146,36 @@ export default function NewAnnouncementPage() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox id="sendSalesApp" checked={sendToSalesApp} onCheckedChange={(c) => setSendToSalesApp(!!c)} />
-              <Label htmlFor="sendSalesApp" className="font-normal cursor-pointer">Send To Sales App</Label>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 flex flex-col">
                 <Label>Employee</Label>
                 <select
-                  value={employeeId}
+                  multiple
+                  value={employeeIds}
                   onChange={(e) => {
-                    setEmployeeId(e.target.value);
-                    if (e.target.value) setEmployeeRoleId(""); // mutually exclusive in UI typically, though optional
+                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                    setEmployeeIds(selected);
                   }}
-                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex min-h-[100px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 >
-                  <option value="">Select user</option>
-                  {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
                 </select>
+                <p className="text-[10px] text-muted-foreground">Hold Ctrl/Cmd to select multiple</p>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 flex flex-col">
                 <Label>Employee Role</Label>
                 <select
-                  value={employeeRoleId}
+                  multiple
+                  value={employeeRoleIds}
                   onChange={(e) => {
-                    setEmployeeRoleId(e.target.value);
-                    if (e.target.value) setEmployeeId("");
+                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                    setEmployeeRoleIds(selected);
                   }}
-                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex min-h-[100px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 >
-                  <option value="">Select role</option>
                   {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
+                <p className="text-[10px] text-muted-foreground">Hold Ctrl/Cmd to select multiple</p>
               </div>
             </div>
           </div>
