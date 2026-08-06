@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Plus, Pencil, Eye, Search } from "lucide-react";
+import { Plus, Pencil, Eye, Search, Trash2, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -90,6 +90,23 @@ export default function AnnouncementsPage() {
         }
       },
       {
+        id: "external_link",
+        label: "Link",
+        type: "text",
+        render: (row) => row.external_link ? (
+          <a 
+            href={row.external_link} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="text-primary hover:underline flex items-center gap-1 text-sm max-w-[200px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <LinkIcon className="h-3 w-3 shrink-0" />
+            <span className="truncate">{row.external_link.replace(/^https?:\/\//, '')}</span>
+          </a>
+        ) : <span className="text-muted-foreground">-</span>
+      },
+      {
         id: "created_at",
         label: "Created On",
         type: "date",
@@ -119,15 +136,24 @@ export default function AnnouncementsPage() {
         label: "Actions",
         type: "text",
         render: (row) => (
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/announcements/${row.id}`); }} className="h-8 gap-1 px-2">
-              <Eye className="h-3.5 w-3.5" /> View
+          <div className="flex items-center gap-1">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={(e) => { e.stopPropagation(); router.push(`/announcements/${row.id}/edit`); }} 
+              className="h-8 w-8"
+              title="Edit"
+            >
+              <Pencil className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/announcements/${row.id}/edit`); }} className="h-8 gap-1 px-2">
-              <Pencil className="h-3.5 w-3.5" /> Edit
-            </Button>
-            <Button variant="ghost" size="sm" onClick={(e) => handleDelete(row.id, e)} className="h-8 gap-1 px-2 text-destructive hover:text-destructive hover:bg-destructive/10">
-              Delete
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={(e) => handleDelete(row.id, e)} 
+              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         )
