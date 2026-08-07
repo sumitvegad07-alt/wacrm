@@ -14,10 +14,19 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId?: string; moduleParam?: string }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [manageFooterOpen, setManageFooterOpen] = useState(false);
   
   // Dummy configuration state
   const [config, setConfig] = useState({
@@ -61,9 +70,9 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
     },
     bottomSections: {
       totalQuantity: { enabled: true, label: "Total Quantity" },
-      signature: { enabled: true, label: "Label", name: "Name", image: false, attachmentUrl: "" },
-      additionalSignature: { enabled: false, label: "Label", name: "Name" },
-      footer: { enabled: true }
+      signature: { enabled: true, label: "Authorize signature", name: "Name", image: false, attachmentUrl: "" },
+      additionalSignature: { enabled: true, label: "Receiver's signature", name: "Name" },
+      footer: { enabled: true, text: "1. Goods once sold will not be taken back.\n2. Subject to Rajkot jurisdiction." }
     }
   });
 
@@ -281,10 +290,10 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
                   <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wide">Footer</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Checkbox checked={config.bottomSections.footer.enabled} onCheckedChange={(c) => setConfig({...config, bottomSections: {...config.bottomSections, footer: {enabled: !!c}}})} />
+                      <Checkbox checked={config.bottomSections.footer.enabled} onCheckedChange={(c) => setConfig({...config, bottomSections: {...config.bottomSections, footer: {...config.bottomSections.footer, enabled: !!c}}})} />
                       <span className="text-sm font-medium">Footer</span>
                     </div>
-                    <Button size="sm" className="h-7 px-3 text-[10px] font-bold tracking-wider bg-blue-500 hover:bg-blue-600">MANAGE</Button>
+                    <Button size="sm" onClick={() => setManageFooterOpen(true)} className="h-7 px-3 text-[10px] font-bold tracking-wider bg-blue-500 hover:bg-blue-600">MANAGE</Button>
                   </div>
                 </div>
                 
@@ -423,11 +432,10 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
             <div className="mt-auto border-t pt-6 text-xs text-gray-500 flex justify-between items-end">
               <div>
                 {config.bottomSections.footer.enabled && (
-                  <>
+                  <div className="whitespace-pre-line leading-relaxed">
                     <p className="font-semibold text-gray-700">Terms & Conditions</p>
-                    <p>1. Goods once sold will not be taken back.</p>
-                    <p>2. Subject to Rajkot jurisdiction.</p>
-                  </>
+                    {config.bottomSections.footer.text}
+                  </div>
                 )}
                 
                 {config.bottomSections.signature.enabled && (
@@ -448,6 +456,26 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
           </Card>
         </div>
       </div>
+
+      <Dialog open={manageFooterOpen} onOpenChange={setManageFooterOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Manage Footer Terms</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea 
+              value={config.bottomSections.footer.text} 
+              onChange={(e) => setConfig({...config, bottomSections: {...config.bottomSections, footer: {...config.bottomSections.footer, text: e.target.value}}})}
+              rows={6}
+              className="w-full text-sm resize-none"
+              placeholder="Enter your terms and conditions..."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManageFooterOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
