@@ -38,12 +38,23 @@ const MARKER_COLORS = {
   current: '#6366F1',
 };
 
-function createColorIcon(type: string, index?: number): L.DivIcon {
-  const color = MARKER_COLORS[type as keyof typeof MARKER_COLORS] || '#6366F1';
+function createColorIcon(
+  type: string,
+  index?: number,
+  opts?: { mocked?: boolean; stale?: boolean },
+): L.DivIcon {
+  // A suspect (mock-GPS) point is drawn red; a stale point (agent gone dark) is greyed out.
+  // These win over the normal type colour so trust problems are visible at a glance.
+  const color = opts?.mocked
+    ? '#EF4444'
+    : opts?.stale
+      ? '#94A3B8'
+      : MARKER_COLORS[type as keyof typeof MARKER_COLORS] || '#6366F1';
   let size = type === 'current' ? 16 : index !== undefined ? 24 : 12;
   if (type === 'visit') size = 32;
 
-  let html = `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">`;
+  const border = opts?.mocked ? '3px solid #Fca5a5' : '3px solid white';
+  let html = `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:${border};box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">`;
   if (index !== undefined && size >= 20) {
     html += `<span style="color:white;font-size:${type === 'visit' ? 13 : 11}px;font-weight:bold;line-height:1;">${index}</span>`;
   }
@@ -67,6 +78,12 @@ export interface Point {
   battery?: number | null;
   index?: number;
   duration?: string;
+  /** Location reported as mocked/spoofed GPS — drawn red with a "suspect" warning. */
+  mocked?: boolean;
+  /** Agent has gone dark (no recent ping during an active session) — drawn greyed. */
+  stale?: boolean;
+  /** Human "last seen X min ago" string for the tooltip. */
+  lastSeen?: string;
 }
 
 export type MapLayerType = 'standard' | 'satellite';
@@ -121,7 +138,10 @@ function AddressMarker({ point, index }: { point: Point; index: number }) {
     setLoading(false);
   }, [point.lat, point.lng, address, loading]);
 
-  const icon = createColorIcon(point.type, point.index);
+  const icon = createColorIcon(point.type, point.index, {
+    mocked: point.mocked,
+    stale: point.stale,
+  });
   const typeLabel = point.type.charAt(0).toUpperCase() + point.type.slice(1);
 
   return (
@@ -180,6 +200,19 @@ function AddressMarker({ point, index }: { point: Point; index: number }) {
             {point.battery != null && (
               <p className="text-muted-foreground text-[10px]">
                 🔋 {point.battery}%
+              </p>
+            )}
+            {point.lastSeen && (
+              <p
+                className="text-[10px] m-0"
+                style={{ color: point.stale ? '#EF4444' : '#64748B' }}
+              >
+                {point.stale ? '⚠ went dark — ' : ''}last seen {point.lastSeen}
+              </p>
+            )}
+            {point.mocked && (
+              <p className="text-[10px] font-bold m-0" style={{ color: '#EF4444' }}>
+                ⚠ Suspect location (mock GPS)
               </p>
             )}
             {loading && (

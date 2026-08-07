@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
+import { computeFilteredDistanceKm } from '@/lib/location/distance';
 
 export default function TrackReportPage() {
   const [globalSearch, setGlobalSearch] = useState("");
@@ -35,71 +36,92 @@ export default function TrackReportPage() {
     const endOfDay = new Date(toDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const { data: pings } = await supabase
-      .from('location_pings')
-      .select(`
-        id,
-        user_id,
-        lat,
-        lng,
-        accuracy,
-        recorded_at,
-        profiles ( full_name, role )
-      `)
-      .gte('recorded_at', startOfDay.toISOString())
-      .lte('recorded_at', endOfDay.toISOString())
-      .order('recorded_at', { ascending: true }); 
-
-    const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-      const R = 6371; 
-      const dLat = (lat2 - lat1) * (Math.PI / 180);
-      const dLon = (lon2 - lon1) * (Math.PI / 180);
-      const a = 
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
-        Math.sin(dLon / 2) * Math.sin(dLon / 2); 
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
-      const d = R * c; 
-      return d;
-    };
+    const [{ data: pings }, { data: events }, { data: sessions }] = await Promise.all([
+      supabase
+        .from('location_pings')
+        .select(`
+          user_id,
+          lat,
+          lng,
+          accuracy_m,
+          is_mocked,
+          recorded_at,
+          profiles ( full_name, role )
+        `)
+        .gte('recorded_at', startOfDay.toISOString())
+        .lte('recorded_at', endOfDay.toISOString())
+        .order('recorded_at', { ascending: true }),
+      // "Agent went dark" signals emitted by the mobile app during a shift.
+      supabase
+        .from('tracking_events')
+        .select('user_id, event_type')
+        .gte('recorded_at', startOfDay.toISOString())
+        .lte('recorded_at', endOfDay.toISOString()),
+      // Sessions that ended abnormally = a tracking gap (phone off / OS killed the app).
+      supabase
+        .from('tracking_sessions')
+        .select('user_id, end_reason')
+        .gte('started_at', startOfDay.toISOString())
+        .lte('started_at', endOfDay.toISOString()),
+    ]);
 
     if (pings) {
       const userAggregates: Record<string, any> = {};
 
-      pings.forEach(p => {
-        if (!userAggregates[p.user_id]) {
-          userAggregates[p.user_id] = {
-            id: p.user_id,
-            name: (p.profiles as any)?.full_name || "Unknown",
-            role: (p.profiles as any)?.role || "Field Staff",
+      const ensure = (userId: string, p?: any) => {
+        if (!userAggregates[userId]) {
+          userAggregates[userId] = {
+            id: userId,
+            name: (p?.profiles as any)?.full_name || "Unknown",
+            role: (p?.profiles as any)?.role || "Field Staff",
             totalPings: 0,
             regular: 0,
             gpsOff: 0,
             switchOff: 0,
             critical: 0,
             mock: 0,
-            distanceSum: 0,
             accuracySum: 0,
-            lastPing: null
+            accuracyCount: 0,
+            pings: [] as any[],
           };
         }
-        
-        const agg = userAggregates[p.user_id];
-        agg.totalPings++;
-        agg.regular++; 
-        agg.accuracySum += (p.accuracy || 100);
+        return userAggregates[userId];
+      };
 
-        if (agg.lastPing && agg.lastPing.lat && agg.lastPing.lng && p.lat && p.lng) {
-            agg.distanceSum += getDistanceFromLatLonInKm(agg.lastPing.lat, agg.lastPing.lng, p.lat, p.lng);
+      pings.forEach(p => {
+        const agg = ensure(p.user_id, p);
+        agg.totalPings++;
+        agg.regular++;
+        if (p.is_mocked) agg.mock++;
+        if (p.accuracy_m != null) {
+          agg.accuracySum += p.accuracy_m;
+          agg.accuracyCount++;
         }
-        agg.lastPing = p;
+        agg.pings.push(p);
       });
 
-      const formatted = Object.values(userAggregates).map(agg => {
+      // GPS turned off mid-shift (self-reported by the app).
+      (events || []).forEach((e: any) => {
+        const agg = ensure(e.user_id);
+        if (e.event_type === 'gps_disabled') agg.gpsOff++;
+      });
+
+      // Abnormal session ends: app killed (phone off) vs timeout (silent tracking stop).
+      (sessions || []).forEach((s: any) => {
+        const agg = ensure(s.user_id);
+        if (s.end_reason === 'app_killed') agg.switchOff++;
+        else if (s.end_reason === 'timeout') agg.critical++;
+      });
+
+      const formatted = Object.values(userAggregates).map((agg: any) => {
+        const avgAccuracy = agg.accuracyCount > 0
+          ? Math.round(agg.accuracySum / agg.accuracyCount)
+          : null;
         return {
           ...agg,
-          distance: agg.distanceSum.toFixed(2),
-          accuracyPct: agg.totalPings > 0 ? (Math.min(100, agg.accuracySum / agg.totalPings)).toFixed(2) + "%" : "100.00%"
+          // Trustworthy distance: excludes low-accuracy pings + impossible GPS jumps.
+          distance: computeFilteredDistanceKm(agg.pings).toFixed(2),
+          accuracyLabel: avgAccuracy != null ? `${avgAccuracy} m` : "—",
         };
       });
 
@@ -108,7 +130,7 @@ export default function TrackReportPage() {
     } else {
       setReportData([]);
     }
-    
+
     setIsLoading(false);
   };
 
@@ -172,10 +194,10 @@ export default function TrackReportPage() {
       render: (row) => <span>{row.mock}</span>
     },
     {
-      id: "accuracyPct",
-      label: "Accuracy",
+      id: "accuracyLabel",
+      label: "Avg Accuracy",
       type: "text",
-      render: (row) => <span>{row.accuracyPct}</span>
+      render: (row) => <span>{row.accuracyLabel}</span>
     }
   ];
 

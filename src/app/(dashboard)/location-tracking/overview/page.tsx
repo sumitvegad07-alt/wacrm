@@ -7,6 +7,10 @@ import { SkeletonCard } from "@/components/dashboard/skeleton";
 import { MapPin, Users, Battery, Activity } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { Point } from "@/components/location-tracking/map-view";
+import { computeFilteredDistanceKm } from "@/lib/location/distance";
+
+/** Minutes without a ping (during an otherwise active day) before an agent is "gone dark". */
+const STALE_AFTER_MIN = 25;
 
 const MapView = dynamic(
   () => import("@/components/location-tracking/map-view"),
@@ -39,7 +43,7 @@ export default function LocationTrackingOverviewPage() {
       // Fetch today's pings for battery and agents
       const { data: pings } = await supabase
         .from("location_pings")
-        .select("user_id, battery_pct, lat, lng, recorded_at")
+        .select("user_id, battery_pct, lat, lng, accuracy_m, is_mocked, recorded_at")
         .gte("recorded_at", startOfDay.toISOString());
 
       // Fetch today's visits
@@ -84,24 +88,7 @@ export default function LocationTrackingOverviewPage() {
           pingsByUser[p.user_id].push(p);
         });
 
-        const getDistanceFromLatLonInKm = (
-          lat1: number,
-          lon1: number,
-          lat2: number,
-          lon2: number,
-        ) => {
-          const R = 6371;
-          const dLat = ((lat2 - lat1) * Math.PI) / 180;
-          const dLon = ((lon2 - lon1) * Math.PI) / 180;
-          const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos((lat1 * Math.PI) / 180) *
-              Math.cos((lat2 * Math.PI) / 180) *
-              Math.sin(dLon / 2) *
-              Math.sin(dLon / 2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          return R * c;
-        };
+        const now = Date.now();
 
         Object.entries(pingsByUser).forEach(([userId, userPings]) => {
           // Sort by time
@@ -111,22 +98,21 @@ export default function LocationTrackingOverviewPage() {
               new Date(b.recorded_at).getTime(),
           );
 
-          for (let i = 1; i < userPings.length; i++) {
-            const prev = userPings[i - 1];
-            const curr = userPings[i];
-            if (prev.lat && prev.lng && curr.lat && curr.lng) {
-              distanceSum += getDistanceFromLatLonInKm(
-                prev.lat,
-                prev.lng,
-                curr.lat,
-                curr.lng,
-              );
-            }
-          }
+          // Trustworthy distance — filters low-accuracy pings + impossible jumps.
+          distanceSum += computeFilteredDistanceKm(userPings);
 
           // Latest ping for map
           const latest = userPings[userPings.length - 1];
           if (latest.lat && latest.lng) {
+            const minutesAgo = Math.round(
+              (now - new Date(latest.recorded_at).getTime()) / 60000,
+            );
+            const lastSeen =
+              minutesAgo < 1
+                ? "just now"
+                : minutesAgo < 60
+                  ? `${minutesAgo} min ago`
+                  : `${Math.floor(minutesAgo / 60)}h ${minutesAgo % 60}m ago`;
             latestPings.push({
               lat: latest.lat,
               lng: latest.lng,
@@ -137,6 +123,9 @@ export default function LocationTrackingOverviewPage() {
               }),
               label: profileMap.get(userId) || "Agent",
               battery: latest.battery_pct,
+              mocked: !!latest.is_mocked,
+              stale: minutesAgo > STALE_AFTER_MIN,
+              lastSeen,
             });
           }
         });
