@@ -458,35 +458,35 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
       </div>
 
       <Dialog open={manageFooterOpen} onOpenChange={setManageFooterOpen}>
-        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden gap-0">
-          <DialogHeader className="p-4 border-b">
-            <DialogTitle className="text-2xl font-normal text-gray-600">Manage Footer</DialogTitle>
+        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden gap-0 bg-card border-border">
+          <DialogHeader className="p-4 border-b border-border">
+            <DialogTitle className="text-2xl font-normal text-muted-foreground">Manage Footer</DialogTitle>
           </DialogHeader>
           <div className="p-4 py-6">
-            <Label className="text-gray-700 text-sm font-medium mb-2 block">Footer</Label>
-            <div className="border rounded-sm overflow-hidden border-gray-200 shadow-sm">
-              <div className="flex items-center bg-[#f1f4f5] border-b border-gray-200 divide-x divide-gray-200">
-                <button className="px-5 py-2.5 hover:bg-gray-200 text-[13px] font-bold text-gray-800">B</button>
-                <button className="px-5 py-2.5 hover:bg-gray-200 text-[14px] italic font-serif text-gray-800">I</button>
-                <button className="px-5 py-2.5 hover:bg-gray-200 text-[13px] underline font-medium text-gray-800">U</button>
-                <button className="px-4 py-2.5 hover:bg-gray-200 text-[13px] flex items-center gap-1.5 text-gray-800">
-                  <span className="font-bold">A</span> <ChevronDown className="size-3 text-gray-500" />
+            <Label className="text-muted-foreground/80 text-sm font-medium mb-2 block">Footer</Label>
+            <div className="border rounded-sm overflow-hidden border-border bg-background shadow-sm">
+              <div className="flex items-center bg-muted/30 border-b border-border divide-x divide-border">
+                <button className="px-5 py-2.5 hover:bg-muted text-[13px] font-bold text-foreground">B</button>
+                <button className="px-5 py-2.5 hover:bg-muted text-[14px] italic font-serif text-foreground">I</button>
+                <button className="px-5 py-2.5 hover:bg-muted text-[13px] underline font-medium text-foreground">U</button>
+                <button className="px-4 py-2.5 hover:bg-muted text-[13px] flex items-center gap-1.5 text-foreground">
+                  <span className="font-bold">A</span> <ChevronDown className="size-3 text-muted-foreground" />
                 </button>
-                <button className="px-4 py-2.5 hover:bg-gray-200 text-[13px] flex items-center gap-1.5 text-gray-800">
-                  <span className="bg-gray-800 text-white font-bold px-0.5 text-xs rounded-sm">A</span> <ChevronDown className="size-3 text-gray-500" />
+                <button className="px-4 py-2.5 hover:bg-muted text-[13px] flex items-center gap-1.5 text-foreground">
+                  <span className="bg-foreground text-background font-bold px-0.5 text-xs rounded-sm">A</span> <ChevronDown className="size-3 text-muted-foreground" />
                 </button>
               </div>
               <Textarea 
                 value={config.bottomSections.footer.text} 
                 onChange={(e) => setConfig({...config, bottomSections: {...config.bottomSections, footer: {...config.bottomSections.footer, text: e.target.value}}})}
                 rows={7}
-                className="w-full text-[13px] text-gray-600 resize-none border-0 focus-visible:ring-0 rounded-none bg-white placeholder:text-gray-400 p-4"
+                className="w-full text-[13px] text-foreground resize-none border-0 focus-visible:ring-0 rounded-none bg-transparent placeholder:text-muted-foreground p-4"
                 placeholder="Enter Footer"
               />
             </div>
           </div>
-          <DialogFooter className="p-4 border-t bg-white">
-            <Button className="bg-[#3b82f6] hover:bg-blue-600 font-bold px-6 tracking-wide text-xs h-9" onClick={() => setManageFooterOpen(false)}>SAVE</Button>
+          <DialogFooter className="p-4 border-t border-border bg-card">
+            <Button className="bg-[#3b82f6] hover:bg-blue-600 text-white font-bold px-6 tracking-wide text-xs h-9" onClick={() => setManageFooterOpen(false)}>SAVE</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
