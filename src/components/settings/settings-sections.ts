@@ -37,6 +37,7 @@ export const SETTINGS_SECTIONS = [
   'ai',
   'templates',
   'fields',
+  'document_templates',
   'deals',
   'deal_pipelines',
   'leads',
@@ -71,6 +72,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   ai: { id: 'ai', label: 'Knowledge Base', icon: BrainCircuit, group: 'hidden' }, // hidden in rail
   templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'hidden' }, // hidden in rail
   fields: { id: 'fields', label: 'Tags', icon: Tags, group: 'workspace' },
+  document_templates: { id: 'document_templates', label: 'Template', icon: FileText, group: 'workspace' },
   deals: { id: 'deals', label: 'Currency', icon: Coins, group: 'hidden' },
   deal_pipelines: { id: 'deal_pipelines', label: 'Deals', icon: GitBranch, group: 'workspace' },
   leads: { id: 'leads', label: 'Leads Settings', icon: User, group: 'workspace' },

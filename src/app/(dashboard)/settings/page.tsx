@@ -8,6 +8,7 @@ import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
+import { DocumentTemplatesPanel } from '@/components/settings/document-templates/document-templates-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { LeadsSettings } from '@/components/settings/leads-settings';
 import { TasksSettings } from '@/components/settings/tasks-settings';
@@ -86,6 +87,7 @@ function SettingsContent() {
       </div>
     ),
     templates: <TemplateManager />,
+    document_templates: <DocumentTemplatesPanel />,
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
     deal_pipelines: (
