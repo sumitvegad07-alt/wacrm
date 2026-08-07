@@ -228,6 +228,69 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
               </AccordionContent>
             </AccordionItem>
 
+            <AccordionItem value="bottom-sections" className="border rounded-lg bg-card px-2">
+              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3">Bottom Sections</AccordionTrigger>
+              <AccordionContent className="space-y-5 pt-1 pb-3">
+                
+                <div className="space-y-3">
+                  <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wide">Total Quantity</p>
+                  <div className="flex items-center gap-3">
+                    <Checkbox checked={config.bottomSections.totalQuantity.enabled} onCheckedChange={(c) => setConfig({...config, bottomSections: {...config.bottomSections, totalQuantity: {...config.bottomSections.totalQuantity, enabled: !!c}}})} />
+                    <Input value={config.bottomSections.totalQuantity.label} onChange={(e) => setConfig({...config, bottomSections: {...config.bottomSections, totalQuantity: {...config.bottomSections.totalQuantity, label: e.target.value}}})} className="h-8 text-xs" />
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t">
+                  <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wide">Signature</p>
+                  <div className="flex items-center gap-3">
+                    <Checkbox checked={config.bottomSections.signature.enabled} onCheckedChange={(c) => setConfig({...config, bottomSections: {...config.bottomSections, signature: {...config.bottomSections.signature, enabled: !!c}}})} />
+                    <span className="text-xs w-16 text-muted-foreground font-medium">Label</span>
+                    <Input value={config.bottomSections.signature.label} onChange={(e) => setConfig({...config, bottomSections: {...config.bottomSections, signature: {...config.bottomSections.signature, label: e.target.value}}})} className="h-8 text-xs" />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Checkbox checked={true} disabled />
+                    <span className="text-xs w-16 text-muted-foreground font-medium">Sign. Name</span>
+                    <Input value={config.bottomSections.signature.name} onChange={(e) => setConfig({...config, bottomSections: {...config.bottomSections, signature: {...config.bottomSections.signature, name: e.target.value}}})} className="h-8 text-xs" />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Checkbox checked={config.bottomSections.signature.image} onCheckedChange={(c) => setConfig({...config, bottomSections: {...config.bottomSections, signature: {...config.bottomSections.signature, image: !!c}}})} />
+                    <span className="text-xs font-medium">Sign. Image</span>
+                  </div>
+                  {config.bottomSections.signature.image && (
+                    <div className="pl-6 pt-1">
+                      <Button variant="secondary" className="w-full h-8 text-xs bg-muted">@ Attach a File</Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3 pt-4 border-t">
+                  <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wide">Additional Signature</p>
+                  <div className="flex items-center gap-3">
+                    <Checkbox checked={config.bottomSections.additionalSignature.enabled} onCheckedChange={(c) => setConfig({...config, bottomSections: {...config.bottomSections, additionalSignature: {...config.bottomSections.additionalSignature, enabled: !!c}}})} />
+                    <span className="text-xs w-16 text-muted-foreground font-medium">Label</span>
+                    <Input value={config.bottomSections.additionalSignature.label} onChange={(e) => setConfig({...config, bottomSections: {...config.bottomSections, additionalSignature: {...config.bottomSections.additionalSignature, label: e.target.value}}})} className="h-8 text-xs" />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Checkbox checked={true} disabled />
+                    <span className="text-xs w-16 text-muted-foreground font-medium">Sign. Name</span>
+                    <Input value={config.bottomSections.additionalSignature.name} onChange={(e) => setConfig({...config, bottomSections: {...config.bottomSections, additionalSignature: {...config.bottomSections.additionalSignature, name: e.target.value}}})} className="h-8 text-xs" />
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t">
+                  <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wide">Footer</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={config.bottomSections.footer.enabled} onCheckedChange={(c) => setConfig({...config, bottomSections: {...config.bottomSections, footer: {enabled: !!c}}})} />
+                      <span className="text-sm font-medium">Footer</span>
+                    </div>
+                    <Button size="sm" className="h-7 px-3 text-[10px] font-bold tracking-wider bg-blue-500 hover:bg-blue-600">MANAGE</Button>
+                  </div>
+                </div>
+                
+              </AccordionContent>
+            </AccordionItem>
+
           </Accordion>
         </div>
 
