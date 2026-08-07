@@ -407,6 +407,7 @@ function getMenuStructure(
           ? [{ href: "/settings?tab=whatsapp", label: "Whatsapp", icon: MessageSquare }]
           : []),
         { href: "/settings?tab=fields", label: "Tags", icon: Tags },
+        { href: "/settings?tab=document_templates", label: "Template", icon: FileText },
         { href: "/settings?tab=deal_pipelines", label: "Deals", icon: Briefcase },
         { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter },
         { href: "/settings?tab=tasks", label: "Task Settings", icon: CheckSquare },
