@@ -60,8 +60,10 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
       total: { enabled: true, label: "Total" },
     },
     bottomSections: {
-      totalQuantity: { enabled: false, label: "Total Quantity" },
-      signature: { enabled: false, label: "Label", name: "Name", image: false }
+      totalQuantity: { enabled: true, label: "Total Quantity" },
+      signature: { enabled: true, label: "Label", name: "Name", image: false, attachmentUrl: "" },
+      additionalSignature: { enabled: false, label: "Label", name: "Name" },
+      footer: { enabled: true }
     }
   });
 
@@ -141,7 +143,7 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
                 {['orderTo', 'billingDetails'].map(sectionKey => {
                   const s = config.documentInfo[sectionKey as keyof typeof config.documentInfo] as any;
                   return (
-                    <div key={sectionKey} className="border p-3 rounded-md bg-muted/10 space-y-3">
+                    <div key={sectionKey} className="border p-3 rounded-md bg-muted/10 space-y-3 mt-4">
                       <div className="flex items-center gap-3">
                         <Checkbox 
                           checked={s.enabled}
@@ -150,7 +152,7 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
                         <Input 
                           value={s.label} 
                           onChange={(e) => setConfig({...config, documentInfo: {...config.documentInfo, [sectionKey]: {...s, label: e.target.value}}})}
-                          className="h-8 text-sm"
+                          className="h-8 text-sm font-semibold"
                         />
                       </div>
                       <div className="pl-6 space-y-2">
@@ -170,6 +172,38 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
                     </div>
                   );
                 })}
+
+                <div className="pt-2 border-t mt-4 space-y-3">
+                  {['orderDate', 'orderStatus', 'priceGroup', 'remark', 'createdBy'].map(k => {
+                    const v = config.documentInfo[k as keyof typeof config.documentInfo] as any;
+                    return (
+                      <div key={k} className="flex items-center gap-3">
+                        <Checkbox 
+                          checked={v.enabled} 
+                          onCheckedChange={(c) => setConfig({...config, documentInfo: {...config.documentInfo, [k]: {...v, enabled: !!c}}})}
+                        />
+                        <Input 
+                          value={v.label}
+                          onChange={(e) => setConfig({...config, documentInfo: {...config.documentInfo, [k]: {...v, label: e.target.value}}})}
+                          className="h-8 text-xs"
+                          disabled={!v.enabled}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+            
+            <AccordionItem value="custom-fields" className="border rounded-lg bg-card px-2">
+              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3">Custom Fields</AccordionTrigger>
+              <AccordionContent className="space-y-3 pt-1 pb-3">
+                {['Dispatch Through', 'E-Way Bill', 'Destination', 'Transport Mode'].map((cf, i) => (
+                  <div key={cf} className="flex items-center space-x-2">
+                    <Checkbox id={`cf-${i}`} defaultChecked={i < 2} />
+                    <label htmlFor={`cf-${i}`} className="text-sm font-medium leading-none cursor-pointer">{cf}</label>
+                  </div>
+                ))}
               </AccordionContent>
             </AccordionItem>
             
@@ -246,8 +280,15 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
               <div className="text-right space-y-1 text-gray-700">
                 {config.documentInfo.orderDate.enabled && <p><span className="font-medium text-gray-500">{config.documentInfo.orderDate.label} :</span> 20-06-2026</p>}
                 {config.documentInfo.orderStatus.enabled && <p><span className="font-medium text-gray-500">{config.documentInfo.orderStatus.label} :</span> Open</p>}
+                {config.documentInfo.remark.enabled && <p><span className="font-medium text-gray-500">{config.documentInfo.remark.label} :</span> Urgent delivery</p>}
                 {config.documentInfo.createdBy.enabled && <p><span className="font-medium text-gray-500">{config.documentInfo.createdBy.label} :</span> Dummy Staff</p>}
               </div>
+            </div>
+
+            {/* Custom Fields Preview */}
+            <div className="grid grid-cols-4 gap-4 py-4 border-b text-xs text-gray-700">
+              <div><span className="font-medium text-gray-500">Dispatch Through :</span> Road</div>
+              <div><span className="font-medium text-gray-500">E-Way Bill :</span> 123456789012</div>
             </div>
 
             {/* Item Table Preview */}
@@ -282,7 +323,16 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
               </table>
 
               {/* Totals Section */}
-              <div className="mt-4 border-t pt-4 flex justify-end">
+              <div className="mt-4 border-t pt-4 flex justify-between items-start">
+                <div className="flex gap-12 text-xs text-gray-700 font-medium">
+                  {config.bottomSections.totalQuantity.enabled && (
+                    <>
+                      <span>Total PCS : 1 (1 Items)</span>
+                      <span>Total KG : 12.600 (3 Items)</span>
+                    </>
+                  )}
+                </div>
+                
                 <div className="w-64 space-y-2 text-sm text-gray-700">
                   {config.itemTable.subTotal.enabled && (
                     <div className="flex justify-between">
@@ -306,11 +356,31 @@ export function DocumentTemplateEditor({ templateId, moduleParam }: { templateId
               </div>
             </div>
 
-            {/* Footer / Terms */}
-            <div className="mt-auto border-t pt-4 text-xs text-gray-500">
-              <p className="font-semibold text-gray-700">Terms & Conditions</p>
-              <p>1. Goods once sold will not be taken back.</p>
-              <p>2. Subject to Rajkot jurisdiction.</p>
+            {/* Footer & Signatures */}
+            <div className="mt-auto border-t pt-6 text-xs text-gray-500 flex justify-between items-end">
+              <div>
+                {config.bottomSections.footer.enabled && (
+                  <>
+                    <p className="font-semibold text-gray-700">Terms & Conditions</p>
+                    <p>1. Goods once sold will not be taken back.</p>
+                    <p>2. Subject to Rajkot jurisdiction.</p>
+                  </>
+                )}
+                
+                {config.bottomSections.signature.enabled && (
+                  <div className="mt-6">
+                    <p className="text-gray-800 font-medium">{config.bottomSections.signature.label}</p>
+                    <p className="text-gray-500 mt-1">{config.bottomSections.signature.name}</p>
+                  </div>
+                )}
+              </div>
+              
+              {config.bottomSections.additionalSignature.enabled && (
+                <div className="text-right">
+                  <p className="text-gray-800 font-medium">{config.bottomSections.additionalSignature.label}</p>
+                  <p className="text-gray-500 mt-1">{config.bottomSections.additionalSignature.name}</p>
+                </div>
+              )}
             </div>
           </Card>
         </div>
