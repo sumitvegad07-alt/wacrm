@@ -56,6 +56,7 @@ import {
   PieChart,
   Target,
   Megaphone,
+  HeartPulse,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -318,6 +319,7 @@ function getMenuStructure(
       icon: MapPin,
       items: [
         { href: "/location-tracking/overview", label: "Overview", icon: LayoutDashboard, module: "location_tracking" },
+        { href: "/location-tracking/health", label: "Tracking Health", icon: HeartPulse, module: "location_tracking" },
         { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin, module: "location_tracking" },
         { href: "/location-tracking/all-locations", label: "All Locations", icon: Map, module: "location_tracking" },
         { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
