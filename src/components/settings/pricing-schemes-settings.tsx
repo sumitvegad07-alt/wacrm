@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { SettingsPanelHead } from "./settings-panel-head";
 import { ProductCategoriesSettings } from "./product-categories-settings";
 import { ProductUnitsSettings } from "./product-units-settings";
 
@@ -69,6 +68,14 @@ export function PricingSchemesSettings() {
   const [taxMode, setTaxMode] = useState<"exclusive" | "inclusive">("exclusive");
   const [enforceFloor, setEnforceFloor] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // Lifted from ProductCategoriesSettings
+  const [levelsCount, setLevelsCount] = useState<1 | 2 | 3>(1);
+  const [level1Name, setLevel1Name] = useState("Category");
+  const [level2Name, setLevel2Name] = useState("Sub-Category");
+  const [level3Name, setLevel3Name] = useState("Brand");
+  
+  const [hasChanges, setHasChanges] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!accountId) return;
@@ -88,25 +95,52 @@ export function PricingSchemesSettings() {
     setDiscountValueType((os.discount_value_type as DiscountValueType) ?? "both");
     setTaxMode((os.tax_mode as "exclusive" | "inclusive") ?? "exclusive");
     setEnforceFloor(os.enforce_price_floor !== false); // default on
+
+    const ps = acctRes.data?.settings?.product_settings ?? {};
+    setLevelsCount(ps.levels_count || 1);
+    setLevel1Name(ps.level_1_name || "Category");
+    setLevel2Name(ps.level_2_name || "Sub-Category");
+    setLevel3Name(ps.level_3_name || "Brand");
+    
+    setHasChanges(false);
     setLoading(false);
   }, [accountId, supabase]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  /** Merge a patch into accounts.settings.order_settings without clobbering siblings. */
-  async function patchOrderSettings(patch: Record<string, unknown>) {
+  /** Save all settings explicitly. */
+  async function saveAllSettings() {
     if (!accountId) return;
     setSaving(true);
     const { data: acct } = await supabase.from("accounts").select("settings").eq("id", accountId).single();
     const settings = acct?.settings ?? {};
-    const orderSettings = settings.order_settings ?? {};
+    
+    const newSettings = {
+      ...settings,
+      order_settings: {
+        ...(settings.order_settings ?? {}),
+        discount_mode: discountMode,
+        tax_mode: taxMode,
+        enforce_price_floor: enforceFloor,
+      },
+      product_settings: {
+        ...(settings.product_settings ?? {}),
+        levels_count: levelsCount,
+        level_1_name: level1Name,
+        level_2_name: level2Name,
+        level_3_name: level3Name,
+      }
+    };
+    
     const { error } = await supabase
       .from("accounts")
-      .update({ settings: { ...settings, order_settings: { ...orderSettings, ...patch } } })
+      .update({ settings: newSettings })
       .eq("id", accountId);
+      
     setSaving(false);
-    if (error) { toast.error("Could not save"); return; }
-    toast.success("Saved");
+    if (error) { toast.error("Could not save settings"); return; }
+    toast.success("Settings saved successfully");
+    setHasChanges(false);
   }
 
   async function handleAddSlab(e: React.FormEvent) {
@@ -173,12 +207,14 @@ export function PricingSchemesSettings() {
 
   return (
     <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Catalogue Settings"
-        description="Tax slabs, salesman discounts and price protection. Assign a slab to a product on the product itself, and a price list to a customer on the customer's page."
-      />
+      <div className="flex items-center justify-end mb-4">
+        <Button onClick={saveAllSettings} disabled={!hasChanges || saving} className="shadow-sm">
+          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Save Settings
+        </Button>
+      </div>
 
-      <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
         <div className="space-y-8">
           {/* ---------------- Tax slabs ---------------- */}
           <div className="space-y-3">
@@ -266,7 +302,7 @@ export function PricingSchemesSettings() {
                   key={m.value}
                   type="button"
                   disabled={!canEditSettings || saving}
-                  onClick={() => { setTaxMode(m.value); patchOrderSettings({ tax_mode: m.value }); }}
+                  onClick={() => { setTaxMode(m.value); setHasChanges(true); }}
                   className={`text-left p-3 rounded-lg border transition-colors ${
                     taxMode === m.value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
                   }`}
@@ -295,7 +331,7 @@ export function PricingSchemesSettings() {
                 onCheckedChange={(on) => {
                   const next: DiscountMode = on ? "item" : "off";
                   setDiscountMode(next);
-                  patchOrderSettings({ discount_mode: next });
+                  setHasChanges(true);
                 }}
               />
             </div>
@@ -315,7 +351,7 @@ export function PricingSchemesSettings() {
                     onCheckedChange={(on) => {
                       const next: DiscountMode = on ? "both" : "item";
                       setDiscountMode(next);
-                      patchOrderSettings({ discount_mode: next });
+                      setHasChanges(true);
                     }}
                   />
                 </div>
@@ -345,7 +381,7 @@ export function PricingSchemesSettings() {
               <Switch
                 checked={enforceFloor}
                 disabled={!canEditSettings || saving}
-                onCheckedChange={(on) => { setEnforceFloor(on); patchOrderSettings({ enforce_price_floor: on }); }}
+                onCheckedChange={(on) => { setEnforceFloor(on); setHasChanges(true); }}
               />
             </div>
             {!enforceFloor && (
@@ -374,7 +410,16 @@ export function PricingSchemesSettings() {
         </div>
       </div>
 
-      <ProductCategoriesSettings />
+      <ProductCategoriesSettings
+        levelsCount={levelsCount}
+        setLevelsCount={(val) => { setLevelsCount(val); setHasChanges(true); }}
+        level1Name={level1Name}
+        setLevel1Name={(val) => { setLevel1Name(val); setHasChanges(true); }}
+        level2Name={level2Name}
+        setLevel2Name={(val) => { setLevel2Name(val); setHasChanges(true); }}
+        level3Name={level3Name}
+        setLevel3Name={(val) => { setLevel3Name(val); setHasChanges(true); }}
+      />
       <ProductUnitsSettings />
     </section>
   );

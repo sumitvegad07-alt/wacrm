@@ -10,19 +10,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProductCategory } from "@/types";
 
-export function ProductCategoriesSettings() {
+export interface ProductCategoriesSettingsProps {
+  levelsCount: 1 | 2 | 3;
+  setLevelsCount: (val: 1 | 2 | 3) => void;
+  level1Name: string;
+  setLevel1Name: (val: string) => void;
+  level2Name: string;
+  setLevel2Name: (val: string) => void;
+  level3Name: string;
+  setLevel3Name: (val: string) => void;
+}
+
+export function ProductCategoriesSettings({
+  levelsCount,
+  setLevelsCount,
+  level1Name,
+  setLevel1Name,
+  level2Name,
+  setLevel2Name,
+  level3Name,
+  setLevel3Name,
+}: ProductCategoriesSettingsProps) {
   const supabase = createClient();
   const { accountId, canEditSettings } = useAuth();
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   
-  // Config
-  const [levelsCount, setLevelsCount] = useState<1 | 2 | 3>(3);
-  const [level1Name, setLevel1Name] = useState("Category");
-  const [level2Name, setLevel2Name] = useState("Sub-Category");
-  const [level3Name, setLevel3Name] = useState("Brand");
-  const [savingSettings, setSavingSettings] = useState(false);
-
   // New category state
   const [newName, setNewName] = useState("");
   const [newLevel, setNewLevel] = useState<1 | 2 | 3>(1);
@@ -32,45 +45,13 @@ export function ProductCategoriesSettings() {
   const loadData = useCallback(async () => {
     if (!accountId) return;
     setLoading(true);
-    const [acctRes, catRes] = await Promise.all([
-      supabase.from("accounts").select("settings").eq("id", accountId).single(),
-      supabase.from("product_categories").select("*").eq("account_id", accountId).order("created_at")
-    ]);
+    const { data: catData, error: catError } = await supabase.from("product_categories").select("*").eq("account_id", accountId).order("created_at");
 
-    const ps = acctRes.data?.settings?.product_settings ?? {};
-    setLevelsCount(ps.levels_count || 3);
-    setLevel1Name(ps.level_1_name || "Category");
-    setLevel2Name(ps.level_2_name || "Sub-Category");
-    setLevel3Name(ps.level_3_name || "Brand");
-
-    setCategories((catRes.data as ProductCategory[]) ?? []);
+    setCategories((catData as ProductCategory[]) ?? []);
     setLoading(false);
   }, [accountId, supabase]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  async function saveSettings() {
-    if (!accountId) return;
-    setSavingSettings(true);
-    const { data: acct } = await supabase.from("accounts").select("settings").eq("id", accountId).single();
-    const settings = acct?.settings ?? {};
-    const productSettings = settings.product_settings ?? {};
-    const { error } = await supabase.from("accounts").update({
-      settings: {
-        ...settings,
-        product_settings: {
-          ...productSettings,
-          levels_count: levelsCount,
-          level_1_name: level1Name,
-          level_2_name: level2Name,
-          level_3_name: level3Name,
-        }
-      }
-    }).eq("id", accountId);
-    setSavingSettings(false);
-    if (error) { toast.error("Could not save level names"); return; }
-    toast.success("Level names saved");
-  }
 
   async function handleAddCategory(e: React.FormEvent) {
     e.preventDefault();
@@ -154,13 +135,6 @@ export function ProductCategoriesSettings() {
           <div className="space-y-2">
             <Label>Level 3 Name</Label>
             <Input value={level3Name} onChange={e => setLevel3Name(e.target.value)} disabled={!canEditSettings} />
-          </div>
-        )}
-        {canEditSettings && (
-          <div className="md:col-span-4 flex justify-end">
-            <Button size="sm" onClick={saveSettings} disabled={savingSettings}>
-              {savingSettings && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Save Configuration
-            </Button>
           </div>
         )}
       </div>
