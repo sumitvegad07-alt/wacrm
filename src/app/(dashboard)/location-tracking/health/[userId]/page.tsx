@@ -25,8 +25,9 @@ import {
   type AgentHealth,
   type HealthSnapshot,
 } from "@/lib/location/tracking-health";
-import { ISSUE_CATALOG, resolveIssueFix, type Severity } from "@/lib/location/tracking-issues";
+import { ISSUE_CATALOG, resolveIssueFix, isBatteryIssue, type Severity } from "@/lib/location/tracking-issues";
 import { normalizeTrackingSettings } from "@/lib/location/tracking-window";
+import { resolveGuide } from "@/lib/location/oem-battery-guides";
 
 function sevBadge(sev: Severity) {
   if (sev === "high") return <Badge variant="destructive">High</Badge>;
@@ -227,6 +228,9 @@ export default function AgentHealthDetailPage() {
                     // every Android vendor buries this setting somewhere different, so a
                     // generic instruction is unfollowable in the field.
                     const fix = resolveIssueFix(code, { manufacturer: snapshot?.manufacturer });
+                    const guide = isBatteryIssue(code)
+                      ? resolveGuide(snapshot?.manufacturer)
+                      : null;
                     return (
                       <div key={code} className="rounded-lg border border-border p-3">
                         <div className="mb-1 flex items-center gap-2">
@@ -234,16 +238,47 @@ export default function AgentHealthDetailPage() {
                           <span className="text-sm font-semibold text-foreground">{meta.title}</span>
                         </div>
                         <p className="text-sm text-muted-foreground">{meta.cause}</p>
-                        <div className="mt-2 flex items-start justify-between gap-2 rounded-md bg-muted/50 p-2.5">
-                          <p className="whitespace-pre-line text-xs text-foreground">{fix}</p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 shrink-0 px-2 text-xs"
-                            onClick={() => copyFix(fix)}
-                          >
-                            <Copy className="mr-1 size-3" /> Copy
-                          </Button>
+
+                        <div className="mt-2 rounded-md bg-muted/50 p-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            {guide ? (
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  {guide.brand} — do this
+                                </p>
+                                <ol className="mt-1 list-decimal space-y-1 pl-4 text-xs text-foreground">
+                                  {guide.required.map((s, i) => (
+                                    <li key={i}>{s}</li>
+                                  ))}
+                                </ol>
+                              </div>
+                            ) : (
+                              <p className="min-w-0 flex-1 whitespace-pre-line text-xs text-foreground">{fix}</p>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 shrink-0 px-2 text-xs"
+                              onClick={() => copyFix(fix)}
+                            >
+                              <Copy className="mr-1 size-3" /> Copy
+                            </Button>
+                          </div>
+
+                          {/* Kept visually secondary so a rep isn't handed five equal-looking
+                              instructions and left guessing which ones actually matter. */}
+                          {guide && guide.ifStillStopping.length > 0 && (
+                            <details className="mt-2 border-t border-border/60 pt-2">
+                              <summary className="cursor-pointer text-[11px] text-muted-foreground">
+                                Only if it still stops after that ({guide.ifStillStopping.length})
+                              </summary>
+                              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                                {guide.ifStillStopping.map((s, i) => (
+                                  <li key={i}>{s}</li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
                         </div>
                       </div>
                     );

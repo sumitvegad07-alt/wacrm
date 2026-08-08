@@ -146,10 +146,19 @@ export function resolveIssueFix(
   code: IssueCode,
   context?: { manufacturer?: string | null },
 ): string {
-  if (code === "app_stopped_in_background" || code === "os_killed_app" || code === "battery_optimization") {
+  if (isBatteryIssue(code)) {
     return formatOemGuide(context?.manufacturer ?? null);
   }
   return ISSUE_CATALOG[code].fix;
+}
+
+/** Issues whose remedy depends on the phone's brand-specific power manager. */
+export function isBatteryIssue(code: IssueCode): boolean {
+  return (
+    code === "app_stopped_in_background" ||
+    code === "os_killed_app" ||
+    code === "battery_optimization"
+  );
 }
 
 const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, info: 2 };

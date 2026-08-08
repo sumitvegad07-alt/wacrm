@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   APP_NAME,
   getOemGuide,
-  resolveSteps,
+  resolveGuide,
   formatOemGuide,
 } from "./oem-battery-guides";
 
@@ -48,30 +48,67 @@ describe("getOemGuide", () => {
     expect(getOemGuide(null).brand).toBe("Android");
     expect(getOemGuide(undefined).brand).toBe("Android");
   });
+});
 
-  it("every guide has actionable steps", () => {
+describe("required vs optional split", () => {
+  it("keeps the required list short so a rep knows what actually matters", () => {
+    for (const make of ["samsung", "xiaomi", "oppo", "vivo", "oneplus", "pixel", "unknown"]) {
+      const g = getOemGuide(make);
+      expect(g.required.length, `${make} required`).toBeGreaterThanOrEqual(1);
+      expect(g.required.length, `${make} required`).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("needs only ONE step on near-stock Android", () => {
+    for (const make of ["pixel", "motorola", "nothing", "nokia", "unknown"]) {
+      expect(getOemGuide(make).required, `${make}`).toHaveLength(1);
+    }
+  });
+
+  it("needs the autostart/never-sleeping step too on aggressive OEMs", () => {
+    // On these skins the single 'Unrestricted' toggle genuinely does not hold.
+    for (const make of ["samsung", "xiaomi", "oppo", "realme", "vivo", "tecno"]) {
+      expect(getOemGuide(make).required.length, `${make}`).toBe(2);
+    }
+  });
+
+  it("every guide has actionable, non-empty steps", () => {
     for (const make of ["samsung", "xiaomi", "oppo", "vivo", "unknown"]) {
       const g = getOemGuide(make);
-      expect(g.steps.length).toBeGreaterThan(0);
-      for (const s of g.steps) expect(s.trim().length).toBeGreaterThan(10);
+      for (const s of [...g.required, ...g.ifStillStopping]) {
+        expect(s.trim().length).toBeGreaterThan(10);
+      }
     }
   });
 });
 
-describe("resolveSteps", () => {
+describe("resolveGuide", () => {
   it("substitutes the product name everywhere, leaving no placeholder behind", () => {
     for (const make of ["samsung", "xiaomi", "oppo", "realme", "vivo", "oneplus", "tecno", "unknown"]) {
-      const steps = resolveSteps(getOemGuide(make));
-      expect(steps.join(" ")).not.toContain("{app}");
-      expect(steps.join(" ")).not.toMatch(/WACRM/i);
-      expect(steps.some((s) => s.includes("OZZO"))).toBe(true);
+      const g = resolveGuide(make);
+      const blob = [...g.required, ...g.ifStillStopping].join(" ");
+      expect(blob).not.toContain("{app}");
+      expect(blob).not.toMatch(/WACRM/i);
+      expect(blob).toContain("OZZO");
     }
   });
 
   it("honours a custom app name", () => {
-    const steps = resolveSteps(getOemGuide("samsung"), "TestApp");
-    expect(steps.some((s) => s.includes("TestApp"))).toBe(true);
-    expect(steps.join(" ")).not.toContain("OZZO");
+    const g = resolveGuide("samsung", "TestApp");
+    expect(g.required.join(" ")).toContain("TestApp");
+    expect(g.required.join(" ")).not.toContain("OZZO");
+  });
+});
+
+describe("formatOemGuide", () => {
+  it("separates what must be done from what's only needed if it persists", () => {
+    const text = formatOemGuide("samsung");
+    expect(text).toContain("Samsung (One UI)");
+    expect(text).toContain("Do this:");
+    expect(text).toContain("Only if it still stops:");
+    expect(text).toContain("1. ");
+    expect(text).toContain("OZZO");
+    expect(text).not.toContain("{app}");
   });
 });
 
@@ -81,19 +118,8 @@ describe("agent-facing copy branding", () => {
     for (const [code, meta] of Object.entries(ISSUE_CATALOG)) {
       const blob = `${meta.title} ${meta.cause} ${meta.fix}`;
       expect(blob, `issue "${code}"`).not.toMatch(/WACRM/i);
-      // and the per-device resolved fix too
       const resolved = resolveIssueFix(code as never, { manufacturer: "samsung" });
       expect(resolved, `resolved fix for "${code}"`).not.toMatch(/WACRM/i);
     }
-  });
-});
-
-describe("formatOemGuide", () => {
-  it("renders numbered steps under the brand heading", () => {
-    const text = formatOemGuide("samsung");
-    expect(text.startsWith("Samsung (One UI):")).toBe(true);
-    expect(text).toContain("1. ");
-    expect(text).toContain("OZZO");
-    expect(text).not.toContain("{app}");
   });
 });

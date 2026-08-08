@@ -9,8 +9,8 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { ChevronRight, HeartPulse, AlertTriangle, UserCheck, MoonStar } from "lucide-react";
-import { computeAgentHealth, type AgentHealth } from "@/lib/location/tracking-health";
-import { ISSUE_CATALOG, type Severity } from "@/lib/location/tracking-issues";
+import { computeAgentHealth, LOW_COVERAGE_PCT, type AgentHealth } from "@/lib/location/tracking-health";
+import { ISSUE_CATALOG } from "@/lib/location/tracking-issues";
 import { normalizeTrackingSettings } from "@/lib/location/tracking-window";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -21,11 +21,21 @@ interface HealthRow extends AgentHealth {
   devicePending: boolean;
 }
 
-function severityBadge(sev: Severity | null) {
-  if (sev === null) return <Badge variant="success">Healthy</Badge>;
-  if (sev === "high") return <Badge variant="destructive">Needs attention</Badge>;
-  if (sev === "medium") return <Badge variant="warning">Check</Badge>;
-  return <Badge variant="neutral">Info</Badge>;
+/**
+ * An agent needs attention when we detected a high-severity problem OR when the day simply
+ * isn't well covered. Coverage alone matters: a shift that recorded under LOW_COVERAGE_PCT of
+ * its expected locations isn't a usable record even if no single gap could be attributed.
+ */
+function needsAttention(row: HealthRow): boolean {
+  if (row.worstSeverity === "high") return true;
+  return row.punchedIn && row.expectedPings > 0 && row.coveragePct < LOW_COVERAGE_PCT;
+}
+
+function statusBadge(row: HealthRow) {
+  if (needsAttention(row)) return <Badge variant="destructive">Needs attention</Badge>;
+  if (row.worstSeverity === "medium") return <Badge variant="warning">Check</Badge>;
+  if (row.worstSeverity === "info") return <Badge variant="neutral">Info</Badge>;
+  return <Badge variant="success">Healthy</Badge>;
 }
 
 export default function TrackingHealthPage() {
@@ -162,9 +172,9 @@ export default function TrackingHealthPage() {
       });
     });
 
-    // Worst first: high → medium → info → healthy.
+    // Worst first: needs-attention → medium → info → healthy.
     const rank = (r: HealthRow) =>
-      r.worstSeverity === "high" ? 0 : r.worstSeverity === "medium" ? 1 : r.worstSeverity === "info" ? 2 : 3;
+      needsAttention(r) ? 0 : r.worstSeverity === "medium" ? 1 : r.worstSeverity === "info" ? 2 : 3;
     built.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 
     setRows(built);
@@ -173,8 +183,8 @@ export default function TrackingHealthPage() {
   };
 
   const summary = useMemo(() => {
-    const needAttention = rows.filter((r) => r.worstSeverity === "high").length;
-    const healthy = rows.filter((r) => r.worstSeverity === null).length;
+    const needAttention = rows.filter(needsAttention).length;
+    const healthy = rows.filter((r) => !needsAttention(r) && r.worstSeverity === null).length;
     const onDuty = rows.filter((r) => r.punchedIn).length;
     return { needAttention, healthy, onDuty };
   }, [rows]);
@@ -195,7 +205,7 @@ export default function TrackingHealthPage() {
       label: "Coverage",
       type: "text",
       render: (row) => (
-        <span className={row.coveragePct < 80 ? "font-semibold text-warning" : ""}>
+        <span className={row.coveragePct < LOW_COVERAGE_PCT ? "font-semibold text-destructive" : row.coveragePct < 80 ? "font-semibold text-warning" : ""}>
           {row.punchedIn ? `${row.coveragePct}%` : "—"}
         </span>
       ),
@@ -204,7 +214,7 @@ export default function TrackingHealthPage() {
       id: "status",
       label: "Status",
       type: "text",
-      render: (row) => severityBadge(row.worstSeverity),
+      render: (row) => statusBadge(row),
     },
     {
       id: "issue",

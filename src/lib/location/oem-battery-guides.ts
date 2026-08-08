@@ -6,8 +6,15 @@
  * this in a different place under a different name, so generic "set it to Unrestricted" advice
  * is unfollowable on the phones our reps actually carry.
  *
+ * Steps are split deliberately:
+ *  - `required`  — do these. On stock Android that is genuinely ONE step. On Xiaomi, Oppo, Vivo,
+ *                  Samsung and the Transsion brands a second one (Autostart / never-sleeping) is
+ *                  also genuinely required; the single step does not hold there.
+ *  - `ifStillStopping` — only needed when tracking still drops after the required steps. Keeping
+ *                  these separate stops a rep being handed five equal-looking instructions and
+ *                  not knowing which actually matter.
+ *
  * MUST stay in sync with the mobile copy at `wacrm-mobile/lib/oem-battery-guides.ts`.
- * Steps are ordered and written to be followed literally by a non-technical field agent.
  */
 
 /** Product name shown to users. The app's launcher label must match this, or the steps below
@@ -17,8 +24,10 @@ export const APP_NAME = "OZZO";
 export interface OemGuide {
   /** Human label for the phone brand/skin, e.g. "Samsung (One UI)". */
   brand: string;
-  /** Ordered, literal steps. `{app}` is substituted with the product name. */
-  steps: string[];
+  /** Must be done. 1 step on stock Android, 2 on aggressive OEMs. `{app}` is substituted. */
+  required: string[];
+  /** Extra hardening, only if tracking still stops after the required steps. */
+  ifStillStopping: string[];
 }
 
 const GUIDES: { match: string[]; guide: OemGuide }[] = [
@@ -26,11 +35,13 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["samsung"],
     guide: {
       brand: "Samsung (One UI)",
-      steps: [
+      required: [
         "Settings → Apps → {app} → Battery → choose “Unrestricted”.",
-        "Settings → Battery → Background usage limits → turn OFF “Put unused apps to sleep” and “Auto-disable unused apps”.",
-        "In the same screen, open “Never sleeping apps” → add {app}.",
-        "Settings → Device care → Auto-optimisation → turn OFF “Restart when needed” (if present).",
+        "Settings → Battery → Background usage limits → “Never sleeping apps” → add {app}.",
+      ],
+      ifStillStopping: [
+        "In the same Background usage limits screen, turn OFF “Put unused apps to sleep” and “Auto-disable unused apps”.",
+        "Settings → Device care → Auto-optimisation → turn OFF “Restart when needed”.",
       ],
     },
   },
@@ -38,9 +49,11 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["xiaomi", "redmi", "poco"],
     guide: {
       brand: "Xiaomi / Redmi / POCO (MIUI / HyperOS)",
-      steps: [
+      required: [
         "Settings → Apps → Manage apps → {app} → Battery saver → choose “No restrictions”.",
         "In the same {app} screen → turn ON “Autostart”.",
+      ],
+      ifStillStopping: [
         "Open Recent apps, swipe DOWN on the {app} card and tap the padlock so it isn’t cleared from memory.",
         "Settings → Battery → turn OFF “Battery saver” during work hours.",
       ],
@@ -50,9 +63,11 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["oppo"],
     guide: {
       brand: "Oppo (ColorOS)",
-      steps: [
-        "Settings → Battery → App battery management → {app} → turn ON “Allow background activity” / “Allow foreground activity”.",
+      required: [
+        "Settings → Battery → App battery management → {app} → turn ON “Allow background activity”.",
         "Settings → Apps → App management → {app} → turn ON “Allow auto startup”.",
+      ],
+      ifStillStopping: [
         "Settings → Battery → turn OFF “Smart power saver” / “Super power saving”.",
         "In Recent apps, lock the {app} card so it survives memory cleanups.",
       ],
@@ -62,9 +77,11 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["realme"],
     guide: {
       brand: "Realme (realme UI)",
-      steps: [
+      required: [
         "Settings → Battery → App battery management → {app} → turn ON “Allow background activity”.",
         "Settings → Apps → App management → {app} → turn ON “Auto-start”.",
+      ],
+      ifStillStopping: [
         "Settings → Battery → turn OFF “Smart power saving” during work hours.",
         "In Recent apps, lock the {app} card.",
       ],
@@ -74,9 +91,11 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["vivo", "iqoo"],
     guide: {
       brand: "Vivo / iQOO (Funtouch OS / OriginOS)",
-      steps: [
+      required: [
         "Settings → Battery → Background power consumption management → {app} → “Allow high background power consumption”.",
-        "Settings → Apps → Autostart (or Permissions → Autostart) → turn ON for {app}.",
+        "Settings → Apps → Autostart → turn ON for {app}.",
+      ],
+      ifStillStopping: [
         "Settings → Battery → turn OFF “Low power mode” during work hours.",
         "In Recent apps, lock the {app} card.",
       ],
@@ -86,9 +105,11 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["oneplus"],
     guide: {
       brand: "OnePlus (OxygenOS)",
-      steps: [
+      required: [
         "Settings → Apps → {app} → Battery → “Unrestricted” (or Battery optimization → “Don’t optimize”).",
-        "Settings → Battery → Advanced settings/Optimization → turn OFF “Sleep standby optimization” and “Deep optimization”.",
+      ],
+      ifStillStopping: [
+        "Settings → Battery → Advanced settings → turn OFF “Sleep standby optimization” and “Deep optimization”.",
         "In Recent apps, lock the {app} card.",
       ],
     },
@@ -97,9 +118,10 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["huawei"],
     guide: {
       brand: "Huawei (EMUI)",
-      steps: [
-        "Settings → Battery → App launch → {app} → switch from “Manage automatically” to “Manage manually”.",
-        "Enable all three: “Auto-launch”, “Secondary launch” and “Run in background”.",
+      required: [
+        "Settings → Battery → App launch → {app} → switch to “Manage manually” and enable “Auto-launch”, “Secondary launch” and “Run in background”.",
+      ],
+      ifStillStopping: [
         "Settings → Battery → turn OFF “Power saving mode” during work hours.",
       ],
     },
@@ -108,9 +130,10 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["honor"],
     guide: {
       brand: "Honor (MagicOS)",
-      steps: [
-        "Settings → Battery → App launch → {app} → set to “Manage manually”.",
-        "Enable “Auto-launch”, “Secondary launch” and “Run in background”.",
+      required: [
+        "Settings → Battery → App launch → {app} → set to “Manage manually” and enable “Auto-launch”, “Secondary launch” and “Run in background”.",
+      ],
+      ifStillStopping: [
         "Settings → Battery → turn OFF “Power saving mode” during work hours.",
       ],
     },
@@ -120,10 +143,12 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["tecno", "infinix", "itel", "transsion"],
     guide: {
       brand: "Tecno / Infinix / itel (HiOS / XOS)",
-      steps: [
-        "Settings → Battery → Background app management (or Power Saving) → {app} → “Allow background running”.",
+      required: [
+        "Settings → Battery → Background app management → {app} → “Allow background running”.",
         "Settings → Apps → Auto-start management → turn ON for {app}.",
-        "Phone Master / Power Marathon app → Protected apps → add {app}.",
+      ],
+      ifStillStopping: [
+        "Open Phone Master / Power Marathon → Protected apps → add {app}.",
         "In Recent apps, lock the {app} card.",
       ],
     },
@@ -132,58 +157,52 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["asus"],
     guide: {
       brand: "Asus (ZenUI)",
-      steps: [
-        "Settings → Battery → PowerMaster → Auto-start manager → allow {app}.",
+      required: [
         "Settings → Apps → {app} → Battery → “Unrestricted” / “Don’t optimize”.",
       ],
+      ifStillStopping: ["Settings → Battery → PowerMaster → Auto-start manager → allow {app}."],
     },
   },
   {
     match: ["sony"],
     guide: {
       brand: "Sony (Xperia)",
-      steps: [
-        "Settings → Battery → STAMINA mode → turn OFF during work hours.",
+      required: [
         "Settings → Apps → {app} → Battery → “Unrestricted” (Battery optimisation → “Don’t optimise”).",
       ],
+      ifStillStopping: ["Settings → Battery → turn OFF STAMINA mode during work hours."],
     },
   },
   {
     match: ["motorola", "moto", "lenovo"],
     guide: {
       brand: "Motorola / Lenovo",
-      steps: [
-        "Settings → Apps → {app} → Battery → “Unrestricted”.",
-        "Settings → Battery → Battery optimization → {app} → “Don’t optimize”.",
-      ],
+      required: ["Settings → Apps → {app} → Battery → “Unrestricted”."],
+      ifStillStopping: ["Settings → Battery → Battery optimization → {app} → “Don’t optimize”."],
     },
   },
   {
     match: ["nothing"],
     guide: {
       brand: "Nothing (Nothing OS)",
-      steps: [
-        "Settings → Apps → {app} → App battery usage → “Unrestricted”.",
-        "Settings → Battery → turn OFF “Battery saver” during work hours.",
-      ],
+      required: ["Settings → Apps → {app} → App battery usage → “Unrestricted”."],
+      ifStillStopping: ["Settings → Battery → turn OFF “Battery saver” during work hours."],
     },
   },
   {
     match: ["google", "pixel"],
     guide: {
       brand: "Google Pixel",
-      steps: [
-        "Settings → Apps → {app} → App battery usage → “Unrestricted”.",
-        "Settings → Battery → turn OFF “Adaptive Battery” if tracking still stops.",
-      ],
+      required: ["Settings → Apps → {app} → App battery usage → “Unrestricted”."],
+      ifStillStopping: ["Settings → Battery → turn OFF “Adaptive Battery”."],
     },
   },
   {
     match: ["nokia", "hmd"],
     guide: {
       brand: "Nokia / HMD",
-      steps: [
-        "Settings → Apps → {app} → Battery → “Unrestricted”.",
+      required: ["Settings → Apps → {app} → Battery → “Unrestricted”."],
+      ifStillStopping: [
         "Settings → Battery → Adaptive preferences → turn OFF “Adaptive Battery”.",
       ],
     },
@@ -192,10 +211,12 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
     match: ["lava", "micromax", "karbonn"],
     guide: {
       brand: "Lava / Micromax / Karbonn",
-      steps: [
+      required: [
         "Settings → Apps → {app} → Battery → “Unrestricted” / “Don’t optimize”.",
+      ],
+      ifStillStopping: [
+        "If the phone has an “Autostart” or “Protected apps” list, add {app} to it.",
         "Settings → Battery → turn OFF any battery saver during work hours.",
-        "If the phone has an Autostart or Protected apps list, add {app}.",
       ],
     },
   },
@@ -203,10 +224,12 @@ const GUIDES: { match: string[]; guide: OemGuide }[] = [
 
 const FALLBACK: OemGuide = {
   brand: "Android",
-  steps: [
+  required: [
     "Settings → Apps → {app} → Battery → choose “Unrestricted” (or Battery optimization → “Don’t optimize”).",
-    "Settings → Battery → turn OFF battery saver / power saving during work hours.",
+  ],
+  ifStillStopping: [
     "If the phone has an “Autostart”, “Protected apps” or “Never sleeping apps” list, add {app} to it.",
+    "Settings → Battery → turn OFF battery saver / power saving during work hours.",
     "In Recent apps, lock the {app} card so it isn’t cleared from memory.",
   ],
 };
@@ -222,16 +245,29 @@ export function getOemGuide(manufacturer?: string | null): OemGuide {
   return FALLBACK;
 }
 
-/** Substitute the product name into a guide's steps. */
-export function resolveSteps(guide: OemGuide, appName: string = APP_NAME): string[] {
-  return guide.steps.map((s) => s.split("{app}").join(appName));
+const sub = (steps: string[], appName: string) =>
+  steps.map((s) => s.split("{app}").join(appName));
+
+/** Guide with `{app}` resolved, ready to render. */
+export function resolveGuide(
+  manufacturer?: string | null,
+  appName: string = APP_NAME,
+): OemGuide {
+  const g = getOemGuide(manufacturer);
+  return {
+    brand: g.brand,
+    required: sub(g.required, appName),
+    ifStillStopping: sub(g.ifStillStopping, appName),
+  };
 }
 
-/** One-paragraph rendering for compact UI / clipboard. */
-export function formatOemGuide(manufacturer?: string | null, appName: string = APP_NAME): string {
-  const guide = getOemGuide(manufacturer);
-  const steps = resolveSteps(guide, appName)
-    .map((s, i) => `${i + 1}. ${s}`)
-    .join("\n");
-  return `${guide.brand}:\n${steps}`;
+/** Flat plain-text rendering, used for clipboard and compact UI. */
+export function formatOemGuide(
+  manufacturer?: string | null,
+  appName: string = APP_NAME,
+): string {
+  const g = resolveGuide(manufacturer, appName);
+  const required = g.required.map((s, i) => `${i + 1}. ${s}`).join("\n");
+  const extra = g.ifStillStopping.map((s) => `• ${s}`).join("\n");
+  return `${g.brand}\n\nDo this:\n${required}\n\nOnly if it still stops:\n${extra}`;
 }

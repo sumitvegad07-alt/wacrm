@@ -16,6 +16,14 @@ export const GAP_THRESHOLD_MIN = 20;
 /** Battery at/below this just before tracking stops implies the phone died. */
 const LOW_BATTERY_PCT = 10;
 
+/**
+ * Coverage below this counts as needing attention on its own, even when no single gap could be
+ * attributed to a specific cause. Founder decision: a shift that recorded under 60% of its
+ * expected locations is not a usable record, so surface it rather than waiting for a
+ * high-severity issue to be detected.
+ */
+export const LOW_COVERAGE_PCT = 60;
+
 export interface HealthSession {
   started_at: string;
   ended_at: string | null;
