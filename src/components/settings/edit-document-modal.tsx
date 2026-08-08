@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +16,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Pencil } from 'lucide-react';
-import { updateKnowledgeDocument } from '@/app/(dashboard)/settings/ai/actions';
 import { toast } from 'sonner';
 
 interface EditDocumentModalProps {
@@ -30,12 +30,17 @@ export function EditDocumentModal({ document, onSuccess }: EditDocumentModalProp
   const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
-    const formData = new FormData(form);
+    const supabase = createClient();
     setIsPending(true);
     try {
-      const result = await updateKnowledgeDocument(document.id, formData);
-      if (result?.error) {
-        toast.error(result.error);
+      const title = (form.elements.namedItem('title') as HTMLInputElement)?.value;
+      const content = (form.elements.namedItem('content') as HTMLTextAreaElement)?.value;
+      const { error } = await supabase
+        .from('knowledge_documents')
+        .update({ title, content_text: content, updated_at: new Date().toISOString() })
+        .eq('id', document.id);
+      if (error) {
+        toast.error(error.message || 'Failed to update document');
         return;
       }
       toast.success('Document updated successfully');

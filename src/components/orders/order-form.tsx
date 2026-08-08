@@ -16,6 +16,7 @@ import { Loader2, Plus, Trash2, AlertTriangle, ArrowLeft, ShoppingCart } from 'l
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
+import { cn } from '@/lib/utils';
 
 /**
  * Web order creation. The ONE pricing authority is the SQL function
@@ -158,6 +159,9 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const [discountMode, setDiscountMode] = useState<DiscountMode>('off');
   const [discountValueType, setDiscountValueType] = useState<DiscountValueType>('both');
   const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive');
+  const [gstEnabled, setGstEnabled] = useState(false);
+  const [companyState, setCompanyState] = useState('');
+  const [customerState, setCustomerState] = useState('');
 
   const [contactId, setContactId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -215,6 +219,8 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       setDiscountMode(((acct?.settings?.order_settings?.discount_mode as DiscountMode) ?? 'off'));
       setDiscountValueType(((acct?.settings?.order_settings?.discount_value_type as DiscountValueType) ?? 'both'));
       setTaxMode(((acct?.settings?.order_settings?.tax_mode as 'exclusive' | 'inclusive') ?? 'exclusive'));
+      setGstEnabled(!!acct?.settings?.gst_enabled);
+      setCompanyState((acct?.settings?.company_profile?.state || '').trim().toLowerCase());
 
       if (isEdit && orderId) {
         // ---- EDIT: load the order + its line items ----
@@ -337,7 +343,31 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [accountId, contactId, pricingInputs, supabase]);
 
-  // priced line aligned to each product-bearing input row, in order
+  // ---- Auto-compute GST type based on company vs customer state ----
+  // When contactId changes, load that contact's state and compare with company's state.
+  useEffect(() => {
+    if (!gstEnabled || !contactId || !accountId) {
+      setCustomerState('');
+      return;
+    }
+    let alive = true;
+    supabase
+      .from('contacts')
+      .select('state')
+      .eq('id', contactId)
+      .single()
+      .then(({ data }) => {
+        if (!alive) return;
+        setCustomerState((data?.state || '').trim().toLowerCase());
+      });
+    return () => { alive = false; };
+  }, [contactId, gstEnabled, accountId, supabase]);
+
+  // Derived: IGST when states differ (or either is empty); SGST+CGST when same non-empty state
+  const gstType: 'igst' | 'sgst_cgst' =
+    gstEnabled && companyState && customerState && companyState === customerState
+      ? 'sgst_cgst'
+      : 'igst';
   const pricedByKey = useMemo(() => {
     const map = new Map<string, PricedLine>();
     if (!pricing) return map;
@@ -686,13 +716,47 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
             )}
 
 
+            {/* GST Type selector — shown only when GST is enabled for this account */}
+            {gstEnabled && (
+              <div className="flex items-center gap-3 text-sm">
+                <span className="text-muted-foreground font-medium">GST Type:</span>
+                <div className="flex gap-3">
+                  {(['igst', 'sgst_cgst'] as const).map((type) => (
+                    <label key={type} className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <span className={cn(
+                        'flex h-4 w-4 items-center justify-center rounded-full border transition-colors',
+                        gstType === type ? 'border-primary bg-primary/10' : 'border-muted-foreground/40 bg-background'
+                      )}>
+                        {gstType === type && <span className="h-2 w-2 rounded-full bg-primary" />}
+                      </span>
+                      <span className={cn('text-xs font-medium', gstType === type ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
+                        {type === 'igst' ? 'IGST (Interstate)' : 'SGST + CGST (Intrastate)'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Totals */}
             <div className="rounded-lg bg-muted/40 border border-border p-4 space-y-1.5 text-sm">
               <Row label="Sub-total" value={pricing ? money(pricing.sub_total) : '—'} />
               {pricing && pricing.discount_total > 0 && (
                 <Row label="Discount" value={`− ${money(pricing.discount_total)}`} accent />
               )}
-              <Row label="Tax" value={pricing ? money(pricing.tax_total) : '—'} />
+              {/* GST breakdown */}
+              {gstEnabled && pricing && pricing.tax_total > 0 ? (
+                gstType === 'igst' ? (
+                  <Row label="IGST" value={money(pricing.tax_total)} />
+                ) : (
+                  <>
+                    <Row label="SGST" value={money(pricing.tax_total / 2)} />
+                    <Row label="CGST" value={money(pricing.tax_total / 2)} />
+                  </>
+                )
+              ) : (
+                <Row label="Tax" value={pricing ? money(pricing.tax_total) : '—'} />
+              )}
               <div className="border-t border-border pt-2 mt-1">
                 <Row label="Total" value={pricing ? money(pricing.total_amount) : '—'} bold />
               </div>

@@ -1,9 +1,10 @@
 import { DocumentTemplateEditor } from "@/components/settings/document-templates/document-template-editor";
 
-export default function EditDocumentTemplatePage({
+export default async function EditDocumentTemplatePage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  return <DocumentTemplateEditor templateId={params.id} />;
+  const { id } = await params;
+  return <DocumentTemplateEditor templateId={id} />;
 }

@@ -13,6 +13,10 @@ import {
   FilterState,
 } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
+import {
+  PING_SOURCE_OPTIONS,
+  pingSourceLabel,
+} from '@/lib/location/ping-source';
 
 export default function AllLocationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +53,7 @@ export default function AllLocationsPage() {
         lng,
         battery_pct,
         recorded_at,
+        source,
         profiles ( full_name, role )
       `
       )
@@ -135,7 +140,8 @@ export default function AllLocationsPage() {
           distance: distanceKm.toFixed(2),
           duration: durationStr,
           battery: p.battery_pct !== null ? `${p.battery_pct}%` : '-',
-          status: 'Regular',
+          // What produced this point. Rows written before `source` existed read as 'auto'.
+          source: (p as any).source ?? 'auto',
         };
       });
 
@@ -189,17 +195,15 @@ export default function AllLocationsPage() {
       render: (row) => <span>{row.battery}</span>,
     },
     {
-      id: 'status',
-      label: 'Status',
+      id: 'source',
+      label: 'Type',
       type: 'select',
-      options: [{ label: 'Regular', value: 'Regular' }],
-      render: (row) => (
-        <Badge
-          className="bg-emerald-600 text-white shadow-sm border-transparent font-medium"
-        >
-          {row.status}
-        </Badge>
-      ),
+      visibleByDefault: true,
+      options: PING_SOURCE_OPTIONS,
+      render: (row) => {
+        const { label, tone } = pingSourceLabel(row.source);
+        return <Badge variant={tone}>{label}</Badge>;
+      },
     },
     {
       id: 'actions',
@@ -241,8 +245,8 @@ export default function AllLocationsPage() {
         } else if (colId === 'role') {
           if (!row.role.toLowerCase().includes((val as string).toLowerCase()))
             return false;
-        } else if (colId === 'status') {
-          if (!(val as string[]).includes(row.status)) return false;
+        } else if (colId === 'source') {
+          if (!(val as string[]).includes(row.source)) return false;
         } else if (colId === 'date') {
           if (!isDateInFilter(row.rawDate, val as string | string[]))
             return false;

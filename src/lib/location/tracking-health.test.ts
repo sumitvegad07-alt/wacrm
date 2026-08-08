@@ -38,7 +38,13 @@ describe("computeAgentHealth", () => {
   const localAt = (h: number, m = 0) => new Date(2026, 7, 7, h, m, 0).valueOf();
 
   it("escalates a missing punch-in to 'late' once the configured window has started", () => {
-    const window = { enabled: true, start_time: "09:00", end_time: "18:00", interval_minutes: 10 };
+    const window = {
+      enabled: true,
+      start_time: "09:00",
+      end_time: "18:00",
+      interval_minutes: 10,
+      grace_minutes: 15,
+    };
 
     // 08:00 local — before the shift starts: still just neutral info.
     const early = computeAgentHealth({
@@ -65,7 +71,13 @@ describe("computeAgentHealth", () => {
 
     const disabled = computeAgentHealth({
       sessions: [], pings: [], events: [], latestSnapshot: null,
-      trackingSettings: { enabled: false, start_time: "09:00", end_time: "18:00", interval_minutes: 10 },
+      trackingSettings: {
+        enabled: false,
+        start_time: "09:00",
+        end_time: "18:00",
+        interval_minutes: 10,
+        grace_minutes: 15,
+      },
       nowMs: localAt(11),
     });
     expect(disabled.issueCodes).toContain("not_punched_in");

@@ -70,6 +70,7 @@ export const ROUTE_PERMISSION_GROUPS: {
       { key: ROUTE_PERMISSIONS.VIEW_HEALTH, label: 'View route health' },
       { key: ROUTE_PERMISSIONS.VIEW_EXECUTIONS, label: 'View route executions' },
       { key: ROUTE_PERMISSIONS.EXECUTE, label: 'Run routes (start / complete)' },
+      { key: ROUTE_PERMISSIONS.SKIP_STOP, label: 'Skip route stop' },
       { key: ROUTE_PERMISSIONS.RESTRICT_OFF_ROUTE, label: 'Restrict off-route visits' },
     ],
   },

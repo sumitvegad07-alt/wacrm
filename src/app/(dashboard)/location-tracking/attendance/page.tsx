@@ -11,8 +11,20 @@ import Link from "next/link";
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
+import { useAuth } from "@/hooks/use-auth";
+import { DEFAULT_TRACKING, formatHHMM, normalizeTrackingSettings } from "@/lib/location/tracking-window";
+import {
+  ATTENDANCE_STATUS_OPTIONS,
+  attendanceBadges,
+  attendanceMatchLabels,
+  attendancePrimaryLabel,
+  computeAttendanceDay,
+  formatWorkedMinutes,
+  type AttendanceTone,
+} from "@/lib/location/attendance-status";
 
 export default function UserAttendancePage() {
+  const { accountId } = useAuth();
   const [activeTab, setActiveTab] = useState("Punch in");
   const [globalSearch, setGlobalSearch] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -20,16 +32,20 @@ export default function UserAttendancePage() {
   const [usersSummaryData, setUsersSummaryData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterState, setFilterState] = useState<FilterState>({});
+  const [shift, setShift] = useState(DEFAULT_TRACKING);
   
   const supabase = createClient();
 
   useEffect(() => {
     fetchAttendance();
-  }, [selectedDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, accountId]);
 
   const fetchAttendance = async () => {
+    // accountId arrives asynchronously from useAuth; querying before it lands sends id=eq.null.
+    if (!accountId) return;
     setIsLoading(true);
-    
+
     const { data: profiles } = await supabase
       .from('profiles')
       .select('user_id, full_name, avatar_url');
@@ -39,6 +55,15 @@ export default function UserAttendancePage() {
       setIsLoading(false);
       return;
     }
+
+    // The company's shift timings. These classify attendance only — they never gate tracking.
+    const { data: acct } = await supabase
+      .from('accounts')
+      .select('settings')
+      .eq('id', accountId)
+      .maybeSingle();
+    const shiftSettings = normalizeTrackingSettings((acct as any)?.settings?.tracking_settings);
+    setShift(shiftSettings);
 
     const startOfMonth = new Date(selectedDate);
     startOfMonth.setDate(1);
@@ -64,34 +89,35 @@ export default function UserAttendancePage() {
       new Date(s.started_at) >= startOfDay && new Date(s.started_at) <= endOfDay
     ) || [];
 
+    const day = new Date(selectedDate);
+    const asTime = (iso: string | null) =>
+      iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : "-";
+
     const formattedDaily = profiles.map(p => {
-      const session = dailySessions.find(s => s.user_id === p.user_id);
-      
-      let durationStr = "-";
-      if (session && session.ended_at) {
-        const diffMs = new Date(session.ended_at).getTime() - new Date(session.started_at).getTime();
-        const diffMins = Math.round(diffMs / 60000);
-        const hrs = Math.floor(diffMins / 60);
-        const mins = diffMins % 60;
-        durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}min`;
-      } else if (session) {
-        const diffMs = new Date().getTime() - new Date(session.started_at).getTime();
-        const diffMins = Math.round(diffMs / 60000);
-        const hrs = Math.floor(diffMins / 60);
-        const mins = diffMins % 60;
-        durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}min`;
-      }
+      // Every session the rep started today, not just the first — a lunch break makes two.
+      const userSessions = dailySessions.filter(s => s.user_id === p.user_id);
+      const attendance = computeAttendanceDay({
+        sessions: userSessions,
+        day,
+        settings: shiftSettings,
+      });
+
+      // The selfie belongs to the first punch-in of the day.
+      const firstSession = [...userSessions].sort(
+        (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
+      )[0];
 
       return {
         id: p.user_id,
         name: p.full_name || "Unknown",
-        rawPunchIn: session ? session.started_at : null,
-        rawPunchOut: session?.ended_at || null,
-        punchIn: session ? new Date(session.started_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : "-",
-        punchOut: session?.ended_at ? new Date(session.ended_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : "-",
-        duration: durationStr,
-        status: session ? "Present" : "Absent",
-        img: session?.punch_in_photo_url || null
+        rawPunchIn: attendance.firstPunchIn,
+        rawPunchOut: attendance.lastPunchOut,
+        punchIn: asTime(attendance.firstPunchIn),
+        punchOut: asTime(attendance.lastPunchOut),
+        duration: formatWorkedMinutes(attendance.workedMinutes),
+        attendance,
+        status: attendancePrimaryLabel(attendance),
+        img: firstSession?.punch_in_photo_url || null
       };
     });
     setAttendanceData(formattedDaily);
@@ -110,35 +136,44 @@ export default function UserAttendancePage() {
       return count;
     };
 
-    const isLate = (dateStr: string) => {
-      const d = new Date(dateStr);
-      return d.getHours() > 9 || (d.getHours() === 9 && d.getMinutes() > 30);
-    };
-
-    const isEarlyLeave = (dateStr: string | null) => {
-      if (!dateStr) return false;
-      const d = new Date(dateStr);
-      return d.getHours() < 18 || (d.getHours() === 18 && d.getMinutes() < 30);
-    };
-
     const totalWorkingDays = getWorkingDays(selectedDate);
+
+    /** Local YYYY-MM-DD. Deliberately not toISOString(), which shifts a late-evening punch-in
+     *  into the next day for anyone east of UTC and would mis-bucket the whole month. */
+    const localDayKey = (iso: string) => {
+      const d = new Date(iso);
+      return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    };
+
     const summaryFormatted = profiles.map(p => {
       const userSessions = monthSessions?.filter(s => s.user_id === p.user_id) || [];
-      const uniqueDays = new Set(userSessions.map(s => new Date(s.started_at).toISOString().split('T')[0]));
-      const present = uniqueDays.size;
-      const absent = Math.max(0, totalWorkingDays - present);
-      
-      const lateStart = userSessions.filter(s => isLate(s.started_at)).length;
-      const earlyLeave = userSessions.filter(s => s.ended_at && isEarlyLeave(s.ended_at)).length;
-      const presencePct = totalWorkingDays > 0 ? Math.round((present / totalWorkingDays) * 100) + '%' : '0%';
-      
-      let shortPresent = 0;
+
+      // Group the month's sessions by the day they started on, then classify each day with the
+      // same engine the daily tab uses — so the columns here can never disagree with that view.
+      const byDay = new Map<string, typeof userSessions>();
       userSessions.forEach(s => {
-          if (s.ended_at) {
-              const diffHours = (new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / (1000 * 60 * 60);
-              if (diffHours < 8) shortPresent++;
-          }
+        const key = localDayKey(s.started_at);
+        if (!byDay.has(key)) byDay.set(key, []);
+        byDay.get(key)!.push(s);
       });
+
+      let lateStart = 0;
+      let earlyLeave = 0;
+      let shortPresent = 0;
+      byDay.forEach(sessions => {
+        const d = computeAttendanceDay({
+          sessions,
+          day: new Date(sessions[0].started_at),
+          settings: shiftSettings,
+        });
+        if (d.flags.includes('late_start')) lateStart++;
+        if (d.flags.includes('early_leaving')) earlyLeave++;
+        if (d.status === 'short_present') shortPresent++;
+      });
+
+      const present = byDay.size;
+      const absent = Math.max(0, totalWorkingDays - present);
+      const presencePct = totalWorkingDays > 0 ? Math.round((present / totalWorkingDays) * 100) + '%' : '0%';
 
       return {
         id: p.user_id,
@@ -186,16 +221,17 @@ export default function UserAttendancePage() {
     },
     {
       id: "status",
-      label: "Present/Absent",
+      label: "Attendance",
       type: "select",
-      options: [
-        { label: "Present", value: "Present" },
-        { label: "Absent", value: "Absent" }
-      ],
+      options: ATTENDANCE_STATUS_OPTIONS,
       render: (row) => (
-        <Badge className={row.status === "Present" ? "bg-emerald-600 text-white shadow-sm border-transparent font-medium" : "bg-red-600 text-white shadow-sm border-transparent font-medium"}>
-          {row.status}
-        </Badge>
+        // A day can be several things at once (Short Present AND Late Start AND Early Leaving);
+        // showing only the first would hide exactly what the admin needs to act on.
+        <div className="flex flex-wrap items-center gap-1">
+          {attendanceBadges(row.attendance).map((b: { key: string; label: string; tone: AttendanceTone }) => (
+            <Badge key={b.key} variant={b.tone}>{b.label}</Badge>
+          ))}
+        </div>
       )
     },
     {
@@ -316,7 +352,9 @@ export default function UserAttendancePage() {
         if (colId === "name") {
           if (!row.name.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "status") {
-          if (!(val as string[]).includes(row.status)) return false;
+          // Match the status OR any flag, so "Late Start" finds a Present-but-late day too.
+          const labels = attendanceMatchLabels(row.attendance);
+          if (!(val as string[]).some((v) => labels.includes(v))) return false;
         } else if (colId === "punchIn") {
           if (!isDateInFilter(row.rawPunchIn, val as string | string[])) return false;
         } else if (colId === "punchOut") {
@@ -351,7 +389,30 @@ export default function UserAttendancePage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">User Attendance</h1>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">User Attendance</h1>
+          {/* Make the rule visible. Without this, "Late Start" is an unexplained accusation. */}
+          <p className="mt-1 text-sm text-muted-foreground">
+            {shift.enabled ? (
+              <>
+                Measured against the{" "}
+                <Link href="/settings" className="text-primary hover:underline">
+                  configured shift
+                </Link>{" "}
+                {formatHHMM(shift.start_time)} – {formatHHMM(shift.end_time)}
+                {shift.grace_minutes > 0 && <> with {shift.grace_minutes} min grace</>}.
+              </>
+            ) : (
+              <>
+                Shift timings are off, so only Present/Absent is shown. Turn them on in{" "}
+                <Link href="/settings" className="text-primary hover:underline">
+                  Organisation Settings
+                </Link>
+                .
+              </>
+            )}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <Input 
             type="date" 

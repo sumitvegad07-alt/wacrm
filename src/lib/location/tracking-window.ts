@@ -1,24 +1,38 @@
 /**
- * Sales-person continuous tracking window — the admin-configurable schedule that says
- * "track this rep's location between X and Y, every N minutes".
+ * Sales-person tracking + shift settings, stored on `accounts.settings.tracking_settings`.
+ * Times are 24h "HH:MM" strings so the web form and the mobile app can never disagree about AM/PM.
  *
- * Stored on `accounts.settings.tracking_settings`. Times are 24h "HH:MM" strings so the web
- * form and the mobile app can never disagree about AM/PM.
+ * IMPORTANT — what the shift times do and do NOT do:
  *
- * The mobile app reads the same shape to decide (a) how often to persist a location ping and
- * (b) whether "now" is inside the working window at all, and Tracking Health uses `start_time`
- * to decide when a missing punch-in stops being normal and becomes a problem worth flagging.
+ *   `start_time`/`end_time` are the company's SHIFT timings. They do NOT gate location tracking.
+ *   Being punched in is what makes a rep on duty, and an on-duty rep is tracked at all hours: a
+ *   night-shift customer visit produces track points exactly like a midday one.
+ *
+ *   Their only job is to classify the day for the Attendance page — Present, Late Start,
+ *   Early Leaving, Short Present, Absent — and to tell Tracking Health when a missing punch-in
+ *   has stopped being normal ("shift started an hour ago and nobody punched in").
+ *
+ * An earlier version of this module used the window to suppress background pings outside working
+ * hours. That silently killed tracking for a rep who punched in at 01:26 with the default 09:00
+ * shift still in place, and gave them no way to know why. Do not reintroduce that behaviour.
+ *
+ * `interval_minutes` is the only field the mobile background task acts on.
  */
 
 export interface TrackingSettings {
-  /** Master switch for the scheduled window. When false, tracking is punch-in driven only. */
+  /** Whether shift timings are applied when classifying attendance. Never gates tracking. */
   enabled: boolean;
-  /** 24h "HH:MM" — start of the working window. */
+  /** 24h "HH:MM" — shift start. */
   start_time: string;
-  /** 24h "HH:MM" — end of the working window. */
+  /** 24h "HH:MM" — shift end. May be earlier than start for a night shift (wraps midnight). */
   end_time: string;
-  /** How often a ping is persisted, in minutes. */
+  /** How often a location is recorded while punched in, in minutes. */
   interval_minutes: number;
+  /**
+   * Minutes of leeway before a punch-in counts as Late Start (or a punch-out as Early Leaving).
+   * Without this, punching in at 09:01 on a 09:00 shift would be flagged, making the column noise.
+   */
+  grace_minutes: number;
 }
 
 export const DEFAULT_TRACKING: TrackingSettings = {
@@ -27,20 +41,27 @@ export const DEFAULT_TRACKING: TrackingSettings = {
   end_time: "18:00",
   // Founder decision: default to 10 minutes (the reference UI showed 15).
   interval_minutes: 10,
+  grace_minutes: 15,
 };
 
 /** Interval choices offered in Organisation Settings. */
 export const TRACKING_INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
 
+/** Grace-period choices offered in Organisation Settings. */
+export const GRACE_MINUTE_OPTIONS = [0, 5, 10, 15, 30, 60] as const;
+
 /** Coerce whatever is in accounts.settings into a complete, safe TrackingSettings. */
 export function normalizeTrackingSettings(raw: unknown): TrackingSettings {
   const r = (raw ?? {}) as Partial<TrackingSettings>;
   const interval = Number(r.interval_minutes);
+  const grace = Number(r.grace_minutes);
   return {
     enabled: r.enabled !== false,
     start_time: isHHMM(r.start_time) ? r.start_time! : DEFAULT_TRACKING.start_time,
     end_time: isHHMM(r.end_time) ? r.end_time! : DEFAULT_TRACKING.end_time,
     interval_minutes: Number.isFinite(interval) && interval > 0 ? interval : DEFAULT_TRACKING.interval_minutes,
+    // 0 is a legitimate choice ("no leeway at all"), so only fall back when it isn't a number.
+    grace_minutes: Number.isFinite(grace) && grace >= 0 ? grace : DEFAULT_TRACKING.grace_minutes,
   };
 }
 
@@ -64,13 +85,43 @@ export function hhmmToMinutes(hhmm: string): number {
 }
 
 /**
- * Is `date` inside the configured window? Handles a window that wraps past midnight
+ * Is `date` inside the configured shift? Handles a shift that wraps past midnight
  * (end earlier than start), e.g. a night shift 20:00 → 04:00.
+ *
+ * For attendance/display only — never use this to decide whether to record a location.
  */
-export function isWithinTrackingWindow(settings: TrackingSettings, date: Date = new Date()): boolean {
+export function isWithinShift(settings: TrackingSettings, date: Date = new Date()): boolean {
   if (!settings.enabled) return false;
   const now = date.getHours() * 60 + date.getMinutes();
   const start = hhmmToMinutes(settings.start_time);
   const end = hhmmToMinutes(settings.end_time);
   return start <= end ? now >= start && now <= end : now >= start || now <= end;
+}
+
+/**
+ * Absolute start/end of the shift that BELONGS to the given calendar day.
+ *
+ * A night shift (20:00 → 04:00) ends on the following date, so the end is pushed forward a day.
+ * Sessions are grouped by the date they started on, which keeps a night shift on one row.
+ */
+export function shiftBoundsFor(
+  day: Date,
+  settings: TrackingSettings,
+): { startMs: number; endMs: number; durationMinutes: number } {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  start.setMinutes(hhmmToMinutes(settings.start_time));
+
+  const end = new Date(day);
+  end.setHours(0, 0, 0, 0);
+  end.setMinutes(hhmmToMinutes(settings.end_time));
+
+  // Wraps past midnight — the shift finishes on the next calendar day.
+  if (end.getTime() <= start.getTime()) end.setDate(end.getDate() + 1);
+
+  return {
+    startMs: start.getTime(),
+    endMs: end.getTime(),
+    durationMinutes: Math.round((end.getTime() - start.getTime()) / 60000),
+  };
 }

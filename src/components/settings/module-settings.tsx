@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import {
   DEFAULT_TRACKING,
   TRACKING_INTERVAL_OPTIONS,
+  GRACE_MINUTE_OPTIONS,
   normalizeTrackingSettings,
   formatHHMM,
 } from "@/lib/location/tracking-window";
@@ -159,12 +160,15 @@ export function ModuleSettingsPanel() {
   const [levels, setLevels] = useState<HierarchyLevel[]>([]);
   const [originalSettings, setOriginalSettings] = useState<any>({});
 
-  // Sales-person continuous tracking window. Times are stored as 24h "HH:MM" strings so there
-  // is no AM/PM ambiguity between the web form and the mobile app that reads them.
+  // Tracking interval + shift timings. Times are stored as 24h "HH:MM" strings so there is no
+  // AM/PM ambiguity between the web form and the mobile app that reads them.
+  // `trackingEnabled` switches the SHIFT rules (attendance) on and off — it never affects
+  // whether locations are recorded.
   const [trackingEnabled, setTrackingEnabled] = useState(true);
   const [trackingStart, setTrackingStart] = useState(DEFAULT_TRACKING.start_time);
   const [trackingEnd, setTrackingEnd] = useState(DEFAULT_TRACKING.end_time);
   const [trackingInterval, setTrackingInterval] = useState<number>(DEFAULT_TRACKING.interval_minutes);
+  const [trackingGrace, setTrackingGrace] = useState<number>(DEFAULT_TRACKING.grace_minutes);
 
   // Sync draft when moduleSettings change externally
   useEffect(() => {
@@ -193,6 +197,7 @@ export function ModuleSettingsPanel() {
         setTrackingStart(ts.start_time);
         setTrackingEnd(ts.end_time);
         setTrackingInterval(ts.interval_minutes);
+        setTrackingGrace(ts.grace_minutes);
         setLevels(
           Array.isArray(os.levels) && os.levels.length > 0
             ? os.levels.map((l: HierarchyLevel, i: number) => ({ ...l, color: l.color || LEVEL_COLORS[i % LEVEL_COLORS.length] }))
@@ -245,6 +250,7 @@ export function ModuleSettingsPanel() {
           start_time: trackingStart,
           end_time: trackingEnd,
           interval_minutes: trackingInterval,
+          grace_minutes: trackingGrace,
         },
         order_settings: {
           ...originalSettings?.order_settings,
@@ -298,6 +304,7 @@ export function ModuleSettingsPanel() {
     setTrackingStart(ts.start_time);
     setTrackingEnd(ts.end_time);
     setTrackingInterval(ts.interval_minutes);
+    setTrackingGrace(ts.grace_minutes);
     const osLevels = originalSettings.order_settings?.levels;
     setLevels(
       Array.isArray(osLevels) && osLevels.length > 0
@@ -525,13 +532,49 @@ export function ModuleSettingsPanel() {
               />
             </div>
 
-            {/* Sales Person Tracking window */}
+            {/* Sales Person Tracking — how often a location is recorded. Always on while
+                punched in; deliberately NOT limited to shift hours (see the note below). */}
             <div>
               <div className="mb-2">
                 <p className="text-sm font-medium text-foreground">Sales Person Tracking</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Continuously track a sales person&apos;s location during working hours. The mobile
-                  app records a location at this interval while the rep is punched in.
+                  The mobile app records a location at this interval the whole time a rep is
+                  punched in — at any hour, night shifts included.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 p-3">
+                <span className="text-sm text-muted-foreground">Record a location every</span>
+                <select
+                  value={trackingInterval}
+                  onChange={(e) => setTrackingInterval(Number(e.target.value))}
+                  disabled={!canEditSettings}
+                  aria-label="Tracking interval"
+                  className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                >
+                  {TRACKING_INTERVAL_OPTIONS.map((m) => (
+                    <option key={m} value={m}>
+                      {m} minutes
+                    </option>
+                  ))}
+                </select>
+                <p className="w-full text-xs text-muted-foreground">
+                  Default is {DEFAULT_TRACKING.interval_minutes} minutes. Tracking starts at
+                  punch-in and stops at punch-out.
+                </p>
+              </div>
+            </div>
+
+            {/* Shift Timings — attendance classification only. Kept visually separate from the
+                interval above because conflating the two is exactly what caused a rep who
+                punched in at 01:26 to be silently untracked against a 09:00–18:00 default. */}
+            <div>
+              <div className="mb-2">
+                <p className="text-sm font-medium text-foreground">Shift Timings</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Your company&apos;s working hours. Used only to classify attendance —
+                  Late Start, Early Leaving, Short Present, Present and Absent on the Attendance
+                  page. These times never stop location tracking: a rep who is punched in is on
+                  duty and is tracked whatever the hour.
                 </p>
               </div>
               <KoopsRadioToggle
@@ -542,14 +585,14 @@ export function ModuleSettingsPanel() {
 
               {trackingEnabled && (
                 <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 p-3">
-                  <span className="text-sm text-muted-foreground">between</span>
+                  <span className="text-sm text-muted-foreground">Shift runs</span>
                   <Input
                     type="time"
                     value={trackingStart}
                     onChange={(e) => setTrackingStart(e.target.value)}
                     disabled={!canEditSettings}
                     className="h-9 w-[120px] bg-background"
-                    aria-label="Tracking start time"
+                    aria-label="Shift start time"
                   />
                   <span className="text-sm text-muted-foreground">to</span>
                   <Input
@@ -558,25 +601,28 @@ export function ModuleSettingsPanel() {
                     onChange={(e) => setTrackingEnd(e.target.value)}
                     disabled={!canEditSettings}
                     className="h-9 w-[120px] bg-background"
-                    aria-label="Tracking end time"
+                    aria-label="Shift end time"
                   />
-                  <span className="text-sm text-muted-foreground">at every</span>
+                  <span className="text-sm text-muted-foreground">with</span>
                   <select
-                    value={trackingInterval}
-                    onChange={(e) => setTrackingInterval(Number(e.target.value))}
+                    value={trackingGrace}
+                    onChange={(e) => setTrackingGrace(Number(e.target.value))}
                     disabled={!canEditSettings}
-                    aria-label="Tracking interval"
+                    aria-label="Attendance grace period"
                     className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
                   >
-                    {TRACKING_INTERVAL_OPTIONS.map((m) => (
+                    {GRACE_MINUTE_OPTIONS.map((m) => (
                       <option key={m} value={m}>
-                        {m} minutes
+                        {m} min
                       </option>
                     ))}
                   </select>
+                  <span className="text-sm text-muted-foreground">grace</span>
                   <p className="w-full text-xs text-muted-foreground">
-                    Currently {formatHHMM(trackingStart)} – {formatHHMM(trackingEnd)}, every{" "}
-                    {trackingInterval} minutes. Default is {DEFAULT_TRACKING.interval_minutes} minutes.
+                    {formatHHMM(trackingStart)} – {formatHHMM(trackingEnd)}. A punch-in after{" "}
+                    {formatHHMM(trackingStart)}
+                    {trackingGrace > 0 && <> plus {trackingGrace} minutes</>} counts as Late Start.
+                    An end time earlier than the start means a night shift that runs past midnight.
                   </p>
                 </div>
               )}

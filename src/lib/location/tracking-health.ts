@@ -9,10 +9,12 @@
 import { type IssueCode, type Severity, sortIssueCodes, worstSeverity } from "./tracking-issues";
 import { hhmmToMinutes, type TrackingSettings } from "./tracking-window";
 
-/** Minutes between persisted pings (mobile PING_INTERVAL_MS = 10 min). */
+/** Fallback minutes between persisted pings, used when the account's interval isn't supplied. */
 export const PING_INTERVAL_MIN = 10;
 /** A quiet stretch longer than this (2× the interval) counts as a tracking gap. */
 export const GAP_THRESHOLD_MIN = 20;
+/** Gap threshold for a given interval — 2× the interval, so one missed ping isn't a "gap". */
+const gapThresholdFor = (intervalMin: number) => intervalMin * 2;
 /** Battery at/below this just before tracking stops implies the phone died. */
 const LOW_BATTERY_PCT = 10;
 
@@ -95,8 +97,14 @@ const ms = (iso: string) => new Date(iso).getTime();
 const minutesBetween = (aIso: string, bIso: string) => (ms(bIso) - ms(aIso)) / 60000;
 
 /** Was there an event of `type` inside [fromIso, toIso] (with a small lead-in buffer)? */
-function eventInWindow(events: HealthEvent[], type: string, fromIso: string, toIso: string): boolean {
-  const from = ms(fromIso) - GAP_THRESHOLD_MIN * 60000; // small lead-in: the trigger can precede the gap
+function eventInWindow(
+  events: HealthEvent[],
+  type: string,
+  fromIso: string,
+  toIso: string,
+  leadInMin: number = GAP_THRESHOLD_MIN,
+): boolean {
+  const from = ms(fromIso) - leadInMin * 60000; // small lead-in: the trigger can precede the gap
   const to = ms(toIso);
   return events.some((e) => e.event_type === type && ms(e.recorded_at) >= from && ms(e.recorded_at) <= to);
 }
@@ -115,10 +123,14 @@ function classifyGap(
     sessionEndReason: string | null;
     /** True when the app sent no device-health heartbeat at all inside this gap. */
     noHeartbeatDuringGap: boolean;
+    /** The account's configured gap threshold, used as the event lead-in buffer. */
+    gapThresholdMin: number;
   },
 ): IssueCode {
-  if (eventInWindow(ctx.events, "gps_disabled", gap.fromIso, gap.toIso)) return "gps_off";
-  if (eventInWindow(ctx.events, "permission_revoked", gap.fromIso, gap.toIso)) return "permission_revoked";
+  const lead = ctx.gapThresholdMin;
+  if (eventInWindow(ctx.events, "gps_disabled", gap.fromIso, gap.toIso, lead)) return "gps_off";
+  if (eventInWindow(ctx.events, "permission_revoked", gap.fromIso, gap.toIso, lead))
+    return "permission_revoked";
 
   const s = ctx.snapshot;
   if (s?.location_services_on === false) return "gps_off";
@@ -163,6 +175,7 @@ function sessionGaps(
   snapshot: HealthSnapshot | null,
   nowMs: number,
   heartbeatTimes: number[] = [],
+  gapThresholdMin: number = GAP_THRESHOLD_MIN,
 ): Gap[] {
   const endIso = session.ended_at ?? new Date(nowMs).toISOString();
   const sorted = [...sessionPings].sort((a, b) => ms(a.recorded_at) - ms(b.recorded_at));
@@ -179,7 +192,7 @@ function sessionGaps(
     const fromIso = boundaries[i - 1].iso;
     const toIso = boundaries[i].iso;
     const minutes = minutesBetween(fromIso, toIso);
-    if (minutes <= GAP_THRESHOLD_MIN) continue;
+    if (minutes <= gapThresholdMin) continue;
     const isTrailingGap = i === boundaries.length - 1;
     gaps.push({
       fromIso,
@@ -198,6 +211,7 @@ function sessionGaps(
           noHeartbeatDuringGap: !heartbeatTimes.some(
             (t) => t > ms(fromIso) && t < ms(toIso),
           ),
+          gapThresholdMin,
         },
       ),
     });
@@ -210,6 +224,15 @@ export function computeAgentHealth(input: ComputeHealthInput): AgentHealth {
   const nowMs = input.nowMs ?? Date.now();
   const { sessions, pings, events, latestSnapshot } = input;
   const heartbeatTimes = (input.snapshotTimes ?? []).map((t) => ms(t));
+
+  // Coverage has to be measured against the interval the admin actually configured. Hard-coding
+  // 10 minutes made Tracking Health report ~33% coverage for a perfectly healthy rep on a
+  // 30-minute interval — the report would have been accusing people of a problem we invented.
+  const intervalMin =
+    input.trackingSettings && input.trackingSettings.interval_minutes > 0
+      ? input.trackingSettings.interval_minutes
+      : PING_INTERVAL_MIN;
+  const gapThresholdMin = gapThresholdFor(intervalMin);
 
   const codes = new Set<IssueCode>();
   if (input.devicePending) codes.add("device_pending");
@@ -245,11 +268,19 @@ export function computeAgentHealth(input: ComputeHealthInput): AgentHealth {
       (p) => ms(p.recorded_at) >= ms(session.started_at) && ms(p.recorded_at) <= endMs,
     );
     allGaps.push(
-      ...sessionGaps(session, sessionPings, events, latestSnapshot, nowMs, heartbeatTimes),
+      ...sessionGaps(
+        session,
+        sessionPings,
+        events,
+        latestSnapshot,
+        nowMs,
+        heartbeatTimes,
+        gapThresholdMin,
+      ),
     );
   }
 
-  const expectedPings = Math.floor(activeSeconds / (PING_INTERVAL_MIN * 60));
+  const expectedPings = Math.floor(activeSeconds / (intervalMin * 60));
   const receivedPings = pings.length;
   const coveragePct =
     expectedPings === 0 ? 100 : Math.min(100, Math.round((receivedPings / expectedPings) * 100));

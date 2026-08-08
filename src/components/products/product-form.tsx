@@ -62,6 +62,7 @@ export function ProductForm({
   // snapshot; min_price is the hard floor no stack of discounts may cross.
   const [taxSlabId, setTaxSlabId] = useState('');
   const [minPrice, setMinPrice] = useState('');
+  const [hsnCode, setHsnCode] = useState('');
   const [taxSlabs, setTaxSlabs] = useState<{ id: string; name: string; rate: number }[]>([]);
 
   const [categoryId, setCategoryId] = useState('');
@@ -90,6 +91,7 @@ export function ProductForm({
       setStock(product?.stock?.toString() ?? '');
       setTaxSlabId((product as { tax_slab_id?: string | null })?.tax_slab_id ?? '');
       setMinPrice((product as { min_price?: number | null })?.min_price?.toString() ?? '');
+      setHsnCode((product as { hsn_code?: string | null })?.hsn_code ?? '');
       setImageFile(null);
       setActive(product?.active ?? true);
       fetchCustomFields();
@@ -235,6 +237,7 @@ export function ProductForm({
         // Empty string must become null, never '' — a uuid column rejects ''.
         tax_slab_id: taxSlabId || null,
         min_price: minPrice !== '' ? parseFloat(minPrice) : null,
+        hsn_code: hsnCode.trim() || null,
         active,
       };
 
@@ -482,6 +485,22 @@ export function ProductForm({
                       No slabs defined yet. Add them in Settings → Pricing &amp; Schemes.
                     </p>
                   )}
+                </div>
+
+                {/* HSN Code */}
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">HSN / SAC Code</Label>
+                  <Input
+                    type="text"
+                    value={hsnCode}
+                    onChange={(e) => setHsnCode(e.target.value)}
+                    placeholder="e.g. 3304, 6109"
+                    className="border-border bg-muted text-foreground"
+                    maxLength={8}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Harmonised System of Nomenclature code for GST invoicing.
+                  </p>
                 </div>
               </div>
 
