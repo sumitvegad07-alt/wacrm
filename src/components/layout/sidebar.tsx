@@ -312,6 +312,28 @@ function getMenuStructure(
 
     { type: "spacer" },
 
+    // ── Route Management (collapsed) ──
+    // The whole feature (planner, approvals, execution monitor) was built and shipped with
+    // no sidebar entry at all — completely unreachable from the web UI except by typing the
+    // URL directly. Gated by the same admin ON/OFF toggle (Settings → Organization Settings)
+    // used for other optional modules like Expense/Territory; ships off by default.
+    ...(moduleSettings?.route === true
+      ? [
+          {
+            type: "group" as const,
+            label: "Route Management",
+            icon: RouteIcon,
+            items: [
+              { href: "/routes", label: "Routes", icon: RouteIcon, configModule: "route" as const },
+              { href: "/routes/planner", label: "Planner", icon: CalendarRange, configModule: "route" as const },
+              { href: "/routes/approvals", label: "Approvals", icon: Shield, configModule: "route" as const },
+              { href: "/routes/executions", label: "Executions", icon: Activity, configModule: "route" as const },
+            ],
+          },
+          { type: "spacer" as const },
+        ]
+      : []),
+
     // ── Location Tracking (collapsed) ──
     {
       type: "group",

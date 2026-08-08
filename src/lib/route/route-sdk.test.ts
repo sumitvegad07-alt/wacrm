@@ -173,13 +173,35 @@ describe('createRouteSdk wiring', () => {
     expect(health.score).toBe(100);
   });
 
-  it('bulkUpdateStatus calls route_bulk_update_status with mapped snake_case args', async () => {
+  it('bulkUpdateStatus has no atomic RPC in the database — fans out to route_update_status once per route', async () => {
     const { sdk, calls } = makeSdk();
-    await sdk.bulkUpdateStatus([UUID, UUID2], 'active', 'Approved in batch', 5);
-    expect(calls[0].fn).toBe('route_bulk_update_status');
-    expect(calls[0].args.p_route_ids).toEqual([UUID, UUID2]);
-    expect(calls[0].args.p_new_status).toBe('active');
-    expect(calls[0].args.p_reason).toBe('Approved in batch');
-    expect(calls[0].args.p_expected_version).toBe(5);
+    const result = await sdk.bulkUpdateStatus([UUID, UUID2], 'active', 'Approved in batch', 5);
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      expect(call.fn).toBe('route_update_status');
+      expect(call.args.p_new_status).toBe('active');
+      expect(call.args.p_reason).toBe('Approved in batch');
+    }
+    expect(calls.map((c) => c.args.p_route_id).sort()).toEqual([UUID, UUID2].sort());
+    expect(result).toEqual({ total: 2, updated: 2, failed: 0, ok_ids: expect.arrayContaining([UUID, UUID2]), errors: [] });
+  });
+
+  it('bulkUpdateStatus reports per-route failures without failing the whole batch', async () => {
+    const calls: { fn: string; args: Record<string, unknown> }[] = [];
+    const executor: RouteRpcExecutor = {
+      async runRpc(fn, args) {
+        calls.push({ fn, args });
+        if (args.p_route_id === UUID2) throw new RouteError('permission', 'Not allowed to approve routes', '42501');
+        return {} as never;
+      },
+    };
+    const client = { rpc: async () => ({ data: null, error: null }) } as unknown as SupabaseClient;
+    const sdk = createRouteSdk(client, { executor });
+
+    const result = await sdk.bulkUpdateStatus([UUID, UUID2], 'active');
+    expect(result.ok_ids).toEqual([UUID]);
+    expect(result.errors).toEqual([{ route_id: UUID2, error: 'Not allowed to approve routes', code: '42501' }]);
+    expect(result.updated).toBe(1);
+    expect(result.failed).toBe(1);
   });
 });

@@ -548,18 +548,35 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
   const restoreRoute = (routeId: string) => updateStatus(routeId, 'active');
   const reopenRoute = (routeId: string) => updateStatus(routeId, 'draft');
 
+  /**
+   * `route_bulk_update_status` does not exist in the database — there is no atomic bulk RPC,
+   * only the singular `route_update_status` (same one `updateStatus` above calls). This used
+   * to call the nonexistent function directly, so every bulk approve/reject in the Approvals
+   * queue failed outright. Fan out to the real per-route RPC instead and assemble the same
+   * `{total, updated, failed, ok_ids, errors}` shape the UI already expects, so callers don't
+   * need to change. `expectedVersion` optimistic-concurrency checking isn't supported by the
+   * singular RPC, so it's accepted for signature compatibility but not enforced per-row here.
+   */
   async function bulkUpdateStatus(
     routeIds: string[],
     newStatus: RouteStatus,
     reason?: string | null,
-    expectedVersion?: number | null
+    _expectedVersion?: number | null
   ): Promise<BulkUpdateStatusResult> {
-    return executor.runRpc<BulkUpdateStatusResult>('route_bulk_update_status', {
-      p_route_ids: routeIds,
-      p_new_status: newStatus,
-      p_reason: reason ?? null,
-      p_expected_version: expectedVersion ?? null,
+    const results = await Promise.allSettled(
+      routeIds.map((routeId) => updateStatus(routeId, newStatus, reason)),
+    );
+    const ok_ids: string[] = [];
+    const errors: { route_id: string; error: string; code?: string }[] = [];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        ok_ids.push(routeIds[i]);
+      } else {
+        const err = r.reason as RouteError;
+        errors.push({ route_id: routeIds[i], error: err?.message ?? 'Failed to update', code: err?.code });
+      }
     });
+    return { total: routeIds.length, updated: ok_ids.length, failed: errors.length, ok_ids, errors };
   }
 
   async function cloneRoute(routeId: string, newName?: string): Promise<{ id: string }> {
