@@ -17,6 +17,7 @@ export type IssueCode =
   | "app_outdated"
   | "mock_location"
   | "not_punched_in"
+  | "not_punched_in_late"
   | "device_pending"
   | "no_heartbeat"
   | "unknown_gap";
@@ -94,6 +95,13 @@ export const ISSUE_CATALOG: Record<IssueCode, IssueMeta> = {
     title: "Device health not reported yet",
     cause: "This agent's app hasn't sent a device-health report — usually an older app build.",
     fix: "Ask the agent to update the app; deeper diagnostics will appear once they do.",
+  },
+  not_punched_in_late: {
+    severity: "high",
+    title: "Not punched in — shift has started",
+    cause:
+      "The working window configured in Organisation Settings has already started, but this agent still hasn't punched in — so nothing about their day is being tracked.",
+    fix: "Ask the agent to open the app and Punch In. Nothing is recorded until they do.",
   },
   not_punched_in: {
     severity: "info",

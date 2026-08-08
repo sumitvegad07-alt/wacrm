@@ -7,6 +7,7 @@
  */
 
 import { type IssueCode, type Severity, sortIssueCodes, worstSeverity } from "./tracking-issues";
+import { hhmmToMinutes, type TrackingSettings } from "./tracking-window";
 
 /** Minutes between persisted pings (mobile PING_INTERVAL_MS = 10 min). */
 export const PING_INTERVAL_MIN = 10;
@@ -67,6 +68,12 @@ export interface ComputeHealthInput {
   currentAppVersion?: string | null;
   /** Device is pending approval (from employee_devices.status). */
   devicePending?: boolean;
+  /**
+   * The account's configured tracking window. When supplied and today's window has already
+   * started, a missing punch-in is escalated from a neutral "not punched in" note to a real
+   * problem the admin should chase.
+   */
+  trackingSettings?: TrackingSettings | null;
   /** "Now" — injected for testability. Defaults to Date.now(). */
   nowMs?: number;
 }
@@ -170,7 +177,15 @@ export function computeAgentHealth(input: ComputeHealthInput): AgentHealth {
   if (input.devicePending) codes.add("device_pending");
 
   if (sessions.length === 0) {
-    codes.add("not_punched_in");
+    // Distinguish "hasn't started their shift yet" (fine) from "the working window is already
+    // underway and they still haven't punched in" (nothing is being tracked — chase it).
+    const ts = input.trackingSettings;
+    const now = new Date(nowMs);
+    const shiftStarted =
+      !!ts &&
+      ts.enabled &&
+      now.getHours() * 60 + now.getMinutes() >= hhmmToMinutes(ts.start_time);
+    codes.add(shiftStarted ? "not_punched_in_late" : "not_punched_in");
     return {
       punchedIn: false,
       activeSeconds: 0,

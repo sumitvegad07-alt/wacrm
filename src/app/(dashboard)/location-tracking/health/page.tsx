@@ -11,6 +11,8 @@ import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-ty
 import { ChevronRight, HeartPulse, AlertTriangle, UserCheck, MoonStar } from "lucide-react";
 import { computeAgentHealth, type AgentHealth } from "@/lib/location/tracking-health";
 import { ISSUE_CATALOG, type Severity } from "@/lib/location/tracking-issues";
+import { normalizeTrackingSettings } from "@/lib/location/tracking-window";
+import { useAuth } from "@/hooks/use-auth";
 
 interface HealthRow extends AgentHealth {
   id: string;
@@ -27,6 +29,7 @@ function severityBadge(sev: Severity | null) {
 }
 
 export default function TrackingHealthPage() {
+  const { accountId } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [rows, setRows] = useState<HealthRow[]>([]);
   const [notPunchedIn, setNotPunchedIn] = useState(0);
@@ -39,9 +42,12 @@ export default function TrackingHealthPage() {
   useEffect(() => {
     fetchHealth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate]);
+  }, [selectedDate, accountId]);
 
   const fetchHealth = async () => {
+    // accountId arrives asynchronously from useAuth; querying before it lands sends
+    // `id=eq.null` and 400s.
+    if (!accountId) return;
     setIsLoading(true);
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
@@ -85,6 +91,15 @@ export default function TrackingHealthPage() {
       supabase.from("employee_devices").select("profile_id, status"),
     ]);
 
+    // The configured working window decides whether a missing punch-in is "hasn't started yet"
+    // (fine) or "shift is underway and nothing is being tracked" (chase it).
+    const { data: acct } = await supabase
+      .from("accounts")
+      .select("settings")
+      .eq("id", accountId)
+      .maybeSingle();
+    const trackingSettings = normalizeTrackingSettings((acct as any)?.settings?.tracking_settings);
+
     const byUser = (list: any[] | null): Record<string, any[]> => {
       const m: Record<string, any[]> = {};
       (list || []).forEach((r: any) => {
@@ -117,6 +132,7 @@ export default function TrackingHealthPage() {
         events: evById[p.user_id] || [],
         latestSnapshot: (snapById[p.user_id] || [])[0] || null,
         devicePending,
+        trackingSettings,
       });
 
       if (!health.punchedIn && !devicePending) {

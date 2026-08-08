@@ -7,6 +7,12 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  DEFAULT_TRACKING,
+  TRACKING_INTERVAL_OPTIONS,
+  normalizeTrackingSettings,
+  formatHHMM,
+} from "@/lib/location/tracking-window";
 
 interface HierarchyLevel {
   position: number;
@@ -148,8 +154,17 @@ export function ModuleSettingsPanel() {
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [assignmentMode, setAssignmentMode] = useState<'area' | 'direct'>('area');
   const [hierarchyEnabled, setHierarchyEnabled] = useState(false);
+  const [gstEnabled, setGstEnabled] = useState(false);
+  const [hsnEnabled, setHsnEnabled] = useState(false);
   const [levels, setLevels] = useState<HierarchyLevel[]>([]);
   const [originalSettings, setOriginalSettings] = useState<any>({});
+
+  // Sales-person continuous tracking window. Times are stored as 24h "HH:MM" strings so there
+  // is no AM/PM ambiguity between the web form and the mobile app that reads them.
+  const [trackingEnabled, setTrackingEnabled] = useState(true);
+  const [trackingStart, setTrackingStart] = useState(DEFAULT_TRACKING.start_time);
+  const [trackingEnd, setTrackingEnd] = useState(DEFAULT_TRACKING.end_time);
+  const [trackingInterval, setTrackingInterval] = useState<number>(DEFAULT_TRACKING.interval_minutes);
 
   // Sync draft when moduleSettings change externally
   useEffect(() => {
@@ -170,6 +185,14 @@ export function ModuleSettingsPanel() {
         
         const os = s.order_settings || {};
         setHierarchyEnabled(!!os.hierarchy_enabled);
+        setGstEnabled(!!s.gst_enabled);
+        setHsnEnabled(!!s.hsn_enabled);
+
+        const ts = normalizeTrackingSettings(s.tracking_settings);
+        setTrackingEnabled(ts.enabled);
+        setTrackingStart(ts.start_time);
+        setTrackingEnd(ts.end_time);
+        setTrackingInterval(ts.interval_minutes);
         setLevels(
           Array.isArray(os.levels) && os.levels.length > 0
             ? os.levels.map((l: HierarchyLevel, i: number) => ({ ...l, color: l.color || LEVEL_COLORS[i % LEVEL_COLORS.length] }))
@@ -215,11 +238,25 @@ export function ModuleSettingsPanel() {
       const newSettings = {
         ...originalSettings,
         assignment_mode: assignmentMode,
+        gst_enabled: gstEnabled,
+        hsn_enabled: hsnEnabled,
+        tracking_settings: {
+          enabled: trackingEnabled,
+          start_time: trackingStart,
+          end_time: trackingEnd,
+          interval_minutes: trackingInterval,
+        },
         order_settings: {
           ...originalSettings?.order_settings,
           hierarchy_enabled: hierarchyEnabled,
           levels: cleanLevels,
-        }
+        },
+        // Ensure company profile also receives GST and HSN flags
+        company_profile: {
+          ...(originalSettings?.company_profile || {}),
+          gst_enabled: gstEnabled,
+          hsn_enabled: hsnEnabled,
+        },
       };
 
       const { error } = await supabase
@@ -248,12 +285,19 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, levels, originalSettings, refreshModuleSettings, supabase]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, levels, originalSettings, refreshModuleSettings, supabase, trackingEnabled, trackingStart, trackingEnd, trackingInterval]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
     setAssignmentMode(originalSettings.assignment_mode === 'direct' ? 'direct' : 'area');
     setHierarchyEnabled(!!originalSettings.order_settings?.hierarchy_enabled);
+    setGstEnabled(!!originalSettings.gst_enabled);
+    setHsnEnabled(!!originalSettings.hsn_enabled);
+    const ts = normalizeTrackingSettings(originalSettings.tracking_settings);
+    setTrackingEnabled(ts.enabled);
+    setTrackingStart(ts.start_time);
+    setTrackingEnd(ts.end_time);
+    setTrackingInterval(ts.interval_minutes);
     const osLevels = originalSettings.order_settings?.levels;
     setLevels(
       Array.isArray(osLevels) && osLevels.length > 0
@@ -481,6 +525,97 @@ export function ModuleSettingsPanel() {
               />
             </div>
 
+            {/* Sales Person Tracking window */}
+            <div>
+              <div className="mb-2">
+                <p className="text-sm font-medium text-foreground">Sales Person Tracking</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Continuously track a sales person&apos;s location during working hours. The mobile
+                  app records a location at this interval while the rep is punched in.
+                </p>
+              </div>
+              <KoopsRadioToggle
+                enabled={trackingEnabled}
+                onChange={setTrackingEnabled}
+                disabled={!canEditSettings}
+              />
+
+              {trackingEnabled && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 p-3">
+                  <span className="text-sm text-muted-foreground">between</span>
+                  <Input
+                    type="time"
+                    value={trackingStart}
+                    onChange={(e) => setTrackingStart(e.target.value)}
+                    disabled={!canEditSettings}
+                    className="h-9 w-[120px] bg-background"
+                    aria-label="Tracking start time"
+                  />
+                  <span className="text-sm text-muted-foreground">to</span>
+                  <Input
+                    type="time"
+                    value={trackingEnd}
+                    onChange={(e) => setTrackingEnd(e.target.value)}
+                    disabled={!canEditSettings}
+                    className="h-9 w-[120px] bg-background"
+                    aria-label="Tracking end time"
+                  />
+                  <span className="text-sm text-muted-foreground">at every</span>
+                  <select
+                    value={trackingInterval}
+                    onChange={(e) => setTrackingInterval(Number(e.target.value))}
+                    disabled={!canEditSettings}
+                    aria-label="Tracking interval"
+                    className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                  >
+                    {TRACKING_INTERVAL_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m} minutes
+                      </option>
+                    ))}
+                  </select>
+                  <p className="w-full text-xs text-muted-foreground">
+                    Currently {formatHHMM(trackingStart)} – {formatHHMM(trackingEnd)}, every{" "}
+                    {trackingInterval} minutes. Default is {DEFAULT_TRACKING.interval_minutes} minutes.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Enable GST */}
+            <div>
+              <div className="mb-2">
+                <p className="text-sm font-medium text-foreground">
+                  Enable GST
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  When enabled, GST and HSN code fields will be shown on invoices, quotations and product catalog.
+                </p>
+              </div>
+              <KoopsRadioToggle
+                enabled={gstEnabled}
+                onChange={setGstEnabled}
+                disabled={!canEditSettings}
+              />
+            </div>
+
+            {/* Enable HSN Code */}
+            <div>
+              <div className="mb-2">
+                <p className="text-sm font-medium text-foreground">
+                  Enable HSN Code
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  When enabled, HSN/SAC codes will be required on products and shown on invoices and quotations.
+                </p>
+              </div>
+              <KoopsRadioToggle
+                enabled={hsnEnabled}
+                onChange={setHsnEnabled}
+                disabled={!canEditSettings}
+              />
+            </div>
+
             {/* Enable Customer Hierarchy */}
             <div>
               <div className="mb-2">
@@ -543,8 +678,6 @@ export function ModuleSettingsPanel() {
           </div>
         )}
       </div>
-
-      {/* Fixed modules removed as per request */}
     </div>
   );
 }

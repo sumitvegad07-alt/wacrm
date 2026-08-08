@@ -20,6 +20,7 @@ import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-f
 import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import { Timeline } from "@/components/shared/timeline";
 import { EmployeeRouteTab } from "@/components/territories/employee-route-tab";
+import { EmployeeAreaAssignment } from "@/components/territories/employee-area-assignment";
 import { logModuleActivity } from "@/lib/activities";
 import type { Employee, EmployeeRole, EmployeeDevice, CustomField } from "@/types";
 
@@ -82,6 +83,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"details" | "territory" | "routes">("details");
   
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -138,13 +140,16 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       const { data: rolesData } = await supabase.from("employee_roles").select("*").order("name", { ascending: true });
       if (rolesData) setRoles(rolesData as EmployeeRole[]);
 
-      const { data: devData } = await supabase.from("employee_devices").select("*").eq("profile_id", employeeId).order("last_seen_at", { ascending: false });
-      if (devData) setDevices(devData as EmployeeDevice[]);
-      else {
-        // Try fallback to user_id if profile_id fails (older DB schema)
-        const { data: devDataLegacy } = await supabase.from("employee_devices").select("*").eq("user_id", employeeId).order("last_login", { ascending: false });
-        if (devDataLegacy) setDevices(devDataLegacy as EmployeeDevice[]);
-      }
+      // employee_devices has neither `last_seen_at` nor `user_id` — ordering/filtering by them
+      // made BOTH the primary and the "legacy fallback" query 400, so this table always rendered
+      // empty even though device rows exist. Scope by profile_id and order by last_login.
+      const { data: devData, error: devErr } = await supabase
+        .from("employee_devices")
+        .select("*")
+        .eq("profile_id", employeeId)
+        .order("last_login", { ascending: false, nullsFirst: false });
+      if (devErr) console.error("[employee] failed to load devices:", devErr);
+      setDevices((devData || []) as EmployeeDevice[]);
 
       if (accountId && user?.id) {
         await ensureDefaultSectionsAndFields(accountId, "user", user.id, supabase);
@@ -166,8 +171,12 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       const { data: timelineActs } = await supabase.from("module_activities").select("*").eq("module_name", "user").eq("record_id", employeeId).order("created_at", { ascending: false });
       if (timelineActs) setActivities(timelineActs);
       
-      const { data: timelineTasks } = await supabase.from("tasks").select("*").eq("module_name", "user").eq("record_id", employeeId).order("created_at", { ascending: false });
-      if (timelineTasks) setTasks(timelineTasks);
+      // NOTE: no task query here. `tasks` has no module_name/record_id columns (it links to a
+      // module via dedicated FKs: contact_id, lead_id, deal_id, order_id, ...) and has no
+      // employee/profile link at all, so the old .eq("module_name","user") query 400'd on every
+      // load and never returned anything. Removed rather than left failing; re-add if/when
+      // tasks can actually be attached to an employee.
+      setTasks([]);
 
     } catch (err) {
       console.error(err);
@@ -260,7 +269,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     }
   };
 
-  const handleDeviceStatusChange = async (deviceId: string, status: 'approved' | 'blocked' | 'pending') => {
+  // The real employee_devices.status values are 'pending' | 'active' | 'rejected' | 'inactive'.
+  // This screen previously wrote/compared 'approved'/'blocked', which matched no real row — the
+  // badge fell through to the amber default and the buttons wrote statuses nothing else reads.
+  const handleDeviceStatusChange = async (deviceId: string, status: 'active' | 'inactive' | 'rejected' | 'pending') => {
     try {
       const { error } = await supabase.from("employee_devices").update({ status }).eq("id", deviceId);
       if (error) throw error;
@@ -368,7 +380,44 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Tab bar — Details | Territory Assignment | Route Management */}
+      <div className="flex items-center gap-1 border-b border-border -mt-2">
+        {([
+          { key: "details", label: "Details" },
+          { key: "territory", label: "Territory Assignment" },
+          ...(isModuleEnabled("route") ? [{ key: "routes" as const, label: "Route Management" }] : []),
+        ] as { key: "details" | "territory" | "routes"; label: string }[]).map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+            {activeTab === tab.key && (
+              <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "territory" && accountId && (
+        <EmployeeAreaAssignment
+          employeeId={employeeId}
+          accountId={accountId}
+          canEdit={accountRole === "owner" || accountRole === "admin" || isSuperadmin}
+        />
+      )}
+
+      {activeTab === "routes" && accountId && (
+        <EmployeeRouteTab employeeId={employeeId} accountId={accountId} />
+      )}
+
+      <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 ${activeTab === "details" ? "" : "hidden"}`}>
         {/* Left Col: Details & Devices */}
         <div className="lg:col-span-2 space-y-8">
           <Card className="p-6 border-border shadow-sm">
@@ -411,20 +460,20 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                       <td className="px-4 py-3">{device.application_version || "-"}</td>
                       <td className="px-4 py-3">{device.database_version || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {device.last_seen_at || device.last_login ? new Date(device.last_seen_at || device.last_login!).toLocaleString() : "-"}
+                        {device.last_login ? new Date(device.last_login).toLocaleString() : "-"}
                       </td>
                       <td className="px-4 py-3">
                         <Badge className={
-                          device.status === 'approved' ? 'bg-emerald-600' :
-                          device.status === 'blocked' ? 'bg-red-600' : 'bg-amber-600'
+                          device.status === 'active' ? 'bg-emerald-600' :
+                          device.status === 'rejected' ? 'bg-red-600' :
+                          device.status === 'inactive' ? 'bg-slate-600' : 'bg-amber-600'
                         }>{device.status}</Badge>
                       </td>
                       <td className="px-4 py-3">
-                        {device.status !== 'blocked' && (
-                          <Button variant="secondary" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'blocked')}>INACTIVATE</Button>
-                        )}
-                        {device.status === 'blocked' && (
-                          <Button variant="outline" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'approved')}>ACTIVATE</Button>
+                        {device.status === 'active' ? (
+                          <Button variant="secondary" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'inactive')}>INACTIVATE</Button>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'active')}>ACTIVATE</Button>
                         )}
                       </td>
                     </tr>
@@ -453,25 +502,6 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      {/* Routes — create, assign and approve this employee's routes right here, rather than in
-          a separate top-level module. Approving flips route_plan_assignments.is_active to true,
-          which is exactly what the mobile app filters on before showing a route to the rep.
-          Full width (outside the grid) so the month calendar has room to breathe. */}
-      {accountId && isModuleEnabled("route") && (
-        <Card className="mt-8 border-border shadow-sm overflow-hidden">
-          <div className="p-4 border-b bg-muted/20">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-primary" /> Routes
-            </h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Assign routes to this employee and approve them to go live on their mobile app.
-            </p>
-          </div>
-          <div className="p-4">
-            <EmployeeRouteTab employeeId={employeeId} accountId={accountId} />
-          </div>
-        </Card>
-      )}
     </div>
   );
 }

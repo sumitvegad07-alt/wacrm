@@ -922,12 +922,12 @@ export interface EmployeeDevice {
   device_name?: string;
   device_model?: string;
   os?: string;
-  status?: 'approved' | 'blocked' | 'pending';
+  /** Real DB values. 'approved'/'blocked' were never valid and made every status check fail. */
+  status?: 'pending' | 'active' | 'rejected' | 'inactive';
   last_login?: string;
   created_at?: string;
   updated_at?: string;
   application_version?: string;
   database_version?: string;
-  last_seen_at?: string;
   [key: string]: any;
 }

@@ -26,6 +26,7 @@ import {
   type HealthSnapshot,
 } from "@/lib/location/tracking-health";
 import { ISSUE_CATALOG, type Severity } from "@/lib/location/tracking-issues";
+import { normalizeTrackingSettings } from "@/lib/location/tracking-window";
 
 function sevBadge(sev: Severity) {
   if (sev === "high") return <Badge variant="destructive">High</Badge>;
@@ -82,7 +83,7 @@ export default function AgentHealthDetailPage() {
     const isoStart = startOfDay.toISOString();
     const isoEnd = endOfDay.toISOString();
 
-    const [{ data: profile }, { data: sessions }, { data: pings }, { data: events }, { data: snaps }] =
+    const [{ data: profile }, { data: sessions }, { data: pings }, { data: events }, { data: snaps }, { data: acct }] =
       await Promise.all([
         supabase.from("profiles").select("full_name").eq("user_id", userId).maybeSingle(),
         supabase
@@ -111,6 +112,9 @@ export default function AgentHealthDetailPage() {
           .lte("recorded_at", isoEnd)
           .order("recorded_at", { ascending: false })
           .limit(1),
+        // Working window — decides whether a missing punch-in counts as "late" (RLS scopes
+        // this to the viewer's own account, so no explicit filter is needed).
+        supabase.from("accounts").select("settings").limit(1).maybeSingle(),
       ]);
 
     setName((profile as any)?.full_name || "Agent");
@@ -122,6 +126,7 @@ export default function AgentHealthDetailPage() {
         pings: (pings as any) || [],
         events: (events as any) || [],
         latestSnapshot: latest as any,
+        trackingSettings: normalizeTrackingSettings((acct as any)?.settings?.tracking_settings),
       }),
     );
     setIsLoading(false);
