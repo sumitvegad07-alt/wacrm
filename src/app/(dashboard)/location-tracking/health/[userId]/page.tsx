@@ -25,7 +25,7 @@ import {
   type AgentHealth,
   type HealthSnapshot,
 } from "@/lib/location/tracking-health";
-import { ISSUE_CATALOG, type Severity } from "@/lib/location/tracking-issues";
+import { ISSUE_CATALOG, resolveIssueFix, type Severity } from "@/lib/location/tracking-issues";
 import { normalizeTrackingSettings } from "@/lib/location/tracking-window";
 
 function sevBadge(sev: Severity) {
@@ -223,6 +223,10 @@ export default function AgentHealthDetailPage() {
                 <div className="space-y-4">
                   {health.issueCodes.map((code) => {
                     const meta = ISSUE_CATALOG[code];
+                    // Battery/power issues get steps for the agent's ACTUAL phone brand —
+                    // every Android vendor buries this setting somewhere different, so a
+                    // generic instruction is unfollowable in the field.
+                    const fix = resolveIssueFix(code, { manufacturer: snapshot?.manufacturer });
                     return (
                       <div key={code} className="rounded-lg border border-border p-3">
                         <div className="mb-1 flex items-center gap-2">
@@ -231,12 +235,12 @@ export default function AgentHealthDetailPage() {
                         </div>
                         <p className="text-sm text-muted-foreground">{meta.cause}</p>
                         <div className="mt-2 flex items-start justify-between gap-2 rounded-md bg-muted/50 p-2.5">
-                          <p className="text-xs text-foreground">{meta.fix}</p>
+                          <p className="whitespace-pre-line text-xs text-foreground">{fix}</p>
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-7 shrink-0 px-2 text-xs"
-                            onClick={() => copyFix(meta.fix)}
+                            onClick={() => copyFix(fix)}
                           >
                             <Copy className="mr-1 size-3" /> Copy
                           </Button>

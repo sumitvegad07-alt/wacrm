@@ -6,6 +6,8 @@
  * code up here to render severity, title, cause, and the "message to send the agent".
  */
 
+import { APP_NAME, formatOemGuide } from "./oem-battery-guides";
+
 export type IssueCode =
   | "gps_off"
   | "permission_revoked"
@@ -40,14 +42,14 @@ export const ISSUE_CATALOG: Record<IssueCode, IssueMeta> = {
     title: "Battery optimization is on",
     cause:
       "Android is putting the app to sleep in the background, so it stops sending location after a while.",
-    fix: "Open Settings → Apps → WACRM → Battery, and set it to 'Unrestricted'. Then punch out and punch in again.",
+    fix: `Open Settings → Apps → ${APP_NAME} → Battery, and set it to 'Unrestricted'. Then punch out and punch in again.`,
   },
   bg_permission_missing: {
     severity: "high",
     title: "Background location not allowed",
     cause:
       "Location is only allowed 'while using the app', so tracking stops whenever the app is in the background.",
-    fix: "Open Settings → Apps → WACRM → Permissions → Location, and choose 'Allow all the time'.",
+    fix: `Open Settings → Apps → ${APP_NAME} → Permissions → Location, and choose 'Allow all the time'.`,
   },
   gps_off: {
     severity: "high",
@@ -89,15 +91,16 @@ export const ISSUE_CATALOG: Record<IssueCode, IssueMeta> = {
     severity: "high",
     title: "Phone stopped the app in the background",
     cause:
-      "Tracking was running normally and then stopped dead, while location, background permission and battery were all fine — so nothing on the app's side failed. This is Android putting the app to sleep to save power, which is very common on Samsung, Xiaomi, Oppo, Vivo and OnePlus.",
-    fix:
-      "On the agent's phone: Settings → Apps → WACRM → Battery → set to 'Unrestricted'. On Samsung also turn OFF Settings → Battery → Background usage limits → 'Put unused apps to sleep', and add WACRM to 'Never sleeping apps'. Then punch out and punch in again.",
+      "Tracking was running normally and then stopped dead, while location, background permission and battery were all fine — so nothing on the app's side failed. This is Android putting the app to sleep to save power. Every phone brand hides this setting somewhere different.",
+    // Generic default. The UI calls resolveIssueFix() so this becomes step-by-step instructions
+    // for the agent's ACTUAL phone brand, read from their device snapshot.
+    fix: formatOemGuide(null),
   },
   app_outdated: {
     severity: "medium",
     title: "Running an old app version",
     cause: "The agent's app is behind the latest version and may be missing tracking fixes.",
-    fix: "Ask the agent to update to the latest WACRM app version and punch in again.",
+    fix: `Ask the agent to update to the latest ${APP_NAME} app version and punch in again.`,
   },
   no_heartbeat: {
     severity: "info",
@@ -131,6 +134,23 @@ export const ISSUE_CATALOG: Record<IssueCode, IssueMeta> = {
     fix: "Ask the agent whether the app was open and location was on during this time.",
   },
 };
+
+/**
+ * The fix text for an issue, tailored to the agent's actual phone where that matters.
+ *
+ * Android power management is the one case where generic advice is useless: the setting lives
+ * in a different menu with a different name on every brand. We know the manufacturer from the
+ * device-health snapshot, so use it.
+ */
+export function resolveIssueFix(
+  code: IssueCode,
+  context?: { manufacturer?: string | null },
+): string {
+  if (code === "app_stopped_in_background" || code === "os_killed_app" || code === "battery_optimization") {
+    return formatOemGuide(context?.manufacturer ?? null);
+  }
+  return ISSUE_CATALOG[code].fix;
+}
 
 const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, info: 2 };
 
