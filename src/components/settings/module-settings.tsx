@@ -549,6 +549,12 @@ export function ModuleSettingsPanel() {
                   aria-label="Tracking interval"
                   className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
                 >
+                  {/* An account saved on a since-retired interval (5 minutes) keeps its value
+                      visible rather than silently showing the wrong option — picking anything
+                      else drops it for good. */}
+                  {!TRACKING_INTERVAL_OPTIONS.includes(trackingInterval as never) && (
+                    <option value={trackingInterval}>{trackingInterval} minutes (current)</option>
+                  )}
                   {TRACKING_INTERVAL_OPTIONS.map((m) => (
                     <option key={m} value={m}>
                       {m} minutes

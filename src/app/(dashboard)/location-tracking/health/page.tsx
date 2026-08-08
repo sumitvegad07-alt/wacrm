@@ -344,14 +344,12 @@ export default function TrackingHealthPage() {
       id: "gpsOffCount",
       label: "GPS off",
       type: "text",
-      visibleByDefault: false,
       render: (row) => num(row.gpsOffCount),
     },
     {
       id: "switchedOffCount",
       label: "Switched off",
       type: "text",
-      visibleByDefault: false,
       render: (row) => num(row.switchedOffCount),
     },
     {
@@ -365,7 +363,6 @@ export default function TrackingHealthPage() {
       id: "mockCount",
       label: "Mock",
       type: "text",
-      visibleByDefault: false,
       render: (row) =>
         row.mockCount > 0 ? (
           <span className="block text-right font-semibold text-destructive tabular-nums">
@@ -386,7 +383,6 @@ export default function TrackingHealthPage() {
       id: "gaps",
       label: "Gaps",
       type: "text",
-      visibleByDefault: false,
       render: (row) => num(row.gaps.length),
     },
     {
@@ -503,7 +499,10 @@ export default function TrackingHealthPage() {
         data={filtered}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
-        storageKey="wacrm_tracking_health_table"
+        // Bumped to _v2: column visibility is cached per browser, so anyone who had already
+        // opened this page would keep the old hidden-by-default set and never see GPS off,
+        // switched off, mock or gaps appear.
+        storageKey="wacrm_tracking_health_table_v2"
         isLoading={isLoading}
         rowKey={(row) => row.id}
       />

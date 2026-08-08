@@ -41,8 +41,14 @@ export const DEFAULT_TRACKING: TrackingSettings = {
   grace_minutes: 15,
 };
 
-/** Interval choices offered in Organisation Settings. */
-export const TRACKING_INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
+/**
+ * Interval choices offered in Organisation Settings.
+ *
+ * 5 minutes was removed deliberately: at that rate Android's power manager is far more likely to
+ * throttle or kill the foreground service, and the battery cost pushes reps to disable the app —
+ * which costs far more tracking than the extra resolution buys.
+ */
+export const TRACKING_INTERVAL_OPTIONS = [10, 15, 30, 60] as const;
 
 /** Grace-period choices offered in Organisation Settings. */
 export const GRACE_MINUTE_OPTIONS = [0, 5, 10, 15, 30, 60] as const;

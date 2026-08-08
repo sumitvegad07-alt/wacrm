@@ -1,25 +1,13 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Search,
-  MapPin,
-  Battery,
-  Calendar,
-  Clock,
-  ChevronRight,
-  CheckCircle2,
-  User,
-  Activity,
-  Route,
-  Loader2,
-} from 'lucide-react';
+import { Search, MapPin, Battery, Route, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   reverseGeocodeWithCache,
@@ -57,15 +45,37 @@ export default function LocationDashboardPage() {
   });
   // Date range for the map. Defaults to today, but any past range can be replayed — the map used
   // to be locked to the current session, so history was unreachable.
+  //
+  // `draft*` is what the pickers show; `fromDate`/`toDate` is what has actually been applied.
+  // Splitting them means changing a date doesn't fire a query (and a routing call) per keystroke.
   const today = () => new Date().toISOString().split('T')[0];
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(today);
-  /** Road-snapped path of where the rep actually drove, from OpenRouteService. */
+  const [draftFrom, setDraftFrom] = useState(today);
+  const [draftTo, setDraftTo] = useState(today);
+  /** Road-snapped path of where the rep actually drove, from OpenRouteService. Always shown. */
   const [travelRoute, setTravelRoute] = useState<RouteOverlay[]>([]);
   const [routeSummary, setRouteSummary] = useState<string | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
-  /** Follow the roads (real travelled route) vs join pings with a straight line. */
-  const [snapToRoads, setSnapToRoads] = useState(true);
+  const [pointsLoading, setPointsLoading] = useState(false);
+  /** Guards against a slow earlier fetch landing after a newer one. See fetchUserPoints. */
+  const requestIdRef = useRef(0);
+
+  const filterDirty = draftFrom !== fromDate || draftTo !== toDate;
+  const filterCleared = fromDate === today() && toDate === today();
+
+  const applyDateFilter = () => {
+    setFromDate(draftFrom);
+    setToDate(draftTo);
+  };
+
+  const clearDateFilter = () => {
+    const t = today();
+    setDraftFrom(t);
+    setDraftTo(t);
+    setFromDate(t);
+    setToDate(t);
+  };
   const [timelineAddresses, setTimelineAddresses] = useState<
     Record<number, string>
   >({});
@@ -150,16 +160,37 @@ export default function LocationDashboardPage() {
     });
 
     setUsersData(allUsers);
-    if (allUsers.length > 0 && !selectedUser) {
-      setSelectedUser(allUsers[0]);
-    }
+
+    // THIS RUNS EVERY 30 SECONDS. It used to read `selectedUser` from the closure, which was
+    // captured as null when the polling interval was created — so every poll re-selected the
+    // first user in the list and yanked the admin off whoever they had actually clicked.
+    // Reading the live value through the updater is what keeps the selection put.
+    setSelectedUser((prev: any) => {
+      if (!prev) return allUsers[0] ?? null;
+      // Keep the selection, but refresh the live bits (a rep may have punched in or out since).
+      const fresh = allUsers.find((u) => u.userId === prev.userId);
+      return fresh
+        ? {
+            ...prev,
+            status: fresh.status,
+            sessionId: fresh.sessionId,
+            startedAt: fresh.startedAt,
+            punchedIn: fresh.punchedIn,
+          }
+        : prev;
+    });
   };
 
   useEffect(() => {
     if (!selectedUser?.userId) return;
 
+    // Wipe the previous rep's trail immediately. Leaving it on screen while the new one loads
+    // is how someone ends up reading Dhaval's route under Sumit's name.
     setTimelineAddresses({});
     setUserAddress('');
+    setPointsData([]);
+    setTravelRoute([]);
+    setRouteSummary(null);
     fetchUserPoints(selectedUser.userId, fromDate, toDate);
 
     // Only poll when the range actually includes today; replaying a past day is static data
@@ -174,6 +205,13 @@ export default function LocationDashboardPage() {
   }, [selectedUser?.userId, fromDate, toDate]);
 
   const fetchUserPoints = async (userId: string, from: string, to: string) => {
+    // Every fetch claims a ticket. Queries + routing take a couple of seconds, so switching rep
+    // or changing the range mid-flight would otherwise let the older, slower response land last
+    // and overwrite the newer one.
+    const reqId = ++requestIdRef.current;
+    const isCurrent = () => reqId === requestIdRef.current;
+    setPointsLoading(true);
+
     // Range, not session: an admin needs to replay any past day, and a rep who is currently
     // punched out has no session id at all.
     const rangeStart = new Date(from);
@@ -305,7 +343,7 @@ export default function LocationDashboardPage() {
         }
         // Fetch address for last known location
         reverseGeocodeWithCache(lastPing.lat, lastPing.lng).then((result) => {
-          if (result) setUserAddress(result.shortAddress);
+          if (result && isCurrent()) setUserAddress(result.shortAddress);
         });
       }
     }
@@ -341,6 +379,9 @@ export default function LocationDashboardPage() {
     // of the raw haversine loop that used to live here and inflated it.
     const totalDistanceKm = computeFilteredDistanceKm((pings || []) as any);
 
+    // A slower earlier request must never repaint the screen for a rep the admin has moved on from.
+    if (!isCurrent()) return;
+
     setSelectedUser((prev: any) => ({
       ...prev,
       distance: totalDistanceKm.toFixed(2),
@@ -355,10 +396,11 @@ export default function LocationDashboardPage() {
     }));
 
     setPointsData(allPoints);
+    setPointsLoading(false);
 
     // Snap the trail to real roads. A straight line between two pings 10 minutes apart cuts
     // through buildings and understates the journey; this shows where the rep actually drove.
-    void buildTravelRoute((pings || []) as any[]);
+    void buildTravelRoute((pings || []) as any[], reqId);
   };
 
   /**
@@ -368,7 +410,8 @@ export default function LocationDashboardPage() {
    * router drags the whole route to the wrong street. Falls back silently to the straight-line
    * trail (the map already draws one) when routing is unavailable or the day is too sparse.
    */
-  const buildTravelRoute = async (pings: any[]) => {
+  const buildTravelRoute = async (pings: any[], reqId: number) => {
+    const isCurrent = () => reqId === requestIdRef.current;
     const waypoints = pings
       .filter(isTrustworthyPing)
       .map((p) => ({ lat: p.lat as number, lng: p.lng as number }));
@@ -382,6 +425,9 @@ export default function LocationDashboardPage() {
     setRouteLoading(true);
     try {
       const result: RouteResult | null = await getMultiPointRoute(waypoints);
+      // Routing is the slowest step on the page, so it is the most likely to come back after
+      // the admin has already clicked a different rep.
+      if (!isCurrent()) return;
       if (result?.coordinates?.length) {
         setTravelRoute([
           {
@@ -396,7 +442,7 @@ export default function LocationDashboardPage() {
         setRouteSummary(null);
       }
     } finally {
-      setRouteLoading(false);
+      if (isCurrent()) setRouteLoading(false);
     }
   };
 
@@ -513,6 +559,8 @@ export default function LocationDashboardPage() {
             </button>
           </div>
 
+          {/* Legend + date range, grouped so they stay together on the right and wrap as a pair. */}
+          <div className="flex flex-wrap items-start justify-end gap-2">
           <div className="bg-background/95 border-border pointer-events-auto flex flex-wrap items-center gap-4 rounded-md border px-3 py-2 text-xs font-medium shadow-sm backdrop-blur-sm">
             <button
               onClick={() => setFilters((f) => ({ ...f, visits: !f.visits }))}
@@ -532,54 +580,59 @@ export default function LocationDashboardPage() {
             >
               <div className="h-2 w-2 rounded-full bg-red-500" /> Ends
             </button>
-            <button
-              onClick={() => setSnapToRoads((v) => !v)}
-              className={`flex items-center gap-1.5 transition-opacity ${!snapToRoads && 'opacity-40'}`}
-              title="Follow roads instead of joining points with a straight line"
-            >
+            {/* The travelled route is always on, so it is a legend entry, not a switch. */}
+            <span className="flex items-center gap-1.5">
               <Route className="h-3 w-3 text-indigo-500" /> Travelled route
-              {routeLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-            </button>
+              {(routeLoading || pointsLoading) && (
+                <Loader2 className="text-muted-foreground h-3 w-3 animate-spin" />
+              )}
+            </span>
+            {routeSummary && (
+              <span className="text-muted-foreground border-border border-l pl-3 font-normal">
+                {routeSummary}
+              </span>
+            )}
           </div>
-        </div>
 
-        {/* Date range — the map used to be locked to today with a static label. */}
-        <div className="pointer-events-none absolute bottom-4 left-4 z-10">
+          {/* Date range sits with the other map controls. Defaults to today, so there is no
+              "Today" button — Clear is what returns you there. The native date inputs carry
+              their own calendar icons; a third decorative one just added noise. */}
           <div className="bg-background/95 border-border pointer-events-auto flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 shadow-sm backdrop-blur-sm">
-            <Calendar className="text-muted-foreground h-3.5 w-3.5" />
             <Input
               type="date"
-              value={fromDate}
-              max={toDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="h-8 w-[145px] text-xs"
+              value={draftFrom}
+              max={draftTo}
+              onChange={(e) => setDraftFrom(e.target.value)}
+              className="h-8 w-[140px] text-xs"
               aria-label="From date"
             />
             <span className="text-muted-foreground text-xs">to</span>
             <Input
               type="date"
-              value={toDate}
-              min={fromDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="h-8 w-[145px] text-xs"
+              value={draftTo}
+              min={draftFrom}
+              onChange={(e) => setDraftTo(e.target.value)}
+              className="h-8 w-[140px] text-xs"
               aria-label="To date"
             />
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={applyDateFilter}
+              disabled={!filterDirty}
+            >
+              Apply
+            </Button>
             <Button
               variant="outline"
               size="sm"
               className="h-8 text-xs"
-              onClick={() => {
-                setFromDate(today());
-                setToDate(today());
-              }}
+              onClick={clearDateFilter}
+              disabled={!filterDirty && filterCleared}
             >
-              Today
+              Clear
             </Button>
-            {routeSummary && (
-              <span className="text-muted-foreground border-border ml-1 border-l pl-2 text-xs">
-                {routeSummary}
-              </span>
-            )}
+          </div>
           </div>
         </div>
 
@@ -587,9 +640,10 @@ export default function LocationDashboardPage() {
           <MapView
             points={filteredPoints as any}
             layerType={layerType}
-            routes={snapToRoads ? travelRoute : []}
-            // When the real route is drawn, the dashed straight line is just visual noise.
-            showStraightLine={!snapToRoads || travelRoute.length === 0}
+            routes={travelRoute}
+            // With the real route drawn, the dashed straight line is just visual noise — it only
+            // appears as a fallback when routing returned nothing.
+            showStraightLine={travelRoute.length === 0}
           />
         </div>
       </div>
