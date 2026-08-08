@@ -125,6 +125,53 @@ describe("computeAgentHealth", () => {
     expect(h.gaps[0].issueCode).toBe("gps_off");
   });
 
+  it("names an OS-killed background app instead of shrugging with unknown_gap", () => {
+    // Reproduces the real 2026-08-08 incident: pings every 10 min for ~40 min, then dead
+    // silence for hours while everything checkable stayed healthy and the app stopped
+    // emitting its hourly heartbeat.
+    const h = computeAgentHealth({
+      sessions: [session(0, null)], // still punched in
+      pings: [ping(0), ping(10), ping(20), ping(30), ping(40, { battery_pct: 43 })],
+      events: [], // app never reported gps-off / permission-revoked — it wasn't running
+      latestSnapshot: snapshot({
+        location_services_on: true,
+        bg_location_permission: "granted",
+        low_power_mode: false,
+      }),
+      snapshotTimes: [at(0)], // last heartbeat at punch-in; none during the gap
+      nowMs: T0 + 340 * 60000,
+    });
+
+    const trailing = h.gaps[h.gaps.length - 1];
+    expect(trailing.issueCode).toBe("app_stopped_in_background");
+    expect(h.worstSeverity).toBe("high");
+  });
+
+  it("still defers to a real device signal over the OS-killed inference", () => {
+    const h = computeAgentHealth({
+      sessions: [session(0, null)],
+      pings: [ping(0), ping(10)],
+      events: [{ event_type: "gps_disabled", recorded_at: at(30) }],
+      latestSnapshot: snapshot({}),
+      snapshotTimes: [at(0)],
+      nowMs: T0 + 200 * 60000,
+    });
+    expect(h.gaps[h.gaps.length - 1].issueCode).toBe("gps_off");
+  });
+
+  it("does not blame the OS when a heartbeat proves the app was alive", () => {
+    const h = computeAgentHealth({
+      sessions: [session(0, null)],
+      pings: [ping(0), ping(10)],
+      events: [],
+      latestSnapshot: snapshot({}),
+      // App kept checking in during the gap, so something else stopped the pings.
+      snapshotTimes: [at(0), at(60), at(120)],
+      nowMs: T0 + 200 * 60000,
+    });
+    expect(h.gaps[h.gaps.length - 1].issueCode).toBe("unknown_gap");
+  });
+
   it("classifies a trailing gap after a low battery as phone_died", () => {
     const h = computeAgentHealth({
       sessions: [session(0, null)], // still open

@@ -14,6 +14,7 @@ export type IssueCode =
   | "power_save_mode"
   | "phone_died"
   | "os_killed_app"
+  | "app_stopped_in_background"
   | "app_outdated"
   | "mock_location"
   | "not_punched_in"
@@ -83,6 +84,14 @@ export const ISSUE_CATALOG: Record<IssueCode, IssueMeta> = {
     title: "The app was closed by the phone",
     cause: "Android shut the app down in the background (often paired with battery optimization).",
     fix: "Set the app's battery usage to 'Unrestricted' and enable Autostart if the phone has it.",
+  },
+  app_stopped_in_background: {
+    severity: "high",
+    title: "Phone stopped the app in the background",
+    cause:
+      "Tracking was running normally and then stopped dead, while location, background permission and battery were all fine — so nothing on the app's side failed. This is Android putting the app to sleep to save power, which is very common on Samsung, Xiaomi, Oppo, Vivo and OnePlus.",
+    fix:
+      "On the agent's phone: Settings → Apps → WACRM → Battery → set to 'Unrestricted'. On Samsung also turn OFF Settings → Battery → Background usage limits → 'Put unused apps to sleep', and add WACRM to 'Never sleeping apps'. Then punch out and punch in again.",
   },
   app_outdated: {
     severity: "medium",

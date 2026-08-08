@@ -131,6 +131,7 @@ export default function TrackingHealthPage() {
         pings: pingById[p.user_id] || [],
         events: evById[p.user_id] || [],
         latestSnapshot: (snapById[p.user_id] || [])[0] || null,
+        snapshotTimes: (snapById[p.user_id] || []).map((s: any) => s.recorded_at),
         devicePending,
         trackingSettings,
       });

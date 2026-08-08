@@ -110,8 +110,9 @@ export default function AgentHealthDetailPage() {
           .eq("user_id", userId)
           .gte("recorded_at", isoStart)
           .lte("recorded_at", isoEnd)
-          .order("recorded_at", { ascending: false })
-          .limit(1),
+          // All of the day's heartbeats, not just the newest: their ABSENCE inside a gap is
+          // what proves the app wasn't running. [0] is still the latest for the device card.
+          .order("recorded_at", { ascending: false }),
         // Working window — decides whether a missing punch-in counts as "late" (RLS scopes
         // this to the viewer's own account, so no explicit filter is needed).
         supabase.from("accounts").select("settings").limit(1).maybeSingle(),
@@ -126,6 +127,7 @@ export default function AgentHealthDetailPage() {
         pings: (pings as any) || [],
         events: (events as any) || [],
         latestSnapshot: latest as any,
+        snapshotTimes: ((snaps as any[]) || []).map((s) => s.recorded_at),
         trackingSettings: normalizeTrackingSettings((acct as any)?.settings?.tracking_settings),
       }),
     );

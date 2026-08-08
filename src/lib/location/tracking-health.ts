@@ -62,6 +62,11 @@ export interface ComputeHealthInput {
   pings: HealthPing[];
   events: HealthEvent[];
   latestSnapshot: HealthSnapshot | null;
+  /**
+   * recorded_at of every device-health heartbeat that day. A live app emits one roughly hourly,
+   * so their absence inside a gap tells us the process itself wasn't running.
+   */
+  snapshotTimes?: string[];
   /** Version of the app this agent's device last reported (from employee_devices). */
   deviceAppVersion?: string | null;
   /** The current/latest app version to compare against, if known. */
@@ -100,6 +105,8 @@ function classifyGap(
     batteryBeforeGap: number | null;
     isTrailingGap: boolean;
     sessionEndReason: string | null;
+    /** True when the app sent no device-health heartbeat at all inside this gap. */
+    noHeartbeatDuringGap: boolean;
   },
 ): IssueCode {
   if (eventInWindow(ctx.events, "gps_disabled", gap.fromIso, gap.toIso)) return "gps_off";
@@ -121,6 +128,22 @@ function classifyGap(
 
   if (ctx.isTrailingGap && ctx.sessionEndReason === "app_killed") return "os_killed_app";
 
+  // Nothing on the app's side was wrong — location was on, background permission was granted,
+  // battery saver was off and the battery was healthy — yet tracking stopped dead AND the app
+  // stopped sending its own health heartbeat (it emits one roughly hourly while alive). The app
+  // wasn't running to report anything, which means the OS put it to sleep. This is the single
+  // most common real-world cause of a tracking gap on Android, so name it instead of shrugging.
+  // (battery saver is already ruled out above — reaching here means low_power_mode wasn't true)
+  if (
+    s &&
+    s.location_services_on === true &&
+    (s.bg_location_permission == null || s.bg_location_permission === "granted") &&
+    (ctx.batteryBeforeGap == null || ctx.batteryBeforeGap > LOW_BATTERY_PCT) &&
+    ctx.noHeartbeatDuringGap
+  ) {
+    return "app_stopped_in_background";
+  }
+
   return "unknown_gap";
 }
 
@@ -131,6 +154,7 @@ function sessionGaps(
   events: HealthEvent[],
   snapshot: HealthSnapshot | null,
   nowMs: number,
+  heartbeatTimes: number[] = [],
 ): Gap[] {
   const endIso = session.ended_at ?? new Date(nowMs).toISOString();
   const sorted = [...sessionPings].sort((a, b) => ms(a.recorded_at) - ms(b.recorded_at));
@@ -161,6 +185,11 @@ function sessionGaps(
           batteryBeforeGap: boundaries[i - 1].batteryBefore,
           isTrailingGap,
           sessionEndReason: session.end_reason,
+          // A live app emits a health heartbeat roughly hourly. None inside a long gap is
+          // strong evidence the process wasn't running at all.
+          noHeartbeatDuringGap: !heartbeatTimes.some(
+            (t) => t > ms(fromIso) && t < ms(toIso),
+          ),
         },
       ),
     });
@@ -172,6 +201,7 @@ function sessionGaps(
 export function computeAgentHealth(input: ComputeHealthInput): AgentHealth {
   const nowMs = input.nowMs ?? Date.now();
   const { sessions, pings, events, latestSnapshot } = input;
+  const heartbeatTimes = (input.snapshotTimes ?? []).map((t) => ms(t));
 
   const codes = new Set<IssueCode>();
   if (input.devicePending) codes.add("device_pending");
@@ -206,7 +236,9 @@ export function computeAgentHealth(input: ComputeHealthInput): AgentHealth {
     const sessionPings = pings.filter(
       (p) => ms(p.recorded_at) >= ms(session.started_at) && ms(p.recorded_at) <= endMs,
     );
-    allGaps.push(...sessionGaps(session, sessionPings, events, latestSnapshot, nowMs));
+    allGaps.push(
+      ...sessionGaps(session, sessionPings, events, latestSnapshot, nowMs, heartbeatTimes),
+    );
   }
 
   const expectedPings = Math.floor(activeSeconds / (PING_INTERVAL_MIN * 60));
