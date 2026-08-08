@@ -393,24 +393,12 @@ export default function UserAttendancePage() {
           <h1 className="text-2xl font-bold tracking-tight">User Attendance</h1>
           {/* Make the rule visible. Without this, "Late Start" is an unexplained accusation. */}
           <p className="mt-1 text-sm text-muted-foreground">
-            {shift.enabled ? (
-              <>
-                Measured against the{" "}
-                <Link href="/settings" className="text-primary hover:underline">
-                  configured shift
-                </Link>{" "}
-                {formatHHMM(shift.start_time)} – {formatHHMM(shift.end_time)}
-                {shift.grace_minutes > 0 && <> with {shift.grace_minutes} min grace</>}.
-              </>
-            ) : (
-              <>
-                Shift timings are off, so only Present/Absent is shown. Turn them on in{" "}
-                <Link href="/settings" className="text-primary hover:underline">
-                  Organisation Settings
-                </Link>
-                .
-              </>
-            )}
+            Measured against the{" "}
+            <Link href="/settings" className="text-primary hover:underline">
+              configured shift
+            </Link>{" "}
+            {formatHHMM(shift.start_time)} – {formatHHMM(shift.end_time)}
+            {shift.grace_minutes > 0 && <> with {shift.grace_minutes} min grace</>}.
           </p>
         </div>
         <div className="flex items-center gap-2">

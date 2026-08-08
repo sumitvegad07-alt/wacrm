@@ -66,9 +66,10 @@ describe("computeAttendanceDay — Late Start", () => {
     expect(d.lateByMinutes).toBe(1);
   });
 
-  it("never flags when shift rules are disabled", () => {
+  it("flags regardless of any legacy enabled flag left in stored settings", () => {
+    // The on/off switch was removed; shift rules always apply now.
     const d = compute([{ started_at: at(14, 0), ended_at: at(18, 0) }], { enabled: false });
-    expect(d.flags).toEqual([]);
+    expect(d.flags).toContain("late_start");
   });
 });
 

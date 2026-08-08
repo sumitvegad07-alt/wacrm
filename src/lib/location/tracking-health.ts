@@ -84,11 +84,18 @@ export interface ComputeHealthInput {
   /** Device is pending approval (from employee_devices.status). */
   devicePending?: boolean;
   /**
-   * The account's configured tracking window. When supplied and today's window has already
-   * started, a missing punch-in is escalated from a neutral "not punched in" note to a real
-   * problem the admin should chase.
+   * The account's configured shift + interval. The interval drives the coverage calculation;
+   * `start_time` decides whether a missing punch-in is "hasn't started yet" or "shift is
+   * underway and nothing is being tracked".
    */
   trackingSettings?: TrackingSettings | null;
+  /**
+   * Whether to escalate a missing punch-in to a chase-it problem. False when looking at a
+   * historical range — "the shift started an hour ago and nobody punched in" is a statement
+   * about right now, and applying it to last week would accuse everyone of everything.
+   * Kept separate from `trackingSettings` so history still gets the correct ping interval.
+   */
+  evaluateMissingPunchIn?: boolean;
   /** "Now" — injected for testability. Defaults to Date.now(). */
   nowMs?: number;
 }
@@ -243,8 +250,8 @@ export function computeAgentHealth(input: ComputeHealthInput): AgentHealth {
     const ts = input.trackingSettings;
     const now = new Date(nowMs);
     const shiftStarted =
+      input.evaluateMissingPunchIn !== false &&
       !!ts &&
-      ts.enabled &&
       now.getHours() * 60 + now.getMinutes() >= hhmmToMinutes(ts.start_time);
     codes.add(shiftStarted ? "not_punched_in_late" : "not_punched_in");
     return {

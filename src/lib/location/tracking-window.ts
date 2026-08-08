@@ -20,8 +20,6 @@
  */
 
 export interface TrackingSettings {
-  /** Whether shift timings are applied when classifying attendance. Never gates tracking. */
-  enabled: boolean;
   /** 24h "HH:MM" — shift start. */
   start_time: string;
   /** 24h "HH:MM" — shift end. May be earlier than start for a night shift (wraps midnight). */
@@ -36,7 +34,6 @@ export interface TrackingSettings {
 }
 
 export const DEFAULT_TRACKING: TrackingSettings = {
-  enabled: true,
   start_time: "09:00",
   end_time: "18:00",
   // Founder decision: default to 10 minutes (the reference UI showed 15).
@@ -56,7 +53,6 @@ export function normalizeTrackingSettings(raw: unknown): TrackingSettings {
   const interval = Number(r.interval_minutes);
   const grace = Number(r.grace_minutes);
   return {
-    enabled: r.enabled !== false,
     start_time: isHHMM(r.start_time) ? r.start_time! : DEFAULT_TRACKING.start_time,
     end_time: isHHMM(r.end_time) ? r.end_time! : DEFAULT_TRACKING.end_time,
     interval_minutes: Number.isFinite(interval) && interval > 0 ? interval : DEFAULT_TRACKING.interval_minutes,
@@ -85,13 +81,19 @@ export function hhmmToMinutes(hhmm: string): number {
 }
 
 /**
+ * The `enabled` flag that used to live on these settings is gone from the UI — an on/off switch
+ * we could not put to honest use. It is still WRITTEN as true when saving, because APKs already
+ * in the field read it as a tracking gate and would stop tracking entirely on false.
+ */
+export const LEGACY_ENABLED_FOR_OLD_APKS = true;
+
+/**
  * Is `date` inside the configured shift? Handles a shift that wraps past midnight
  * (end earlier than start), e.g. a night shift 20:00 → 04:00.
  *
  * For attendance/display only — never use this to decide whether to record a location.
  */
 export function isWithinShift(settings: TrackingSettings, date: Date = new Date()): boolean {
-  if (!settings.enabled) return false;
   const now = date.getHours() * 60 + date.getMinutes();
   const start = hhmmToMinutes(settings.start_time);
   const end = hhmmToMinutes(settings.end_time);

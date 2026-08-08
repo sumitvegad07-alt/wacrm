@@ -35,14 +35,12 @@ describe("normalizeTrackingSettings", () => {
   it("keeps valid values", () => {
     expect(
       normalizeTrackingSettings({
-        enabled: true,
         start_time: "08:15",
         end_time: "19:00",
         interval_minutes: 15,
         grace_minutes: 30,
       }),
     ).toEqual({
-      enabled: true,
       start_time: "08:15",
       end_time: "19:00",
       interval_minutes: 15,
@@ -50,14 +48,14 @@ describe("normalizeTrackingSettings", () => {
     });
   });
 
+  it("ignores a stored enabled:false — the flag no longer gates anything", () => {
+    // Old accounts may still carry it. Shift rules must apply regardless.
+    expect(normalizeTrackingSettings({ enabled: false } as never)).toEqual(DEFAULT_TRACKING);
+  });
+
   it("rejects out-of-range times", () => {
     expect(normalizeTrackingSettings({ start_time: "24:00" }).start_time).toBe(DEFAULT_TRACKING.start_time);
     expect(normalizeTrackingSettings({ end_time: "12:60" }).end_time).toBe(DEFAULT_TRACKING.end_time);
-  });
-
-  it("treats enabled as true unless explicitly false", () => {
-    expect(normalizeTrackingSettings({}).enabled).toBe(true);
-    expect(normalizeTrackingSettings({ enabled: false }).enabled).toBe(false);
   });
 
   it("keeps a grace of 0 — 'no leeway' is a real choice, not a missing value", () => {
@@ -92,10 +90,6 @@ describe("isWithinShift", () => {
     expect(isWithinShift(day, at(8, 59))).toBe(false);
     expect(isWithinShift(day, at(18, 1))).toBe(false);
     expect(isWithinShift(day, at(3, 0))).toBe(false);
-  });
-
-  it("is always false when disabled", () => {
-    expect(isWithinShift({ ...day, enabled: false }, at(13, 0))).toBe(false);
   });
 
   it("handles a night shift that wraps past midnight", () => {

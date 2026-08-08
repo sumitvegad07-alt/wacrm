@@ -39,7 +39,6 @@ describe("computeAgentHealth", () => {
 
   it("escalates a missing punch-in to 'late' once the configured window has started", () => {
     const window = {
-      enabled: true,
       start_time: "09:00",
       end_time: "18:00",
       interval_minutes: 10,
@@ -63,24 +62,59 @@ describe("computeAgentHealth", () => {
     expect(late.worstSeverity).toBe("high");
   });
 
-  it("stays neutral when no tracking window is configured or it is disabled", () => {
-    const noWindow = computeAgentHealth({
-      sessions: [], pings: [], events: [], latestSnapshot: null, nowMs: localAt(11),
-    });
-    expect(noWindow.issueCodes).toContain("not_punched_in");
-
-    const disabled = computeAgentHealth({
+  it("does not accuse anyone of a missing punch-in on a historical range", () => {
+    // Viewing last week: "the shift started and nobody punched in" is a statement about NOW.
+    const historical = computeAgentHealth({
       sessions: [], pings: [], events: [], latestSnapshot: null,
       trackingSettings: {
-        enabled: false,
         start_time: "09:00",
         end_time: "18:00",
         interval_minutes: 10,
         grace_minutes: 15,
       },
+      evaluateMissingPunchIn: false,
       nowMs: localAt(11),
     });
-    expect(disabled.issueCodes).toContain("not_punched_in");
+    expect(historical.issueCodes).toContain("not_punched_in");
+    expect(historical.issueCodes).not.toContain("not_punched_in_late");
+  });
+
+  it("still measures coverage against the configured interval on a historical range", () => {
+    // Regression: suppressing the late-punch-in judgement must not also drop the interval,
+    // or a healthy rep on a 30-minute interval reads as ~33% coverage.
+    const base = {
+      // 3 hours on duty with a ping every 30 minutes: full coverage at a 30-minute interval.
+      sessions: [session(0, 180, "manual")],
+      pings: [0, 30, 60, 90, 120, 150].map((m) => ping(m)),
+      events: [],
+      latestSnapshot: null,
+      evaluateMissingPunchIn: false,
+    };
+    const shift = { start_time: "09:00", end_time: "18:00", grace_minutes: 15 };
+
+    const halfHourly = computeAgentHealth({
+      ...base,
+      trackingSettings: { ...shift, interval_minutes: 30 },
+    });
+    expect(halfHourly.expectedPings).toBe(6);
+    expect(halfHourly.coveragePct).toBe(100);
+
+    // Same data judged against a 10-minute interval is genuinely poor coverage — proving the
+    // number tracks the setting rather than a hardcoded constant.
+    const tenMinute = computeAgentHealth({
+      ...base,
+      trackingSettings: { ...shift, interval_minutes: 10 },
+    });
+    expect(tenMinute.expectedPings).toBe(18);
+    expect(tenMinute.coveragePct).toBe(33);
+  });
+
+  it("stays neutral when no shift is configured at all", () => {
+    const noWindow = computeAgentHealth({
+      sessions: [], pings: [], events: [], latestSnapshot: null, nowMs: localAt(11),
+    });
+    expect(noWindow.issueCodes).toContain("not_punched_in");
+    expect(noWindow.issueCodes).not.toContain("not_punched_in_late");
   });
 
   it("shows full coverage and no gaps when pings arrive every 10 min", () => {

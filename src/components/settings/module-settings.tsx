@@ -11,6 +11,7 @@ import {
   DEFAULT_TRACKING,
   TRACKING_INTERVAL_OPTIONS,
   GRACE_MINUTE_OPTIONS,
+  LEGACY_ENABLED_FOR_OLD_APKS,
   normalizeTrackingSettings,
   formatHHMM,
 } from "@/lib/location/tracking-window";
@@ -162,9 +163,6 @@ export function ModuleSettingsPanel() {
 
   // Tracking interval + shift timings. Times are stored as 24h "HH:MM" strings so there is no
   // AM/PM ambiguity between the web form and the mobile app that reads them.
-  // `trackingEnabled` switches the SHIFT rules (attendance) on and off — it never affects
-  // whether locations are recorded.
-  const [trackingEnabled, setTrackingEnabled] = useState(true);
   const [trackingStart, setTrackingStart] = useState(DEFAULT_TRACKING.start_time);
   const [trackingEnd, setTrackingEnd] = useState(DEFAULT_TRACKING.end_time);
   const [trackingInterval, setTrackingInterval] = useState<number>(DEFAULT_TRACKING.interval_minutes);
@@ -193,8 +191,7 @@ export function ModuleSettingsPanel() {
         setHsnEnabled(!!s.hsn_enabled);
 
         const ts = normalizeTrackingSettings(s.tracking_settings);
-        setTrackingEnabled(ts.enabled);
-        setTrackingStart(ts.start_time);
+            setTrackingStart(ts.start_time);
         setTrackingEnd(ts.end_time);
         setTrackingInterval(ts.interval_minutes);
         setTrackingGrace(ts.grace_minutes);
@@ -246,7 +243,9 @@ export function ModuleSettingsPanel() {
         gst_enabled: gstEnabled,
         hsn_enabled: hsnEnabled,
         tracking_settings: {
-          enabled: trackingEnabled,
+          // Still written even though the UI no longer exposes it: APKs already in the field
+          // read this flag as a tracking gate and would stop tracking entirely on false.
+          enabled: LEGACY_ENABLED_FOR_OLD_APKS,
           start_time: trackingStart,
           end_time: trackingEnd,
           interval_minutes: trackingInterval,
@@ -291,7 +290,7 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, levels, originalSettings, refreshModuleSettings, supabase, trackingEnabled, trackingStart, trackingEnd, trackingInterval]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
@@ -300,7 +299,6 @@ export function ModuleSettingsPanel() {
     setGstEnabled(!!originalSettings.gst_enabled);
     setHsnEnabled(!!originalSettings.hsn_enabled);
     const ts = normalizeTrackingSettings(originalSettings.tracking_settings);
-    setTrackingEnabled(ts.enabled);
     setTrackingStart(ts.start_time);
     setTrackingEnd(ts.end_time);
     setTrackingInterval(ts.interval_minutes);
@@ -577,14 +575,7 @@ export function ModuleSettingsPanel() {
                   duty and is tracked whatever the hour.
                 </p>
               </div>
-              <KoopsRadioToggle
-                enabled={trackingEnabled}
-                onChange={setTrackingEnabled}
-                disabled={!canEditSettings}
-              />
-
-              {trackingEnabled && (
-                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 p-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 p-3">
                   <span className="text-sm text-muted-foreground">Shift runs</span>
                   <Input
                     type="time"
@@ -624,8 +615,7 @@ export function ModuleSettingsPanel() {
                     {trackingGrace > 0 && <> plus {trackingGrace} minutes</>} counts as Late Start.
                     An end time earlier than the start means a night shift that runs past midnight.
                   </p>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Enable GST */}

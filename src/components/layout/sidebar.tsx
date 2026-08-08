@@ -328,7 +328,7 @@ function getMenuStructure(
         { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin, module: "location_tracking" },
         { href: "/location-tracking/all-locations", label: "All Locations", icon: Map, module: "location_tracking" },
         { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
-        { href: "/location-tracking/track-report", label: "Track report", icon: LineChart, module: "location_tracking" },
+        // Track report was merged into Tracking Health — one table, nothing lost.
         { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
         { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking" },
       ],
@@ -345,7 +345,7 @@ function getMenuStructure(
         { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
         { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },
         { href: "/expenses", label: "Expenses Report", icon: Coins, module: "expenses" },
-        { href: "/location-tracking/track-report", label: "Location Reports", icon: MapPin, module: "location_tracking" },
+        { href: "/location-tracking/health", label: "Location Reports", icon: MapPin, module: "location_tracking" },
       ],
     },
 

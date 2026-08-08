@@ -105,18 +105,16 @@ export function computeAttendanceDay(input: ComputeAttendanceInput): AttendanceD
 
   // Late Start — first punch-in later than shift start + grace.
   let lateByMinutes = 0;
-  if (settings.enabled) {
-    const lateMs = ms(firstPunchIn) - (startMs + graceMs);
-    if (lateMs > 0) {
-      lateByMinutes = Math.round(lateMs / 60000);
-      flags.push("late_start");
-    }
+  const lateMs = ms(firstPunchIn) - (startMs + graceMs);
+  if (lateMs > 0) {
+    lateByMinutes = Math.round(lateMs / 60000);
+    flags.push("late_start");
   }
 
   // Early Leaving — last punch-out earlier than shift end - grace. Skipped while still on duty:
   // someone mid-shift hasn't left early, they simply haven't finished.
   let leftEarlyByMinutes = 0;
-  if (settings.enabled && lastPunchOut && !stillOnDuty) {
+  if (lastPunchOut && !stillOnDuty) {
     const earlyMs = endMs - graceMs - ms(lastPunchOut);
     if (earlyMs > 0) {
       leftEarlyByMinutes = Math.round(earlyMs / 60000);

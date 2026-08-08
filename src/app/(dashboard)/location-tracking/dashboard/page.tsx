@@ -27,6 +27,8 @@ import {
   type RouteResult,
 } from '@/lib/geo-service';
 import type { RouteOverlay } from '@/components/location-tracking/map-view';
+import { computeFilteredDistanceKm, isTrustworthyPing } from '@/lib/location/distance';
+import { isManualPing, pingSourceLabel } from '@/lib/location/ping-source';
 
 const MapView = dynamic(
   () => import('@/components/location-tracking/map-view'),
@@ -53,6 +55,17 @@ export default function LocationDashboardPage() {
     tracked: true,
     ends: true,
   });
+  // Date range for the map. Defaults to today, but any past range can be replayed — the map used
+  // to be locked to the current session, so history was unreachable.
+  const today = () => new Date().toISOString().split('T')[0];
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
+  /** Road-snapped path of where the rep actually drove, from OpenRouteService. */
+  const [travelRoute, setTravelRoute] = useState<RouteOverlay[]>([]);
+  const [routeSummary, setRouteSummary] = useState<string | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  /** Follow the roads (real travelled route) vs join pings with a straight line. */
+  const [snapToRoads, setSnapToRoads] = useState(true);
   const [timelineAddresses, setTimelineAddresses] = useState<
     Record<number, string>
   >({});
@@ -143,92 +156,86 @@ export default function LocationDashboardPage() {
   };
 
   useEffect(() => {
-    if (selectedUser?.sessionId) {
-      fetchUserPoints(
-        selectedUser.sessionId,
-        selectedUser.userId,
-        selectedUser.startedAt
-      );
-      
-      const interval = setInterval(() => {
-        fetchUserPoints(
-          selectedUser.sessionId,
-          selectedUser.userId,
-          selectedUser.startedAt
-        );
-      }, 30000);
+    if (!selectedUser?.userId) return;
 
-      setTimelineAddresses({});
-      setUserAddress('');
-      
-      return () => clearInterval(interval);
-    }
-  }, [selectedUser?.sessionId, selectedUser?.startedAt, selectedUser?.userId]);
+    setTimelineAddresses({});
+    setUserAddress('');
+    fetchUserPoints(selectedUser.userId, fromDate, toDate);
 
-  const fetchUserPoints = async (
-    sessionId: string,
-    userId: string,
-    startedAt: string
-  ) => {
+    // Only poll when the range actually includes today; replaying a past day is static data
+    // and re-fetching it every 30 seconds just burns the routing quota.
+    if (toDate < today()) return;
+    const interval = setInterval(
+      () => fetchUserPoints(selectedUser.userId, fromDate, toDate),
+      30000
+    );
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUser?.userId, fromDate, toDate]);
+
+  const fetchUserPoints = async (userId: string, from: string, to: string) => {
+    // Range, not session: an admin needs to replay any past day, and a rep who is currently
+    // punched out has no session id at all.
+    const rangeStart = new Date(from);
+    rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = new Date(to);
+    rangeEnd.setHours(23, 59, 59, 999);
+    const startStr = rangeStart.toISOString();
+    const endStr = rangeEnd.toISOString();
+
     const { data: pings } = await supabase
       .from('location_pings')
       .select('*')
-      .eq('session_id', sessionId)
+      .eq('user_id', userId)
+      .gte('recorded_at', startStr)
+      .lte('recorded_at', endStr)
       .order('recorded_at', { ascending: true });
 
     const { data: visits } = await supabase
       .from('site_visits')
       .select('*, contacts(name)')
       .eq('user_id', userId)
-      .gte('check_in_at', startedAt);
+      .gte('check_in_at', startStr)
+      .lte('check_in_at', endStr);
 
-    // Fetch daily stats
-    const startOfDay = new Date(startedAt);
-    startOfDay.setHours(0, 0, 0, 0);
-    const startStr = startOfDay.toISOString();
+    // expenses.employee_id is profiles.id, not the auth user id, so resolve it first.
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
 
     const [quotationsRes, tasksRes, expensesRes] = await Promise.all([
       supabase
         .from('quotations')
         .select('id')
         .eq('user_id', userId)
-        .gte('created_at', startStr),
+        .gte('created_at', startStr)
+        .lte('created_at', endStr),
       supabase
         .from('tasks')
         .select('status')
         .eq('assigned_to', userId)
-        .gte('created_at', startStr),
-      supabase
-        .from('expenses')
-        .select('amount, status')
-        .eq('employee_id', userId)
-        .gte('created_at', startStr), // assuming employee_id maps to user_id or profile_id? Wait, employee_id is profile.id.
+        .gte('created_at', startStr)
+        .lte('created_at', endStr),
+      profile
+        ? supabase
+            .from('expenses')
+            .select('amount, status')
+            .eq('employee_id', profile.id)
+            .gte('created_at', startStr)
+            .lte('created_at', endStr)
+        : Promise.resolve({ data: [] as any[] }),
     ]);
 
-    // We need profile ID for expenses since employee_id = profiles.id
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('user_id', userId)
-      .single();
     let expenseTotal = 0,
       expenseApproved = 0,
       expensePending = 0;
-
-    if (profile) {
-      const { data: exp } = await supabase
-        .from('expenses')
-        .select('amount, status')
-        .eq('employee_id', profile.id)
-        .gte('created_at', startStr);
-      if (exp) {
-        exp.forEach((e: any) => {
-          expenseTotal += Number(e.amount) || 0;
-          if (e.status === 'Approved') expenseApproved += Number(e.amount) || 0;
-          if (e.status === 'Pending') expensePending += Number(e.amount) || 0;
-        });
-      }
-    }
+    (expensesRes.data || []).forEach((e: any) => {
+      expenseTotal += Number(e.amount) || 0;
+      if (e.status === 'Approved') expenseApproved += Number(e.amount) || 0;
+      if (e.status === 'Pending') expensePending += Number(e.amount) || 0;
+    });
 
     const totalOrders = quotationsRes.data?.length || 0;
     const activityTotal = tasksRes.data?.length || 0;
@@ -266,18 +273,25 @@ export default function LocationDashboardPage() {
     }
 
     if (pings) {
-      const formattedPoints = pings.map((p: any) => ({
-        lat: p.lat,
-        lng: p.lng,
-        type: 'ping',
-        time: new Date(p.recorded_at).toLocaleTimeString('en-IN', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        label: 'Tracked Location',
-        battery: p.battery_pct,
-        recordedAt: new Date(p.recorded_at).getTime(),
-      }));
+      // A visit already gets its own richer marker from site_visits above (customer name,
+      // duration). Drawing its ping too would stack two markers on the same doorstep.
+      const formattedPoints = pings
+        .filter((p: any) => !isManualPing(p.source))
+        .map((p: any) => ({
+          lat: p.lat,
+          lng: p.lng,
+          type: 'ping',
+          time: new Date(p.recorded_at).toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          label: pingSourceLabel(p.source).label === 'Auto'
+            ? 'Tracked Location'
+            : pingSourceLabel(p.source).label,
+          battery: p.battery_pct,
+          mocked: p.is_mocked ?? false,
+          recordedAt: new Date(p.recorded_at).getTime(),
+        }));
       allPoints = [...allPoints, ...formattedPoints];
 
       // Update battery for selected user
@@ -322,26 +336,10 @@ export default function LocationDashboardPage() {
       }
     }
 
-    // Calculate actual GPS distance travelled
-    let totalDistanceKm = 0;
-    if (allPoints.length > 1) {
-      const toRad = (value: number) => (value * Math.PI) / 180;
-      for (let i = 1; i < allPoints.length; i++) {
-        const p1 = allPoints[i - 1];
-        const p2 = allPoints[i];
-        const R = 6371; // Earth radius km
-        const dLat = toRad(p2.lat - p1.lat);
-        const dLon = toRad(p2.lng - p1.lng);
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(toRad(p1.lat)) *
-            Math.cos(toRad(p2.lat)) *
-            Math.sin(dLon / 2) *
-            Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        totalDistanceKm += R * c;
-      }
-    }
+    // Distance uses the shared filtered calculation (drops low-accuracy pings and impossible
+    // GPS jumps) so this number agrees with Tracking Health and the Postgres function, instead
+    // of the raw haversine loop that used to live here and inflated it.
+    const totalDistanceKm = computeFilteredDistanceKm((pings || []) as any);
 
     setSelectedUser((prev: any) => ({
       ...prev,
@@ -357,6 +355,49 @@ export default function LocationDashboardPage() {
     }));
 
     setPointsData(allPoints);
+
+    // Snap the trail to real roads. A straight line between two pings 10 minutes apart cuts
+    // through buildings and understates the journey; this shows where the rep actually drove.
+    void buildTravelRoute((pings || []) as any[]);
+  };
+
+  /**
+   * Ask OpenRouteService for the driving path through the day's positions.
+   *
+   * Only trustworthy pings are used as waypoints — feeding a 1.2 km-accuracy reading to the
+   * router drags the whole route to the wrong street. Falls back silently to the straight-line
+   * trail (the map already draws one) when routing is unavailable or the day is too sparse.
+   */
+  const buildTravelRoute = async (pings: any[]) => {
+    const waypoints = pings
+      .filter(isTrustworthyPing)
+      .map((p) => ({ lat: p.lat as number, lng: p.lng as number }));
+
+    if (waypoints.length < 2) {
+      setTravelRoute([]);
+      setRouteSummary(null);
+      return;
+    }
+
+    setRouteLoading(true);
+    try {
+      const result: RouteResult | null = await getMultiPointRoute(waypoints);
+      if (result?.coordinates?.length) {
+        setTravelRoute([
+          {
+            coordinates: result.coordinates,
+            color: '#6366F1',
+            label: 'Travelled route',
+          },
+        ]);
+        setRouteSummary(result.summary);
+      } else {
+        setTravelRoute([]);
+        setRouteSummary(null);
+      }
+    } finally {
+      setRouteLoading(false);
+    }
   };
 
 
@@ -491,10 +532,54 @@ export default function LocationDashboardPage() {
             >
               <div className="h-2 w-2 rounded-full bg-red-500" /> Ends
             </button>
-            <div className="border-border ml-2 flex items-center gap-2 border-l pl-4">
-              <Calendar className="text-muted-foreground h-3.5 w-3.5" />{' '}
-              <span>Today</span>
-            </div>
+            <button
+              onClick={() => setSnapToRoads((v) => !v)}
+              className={`flex items-center gap-1.5 transition-opacity ${!snapToRoads && 'opacity-40'}`}
+              title="Follow roads instead of joining points with a straight line"
+            >
+              <Route className="h-3 w-3 text-indigo-500" /> Travelled route
+              {routeLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Date range — the map used to be locked to today with a static label. */}
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10">
+          <div className="bg-background/95 border-border pointer-events-auto flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 shadow-sm backdrop-blur-sm">
+            <Calendar className="text-muted-foreground h-3.5 w-3.5" />
+            <Input
+              type="date"
+              value={fromDate}
+              max={toDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-8 w-[145px] text-xs"
+              aria-label="From date"
+            />
+            <span className="text-muted-foreground text-xs">to</span>
+            <Input
+              type="date"
+              value={toDate}
+              min={fromDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-8 w-[145px] text-xs"
+              aria-label="To date"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => {
+                setFromDate(today());
+                setToDate(today());
+              }}
+            >
+              Today
+            </Button>
+            {routeSummary && (
+              <span className="text-muted-foreground border-border ml-1 border-l pl-2 text-xs">
+                {routeSummary}
+              </span>
+            )}
           </div>
         </div>
 
@@ -502,7 +587,9 @@ export default function LocationDashboardPage() {
           <MapView
             points={filteredPoints as any}
             layerType={layerType}
-            showStraightLine={true}
+            routes={snapToRoads ? travelRoute : []}
+            // When the real route is drawn, the dashed straight line is just visual noise.
+            showStraightLine={!snapToRoads || travelRoute.length === 0}
           />
         </div>
       </div>
