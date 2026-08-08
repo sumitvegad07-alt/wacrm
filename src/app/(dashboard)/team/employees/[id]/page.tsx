@@ -439,52 +439,57 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 <Smartphone className="w-5 h-5 text-primary" /> User Devices
               </h2>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-muted-foreground bg-muted/50">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Device Name</th>
-                    <th className="px-4 py-3 font-medium">Device ID</th>
-                    <th className="px-4 py-3 font-medium">Application Version</th>
-                    <th className="px-4 py-3 font-medium">Database Version</th>
-                    <th className="px-4 py-3 font-medium">Last Active Session</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {devices.map(device => (
-                    <tr key={device.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium text-foreground">{device.device_name || "-"}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{device.device_id || "-"}</td>
-                      <td className="px-4 py-3">{device.application_version || "-"}</td>
-                      <td className="px-4 py-3">{device.database_version || "-"}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {device.last_login ? new Date(device.last_login).toLocaleString() : "-"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge className={
-                          device.status === 'active' ? 'bg-emerald-600' :
-                          device.status === 'rejected' ? 'bg-red-600' :
-                          device.status === 'inactive' ? 'bg-slate-600' : 'bg-amber-600'
-                        }>{device.status}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        {device.status === 'active' ? (
-                          <Button variant="secondary" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'inactive')}>INACTIVATE</Button>
-                        ) : (
-                          <Button variant="outline" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'active')}>ACTIVATE</Button>
+            {/* Card list rather than a wide table: the 7-column table pushed the
+                Activate/Inactivate action off-screen, so approving a device meant scrolling
+                sideways to find the button. Here the action is always in view. */}
+            <div className="divide-y divide-border">
+              {devices.map(device => (
+                <div key={device.id} className="flex flex-wrap items-start justify-between gap-3 p-4 hover:bg-muted/30">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground">{device.device_name || "Unknown device"}</span>
+                      <Badge className={
+                        device.status === 'active' ? 'bg-emerald-600' :
+                        device.status === 'rejected' ? 'bg-red-600' :
+                        device.status === 'inactive' ? 'bg-slate-600' : 'bg-amber-600'
+                      }>{device.status}</Badge>
+                      {device.status === 'pending' && (
+                        <span className="text-xs text-amber-500">waiting for your approval</span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {device.os || "Unknown OS"}
+                      {device.application_version ? ` · app ${device.application_version}` : ""}
+                      {device.database_version ? ` · db ${device.database_version}` : ""}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Last active: {device.last_login ? new Date(device.last_login).toLocaleString() : "never"}
+                      {device.device_id ? ` · ID ${String(device.device_id).slice(0, 12)}…` : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0">
+                    {device.status === 'active' ? (
+                      <Button variant="secondary" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'inactive')}>
+                        Inactivate
+                      </Button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" onClick={() => handleDeviceStatusChange(device.id, 'active')}>
+                          {device.status === 'pending' ? 'Approve' : 'Activate'}
+                        </Button>
+                        {device.status === 'pending' && (
+                          <Button variant="outline" size="sm" onClick={() => handleDeviceStatusChange(device.id, 'rejected')}>
+                            Reject
+                          </Button>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                  {devices.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No devices registered.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {devices.length === 0 && (
+                <p className="px-4 py-8 text-center text-muted-foreground">No devices registered.</p>
+              )}
             </div>
           </Card>
         </div>
