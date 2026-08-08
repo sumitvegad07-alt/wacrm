@@ -576,8 +576,12 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     }
     setCreatingRoute(true);
     try {
+      // route_upsert inserts p_route_id straight into routes.id, so passing null overrides the
+      // column's gen_random_uuid() default and trips its NOT NULL constraint — creating an area
+      // failed every time. The id must be client-generated (also the idempotency convention used
+      // everywhere else: the route SDK's saveRoute() takes a required client-side routeId).
       const { data: routeRes, error: createErr } = await supabase.rpc("route_upsert", {
-        p_route_id: null,
+        p_route_id: crypto.randomUUID(),
         p_name: newRouteName.trim(),
         p_description: null,
         p_primary_assignee_id: employeeId,

@@ -12,13 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
-  ArrowLeft, Edit2, Loader2, Save, Trash2, Smartphone, Lock, Unlock, CheckCircle2, XCircle, Camera, User
+  ArrowLeft, Edit2, Loader2, Save, Trash2, Smartphone, Lock, Unlock, CheckCircle2, XCircle, Camera, User, MapPin
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import { Timeline } from "@/components/shared/timeline";
+import { EmployeeRouteTab } from "@/components/territories/employee-route-tab";
 import { logModuleActivity } from "@/lib/activities";
 import type { Employee, EmployeeRole, EmployeeDevice, CustomField } from "@/types";
 
@@ -74,7 +75,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const router = useRouter();
   const supabase = createClient();
 
-  const { user, accountId, isSuperadmin, accountRole } = useAuth();
+  const { user, accountId, isSuperadmin, accountRole, isModuleEnabled } = useAuth();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<EmployeeDevice[]>([]);
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
@@ -441,7 +442,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
         {/* Right Col: Timeline */}
         <div className="space-y-8">
-          <Timeline 
+          <Timeline
             moduleName="user"
             recordId={employeeId}
             tasks={tasks}
@@ -451,6 +452,26 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           />
         </div>
       </div>
+
+      {/* Routes — create, assign and approve this employee's routes right here, rather than in
+          a separate top-level module. Approving flips route_plan_assignments.is_active to true,
+          which is exactly what the mobile app filters on before showing a route to the rep.
+          Full width (outside the grid) so the month calendar has room to breathe. */}
+      {accountId && isModuleEnabled("route") && (
+        <Card className="mt-8 border-border shadow-sm overflow-hidden">
+          <div className="p-4 border-b bg-muted/20">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-primary" /> Routes
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Assign routes to this employee and approve them to go live on their mobile app.
+            </p>
+          </div>
+          <div className="p-4">
+            <EmployeeRouteTab employeeId={employeeId} accountId={accountId} />
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
