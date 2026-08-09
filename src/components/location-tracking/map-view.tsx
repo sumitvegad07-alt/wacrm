@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, Fragment } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo, Fragment } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -17,6 +17,13 @@ import {
   reverseGeocodeWithCache,
   type ReverseGeoResult,
 } from '@/lib/geo-service';
+import {
+  arrowsAlong,
+  bearingDeg,
+  cumulativeKm,
+  playbackDurationMs,
+  poseAtFraction,
+} from '@/lib/location/route-geometry';
 
 // Fix for default marker icons in Next.js/Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -30,8 +37,14 @@ L.Icon.Default.mergeOptions({
 });
 
 // ─── Custom marker icons ──────────────────────────────────────────────────
-/** Travelled route. Green reads as "this is the path" against blue point markers. */
-export const ROUTE_GREEN = '#16A34A';
+/**
+ * Travelled route — a vivid, fully saturated blue.
+ *
+ * Green washed out against the map's own green parks and grey roads. This sits well above the
+ * softer blue of the point markers in both brightness and saturation, and the white casing
+ * underneath keeps the two readable where the line runs through a cluster of pins.
+ */
+export const ROUTE_BLUE = '#0A5BFF';
 
 const MARKER_COLORS = {
   ping: '#3B82F6',
@@ -100,37 +113,92 @@ function createColorIcon(
   });
 }
 
-/** Initial bearing from one coordinate to the next, in degrees clockwise from north. */
-function bearingDeg(from: [number, number], to: [number, number]): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const [lat1, lng1] = from;
-  const [lat2, lng2] = to;
-  const dLng = toRad(lng2 - lng1);
-  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
-  const x =
-    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
-  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+/**
+ * Rider marker for the route playback — the Swiggy-style scooter running the day's path.
+ *
+ * The badge stays upright (a rotated emoji reads as a crash) while a small nose cone rotates
+ * to the heading, so direction is still legible while it moves.
+ */
+function riderIcon(deg: number, color: string): L.DivIcon {
+  return L.divIcon({
+    className: 'route-rider',
+    html: `<div style="position:relative;width:38px;height:38px;">
+             <div style="position:absolute;inset:0;transform:rotate(${deg}deg);">
+               <svg width="38" height="38" viewBox="0 0 38 38">
+                 <path d="M19 0 L24 9 L14 9 Z" fill="${color}"/>
+               </svg>
+             </div>
+             <div style="position:absolute;left:5px;top:5px;width:28px;height:28px;border-radius:50%;
+                         background:#fff;border:2.5px solid ${color};box-shadow:0 2px 8px rgba(0,0,0,0.4);
+                         display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;">
+               🛵
+             </div>
+           </div>`,
+    iconSize: [38, 38],
+    iconAnchor: [19, 19],
+  });
 }
 
 /**
- * Evenly spaced direction arrows along a route.
+ * Animates a marker along the route at constant ground speed.
  *
- * The route needed these more than it needed a different colour: with lines criss-crossing a
- * city you cannot otherwise tell whether a rep went north then south or the reverse, which is
- * the first thing anyone asks when reviewing a day.
+ * Constant SPEED, not constant index: coordinates from the router are unevenly spaced, so
+ * stepping one per frame makes the rider crawl through junctions and rocket down straights.
+ * Interpolating on cumulative distance keeps the motion honest to the shape of the journey.
  */
-function arrowsAlong(
-  coords: [number, number][],
-  count = 12,
-): { pos: [number, number]; deg: number }[] {
-  if (coords.length < 2) return [];
-  const step = Math.max(1, Math.floor(coords.length / (count + 1)));
-  const out: { pos: [number, number]; deg: number }[] = [];
-  for (let i = step; i < coords.length - 1; i += step) {
-    out.push({ pos: coords[i], deg: bearingDeg(coords[i], coords[i + 1]) });
-  }
-  return out;
+function RoutePlayer({
+  coords,
+  color,
+  playing,
+  onFinish,
+}: {
+  coords: [number, number][];
+  color: string;
+  playing: boolean;
+  onFinish: () => void;
+}) {
+  const [pose, setPose] = useState<{ pos: [number, number]; deg: number } | null>(null);
+  const frameRef = useRef<number | null>(null);
+
+  // Cumulative distance along the path, recomputed only when the route itself changes.
+  const cumulative = useMemo(() => cumulativeKm(coords), [coords]);
+
+  useEffect(() => {
+    if (!playing || coords.length < 2) {
+      setPose(null);
+      return;
+    }
+
+    const total = cumulative[cumulative.length - 1];
+    if (!(total > 0)) {
+      onFinish();
+      return;
+    }
+
+    const durationMs = playbackDurationMs(total);
+    let start: number | null = null;
+
+    const step = (ts: number) => {
+      if (start === null) start = ts;
+      const t = Math.min(1, (ts - start) / durationMs);
+      setPose(poseAtFraction(coords, cumulative, t));
+      if (t < 1) {
+        frameRef.current = requestAnimationFrame(step);
+      } else {
+        onFinish();
+      }
+    };
+
+    frameRef.current = requestAnimationFrame(step);
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, coords, cumulative]);
+
+  if (!pose) return null;
+  return <Marker position={pose.pos} icon={riderIcon(pose.deg, color)} interactive={false} zIndexOffset={1000} />;
 }
 
 function arrowIcon(deg: number, color: string): L.DivIcon {
@@ -326,10 +394,17 @@ export default function MapView({
   showStraightLine?: boolean;
 }) {
   const [isMounted, setIsMounted] = useState(false);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // A route change means a different rep or a different day; leaving playback running would
+  // animate the new path from wherever the old one happened to be.
+  useEffect(() => {
+    setPlaying(false);
+  }, [routes]);
 
   if (!isMounted)
     return <div className="bg-muted h-full w-full animate-pulse" />;
@@ -383,7 +458,7 @@ export default function MapView({
         {/* Travelled route: a white casing under the coloured line keeps it legible over both
             the street map and satellite imagery, then arrows show the direction of travel. */}
         {routes.map((route, idx) => {
-          const color = route.color || ROUTE_GREEN;
+          const color = route.color || ROUTE_BLUE;
           return (
             <Fragment key={`route-${idx}`}>
               <Polyline
@@ -400,8 +475,10 @@ export default function MapView({
                 positions={route.coordinates}
                 pathOptions={{
                   color,
-                  weight: 4.5,
-                  opacity: 0.95,
+                  weight: 5,
+                  // Fully opaque: any transparency lets the map's own colours bleed through and
+                  // is exactly what made the previous line look washed out.
+                  opacity: 1,
                   dashArray: route.dashed ? '8, 12' : undefined,
                   lineCap: 'round',
                   lineJoin: 'round',
@@ -415,10 +492,32 @@ export default function MapView({
                   interactive={false}
                 />
               ))}
+              {idx === 0 && (
+                <RoutePlayer
+                  coords={route.coordinates}
+                  color={color}
+                  playing={playing}
+                  onFinish={() => setPlaying(false)}
+                />
+              )}
             </Fragment>
           );
         })}
       </MapContainer>
+
+      {/* Route playback. Off by default — the arrows already answer "which way", so this is for
+          walking through a day, not the resting state of the map. */}
+      {routes.length > 0 && routes[0].coordinates.length > 1 && (
+        <button
+          onClick={() => setPlaying((p) => !p)}
+          aria-label={playing ? 'Stop route playback' : 'Play route'}
+          title={playing ? 'Stop route playback' : 'Play route'}
+          className="absolute bottom-4 left-4 z-[500] flex items-center gap-1.5 rounded-md border border-slate-200 bg-white/95 px-3 py-2 text-xs font-medium text-slate-700 shadow-md backdrop-blur-sm hover:bg-white"
+        >
+          <span className="text-sm leading-none">{playing ? '⏸' : '🛵'}</span>
+          {playing ? 'Stop' : 'Play route'}
+        </button>
+      )}
     </div>
   );
 }
