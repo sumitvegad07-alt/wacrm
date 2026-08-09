@@ -7,7 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Search, MapPin, Battery, Route, Loader2 } from 'lucide-react';
+import { Search, MapPin, Battery } from 'lucide-react';
+import MapToolbar from '@/components/location-tracking/map-toolbar';
 import { Input } from '@/components/ui/input';
 import {
   reverseGeocodeWithCache,
@@ -63,6 +64,15 @@ export default function LocationDashboardPage() {
 
   const filterDirty = draftFrom !== fromDate || draftTo !== toDate;
   const filterCleared = fromDate === today() && toDate === today();
+
+  /** Inline toolbar picker: viewing a single day is the normal case and needs no Apply step. */
+  const setSingleDay = (value: string) => {
+    if (!value) return;
+    setDraftFrom(value);
+    setDraftTo(value);
+    setFromDate(value);
+    setToDate(value);
+  };
 
   const applyDateFilter = () => {
     setFromDate(draftFrom);
@@ -542,99 +552,24 @@ export default function LocationDashboardPage() {
 
       {/* Middle (Map Area) */}
       <div className="relative flex min-w-0 flex-1 flex-col">
-        {/* Top Controls Overlay */}
-        <div className="pointer-events-none absolute top-4 right-4 left-4 z-10 flex flex-wrap items-start justify-between gap-2">
-          <div className="bg-background/95 border-border pointer-events-auto flex rounded-md border p-1 shadow-sm backdrop-blur-sm">
-            <button
-              onClick={() => setLayerType('standard')}
-              className={`rounded px-3 py-1 text-xs font-medium ${layerType === 'standard' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50'}`}
-            >
-              Map
-            </button>
-            <button
-              onClick={() => setLayerType('satellite')}
-              className={`rounded px-3 py-1 text-xs font-medium ${layerType === 'satellite' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50'}`}
-            >
-              Satellite
-            </button>
-          </div>
-
-          {/* Legend + date range, grouped so they stay together on the right and wrap as a pair. */}
-          <div className="flex flex-wrap items-start justify-end gap-2">
-          <div className="bg-background/95 border-border pointer-events-auto flex flex-wrap items-center gap-4 rounded-md border px-3 py-2 text-xs font-medium shadow-sm backdrop-blur-sm">
-            <button
-              onClick={() => setFilters((f) => ({ ...f, visits: !f.visits }))}
-              className={`flex items-center gap-1.5 transition-opacity ${!filters.visits && 'opacity-40'}`}
-            >
-              <div className="h-2 w-2 rounded-sm bg-green-500" /> Visits
-            </button>
-            <button
-              onClick={() => setFilters((f) => ({ ...f, tracked: !f.tracked }))}
-              className={`flex items-center gap-1.5 transition-opacity ${!filters.tracked && 'opacity-40'}`}
-            >
-              <div className="h-2 w-2 rounded-sm bg-blue-500" /> Tracked
-            </button>
-            <button
-              onClick={() => setFilters((f) => ({ ...f, ends: !f.ends }))}
-              className={`flex items-center gap-1.5 transition-opacity ${!filters.ends && 'opacity-40'}`}
-            >
-              <div className="h-2 w-2 rounded-full bg-red-500" /> Ends
-            </button>
-            {/* The travelled route is always on, so it is a legend entry, not a switch. */}
-            <span className="flex items-center gap-1.5">
-              <Route className="h-3 w-3 text-indigo-500" /> Travelled route
-              {(routeLoading || pointsLoading) && (
-                <Loader2 className="text-muted-foreground h-3 w-3 animate-spin" />
-              )}
-            </span>
-            {routeSummary && (
-              <span className="text-muted-foreground border-border border-l pl-3 font-normal">
-                {routeSummary}
-              </span>
-            )}
-          </div>
-
-          {/* Date range sits with the other map controls. Defaults to today, so there is no
-              "Today" button — Clear is what returns you there. The native date inputs carry
-              their own calendar icons; a third decorative one just added noise. */}
-          <div className="bg-background/95 border-border pointer-events-auto flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 shadow-sm backdrop-blur-sm">
-            <Input
-              type="date"
-              value={draftFrom}
-              max={draftTo}
-              onChange={(e) => setDraftFrom(e.target.value)}
-              className="h-8 w-[140px] text-xs"
-              aria-label="From date"
-            />
-            <span className="text-muted-foreground text-xs">to</span>
-            <Input
-              type="date"
-              value={draftTo}
-              min={draftFrom}
-              onChange={(e) => setDraftTo(e.target.value)}
-              className="h-8 w-[140px] text-xs"
-              aria-label="To date"
-            />
-            <Button
-              size="sm"
-              className="h-8 text-xs"
-              onClick={applyDateFilter}
-              disabled={!filterDirty}
-            >
-              Apply
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={clearDateFilter}
-              disabled={!filterDirty && filterCleared}
-            >
-              Clear
-            </Button>
-          </div>
-          </div>
-        </div>
+        <MapToolbar
+          layerType={layerType}
+          onLayerTypeChange={setLayerType}
+          filters={filters}
+          onToggleFilter={(key) => setFilters((f) => ({ ...f, [key]: !f[key] }))}
+          fromDate={fromDate}
+          toDate={toDate}
+          draftFrom={draftFrom}
+          draftTo={draftTo}
+          onDraftFromChange={setDraftFrom}
+          onDraftToChange={setDraftTo}
+          onSingleDayChange={setSingleDay}
+          onApply={applyDateFilter}
+          onClear={clearDateFilter}
+          canApply={filterDirty}
+          canClear={filterDirty || !filterCleared}
+          loading={routeLoading || pointsLoading}
+        />
 
         <div className="z-0 flex-1">
           <MapView
@@ -681,6 +616,15 @@ export default function LocationDashboardPage() {
                 <span className="text-muted-foreground text-[10px] font-normal uppercase">
                   km
                 </span>
+              </div>
+              {/* Straight-line between GPS points and actual road distance are two different
+                  numbers. Showing 0.11 km here beside a 1.4 km route on the map with neither
+                  labelled just reads as a bug, so name both. */}
+              <div className="text-muted-foreground mt-1 text-[10px] leading-tight">
+                straight line
+                {routeSummary && (
+                  <div className="text-indigo-500">{routeSummary} by road</div>
+                )}
               </div>
             </div>
           </div>
