@@ -231,6 +231,8 @@ export interface Point {
   stale?: boolean;
   /** Human "last seen X min ago" string for the tooltip. */
   lastSeen?: string;
+  /** Full "DD-MM-YYYY hh:mm AM" for the hover card. `time` alone is just the clock. */
+  dateTime?: string;
 }
 
 export type MapLayerType = 'standard' | 'satellite';
@@ -289,7 +291,6 @@ function AddressMarker({ point, index }: { point: Point; index: number }) {
     mocked: point.mocked,
     stale: point.stale,
   });
-  const typeLabel = point.type.charAt(0).toUpperCase() + point.type.slice(1);
 
   return (
     <Marker
@@ -331,48 +332,31 @@ function AddressMarker({ point, index }: { point: Point; index: number }) {
             </div>
           </div>
         ) : (
-          <div className="space-y-1 py-1 px-1 text-left">
-            <p className="text-slate-900 text-[13px] font-semibold m-0">
-              {point.label || `Point ${index + 1}`}
+          /* Where the rep was, when, and how much battery was left — nothing else.
+             "Tracked Location" and a "Ping" type label were noise: the marker's colour and
+             number already say what kind of point this is, so repeating it in words pushed the
+             address (the only thing worth reading) to the bottom. */
+          <div className="w-64 space-y-1 px-2 py-1.5 text-left">
+            <p className="m-0 text-[12px] leading-snug font-medium whitespace-normal text-slate-900">
+              {/* The FULL address, not the abbreviated one. "Rajkot, Gujarat" is true of half
+                  the day's points and tells an admin nothing about where the rep actually was;
+                  the street and landmark are the whole reason to hover. */}
+              {address
+                ? address.address || address.shortAddress
+                : loading
+                  ? 'Loading address…'
+                  : 'Address unavailable'}
             </p>
-            <p className="text-slate-500 text-[11px] m-0">{point.time}</p>
-            <p
-              className="text-[10px] font-bold tracking-wide uppercase m-0"
-              style={{
-                color: MARKER_COLORS[point.type as keyof typeof MARKER_COLORS],
-              }}
-            >
-              {typeLabel}
+            <p className="m-0 text-[11px] text-slate-500">
+              Date : {point.dateTime || point.time}
+              {point.battery != null && (
+                <span className="ml-2 text-slate-600">🔋 {point.battery}%</span>
+              )}
             </p>
-            {point.battery != null && (
-              <p className="text-muted-foreground text-[10px]">
-                🔋 {point.battery}%
-              </p>
-            )}
-            {point.lastSeen && (
-              <p
-                className="text-[10px] m-0"
-                style={{ color: point.stale ? '#EF4444' : '#64748B' }}
-              >
-                {point.stale ? '⚠ went dark — ' : ''}last seen {point.lastSeen}
-              </p>
-            )}
             {point.mocked && (
-              <p className="text-[10px] font-bold m-0" style={{ color: '#EF4444' }}>
+              <p className="m-0 text-[10px] font-bold" style={{ color: '#EF4444' }}>
                 ⚠ Suspect location (mock GPS)
               </p>
-            )}
-            {loading && (
-              <p className="text-muted-foreground text-[10px] italic">
-                Loading address...
-              </p>
-            )}
-            {address && (
-              <div className="border-border mt-1 border-t pt-1">
-                <p className="text-foreground text-[11px] leading-snug">
-                  {address.shortAddress}
-                </p>
-              </div>
             )}
           </div>
         )}
@@ -512,9 +496,18 @@ export default function MapView({
           onClick={() => setPlaying((p) => !p)}
           aria-label={playing ? 'Stop route playback' : 'Play route'}
           title={playing ? 'Stop route playback' : 'Play route'}
-          className="absolute bottom-4 left-4 z-[500] flex items-center gap-1.5 rounded-md border border-slate-200 bg-white/95 px-3 py-2 text-xs font-medium text-slate-700 shadow-md backdrop-blur-sm hover:bg-white"
+          // Solid colour rather than another pale map control: it is an action, and as a white
+          // chip it disappeared into the tiles. Inline colours because this sits over Leaflet,
+          // outside the app's themed surfaces.
+          className="absolute bottom-4 left-4 z-[500] flex items-center gap-2 rounded-full px-4 py-2.5 text-xs font-bold tracking-wide text-white uppercase shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.98]"
+          style={{
+            background: playing
+              ? '#DC2626'
+              : `linear-gradient(135deg, ${ROUTE_BLUE} 0%, #0A84FF 100%)`,
+            boxShadow: '0 4px 14px rgba(10,91,255,0.45)',
+          }}
         >
-          <span className="text-sm leading-none">{playing ? '⏸' : '🛵'}</span>
+          <span className="text-base leading-none">{playing ? '⏹' : '🛵'}</span>
           {playing ? 'Stop' : 'Play route'}
         </button>
       )}

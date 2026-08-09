@@ -382,6 +382,15 @@ export default function LocationDashboardPage() {
           label: pingSourceLabel(p.source).label === 'Auto'
             ? 'Tracked Location'
             : pingSourceLabel(p.source).label,
+          // Full date for the map hover card; `time` stays the clock-only value the timeline uses.
+          dateTime: new Date(p.recorded_at).toLocaleString('en-IN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          }),
           battery: p.battery_pct,
           mocked: p.is_mocked ?? false,
           recordedAt: new Date(p.recorded_at).getTime(),
@@ -808,7 +817,12 @@ export default function LocationDashboardPage() {
             </div>
           </div>
 
-          {/* Timeline */}
+        </div>
+
+        {/* Timeline lives in its OWN scroll area. It used to sit inside the summary block, which
+            had no overflow of its own, so a day with more than a handful of points simply ran
+            off the bottom of the screen and could not be reached at all. */}
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
           <h4 className="text-muted-foreground mb-4 text-xs font-semibold tracking-wider uppercase">
             Location Timeline
           </h4>
@@ -824,31 +838,39 @@ export default function LocationDashboardPage() {
                 <div
                   className={`border-background z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-white ${point.type === 'visit' ? 'bg-green-500' : point.type === 'start' ? 'bg-red-500' : 'bg-blue-500'}`}
                 />
-                <div className="border-border bg-card ml-3 w-full rounded-lg border p-2.5 shadow-sm">
+                <div
+                  className={`ml-3 w-full min-w-0 rounded-lg border p-2.5 shadow-sm ${
+                    point.type === 'visit'
+                      ? // A customer visit is what the day was for, so it is the one entry that
+                        // gets real emphasis instead of reading like another breadcrumb.
+                        'border-l-4 border-green-500/60 border-l-green-500 bg-green-500/[0.07]'
+                      : 'border-border bg-card'
+                  }`}
+                >
                   {point.type === 'visit' ? (
                     /* A visit is the substance of the day, so it gets the full record rather
                        than a one-line label: who, when, how long, and what came of it. */
                     <>
-                      <div className="mb-1 flex items-start justify-between gap-2">
-                        <span className="text-foreground text-xs font-semibold">
-                          {point.customerName}
-                        </span>
-                        <span className="text-muted-foreground shrink-0 text-[10px] font-medium">
-                          {point.duration}
-                        </span>
-                      </div>
-                      <time className="text-muted-foreground block text-[10px]">
+                      <p className="text-foreground text-[13px] leading-snug font-semibold break-words">
+                        {point.customerName}
+                      </p>
+                      <time className="text-muted-foreground mt-0.5 block text-[10px]">
                         {point.visitedAt}
                       </time>
-                      {point.feedbackType && (
-                        <span
-                          className={`mt-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${feedbackTone(point.feedbackType)}`}
-                        >
-                          {point.feedbackType}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="bg-muted text-foreground inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold">
+                          ⏱ {point.duration}
                         </span>
-                      )}
+                        {point.feedbackType && (
+                          <span
+                            className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${feedbackTone(point.feedbackType)}`}
+                          >
+                            {point.feedbackType}
+                          </span>
+                        )}
+                      </div>
                       {point.feedbackText && (
-                        <p className="text-muted-foreground mt-1 text-[11px] leading-snug">
+                        <p className="text-muted-foreground mt-1.5 text-[11px] leading-snug break-words">
                           {point.feedbackText}
                         </p>
                       )}
