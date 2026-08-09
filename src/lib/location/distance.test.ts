@@ -74,8 +74,11 @@ describe("computeFilteredDistanceKm", () => {
 
   it("matches compute_daily_distance() SQL on the shared parity fixture (111.19 km)", () => {
     // These exact rows were run through the live Postgres compute_daily_distance() in a
-    // rolled-back transaction on 2026-08-07 and returned 111.19 km. If this assertion ever
-    // fails, the TS util and the SQL function have drifted — fix both, don't just adjust here.
+    // rolled-back transaction and returned 111.19 km — re-verified on 2026-08-10 after the
+    // rewrite for the dense trace (tighter accuracy bar plus the stationary gate). The drift
+    // fixture in the test above was checked the same way and returns 0 in both engines.
+    // If this assertion ever fails, the TS util and the SQL function have drifted — fix both,
+    // don't just adjust the number here.
     const acc = (accuracy_m: number | null, lng: number, hhmm: string): DistancePing => ({
       lat: 0,
       lng,
@@ -91,6 +94,41 @@ describe("computeFilteredDistanceKm", () => {
       { lat: 5, lng: 1.0, accuracy_m: 10, recorded_at: "2026-06-01T02:05:00.000Z" }, // teleport -> skipped
     ];
     expect(computeFilteredDistanceKm(fixture)).toBe(111.19);
+  });
+
+  it("ignores a stationary phone's GPS drift", () => {
+    // The single biggest source of fabricated distance on low-cost handsets. A parked phone
+    // reports a position that jitters around a point; at a 15-second cadence that is 240 phantom
+    // steps an hour. Each step here is ~11 m with the device claiming 20 m accuracy, so none of
+    // them is distinguishable from standing still. Before the stationary gate this fixture
+    // summed to ~0.22 km of travel that never happened.
+    const jitter: DistancePing[] = [];
+    for (let i = 0; i < 20; i++) {
+      jitter.push({
+        lat: 0,
+        lng: i % 2 === 0 ? 0 : 0.0001, // ~11 m apart, oscillating around one spot
+        accuracy_m: 20,
+        recorded_at: new Date(Date.UTC(2026, 5, 1, 0, 0, i * 15)).toISOString(),
+      });
+    }
+    expect(computeFilteredDistanceKm(jitter)).toBe(0);
+  });
+
+  it("still counts genuine slow movement that drifts past the uncertainty", () => {
+    // Walking away in one direction must NOT be swallowed by the stationary gate: the steps
+    // accumulate in one direction, so displacement from the baseline soon exceeds it.
+    const walk: DistancePing[] = [];
+    for (let i = 0; i < 20; i++) {
+      walk.push({
+        lat: 0,
+        lng: i * 0.0001, // ~11 m per step, all the same way
+        accuracy_m: 20,
+        recorded_at: new Date(Date.UTC(2026, 5, 1, 0, 0, i * 15)).toISOString(),
+      });
+    }
+    // 19 steps of ~11.1 m ≈ 211 m, counted in ~22 m increments once each clears the threshold.
+    expect(computeFilteredDistanceKm(walk)).toBeGreaterThan(0.15);
+    expect(computeFilteredDistanceKm(walk)).toBeLessThan(0.25);
   });
 
   it("is order-independent (sorts by recorded_at internally)", () => {

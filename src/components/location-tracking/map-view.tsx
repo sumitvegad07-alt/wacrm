@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, Fragment } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -30,6 +30,9 @@ L.Icon.Default.mergeOptions({
 });
 
 // ─── Custom marker icons ──────────────────────────────────────────────────
+/** Travelled route. Green reads as "this is the path" against blue point markers. */
+export const ROUTE_GREEN = '#16A34A';
+
 const MARKER_COLORS = {
   ping: '#3B82F6',
   visit: '#10B981',
@@ -38,6 +41,14 @@ const MARKER_COLORS = {
   current: '#6366F1',
 };
 
+/**
+ * Numbered teardrop pin, matching the marker style the founder asked for.
+ *
+ * A pin beats a plain dot for two reasons that matter on a dense city map: its tip marks the
+ * exact coordinate (a circle centred on the point covers it), and the number inside gives the
+ * sequence, so criss-crossing lines can still be read in order. Colours are unchanged, so the
+ * existing legend still applies.
+ */
 function createColorIcon(
   type: string,
   index?: number,
@@ -50,21 +61,89 @@ function createColorIcon(
     : opts?.stale
       ? '#94A3B8'
       : MARKER_COLORS[type as keyof typeof MARKER_COLORS] || '#6366F1';
-  let size = type === 'current' ? 16 : index !== undefined ? 24 : 12;
-  if (type === 'visit') size = 32;
 
-  const border = opts?.mocked ? '3px solid #Fca5a5' : '3px solid white';
-  let html = `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:${border};box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">`;
-  if (index !== undefined && size >= 20) {
-    html += `<span style="color:white;font-size:${type === 'visit' ? 13 : 11}px;font-weight:bold;line-height:1;">${index}</span>`;
+  // Unnumbered points stay small dots — a pin for every breadcrumb would bury the map.
+  if (index === undefined) {
+    const size = type === 'current' ? 16 : 12;
+    return L.divIcon({
+      className: 'custom-div-marker',
+      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>`,
+      iconSize: [size + 4, size + 4],
+      iconAnchor: [(size + 4) / 2, (size + 4) / 2],
+    });
   }
-  html += `</div>`;
+
+  const w = type === 'visit' ? 34 : 30;
+  const h = Math.round(w * 1.36);
+  const stroke = opts?.mocked ? '#FCA5A5' : '#FFFFFF';
+  const label = String(index);
+  // Shrink the digits as the number grows so three digits still fit inside the disc.
+  const fontSize = label.length > 2 ? 9 : label.length > 1 ? 11 : 12;
+
+  const html = `
+    <svg width="${w}" height="${h}" viewBox="0 0 28 38" xmlns="http://www.w3.org/2000/svg"
+         style="filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4));display:block;">
+      <path d="M14 0.5C6.5 0.5 0.5 6.5 0.5 14c0 10.2 13.5 23.5 13.5 23.5S27.5 24.2 27.5 14C27.5 6.5 21.5 0.5 14 0.5z"
+            fill="${color}" stroke="${stroke}" stroke-width="1.75"/>
+      <circle cx="14" cy="14" r="8.5" fill="#FFFFFF" fill-opacity="0.95"/>
+      <text x="14" y="14" text-anchor="middle" dominant-baseline="central"
+            font-family="system-ui,-apple-system,sans-serif" font-size="${fontSize}"
+            font-weight="700" fill="${color}">${label}</text>
+    </svg>`;
 
   return L.divIcon({
     className: 'custom-div-marker',
     html,
-    iconSize: [size + 6, size + 6],
-    iconAnchor: [(size + 6) / 2, (size + 6) / 2],
+    iconSize: [w, h],
+    // The pin's TIP is the coordinate, so anchor at bottom-centre.
+    iconAnchor: [w / 2, h],
+  });
+}
+
+/** Initial bearing from one coordinate to the next, in degrees clockwise from north. */
+function bearingDeg(from: [number, number], to: [number, number]): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const [lat1, lng1] = from;
+  const [lat2, lng2] = to;
+  const dLng = toRad(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
+  const x =
+    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+/**
+ * Evenly spaced direction arrows along a route.
+ *
+ * The route needed these more than it needed a different colour: with lines criss-crossing a
+ * city you cannot otherwise tell whether a rep went north then south or the reverse, which is
+ * the first thing anyone asks when reviewing a day.
+ */
+function arrowsAlong(
+  coords: [number, number][],
+  count = 12,
+): { pos: [number, number]; deg: number }[] {
+  if (coords.length < 2) return [];
+  const step = Math.max(1, Math.floor(coords.length / (count + 1)));
+  const out: { pos: [number, number]; deg: number }[] = [];
+  for (let i = step; i < coords.length - 1; i += step) {
+    out.push({ pos: coords[i], deg: bearingDeg(coords[i], coords[i + 1]) });
+  }
+  return out;
+}
+
+function arrowIcon(deg: number, color: string): L.DivIcon {
+  return L.divIcon({
+    className: 'route-arrow',
+    // rotate(deg) points the glyph along the bearing; the glyph itself points north at 0.
+    html: `<div style="transform:rotate(${deg}deg);width:16px;height:16px;line-height:16px;text-align:center;">
+             <svg width="16" height="16" viewBox="0 0 16 16" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45));">
+               <path d="M8 1 L13 13 L8 10.2 L3 13 Z" fill="${color}" stroke="#FFFFFF" stroke-width="1"/>
+             </svg>
+           </div>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
   });
 }
 
@@ -301,21 +380,44 @@ export default function MapView({
           />
         )}
 
-        {/* ORS route overlays */}
-        {routes.map((route, idx) => (
-          <Polyline
-            key={`route-${idx}`}
-            positions={route.coordinates}
-            pathOptions={{
-              color: route.color || '#6366F1',
-              weight: 4,
-              opacity: 0.85,
-              dashArray: route.dashed ? '8, 12' : undefined,
-              lineCap: 'round',
-              lineJoin: 'round',
-            }}
-          />
-        ))}
+        {/* Travelled route: a white casing under the coloured line keeps it legible over both
+            the street map and satellite imagery, then arrows show the direction of travel. */}
+        {routes.map((route, idx) => {
+          const color = route.color || ROUTE_GREEN;
+          return (
+            <Fragment key={`route-${idx}`}>
+              <Polyline
+                positions={route.coordinates}
+                pathOptions={{
+                  color: '#FFFFFF',
+                  weight: 8,
+                  opacity: 0.7,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+              <Polyline
+                positions={route.coordinates}
+                pathOptions={{
+                  color,
+                  weight: 4.5,
+                  opacity: 0.95,
+                  dashArray: route.dashed ? '8, 12' : undefined,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+              {arrowsAlong(route.coordinates).map((a, i) => (
+                <Marker
+                  key={`arrow-${idx}-${i}`}
+                  position={a.pos}
+                  icon={arrowIcon(a.deg, color)}
+                  interactive={false}
+                />
+              ))}
+            </Fragment>
+          );
+        })}
       </MapContainer>
     </div>
   );

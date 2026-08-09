@@ -175,7 +175,13 @@ export default function TrackingHealthPage() {
 
     (profiles || []).forEach((p: any) => {
       const userSessions = sessById[p.user_id] || [];
-      const userPings = pingById[p.user_id] || [];
+      const allPings = pingById[p.user_id] || [];
+      // Two different populations, and mixing them would corrupt both numbers:
+      //  - COVERAGE asks "did the app report in every N minutes", so it counts only the display
+      //    pings. Counting the 15-second trace rows would show 2000% coverage and hide outages.
+      //  - DISTANCE, accuracy and mock rates want every fix, because the dense trace is the
+      //    better sample of what the GPS was actually doing.
+      const userPings = allPings.filter((x: any) => x.source !== 'trace');
       const userEvents = evById[p.user_id] || [];
       const devicePending = pendingUserIds.has(p.user_id);
 
@@ -197,18 +203,19 @@ export default function TrackingHealthPage() {
       // Keep the list focused on people who actually did something in this range. A rep with no
       // session but with pings still belongs here — visit check-ins now record a location even
       // when nobody punched in, and dropping those rows would lose data the old Track Report showed.
-      if (!health.punchedIn && !devicePending && userPings.length === 0) return;
+      if (!health.punchedIn && !devicePending && allPings.length === 0) return;
 
-      const lastPing = userPings.length
-        ? userPings.reduce((a: any, b: any) =>
+      const lastPing = allPings.length
+        ? allPings.reduce((a: any, b: any) =>
             new Date(a.recorded_at) > new Date(b.recorded_at) ? a : b,
           )
         : null;
 
       // Accuracy score: what share of recorded locations were good enough to trust. More useful
-      // than a raw metre average, which one 1.2 km reading can wreck.
-      const withAccuracy = userPings.filter((x: any) => x.accuracy_m != null);
-      const trustworthy = userPings.filter(isTrustworthyPing).length;
+      // than a raw metre average, which one 1.2 km reading can wreck. Measured over every fix,
+      // trace included — that is the honest sample of how well this device's GPS performs.
+      const withAccuracy = allPings.filter((x: any) => x.accuracy_m != null);
+      const trustworthy = allPings.filter(isTrustworthyPing).length;
       const avgAccuracyM = withAccuracy.length
         ? Math.round(
             withAccuracy.reduce((sum: number, x: any) => sum + x.accuracy_m, 0) /
@@ -222,10 +229,10 @@ export default function TrackingHealthPage() {
         name: p.full_name || "Unknown",
         role: p.role || "Field Staff",
         devicePending,
-        distanceKm: computeFilteredDistanceKm(userPings as any),
-        mockCount: userPings.filter((x: any) => x.is_mocked).length,
-        accuracyPct: userPings.length
-          ? Math.round((trustworthy / userPings.length) * 100)
+        distanceKm: computeFilteredDistanceKm(allPings as any),
+        mockCount: allPings.filter((x: any) => x.is_mocked).length,
+        accuracyPct: allPings.length
+          ? Math.round((trustworthy / allPings.length) * 100)
           : null,
         avgAccuracyM,
         gpsOffCount: userEvents.filter((e: any) => e.event_type === "gps_disabled").length,

@@ -57,6 +57,10 @@ export default function AllLocationsPage() {
         profiles ( full_name, role )
       `
       )
+      // Trace rows exist only to make distance accurate — one every 15 seconds. They are
+      // machine data, not something an admin should scroll through, so this stays the
+      // human-readable set.
+      .neq('source', 'trace')
       .gte('recorded_at', startOfDay.toISOString())
       .lte('recorded_at', endOfDay.toISOString())
       .order('recorded_at', { ascending: false });

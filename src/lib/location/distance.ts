@@ -13,10 +13,21 @@
  */
 
 /** Pings with a worse (larger) accuracy reading than this, or none at all, are excluded. */
-export const MAX_ACCURACY_M = 100;
+export const MAX_ACCURACY_M = 50;
 
 /** A segment implying a faster speed than this (~200 km/h) is treated as a GPS jump and skipped. */
 export const MAX_PLAUSIBLE_SPEED_MPS = 55;
+
+/**
+ * Floor for the "did they actually move" threshold, in metres.
+ *
+ * A stationary phone reports a position that wanders continuously. Summed over a day parked at
+ * customers, that drift alone fabricates kilometres — and it is worst on exactly the cheap
+ * handsets field reps carry. A step counts as movement only when it exceeds the GPS uncertainty
+ * of the two fixes involved, so the bar rises automatically when the device is less sure of
+ * itself; this constant stops it dropping to nothing when a device claims 2 m accuracy.
+ */
+export const MIN_MOVE_M = 15;
 
 export interface DistancePing {
   lat: number | null;
@@ -67,14 +78,32 @@ export function computeFilteredDistanceKm(pings: DistancePing[]): number {
     .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
 
   let totalKm = 0;
+  // The previous ACCEPTED point, which is not always the previous point in the list: a rejected
+  // step must not reset the baseline, or a stationary phone drifting 10 m at a time would add
+  // every one of those steps as real travel.
+  let prev: DistancePing | null = usable[0] ?? null;
+
   for (let i = 1; i < usable.length; i++) {
-    const prev = usable[i - 1];
     const curr = usable[i];
-    const segKm = haversineKm(prev.lat!, prev.lng!, curr.lat!, curr.lng!);
-    const dtSec = (new Date(curr.recorded_at).getTime() - new Date(prev.recorded_at).getTime()) / 1000;
-    if (dtSec > 0 && (segKm * 1000) / dtSec <= MAX_PLAUSIBLE_SPEED_MPS) {
-      totalKm += segKm;
+    if (!prev) {
+      prev = curr;
+      continue;
     }
+
+    const segKm = haversineKm(prev.lat!, prev.lng!, curr.lat!, curr.lng!);
+    const segM = segKm * 1000;
+
+    // Stationary gate — indistinguishable from standing still given the two fixes' uncertainty.
+    // Keep `prev` where it is so drift cannot accumulate step by step.
+    if (segM < Math.max(MIN_MOVE_M, prev.accuracy_m ?? 0, curr.accuracy_m ?? 0)) continue;
+
+    const dtSec =
+      (new Date(curr.recorded_at).getTime() - new Date(prev.recorded_at).getTime()) / 1000;
+    // Impossible-speed gate — a GPS glitch, not a journey. Also skipped without moving `prev`.
+    if (dtSec > 0 && segM / dtSec > MAX_PLAUSIBLE_SPEED_MPS) continue;
+
+    totalKm += segKm;
+    prev = curr;
   }
   return Math.round(totalKm * 100) / 100;
 }

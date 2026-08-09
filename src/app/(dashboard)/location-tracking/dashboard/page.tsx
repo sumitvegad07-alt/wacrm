@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Search, MapPin, Battery } from 'lucide-react';
+import { Search, MapPin, Battery, ChevronLeft, ChevronRight } from 'lucide-react';
 import MapToolbar from '@/components/location-tracking/map-toolbar';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,9 +15,21 @@ import {
   getMultiPointRoute,
   type RouteResult,
 } from '@/lib/geo-service';
+// Type-only: map-view pulls in Leaflet, which touches `window` at import time and is why it is
+// loaded with ssr:false. A value import here would drag it into the server bundle.
 import type { RouteOverlay } from '@/components/location-tracking/map-view';
 import { computeFilteredDistanceKm, isTrustworthyPing } from '@/lib/location/distance';
 import { isManualPing, pingSourceLabel } from '@/lib/location/ping-source';
+
+/** Colour for a visit's feedback verdict, so a bad call stands out when scanning the day. */
+function feedbackTone(type: string): string {
+  const t = type.toLowerCase();
+  if (t.includes('good') || t.includes('positive') || t.includes('order'))
+    return 'bg-green-500/15 text-green-600';
+  if (t.includes('bad') || t.includes('negative') || t.includes('lost'))
+    return 'bg-red-500/15 text-red-600';
+  return 'bg-amber-500/15 text-amber-600';
+}
 
 /** "₹5.4K" / "₹560" — the tile is narrow, so large values are abbreviated. */
 function formatInr(amount: number): string {
@@ -67,6 +79,7 @@ export default function LocationDashboardPage() {
   const [routeSummary, setRouteSummary] = useState<string | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [pointsLoading, setPointsLoading] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   /** Guards against a slow earlier fetch landing after a newer one. See fetchUserPoints. */
   const requestIdRef = useRef(0);
 
@@ -334,6 +347,19 @@ export default function LocationDashboardPage() {
           battery: null,
           recordedAt: new Date(v.check_in_at).getTime(),
           checkoutAt: v.check_out_at ? new Date(v.check_out_at).getTime() : null,
+          // Everything the timeline card shows for a visit. Read straight off the visit record
+          // so the panel needs no second query.
+          customerName: v.contacts?.name || 'Unknown customer',
+          visitedAt: new Date(v.check_in_at).toLocaleString('en-IN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          }),
+          feedbackType: v.feedback_type || null,
+          feedbackText: v.feedback_text || v.notes || null,
         }));
       allPoints = [...allPoints, ...visitPoints];
     }
@@ -341,8 +367,10 @@ export default function LocationDashboardPage() {
     if (pings) {
       // A visit already gets its own richer marker from site_visits above (customer name,
       // duration). Drawing its ping too would stack two markers on the same doorstep.
+      // Trace points are excluded as MARKERS — one every 15 seconds would bury the map — but
+      // they are exactly what draws the route line and the distance below.
       const formattedPoints = pings
-        .filter((p: any) => !isManualPing(p.source))
+        .filter((p: any) => p.source !== 'trace' && !isManualPing(p.source))
         .map((p: any) => ({
           lat: p.lat,
           lng: p.lng,
@@ -395,7 +423,10 @@ export default function LocationDashboardPage() {
         if (allPoints[i].checkoutAt) {
           const diffMs = allPoints[i].checkoutAt - allPoints[i].recordedAt;
           const diffMins = Math.round(diffMs / 60000);
-          allPoints[i].duration = `${diffMins} min`;
+          // "0h 2m" — how long they actually stood at the customer, which is the number an
+          // admin scans this list for.
+          const h = Math.floor(diffMins / 60);
+          allPoints[i].duration = `${h}h ${diffMins % 60}m`;
         } else {
           allPoints[i].duration = 'Ongoing';
         }
@@ -458,12 +489,10 @@ export default function LocationDashboardPage() {
       // the admin has already clicked a different rep.
       if (!isCurrent()) return;
       if (result?.coordinates?.length) {
+        // No colour set on purpose — MapView owns the route styling (green line, white casing,
+        // direction arrows) so every map in the product draws a route the same way.
         setTravelRoute([
-          {
-            coordinates: result.coordinates,
-            color: '#6366F1',
-            label: 'Travelled route',
-          },
+          { coordinates: result.coordinates, label: 'Travelled route' },
         ]);
         setRouteSummary(result.summary);
       } else {
@@ -602,8 +631,37 @@ export default function LocationDashboardPage() {
         </div>
       </div>
 
-      {/* Right Sidebar (Details & Timeline) */}
+      {/* Right Sidebar (Details & Timeline). Collapses to a rail so the map can take the full
+          width — on a laptop the panel was eating a third of the screen the map needs. */}
+      {panelCollapsed ? (
+        <div className="border-border bg-card z-10 flex w-10 shrink-0 flex-col items-center border-l pt-4">
+          <button
+            onClick={() => setPanelCollapsed(false)}
+            aria-label="Expand details panel"
+            title="Expand details"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1.5"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span
+            className="text-muted-foreground mt-3 text-[10px] font-semibold tracking-wider uppercase"
+            style={{ writingMode: 'vertical-rl' }}
+          >
+            {selectedUser?.name || 'Details'}
+          </span>
+        </div>
+      ) : (
       <div className="border-border bg-card z-10 flex w-72 shrink-0 flex-col border-l shadow-[0_0_15px_rgba(0,0,0,0.05)]">
+        <div className="border-border flex justify-end border-b px-2 py-1">
+          <button
+            onClick={() => setPanelCollapsed(true)}
+            aria-label="Collapse details panel"
+            title="Collapse details"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1.5"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
         {/* User Summary Header */}
         <div className="border-border bg-muted/10 border-b p-4">
           <div className={`mb-4 flex items-start justify-between rounded-xl border p-3 ${selectedUser?.status === 'active' ? 'border-green-500/20 bg-green-500/10' : 'border-zinc-500/20 bg-zinc-500/10'}`}>
@@ -767,14 +825,46 @@ export default function LocationDashboardPage() {
                   className={`border-background z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-white ${point.type === 'visit' ? 'bg-green-500' : point.type === 'start' ? 'bg-red-500' : 'bg-blue-500'}`}
                 />
                 <div className="border-border bg-card ml-3 w-full rounded-lg border p-2.5 shadow-sm">
-                  <div className="mb-0.5 flex items-center justify-between">
-                    <time className="text-muted-foreground text-[10px] font-medium">
-                      {point.time}
-                    </time>
-                  </div>
-                  <div className="text-foreground text-xs font-medium">
-                    {point.label}
-                  </div>
+                  {point.type === 'visit' ? (
+                    /* A visit is the substance of the day, so it gets the full record rather
+                       than a one-line label: who, when, how long, and what came of it. */
+                    <>
+                      <div className="mb-1 flex items-start justify-between gap-2">
+                        <span className="text-foreground text-xs font-semibold">
+                          {point.customerName}
+                        </span>
+                        <span className="text-muted-foreground shrink-0 text-[10px] font-medium">
+                          {point.duration}
+                        </span>
+                      </div>
+                      <time className="text-muted-foreground block text-[10px]">
+                        {point.visitedAt}
+                      </time>
+                      {point.feedbackType && (
+                        <span
+                          className={`mt-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${feedbackTone(point.feedbackType)}`}
+                        >
+                          {point.feedbackType}
+                        </span>
+                      )}
+                      {point.feedbackText && (
+                        <p className="text-muted-foreground mt-1 text-[11px] leading-snug">
+                          {point.feedbackText}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="mb-0.5 flex items-center justify-between">
+                        <time className="text-muted-foreground text-[10px] font-medium">
+                          {point.time}
+                        </time>
+                      </div>
+                      <div className="text-foreground text-xs font-medium">
+                        {point.label}
+                      </div>
+                    </>
+                  )}
                   {timelineAddresses[i] && (
                     <div className="text-muted-foreground mt-1 flex items-center gap-1 text-[10px]">
                       <MapPin className="text-primary/60 h-2.5 w-2.5" />
@@ -793,6 +883,7 @@ export default function LocationDashboardPage() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }
