@@ -19,6 +19,14 @@ import type { RouteOverlay } from '@/components/location-tracking/map-view';
 import { computeFilteredDistanceKm, isTrustworthyPing } from '@/lib/location/distance';
 import { isManualPing, pingSourceLabel } from '@/lib/location/ping-source';
 
+/** "₹5.4K" / "₹560" — the tile is narrow, so large values are abbreviated. */
+function formatInr(amount: number): string {
+  if (!amount) return '₹0';
+  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
+  if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`;
+  return `₹${Math.round(amount)}`;
+}
+
 const MapView = dynamic(
   () => import('@/components/location-tracking/map-view'),
   {
@@ -253,17 +261,22 @@ export default function LocationDashboardPage() {
       .eq('user_id', userId)
       .maybeSingle();
 
-    const [quotationsRes, tasksRes, expensesRes] = await Promise.all([
+    const [ordersRes, tasksRes, expensesRes] = await Promise.all([
+      // ORDERS, not quotations. This tile is labelled "Orders" but was counting rows in
+      // `quotations`, so a rep who booked real orders all day still read as 0. Also pulls
+      // total_amount so the order value can sit beside the count.
       supabase
-        .from('quotations')
-        .select('id')
+        .from('orders')
+        .select('id, total_amount')
         .eq('user_id', userId)
         .gte('created_at', startStr)
         .lte('created_at', endStr),
+      // The column is `assigned_user_id`; `assigned_to` does not exist on tasks, so this
+      // request 400'd every time and Activity was permanently 0.
       supabase
         .from('tasks')
         .select('status')
-        .eq('assigned_to', userId)
+        .eq('assigned_user_id', userId)
         .gte('created_at', startStr)
         .lte('created_at', endStr),
       profile
@@ -285,7 +298,12 @@ export default function LocationDashboardPage() {
       if (e.status === 'Pending') expensePending += Number(e.amount) || 0;
     });
 
-    const totalOrders = quotationsRes.data?.length || 0;
+    const totalOrders = ordersRes.data?.length || 0;
+    // Value of what the rep actually booked, straight off the orders they raised.
+    const orderAmount = (ordersRes.data || []).reduce(
+      (sum: number, o: any) => sum + (Number(o.total_amount) || 0),
+      0,
+    );
     const activityTotal = tasksRes.data?.length || 0;
     const activityDone =
       tasksRes.data?.filter((t) => t.status === 'Completed').length || 0;
@@ -398,6 +416,7 @@ export default function LocationDashboardPage() {
       totalVisits: visitCount,
       totalCustomers: uniqueCustomers.size,
       totalOrders,
+      orderAmount,
       activityTotal,
       activityDone,
       expenseTotal,
@@ -617,14 +636,13 @@ export default function LocationDashboardPage() {
                   km
                 </span>
               </div>
-              {/* Straight-line between GPS points and actual road distance are two different
-                  numbers. Showing 0.11 km here beside a 1.4 km route on the map with neither
-                  labelled just reads as a bug, so name both. */}
+              {/* ONE distance only. Showing the straight-line total beside the road-route total
+                  gave two different "km" for the same day and left admins unable to say which
+                  was right. This is the figure Tracking Health and the reports use, so the whole
+                  product agrees. The road route is still drawn on the map, just not as a rival
+                  number. Which of the two should be canonical is a pending product decision. */}
               <div className="text-muted-foreground mt-1 text-[10px] leading-tight">
-                straight line
-                {routeSummary && (
-                  <div className="text-indigo-500">{routeSummary} by road</div>
-                )}
+                travelled
               </div>
             </div>
           </div>
@@ -639,7 +657,7 @@ export default function LocationDashboardPage() {
             </div>
           )}
 
-          <div className="border-border mb-4 grid grid-cols-3 gap-2 border-b pb-4">
+          <div className="border-border mb-4 grid grid-cols-4 gap-2 border-b pb-4">
             <div className="text-center">
               <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
                 Visit
@@ -662,6 +680,14 @@ export default function LocationDashboardPage() {
               </div>
               <div className="text-lg font-bold text-green-600">
                 {selectedUser?.totalOrders ?? 0}
+              </div>
+            </div>
+            <div className="border-border border-l text-center">
+              <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
+                Order Amt
+              </div>
+              <div className="text-sm leading-tight font-bold text-green-600">
+                {formatInr(selectedUser?.orderAmount ?? 0)}
               </div>
             </div>
           </div>
