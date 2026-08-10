@@ -39,6 +39,86 @@ async function throwMetaError(response: Response, fallback: string): Promise<nev
 }
 
 // ============================================================
+// Token introspection
+// ============================================================
+
+export interface DebugTokenArgs {
+  accessToken: string
+}
+
+export interface MetaTokenInfo {
+  /** Whether Meta still accepts this token right now. */
+  isValid: boolean
+  /**
+   * Unix seconds when the token expires, or null when it never expires.
+   * Meta reports 0 for non-expiring System User tokens; that is normalised
+   * to null here so callers don't have to know the quirk.
+   */
+  expiresAt: number | null
+  /** Meta app id the token belongs to. */
+  appId?: string
+  /** 'USER' | 'SYSTEM_USER' | 'PAGE' … — SYSTEM_USER is the durable kind. */
+  type?: string
+  scopes?: string[]
+  /** Meta's own explanation when the token is rejected. */
+  error?: string
+}
+
+/**
+ * Ask Meta about a token: is it still valid, and when does it die?
+ *
+ * This exists because a WhatsApp connection dying is invisible until someone
+ * notices messages stopped. The Developer Console hands out TEMPORARY tokens
+ * that expire in about 24 hours, so a connection set up with one silently
+ * breaks the next day and looks like a bug in the product. Knowing the expiry
+ * up front turns that into a warning days ahead instead of an outage.
+ *
+ * Called with the token inspecting itself (`input_token` and `access_token`
+ * both set to it), which Meta permits and which avoids having to hold a
+ * separate app token.
+ */
+export async function debugToken(args: DebugTokenArgs): Promise<MetaTokenInfo> {
+  const { accessToken } = args
+  const url =
+    `${META_API_BASE}/debug_token` +
+    `?input_token=${encodeURIComponent(accessToken)}` +
+    `&access_token=${encodeURIComponent(accessToken)}`
+
+  const response = await fetch(url, { method: 'GET' })
+  const body = (await response.json().catch(() => null)) as {
+    data?: {
+      is_valid?: boolean
+      expires_at?: number
+      data_access_expires_at?: number
+      app_id?: string
+      type?: string
+      scopes?: string[]
+      error?: { message?: string }
+    }
+    error?: { message?: string }
+  } | null
+
+  if (!response.ok || !body?.data) {
+    return {
+      isValid: false,
+      expiresAt: null,
+      error: body?.error?.message ?? `Meta API error: ${response.status}`,
+    }
+  }
+
+  const d = body.data
+  return {
+    isValid: d.is_valid === true,
+    // Meta uses 0 to mean "never expires" on System User tokens.
+    expiresAt: d.expires_at && d.expires_at > 0 ? d.expires_at : null,
+    appId: d.app_id,
+    type: d.type,
+    scopes: d.scopes,
+    error: d.error?.message,
+  }
+}
+
+// ============================================================
 // Phone number / account
 // ============================================================
 

@@ -16,6 +16,7 @@ import type {
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
+import { findOrCreateConversation } from '@/lib/whatsapp/conversations'
 
 // ------------------------------------------------------------
 // Public API
@@ -559,23 +560,28 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 /**
  * Pick the conversation a send-type step should use. Prefer the id the
  * webhook handed us (it's the one that just got the inbound message);
- * fall back to the contact's conversation for resumed/wait paths and
- * manual engine POSTs. Throws if none exists — send steps have
- * no meaningful target without a conversation.
+ * otherwise find the contact's conversation, creating one if there isn't
+ * yet.
+ *
+ * The create-on-demand step matters: this function used to throw
+ * "no conversation for contact" whenever the contact had never messaged
+ * in. That is true of every newly created customer, so a business-event
+ * automation — welcome a new customer, confirm their first order —
+ * failed on its very first run. A business-initiated message needs a
+ * thread to live in exactly as much as an inbound one does.
  */
 async function resolveConversationId(args: ExecuteArgs): Promise<string> {
   const fromCtx = args.context.conversation_id
   if (fromCtx) return fromCtx
   if (!args.contactId) throw new Error('cannot resolve conversation: no contact')
-  const { data, error } = await supabaseAdmin()
-    .from('conversations')
-    .select('id')
-    .eq('account_id', args.automation.account_id)
-    .eq('contact_id', args.contactId)
-    .maybeSingle()
-  if (error) throw new Error(`conversation lookup failed: ${error.message}`)
-  if (!data?.id) throw new Error('no conversation for contact')
-  return data.id as string
+
+  const conversation = await findOrCreateConversation(supabaseAdmin(), {
+    accountId: args.automation.account_id,
+    contactId: args.contactId,
+    ownerUserId: args.automation.user_id,
+  })
+  if (!conversation) throw new Error('could not open a conversation for this contact')
+  return conversation.id
 }
 
 function triggerMatches(automation: Automation, ctx: AutomationContext | undefined): boolean {
