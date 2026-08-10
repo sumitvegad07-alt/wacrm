@@ -19,10 +19,13 @@ interface HierarchyLevel {
 
 const LEVEL_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
-// NOTE: Order status is no longer configurable. It's a fixed state machine
+// NOTE: Order status is not configurable, by design. It's a fixed state machine
 // (Pending → Approved → Part Dispatch → Dispatched, plus Rejected/Cancelled)
-// enforced in the database (migrations 086 & 089), so the old editable
-// order_statuses list was removed from this screen.
+// enforced in the database (migrations 086 & 089). The editable list was removed
+// from this screen, and the backing `order_statuses` table was dropped in
+// 20260810123000 — it had drifted to names the state machine did not recognise,
+// so it showed statuses that governed nothing. The status list now lives in one
+// place: src/lib/orders/statuses.ts.
 export function OrdersSettings() {
   const supabase = createClient();
   const { accountId, canEditSettings } = useAuth();

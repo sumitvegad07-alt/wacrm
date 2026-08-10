@@ -17,6 +17,7 @@ import { OrderForm } from '@/components/orders/order-form';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
+import { ORDER_STATUSES } from '@/lib/orders/statuses';
 
 interface OrderRow {
   id: string;
@@ -50,15 +51,17 @@ const STATUS_BADGE: Record<string, string> = {
   Cancelled: 'bg-slate-600 text-white shadow-sm border-transparent',
 };
 
-// Legal transitions per the SQL state machine — a bulk action only applies to
-// rows where the transition is legal from their current status.
+// Legal transitions for BULK actions only — a bulk action applies solely to
+// rows where that transition is legal from their current status. Deliberately
+// narrower than ORDER_STATUS_TRANSITIONS (the full SQL state machine): reaching
+// 'Dispatched' goes through the per-order dispatch flow, never a bulk button.
 const LEGAL_TO: Record<string, string[]> = {
   Pending: ['Approved', 'Rejected', 'Cancelled'],
   Approved: ['Rejected', 'Cancelled'],
   'Part Dispatch': ['Cancelled'],
 };
-// Fixed order statuses (the configurable order_statuses table is retired).
-const ALL_STATUSES = ['Pending', 'Approved', 'Part Dispatch', 'Dispatched', 'Rejected', 'Cancelled'];
+// Order status is fixed, not configurable — see src/lib/orders/statuses.ts.
+const ALL_STATUSES: readonly string[] = ORDER_STATUSES;
 
 // Bulk status actions (deliberately no bulk Dispatch — that's per-order).
 const BULK_ACTIONS: { to: string; label: string; icon: typeof CheckCircle2; variant: 'default' | 'outline' | 'destructive' }[] = [
