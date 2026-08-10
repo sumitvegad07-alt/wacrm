@@ -122,8 +122,11 @@ export default function UserAttendancePage() {
     });
 
     const day = new Date(selectedDate);
+    // "--" is the founder's chosen marker for a punch-out that never happened. The system
+    // closes the day at midnight in the database, but refuses to print 00:00 as if the rep
+    // had chosen it.
     const asTime = (iso: string | null) =>
-      iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : "-";
+      iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : "--";
 
     const formattedDaily = profiles.map(p => {
       // Every session the rep started today, not just the first — a lunch break makes two.
@@ -203,12 +206,14 @@ export default function UserAttendancePage() {
       let lateStart = 0;
       let earlyLeave = 0;
       let shortPresent = 0;
+      let missingPunchOut = 0;
       byDay.forEach(sessions => {
         const d = computeAttendanceDay({
           sessions,
           day: new Date(sessions[0].started_at),
           settings: shiftSettings,
         });
+        if (d.flags.includes('missing_punch_out')) missingPunchOut++;
         if (d.flags.includes('late_start')) lateStart++;
         if (d.flags.includes('early_leaving')) earlyLeave++;
         if (d.status === 'short_present') shortPresent++;
@@ -229,7 +234,8 @@ export default function UserAttendancePage() {
         presencePct,
         lateStart,
         earlyLeave,
-        shortPresent
+        shortPresent,
+        missingPunchOut
       };
     });
     setUsersSummaryData(summaryFormatted);
@@ -431,6 +437,18 @@ export default function UserAttendancePage() {
       label: "Short Present",
       type: "text",
       render: (row) => <span className="text-right block">{row.shortPresent}</span>
+    },
+    {
+      // Days the rep simply never punched out. Worth its own column: it is a habit to correct,
+      // and every one of those days has an unverifiable duration.
+      id: "missingPunchOut",
+      label: "No Punch Out",
+      type: "text",
+      render: (row) => (
+        <span className={`text-right block ${row.missingPunchOut > 0 ? 'font-semibold text-destructive' : ''}`}>
+          {row.missingPunchOut}
+        </span>
+      )
     }
   ];
 

@@ -24,11 +24,16 @@ export const SHORT_PRESENT_RATIO = 0.75;
 export type AttendanceStatus = "absent" | "short_present" | "present";
 
 /** Additive: what went wrong within a day that was otherwise worked. */
-export type AttendanceFlag = "late_start" | "early_leaving";
+export type AttendanceFlag = "late_start" | "early_leaving" | "missing_punch_out";
 
 export interface AttendanceSession {
   started_at: string;
   ended_at: string | null;
+  /**
+   * 'auto_midnight' means the rep never punched out and the system closed the day at midnight.
+   * The record has an end time, but nobody chose it — so it must not be presented as one.
+   */
+  end_reason?: string | null;
 }
 
 export interface AttendanceDay {
@@ -94,14 +99,20 @@ export function computeAttendanceDay(input: ComputeAttendanceInput): AttendanceD
   }
   const workedMinutes = Math.round(workedMs / 60000);
 
-  // Only a closed day has a meaningful punch-out.
-  const closed = ordered.filter((s) => s.ended_at);
+  // A shift the system closed at midnight has an end time nobody chose. Treat it as NO
+  // punch-out: showing 00:00 would put a time in an attendance record that never happened,
+  // and would make the rep look like a spectacular early-leaver every time.
+  const missingPunchOut = ordered.some((s) => s.end_reason === "auto_midnight");
+  const closed = ordered.filter((s) => s.ended_at && s.end_reason !== "auto_midnight");
   const lastPunchOut = closed.length
     ? closed.reduce((a, b) => (ms(a.ended_at!) > ms(b.ended_at!) ? a : b)).ended_at
     : null;
 
   const graceMs = Math.max(0, settings.grace_minutes) * 60000;
   const flags: AttendanceFlag[] = [];
+  // Surfaced so nobody reads the day's duration as verified — it was capped at midnight, not
+  // measured. Without this the hours look real and quietly feed Short Present.
+  if (missingPunchOut) flags.push("missing_punch_out");
 
   // Late Start — first punch-in later than shift start + grace.
   let lateByMinutes = 0;
@@ -123,10 +134,11 @@ export function computeAttendanceDay(input: ComputeAttendanceInput): AttendanceD
   }
 
   // Short Present — worked well under the shift's length. Not judged mid-shift, for the same
-  // reason: the hours aren't in yet.
+  // reason: the hours aren't in yet. Also not judged when the punch-out is missing, because
+  // the worked total is then an artefact of where midnight fell, not of what the rep did.
   const shortThreshold = durationMinutes * SHORT_PRESENT_RATIO;
   const status: AttendanceStatus =
-    !stillOnDuty && durationMinutes > 0 && workedMinutes < shortThreshold
+    !stillOnDuty && !missingPunchOut && durationMinutes > 0 && workedMinutes < shortThreshold
       ? "short_present"
       : "present";
 
@@ -155,6 +167,7 @@ const STATUS_LABELS: Record<AttendanceStatus, { label: string; tone: AttendanceT
 const FLAG_LABELS: Record<AttendanceFlag, { label: string; tone: AttendanceTone }> = {
   late_start: { label: "Late Start", tone: "warning" },
   early_leaving: { label: "Early Leaving", tone: "warning" },
+  missing_punch_out: { label: "No Punch Out", tone: "destructive" },
 };
 
 /**
@@ -188,6 +201,7 @@ export const ATTENDANCE_STATUS_OPTIONS = [
   { label: "On Duty", value: "On Duty" },
   { label: "Late Start", value: "Late Start" },
   { label: "Early Leaving", value: "Early Leaving" },
+  { label: "No Punch Out", value: "No Punch Out" },
 ];
 
 /** Every label that applies to a day — primary status plus flags. Used for filtering. */

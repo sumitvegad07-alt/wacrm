@@ -5,6 +5,7 @@ import {
   computeAttendanceDay,
   formatWorkedMinutes,
   SHORT_PRESENT_RATIO,
+  type AttendanceSession,
 } from "./attendance-status";
 import { DEFAULT_TRACKING, type TrackingSettings } from "./tracking-window";
 
@@ -22,7 +23,7 @@ const shift = (over: Partial<TrackingSettings> = {}): TrackingSettings => ({
   ...over,
 });
 
-const compute = (sessions: { started_at: string; ended_at: string | null }[], over = {}) =>
+const compute = (sessions: AttendanceSession[], over = {}) =>
   computeAttendanceDay({
     sessions,
     day: DAY,
@@ -120,6 +121,44 @@ describe("computeAttendanceDay — Short Present", () => {
     const d = compute([{ started_at: at(19, 30), ended_at: null }]);
     expect(d.stillOnDuty).toBe(true);
     expect(d.status).toBe("present");
+  });
+});
+
+describe("computeAttendanceDay — forgotten punch-out", () => {
+  // The system closes an abandoned shift at midnight. The DB row then has an end time, but the
+  // rep never chose it, so it must not be treated as a punch-out.
+  const abandoned = [
+    { started_at: at(9, 0), ended_at: at(0, 0, 1), end_reason: "auto_midnight" },
+  ];
+
+  it("reports no punch-out rather than a midnight one", () => {
+    const d = compute(abandoned);
+    expect(d.lastPunchOut).toBeNull();
+    expect(d.flags).toContain("missing_punch_out");
+  });
+
+  it("does not call it early leaving", () => {
+    // Midnight is 6 hours AFTER the 18:00 shift end, but a naive reading of 00:00 as a clock
+    // time would make this the most extreme early-leaver in the company.
+    expect(compute(abandoned).flags).not.toContain("early_leaving");
+  });
+
+  it("does not judge the hours, because they were capped not measured", () => {
+    // 09:00 to midnight is 15 hours — but the rep may have stopped work at 11am. Marking the
+    // day Present or Short Present off that number would be inventing a fact.
+    const short = compute([
+      { started_at: at(9, 0), ended_at: at(10, 0), end_reason: "auto_midnight" },
+    ]);
+    expect(short.status).toBe("present");
+    expect(short.flags).toContain("missing_punch_out");
+  });
+
+  it("leaves a normal punch-out completely alone", () => {
+    const normal = compute([
+      { started_at: at(9, 0), ended_at: at(18, 0), end_reason: "manual" },
+    ]);
+    expect(normal.flags).not.toContain("missing_punch_out");
+    expect(normal.lastPunchOut).toBe(at(18, 0));
   });
 });
 
