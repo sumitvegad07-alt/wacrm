@@ -76,7 +76,7 @@ export default function AllLocationsPage() {
         battery_pct,
         recorded_at,
         source,
-        profiles ( full_name, role )
+        profiles ( full_name, employee_roles ( name ) )
       `
           )
           // Trace rows exist only to make distance accurate — one every 15 seconds. They are
@@ -192,7 +192,8 @@ export default function AllLocationsPage() {
         return {
           id: p.id,
           name: (p.profiles as any)?.full_name || 'Unknown',
-          role: (p.profiles as any)?.role || 'Field Staff',
+          // The admin-created role, not the internal account_role.
+          role: (p.profiles as any)?.employee_roles?.name || 'No role assigned',
           rawDate: p.recorded_at,
           date: new Date(p.recorded_at).toLocaleString('en-IN', {
             day: '2-digit',

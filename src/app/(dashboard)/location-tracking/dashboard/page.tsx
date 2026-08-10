@@ -123,7 +123,10 @@ export default function LocationDashboardPage() {
     // 1. Fetch ALL team profiles for this account
     const { data: allProfiles } = await supabase
       .from('profiles')
-      .select('id, user_id, full_name, account_role')
+      // The role shown is ALWAYS the admin-created one. `account_role` is an internal security
+      // value derived from that role's Full Access flag and drives RLS; it is not a label for
+      // people, and showing "agent"/"owner" alongside roles the admin actually named was noise.
+      .select('id, user_id, full_name, employee_roles(name)')
       .order('full_name');
 
     // 2. Fetch active tracking sessions (punched in users)
@@ -159,7 +162,7 @@ export default function LocationDashboardPage() {
           id: profile.user_id,
           sessionId: session?.id || null,
           name: profile.full_name || 'Unknown',
-          role: profile.account_role || 'user',
+          role: (profile.employee_roles as any)?.name || 'No role assigned',
           status: isActive ? 'active' : 'offline',
           userId: profile.user_id,
           startedAt: session?.started_at || null,

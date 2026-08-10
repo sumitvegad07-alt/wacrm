@@ -110,7 +110,8 @@ export default function TrackingHealthPage() {
       { data: snaps },
       { data: devices },
     ] = await Promise.all([
-      supabase.from("profiles").select("id, user_id, full_name, role"),
+      // Show the admin-created role, never the internal account_role/role values.
+      supabase.from("profiles").select("id, user_id, full_name, employee_roles(name)"),
       supabase
         .from("tracking_sessions")
         .select("user_id, started_at, ended_at, end_reason")
@@ -227,7 +228,7 @@ export default function TrackingHealthPage() {
         ...health,
         id: p.user_id,
         name: p.full_name || "Unknown",
-        role: p.role || "Field Staff",
+        role: (p.employee_roles as any)?.name || "No role assigned",
         devicePending,
         distanceKm: computeFilteredDistanceKm(allPings as any),
         mockCount: allPings.filter((x: any) => x.is_mocked).length,
