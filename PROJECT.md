@@ -763,17 +763,21 @@ a transient failure falls back to the queue like `enqueueMutation`. Offline it q
 (`Result.offline`). `SyncOperation` gained an optional `kind` field (`'mutation'` | `'rpc'`);
 items without it are treated as mutations, so existing flows are untouched.
 
-**Dead-letter handling (RPC ops only, deliberately scoped).** The old `RetryHandler` silently
-skipped an op forever once it hit `MAX_RETRIES` (5) — the cause of stuck, invisible punch-in/out
-actions. For **RPC ops** SyncEngine now gives up VISIBLY: after 5 transient failures, or
-immediately on a permanent rejection, the op is moved to a persisted dead-letter store
-(`@wacrm_sync_deadletter`) instead of dropped. Transient vs permanent is classified in
-`index.ts` (`isPermanentRpcError`): network/transport = transient (retry); a Postgres SQLSTATE =
-permanent (except serialization/deadlock/connection codes). **Legacy mutation ops keep their
-exact old behaviour** (skip-after-5) — the punch-in/out bug is NOT fixed here; fixing it means
-changing mutation flows, which is out of this step's scope. Dead-letters are queryable via
-`syncEngine.getDeadLetterQueue()` / `subscribeDeadLetter()` and recoverable via
-`retryDeadLetter(id)` / `dismissDeadLetter(id)`.
+**Dead-letter handling.** The old `RetryHandler` silently skipped an op forever once it hit
+`MAX_RETRIES` (5) — the cause of stuck, invisible punch-in/out actions. SyncEngine now gives up
+VISIBLY: after 5 transient failures, or immediately on a permanent rejection, the op is moved to
+a persisted dead-letter store (`@wacrm_sync_deadletter`) instead of dropped. Transient vs
+permanent is classified in `index.ts` (`isPermanentRpcError`): network/transport = transient
+(retry); a Postgres SQLSTATE = permanent (except serialization/deadlock/connection codes).
+Dead-letters are queryable via `syncEngine.getDeadLetterQueue()` / `subscribeDeadLetter()` and
+recoverable via `retryDeadLetter(id)` / `dismissDeadLetter(id)`.
+
+> **CORRECTED 2026-08-09.** This section previously said "Legacy mutation ops keep their exact
+> old behaviour (skip-after-5)" and that the punch-in/out bug was NOT fixed. Both statements are
+> now out of date: `RetryHandler` dead-letters **mutations as well as RPCs**, and the punch
+> sync bug was fixed (the root cause was `enqueueMutation` always queueing when the op carried
+> file uploads, so a punch never flushed until something else triggered a flush). See the
+> 2026-08-07 → 2026-08-10 section below.
 
 **Dead-letter UI (built 26 Jul 2026).** `src/components/ui/SyncFailureBanner.tsx` is a persistent
 floating banner mounted once in `app/_layout.tsx`; it subscribes to the dead-letter store and,
@@ -1245,6 +1249,270 @@ model changed. Brought into line:
 - **Visual Status & Badge Hierarchy**: Use consistent intent colors (`success`, `warning`, `danger`, `info`, `default`) for status badges across EntityCards and detail screens (e.g., `'Part Dispatch'`, `'Pending'`, `'Approved'`).
 - **Required Field Indicating**: Always demarcate mandatory fields (both system-required like `company`/`name`/`phone` and admin-defined required custom fields) with an inline red asterisk (`*`).
 
+
+---
+
+# Location Trust, Distance Accuracy & Offline-First (2026-08-07 → 2026-08-10)
+
+A single long push covering the Location Tracking module end to end, plus the app-wide
+offline-first read layer. Everything here is applied to production unless stated otherwise.
+**Read this before touching location tracking, distance, attendance, or the mobile data layer —
+several of the decisions below are counter-intuitive and were arrived at from real field data.**
+
+## 1. The ping pipeline was dead (root cause, fixed)
+
+GPS pings stopped saving on **2026-07-17** and nobody noticed until this session. Cause:
+`location_pings.id` is a server-assigned `bigint GENERATED ALWAYS AS IDENTITY`, and the mobile
+payload was sending a client-generated `id`. Postgres rejected **every** insert.
+
+The fix is not just removing `id` — it is `client_ping_id` (a client UUID) plus a unique index
+on `(account_id, client_ping_id)`, so an offline replay is idempotent rather than duplicating.
+**Never put `id` in a `location_pings` payload.**
+
+## 2. Distance: why it was wrong, and what makes it right
+
+Distance was summed from pings persisted every 10 minutes. At 40 km/h that is ~6.7 km between
+consecutive points, and **the road actually driven between them was never recorded** — so the
+straight line under-reported by 40%+ (observed: 15.67 km straight-line vs 27.9 km by road for
+the same day). No post-processing recovers information that was never captured.
+
+The fix was upstream of the maths. The OS was already delivering a fix every 30 seconds and the
+background task **discarded 19 of every 20**. Those fixes are now persisted as
+`location_pings.source = 'trace'`, and the OS interval was tightened to 15s (which halves
+corner-cutting error; GPS is already engaged for the foreground service so this costs little
+power — it is callback frequency, not radio duty cycle).
+
+Three gates run **on the device AND again in Postgres**, so the admin-facing number is
+recomputable and never depends on trusting the handset's arithmetic:
+
+| Gate | Threshold | The lie it catches |
+|---|---|---|
+| Accuracy | ≤ 50 m | A vague fix could be anywhere in a large circle — invents kilometres |
+| **Stationary** | step > max(15 m, both fixes' accuracy) | **The dominant error on cheap devices.** A parked phone's position wanders constantly; a day in shops fabricates km |
+| Speed | ≤ 55 m/s | GPS glitch, not a car |
+
+**The subtle part:** a step rejected by the stationary gate must NOT advance the comparison
+baseline. Otherwise drift accumulates 10 m at a time and you are back where you started.
+
+`compute_daily_distance()` (SQL) and `computeFilteredDistanceKm()` (TS) must stay behaviourally
+identical. Both fixtures were verified against the live database in rolled-back transactions:
+the 111.19 km parity fixture matches, and a 20-point drift fixture returns **0 in both engines**
+where the old logic invented ~0.22 km.
+
+Expected accuracy is **3–6% under a car odometer**. This has NOT been measured against a real
+odometer yet — that validation is outstanding. If it lands outside 5%, the next step is
+map-matching the trace to the road network (~2%), not more filtering.
+
+## 3. Shift times must NEVER gate tracking
+
+An earlier version of this work used the configured window to suppress background pings outside
+working hours. A rep punched in at 01:26 against the default 09:00–18:00 and recorded exactly
+one ping — the punch-in, which `punch.tsx` writes directly and bypassed the check. Night work
+was invisible **by design**, with no indication why.
+
+**Founder ruling: being punched in IS the signal that a rep is on duty.** An on-duty rep is
+tracked at any hour. `start_time`/`end_time` are SHIFT TIMINGS used only to classify attendance;
+only `interval_minutes` reaches the background task. Do not reintroduce time-based suppression.
+
+The on/off toggle for shift timings was later removed as well (it had no honest use). `enabled`
+is still **written as `true`** when saving, because APKs already in the field read that flag as
+a tracking gate and would stop tracking entirely on `false`.
+
+## 4. Attendance classification (`src/lib/location/attendance-status.ts`)
+
+Derives Absent / Short Present / Late Start / Early Leaving / Present from shift times plus real
+punch sessions. Handles night shifts that wrap past midnight, and sums **all** sessions in a day
+(a lunch break makes two — counting only the first reads as Short Present).
+
+`grace_minutes` (default 15) was added because punching in at 09:01 on a 09:00 shift would
+otherwise be flagged, making the column noise.
+
+## 5. Forgotten punch-out — closed at midnight
+
+A rep who forgot to punch out was tracked all night, showed as Active in green indefinitely, and
+made every figure for that day meaningless.
+
+`close_stale_tracking_sessions()` runs via **pg_cron at 18:30 UTC = 00:00 IST** and closes any
+shift left open, with `end_reason = 'auto_midnight'`. Sessions started **today** are skipped, so
+a rep working past midnight is never cut off mid-shift by a job that runs late.
+
+The database records an end time; **the UI deliberately shows `--`**, because the rep did not
+punch out at midnight — we stopped counting, and printing 00:00 would put a time in an
+attendance record that never happened. Two consequences are handled explicitly:
+
+- **Early Leaving is suppressed** for these days. Midnight read as a clock time makes the rep
+  the most extreme early-leaver in the company, every single time.
+- **Short Present is suppressed.** The worked total is an artefact of where midnight fell, not
+  a measurement.
+
+The mobile side mirrors this: the punch-in day is stored in the tracking state file and the
+background task stops once the local calendar day rolls over. Both sides must agree — the server
+closing the record while the phone keeps pinging attaches a night of locations to a finished
+shift.
+
+## 6. `location_pings.source` — every point knows what made it
+
+`source` ∈ `auto | punch_in | punch_out | visit_check_in | visit_check_out | trace`,
+and `session_id` is now **nullable** (a visit check-in by a rep who has not punched in must be
+recorded, not dropped).
+
+Visit check-ins previously wrote GPS only to `site_visits.check_in_lat/lng`, so the most
+meaningful location of the day appeared on Customer Visits and **nowhere else** — All Locations,
+Track Report, Overview and the Live Feed all read `location_pings`.
+
+**Trace rows are machine data.** They must be excluded from All Locations, the Live Feed markers,
+and Tracking Health's coverage maths (counting them as coverage reports ~2000% and hides real
+outages). Distance, accuracy % and mock counts DO use them.
+
+## 7. Duplicate-key sync failures — two distinct causes
+
+`UNIQUE (session_id, recorded_at)` on `location_pings` produced repeated Failed Syncs.
+
+1. **Self-inflicted.** One OS callback carries one location, but the task could write both a
+   trace row and a display row from that same fix — identical timestamps, second rejected. Only
+   at the interval boundary while moving, which is why it looked random. **The source is now
+   decided first and the fix is written once.** Nothing is lost: distance reads every row
+   regardless of source, so a display ping doubles as that moment's trace point.
+2. **Lost acknowledgements.** On a weak link the write lands but the response does not; the
+   queue retries and hits the same constraint. `(session_id, recorded_at)` is a **natural
+   idempotency key** — one device, one session, one instant, one place — so a collision there
+   can only be a replay and is treated as success. Other unique violations (duplicate contact
+   phone) are still surfaced.
+
+Also fixed: the auto-ping interval slot was claimed **before** the battery read, enqueue and
+health capture. Any throw burnt the slot and wrote nothing, so a run of failures read as a long
+silent gap. The slot is now claimed only after the ping is queued.
+
+## 8. Tracking Health — diagnosis, not just numbers
+
+`tracking-health.ts` classifies each gap to a cause (`ISSUE_CATALOG` in `tracking-issues.ts`
+carries the plain-English cause + a ready-to-send fix). Merged the old **Track Report** into it:
+one table, every column preserved, rarely-needed ones behind Manage Columns.
+
+`explainGap()` puts the same explanation on each All Locations row. **The snapshot it reasons
+from is chosen carefully and the intuitive choices are both wrong:** on the real 2026-08-10
+incident, battery saver switched ON at 13:08 (which stopped the pings) and was OFF again by
+14:11 once the phone was charged. The day's last snapshot — and the last one *inside* the gap —
+both say "power save off". What explains a silence is the device state when it **fell silent**,
+so it takes the most recent snapshot at or before the gap starts. There is a regression test
+built from this incident.
+
+Coverage is measured against the **configured** interval. It was hardcoded to 10 minutes, which
+would have reported ~33% coverage as a fault for a healthy rep on a 30-minute interval.
+
+`LOW_COVERAGE_PCT = 60` (founder decision).
+
+## 9. Android reality — why tracking dies
+
+Confirmed on a Samsung Galaxy A06 (Android 16): pings landed every 10 min for ~40 minutes after
+punch-in, then stopped dead for 5 hours. Location on, background permission granted, battery
+saver off, battery 43% — and **the app stopped sending its own health heartbeat**, i.e. the
+process was not running. That is the OS putting the app to sleep.
+
+- `oem-battery-guides.ts` — 21 manufacturers, split into `required[]` (1 step on stock Android,
+  2 on aggressive OEMs) and `ifStillStopping[]`. A rep in a shop will not work through five
+  equal-looking instructions.
+- `react-native-device-info` does **NOT** expose battery-optimization state. Reading it needs a
+  native module; `battery_optimization_on` is honestly `null` rather than guessed.
+- Product name shown to users is **OZZO**. The launcher label must match, or "find OZZO in the
+  list" cannot be followed.
+
+## 10. Offline-first reads (2026-08-10) — the architecture
+
+The **write** path had been offline-first for a long time (SyncEngine queues every mutation).
+**Reads were not.** Every screen visit went straight to the network with nothing persisted, so
+weak signal meant a spinner and no signal meant a permanently empty screen.
+
+**Caching lives in the repository layer, not in screens.** `src/dal/withOfflineReads.ts` wraps
+any repository and intercepts `findAll`/`findById`. Registering a repository in
+`src/dal/index.ts` is the entire integration — **this is what makes future modules offline-capable
+by default**, with nothing for anyone to remember.
+
+Behaviour is **cache-first, not network-first**: a cached answer returns immediately and a
+refresh runs behind it. That is what removes the wait — on a slow link the screen no longer
+blocks on a request at all. Data can be one interaction old, which is the right trade for a
+field app. A failed refresh never destroys the cached copy.
+
+Cold reads run under a **12s timeout**, because supabase-js otherwise inherits a socket timeout
+of a minute or more on a stalled mobile connection. With nothing cached and no network, the read
+**fails explicitly** rather than returning an empty list — an empty list reads as "this customer
+has no orders".
+
+**Three repositories are deliberately NOT cached:**
+
+| Repository | Why |
+|---|---|
+| `trackingsessionRepo` | The punch screen reads it to decide Punch In vs Punch Out. A stale session is exactly the bug that had reps punching in twice |
+| `deviceRepo` | Device approval is a security check; a cached "active" readmits a revoked handset |
+| `locationpingRepo` | Write-only from the background task |
+
+Supporting pieces:
+- `useCachedCollection` — two-phase hook for screens that want an explicit refreshing state.
+- `warmOfflineCache()` at sign-in pulls the main collections down while there is still signal.
+  Cache-first only helps once something is cached; without this a rep who signs in at the office
+  and drives into a dead zone finds every screen they had not already opened is empty.
+- Caches are cleared on sign-out — they are written to disk on purpose, and on a shared handset
+  would otherwise show the next rep the previous rep's customers.
+- Writes invalidate that table's cached reads.
+- **Customers** dropped from two SEQUENTIAL query rounds to one via PostgREST embeds. The old
+  second round (`.in(contactIds)`) also grew its URL with the customer count and would eventually
+  be rejected outright.
+- **SYNC NOW** on the Failed Syncs screen re-queues every dead-lettered op plus the invisible
+  live queue and flushes once. It reports what is actually left rather than a blanket "done".
+
+**Still to convert:** `app/dispatch/[id].tsx`. `app/order/new.tsx` was already cache-first.
+
+## 11. Roles — display vs security
+
+There are **two parallel role systems**:
+
+- `account_role` enum (`owner`/`admin`/`agent`/`viewer`) — **derived** from a custom role's Full
+  Access flag, and referenced by **269 of 283 RLS policies**. This is the multi-tenant security
+  primitive.
+- `employee_roles` table — the roles an admin actually creates ("Admin", "Sales Executive").
+
+Screens now display the **admin-created role** everywhere. `account_role` stays internal and is
+never shown. **Do not attempt to delete the enum** — that is a rewrite of 95% of the database's
+access control, and a mistake there is a cross-tenant data leak, not a bug.
+
+## 12. Other fixes worth knowing
+
+- **Tab bar under Android's navigation bar.** Expo SDK 54+ makes Android edge-to-edge mandatory.
+  Hardcoding `height`/`paddingBottom` on `tabBarStyle` **overrides** the insets React Navigation
+  would otherwise apply, so the gesture bar sat on the labels. Both now derive from the real
+  inset. The FAB had the same bug (absolutely positioned 24 px from the bottom of the *screen*).
+- **Device registration** is server-side (`device_register()` RPC). The client cannot self-assign
+  status: first device = `active`, any additional = `pending`. Registration runs on sign-in AND
+  on session restore.
+- **`tasks.assigned_to` does not exist** — it is `assigned_user_id`. The Live Feed Activity tile
+  queried the wrong column and 400'd on every load, so it was permanently 0.
+- **The Live Feed "Orders" tile queried `quotations`.** It now queries `orders`, with an Order
+  Amt tile from `total_amount`.
+- **Live Feed selection reset every 30s.** `fetchDashboardData` read `selectedUser` from a
+  closure captured when the polling interval was created (always `null`), so every poll
+  re-selected the first user. Read through the state updater instead.
+- **`bg-primary/10` renders fully transparent** on some elements under the current theme tokens
+  while `bg-muted` paints on others. Do not rely on tinted backgrounds for an "active" signal;
+  use a solid palette colour.
+- **Addresses**: Nominatim's raw `display_name` includes revenue-administration units ("Rajkot
+  East Taluka") and repeats the city. Addresses are composed from the structured fields in
+  envelope order instead. Not switching to Google Geocoding — it bills per request and this
+  fires on hover over every point of every day.
+- Route line is **vivid blue at full opacity** with a white casing and direction arrows; there is
+  a Swiggy-style **Play route** rider animation. Route geometry lives in
+  `src/lib/location/route-geometry.ts` **specifically so it can be unit-tested** — `map-view.tsx`
+  imports Leaflet, which needs a browser.
+
+## 13. Outstanding / not done
+
+- Distance accuracy has **not** been validated against a real odometer.
+- No per-customer code exists in the schema (`accounts.customer_id` is the *tenant* id). Adding
+  one is a customer-master change.
+- `app/dispatch/[id].tsx` still fetches without a cache.
+- The mobile repo has **no test harness** — offline-first work is verified by typecheck and a
+  full Android bundle export only.
+- `app.json` `version` is still `1.0.0` for every build, so `app_version` in
+  `device_health_snapshots` cannot distinguish which APK a device is running.
 
 
 # PART 3: ARCHITECTURE & ENGINEERING BIBLE
