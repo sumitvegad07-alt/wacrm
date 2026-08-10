@@ -2,7 +2,13 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, Filter, Upload } from "lucide-react";
+import { Plus, Search, Filter, Upload, MapPin } from "lucide-react";
+import {
+  PointMapDialog,
+  formatLatLng,
+  hasPoint,
+  type MapPoint,
+} from "@/components/location-tracking/point-map-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -35,6 +41,7 @@ export default function LeadsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   
   // Lookups for filters
@@ -175,6 +182,40 @@ export default function LeadsPage() {
       type: "select",
       options: leadIndustries.map(s => ({ label: s.name, value: s.name })),
       render: (lead) => <span>{lead.industry || "-"}</span>
+    },
+    {
+      // The geo-tag captured when a rep tagged this lead on site.
+      id: "latLng",
+      label: "Latitude, Longitude",
+      type: "text",
+      render: (lead) => (
+        <span className="font-mono text-xs whitespace-nowrap">
+          {formatLatLng((lead as any).latitude, (lead as any).longitude)}
+        </span>
+      )
+    },
+    {
+      id: "geoMap",
+      label: "Geo Map",
+      render: (lead) => (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1 text-xs whitespace-nowrap"
+          disabled={!hasPoint((lead as any).latitude, (lead as any).longitude)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMapPoint({
+              lat: (lead as any).latitude,
+              lng: (lead as any).longitude,
+              title: lead.name || 'Lead',
+              label: 'Lead geo-tag',
+            });
+          }}
+        >
+          <MapPin className="h-3 w-3" /> MAP
+        </Button>
+      )
     }
   ];
 
@@ -274,7 +315,8 @@ export default function LeadsPage() {
         }
         filterState={filterState}
         onFilterChange={handleFilterChange}
-        storageKey="wacrm_leads_table_columns"
+        // _v2: saved column layouts would otherwise hide the new geo-tag columns.
+        storageKey="wacrm_leads_table_columns_v2"
         isLoading={loading}
         rowKey={(lead) => lead.id}
         onRowClick={(lead) => router.push(`/leads/${lead.id}`)}
@@ -296,6 +338,8 @@ export default function LeadsPage() {
         onOpenChange={setImportOpen}
         onSuccess={loadLeads}
       />
+
+      <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />
     </PageLayout>
   );
 }

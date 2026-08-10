@@ -12,6 +12,12 @@ import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  PointMapDialog,
+  formatLatLng,
+  hasPoint,
+  type MapPoint,
+} from "@/components/location-tracking/point-map-dialog";
 import { DEFAULT_TRACKING, formatHHMM, normalizeTrackingSettings } from "@/lib/location/tracking-window";
 import {
   ATTENDANCE_STATUS_OPTIONS,
@@ -33,6 +39,7 @@ export default function UserAttendancePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [filterState, setFilterState] = useState<FilterState>({});
   const [shift, setShift] = useState(DEFAULT_TRACKING);
+  const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
   
   const supabase = createClient();
 
@@ -85,9 +92,34 @@ export default function UserAttendancePage() {
     const endOfDay = new Date(selectedDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const dailySessions = monthSessions?.filter(s => 
+    const dailySessions = monthSessions?.filter(s =>
       new Date(s.started_at) >= startOfDay && new Date(s.started_at) <= endOfDay
     ) || [];
+
+    // Punch coordinates are NOT on tracking_sessions — the app records them as location_pings
+    // tagged punch_in / punch_out against the session. Sessions from before that tagging existed
+    // still have the coordinates, just labelled 'auto', so fall back to the session's first and
+    // last point, which is exactly what a punch-in and punch-out ping are.
+    const sessionIds = dailySessions.map(s => s.id);
+    const { data: punchPings } = sessionIds.length
+      ? await supabase
+          .from('location_pings')
+          .select('session_id, lat, lng, source, recorded_at')
+          .in('session_id', sessionIds)
+          .order('recorded_at', { ascending: true })
+      : { data: [] as any[] };
+
+    const punchBySession: Record<string, { inPt: any; outPt: any }> = {};
+    (punchPings || []).forEach((lp: any) => {
+      const slot = (punchBySession[lp.session_id] ||= { inPt: null, outPt: null });
+      if (lp.source === 'punch_in') slot.inPt ||= lp;
+      else if (lp.source === 'punch_out') slot.outPt = lp;
+      else {
+        // Untagged legacy point: first seen is the punch-in, last seen is the punch-out.
+        slot.inPt ||= lp;
+        slot.outPt = lp;
+      }
+    });
 
     const day = new Date(selectedDate);
     const asTime = (iso: string | null) =>
@@ -103,9 +135,13 @@ export default function UserAttendancePage() {
       });
 
       // The selfie belongs to the first punch-in of the day.
-      const firstSession = [...userSessions].sort(
+      const ordered = [...userSessions].sort(
         (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-      )[0];
+      );
+      const firstSession = ordered[0];
+      const lastSession = ordered[ordered.length - 1];
+      const inPt = firstSession ? punchBySession[firstSession.id]?.inPt : null;
+      const outPt = lastSession ? punchBySession[lastSession.id]?.outPt : null;
 
       return {
         id: p.user_id,
@@ -117,7 +153,14 @@ export default function UserAttendancePage() {
         duration: formatWorkedMinutes(attendance.workedMinutes),
         attendance,
         status: attendancePrimaryLabel(attendance),
-        img: firstSession?.punch_in_photo_url || null
+        img: firstSession?.punch_in_photo_url || null,
+        // Where the rep actually stood when they punched in and out.
+        punchInLat: inPt?.lat ?? null,
+        punchInLng: inPt?.lng ?? null,
+        punchOutLat: outPt?.lat ?? null,
+        punchOutLng: outPt?.lng ?? null,
+        punchInLatLng: formatLatLng(inPt?.lat, inPt?.lng),
+        punchOutLatLng: formatLatLng(outPt?.lat, outPt?.lng),
       };
     });
     setAttendanceData(formattedDaily);
@@ -220,6 +263,22 @@ export default function UserAttendancePage() {
       render: (row) => <span>{row.duration}</span>
     },
     {
+      id: "punchInLatLng",
+      label: "Punch in location",
+      type: "text",
+      render: (row) => (
+        <span className="font-mono text-xs whitespace-nowrap">{row.punchInLatLng}</span>
+      )
+    },
+    {
+      id: "punchOutLatLng",
+      label: "Punch out location",
+      type: "text",
+      render: (row) => (
+        <span className="font-mono text-xs whitespace-nowrap">{row.punchOutLatLng}</span>
+      )
+    },
+    {
       id: "status",
       label: "Attendance",
       type: "select",
@@ -239,12 +298,45 @@ export default function UserAttendancePage() {
       label: "View Map",
       visibleByDefault: true,
       render: (row) => (
-        <div className="flex justify-center">
-          <Link href="/location-tracking/dashboard" onClick={(e) => e.stopPropagation()}>
-            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs whitespace-nowrap">
-              <MapPin className="h-3 w-3" /> MAP
-            </Button>
-          </Link>
+        // Two separate places, so two buttons. One "MAP" link that went to the Live Feed could
+        // not have shown either of them.
+        <div className="flex justify-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1 text-xs whitespace-nowrap"
+            disabled={!hasPoint(row.punchInLat, row.punchInLng)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMapPoint({
+                lat: row.punchInLat,
+                lng: row.punchInLng,
+                title: `${row.name} — Punch In`,
+                when: row.punchIn,
+                label: 'Punch In',
+              });
+            }}
+          >
+            <MapPin className="h-3 w-3" /> IN
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1 text-xs whitespace-nowrap"
+            disabled={!hasPoint(row.punchOutLat, row.punchOutLng)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMapPoint({
+                lat: row.punchOutLat,
+                lng: row.punchOutLng,
+                title: `${row.name} — Punch Out`,
+                when: row.punchOut,
+                label: 'Punch Out',
+              });
+            }}
+          >
+            <MapPin className="h-3 w-3" /> OUT
+          </Button>
         </div>
       )
     },
@@ -479,6 +571,8 @@ export default function UserAttendancePage() {
           )}
         </div>
       </div>
+
+      <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />
     </div>
   );
 }

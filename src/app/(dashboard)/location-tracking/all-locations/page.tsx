@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -27,15 +26,10 @@ import { explainGap } from '@/lib/location/tracking-health';
 import { ISSUE_CATALOG, type IssueCode } from '@/lib/location/tracking-issues';
 import { normalizeTrackingSettings } from '@/lib/location/tracking-window';
 import { useAuth } from '@/hooks/use-auth';
-
-const PointMap = dynamic(() => import('@/components/location-tracking/map-view'), {
-  ssr: false,
-  loading: () => (
-    <div className="bg-muted text-muted-foreground flex h-full w-full animate-pulse items-center justify-center text-sm">
-      Loading map…
-    </div>
-  ),
-});
+import {
+  PointMapDialog,
+  formatLatLng,
+} from '@/components/location-tracking/point-map-dialog';
 
 export default function AllLocationsPage() {
   const { accountId } = useAuth();
@@ -217,10 +211,7 @@ export default function AllLocationsPage() {
           // type carries them — automatic, visit check-in/out, punch, first and last.
           lat: p.lat,
           lng: p.lng,
-          latLng:
-            p.lat != null && p.lng != null
-              ? `${Number(p.lat).toFixed(6)}, ${Number(p.lng).toFixed(6)}`
-              : '-',
+          latLng: formatLatLng(p.lat, p.lng),
           gapIssue: gap ? ISSUE_CATALOG[gap.issueCode].title : null,
           gapCause: gap ? ISSUE_CATALOG[gap.issueCode].cause : null,
           gapFix: gap ? ISSUE_CATALOG[gap.issueCode].fix : null,
@@ -425,40 +416,22 @@ export default function AllLocationsPage() {
       />
 
       {/* This exact point, on its own map. */}
-      <Dialog open={!!mapRow} onOpenChange={(open) => !open && setMapRow(null)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {mapRow?.name} — {mapRow?.date}
-            </DialogTitle>
-          </DialogHeader>
-          {mapRow && (
-            <>
-              <div className="h-[420px] w-full overflow-hidden rounded-lg border border-border">
-                <PointMap
-                  points={[
-                    {
-                      lat: Number(mapRow.lat),
-                      lng: Number(mapRow.lng),
-                      type: 'current',
-                      time: mapRow.date,
-                      dateTime: mapRow.date,
-                      label: pingSourceLabel(mapRow.source).label,
-                      battery:
-                        mapRow.battery === '-' ? null : parseInt(mapRow.battery, 10),
-                    },
-                  ]}
-                  layerType="standard"
-                  showStraightLine={false}
-                />
-              </div>
-              <p className="text-muted-foreground font-mono text-xs">
-                {mapRow.latLng}
-              </p>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <PointMapDialog
+        point={
+          mapRow
+            ? {
+                lat: mapRow.lat,
+                lng: mapRow.lng,
+                title: mapRow.name,
+                when: mapRow.date,
+                label: pingSourceLabel(mapRow.source).label,
+                battery:
+                  mapRow.battery === '-' ? null : parseInt(mapRow.battery, 10),
+              }
+            : null
+        }
+        onClose={() => setMapRow(null)}
+      />
 
       {/* Why the phone went quiet before this point — same wording as Tracking Health. */}
       <Dialog open={!!issueRow} onOpenChange={(open) => !open && setIssueRow(null)}>

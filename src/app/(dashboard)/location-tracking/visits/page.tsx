@@ -12,8 +12,15 @@ import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
 import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
+import {
+  PointMapDialog,
+  formatLatLng,
+  hasPoint,
+  type MapPoint,
+} from "@/components/location-tracking/point-map-dialog";
 
 export default function CustomerVisitsPage() {
+  const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [visitsData, setVisitsData] = useState<any[]>([]);
@@ -44,6 +51,10 @@ export default function CustomerVisitsPage() {
         visit_photo_url,
         target_type,
         target_id,
+        check_in_lat,
+        check_in_lng,
+        check_out_lat,
+        check_out_lng,
         contacts ( name ),
         profiles ( full_name )
       `)
@@ -81,7 +92,15 @@ export default function CustomerVisitsPage() {
         feedbackType: v.feedback_type || "N/A",
         feedback: v.feedback_text || "-",
         visitedBy: (v.profiles as any)?.full_name || "Unknown",
-        img: v.visit_photo_url || null
+        img: v.visit_photo_url || null,
+        // Where the rep stood at each end of the visit. Check-out can be missing on a visit
+        // that is still open, so the two are kept separate rather than merged into one field.
+        checkInLat: (v as any).check_in_lat ?? null,
+        checkInLng: (v as any).check_in_lng ?? null,
+        checkOutLat: (v as any).check_out_lat ?? null,
+        checkOutLng: (v as any).check_out_lng ?? null,
+        checkInLatLng: formatLatLng((v as any).check_in_lat, (v as any).check_in_lng),
+        checkOutLatLng: formatLatLng((v as any).check_out_lat, (v as any).check_out_lng),
       }));
       setVisitsData(formatted);
     } else {
@@ -192,15 +211,45 @@ export default function CustomerVisitsPage() {
       render: (row) => <span>{row.visitedBy}</span>
     },
     {
+      id: "checkInLatLng",
+      label: "Check-in location",
+      type: "text",
+      render: (row) => (
+        <span className="font-mono text-xs whitespace-nowrap">{row.checkInLatLng}</span>
+      )
+    },
+    {
+      id: "checkOutLatLng",
+      label: "Check-out location",
+      type: "text",
+      render: (row) => (
+        <span className="font-mono text-xs whitespace-nowrap">{row.checkOutLatLng}</span>
+      )
+    },
+    {
       id: "actions",
       label: "Action",
       visibleByDefault: true,
       render: (row) => (
-        <Link href="/location-tracking/dashboard" onClick={(e) => e.stopPropagation()}>
-          <Button variant="outline" size="sm" className="h-8 gap-1 text-xs whitespace-nowrap">
-            <MapPin className="h-3 w-3" /> MAP
-          </Button>
-        </Link>
+        // The check-in is the point that matters here — where the rep actually met the customer.
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1 text-xs whitespace-nowrap"
+          disabled={!hasPoint(row.checkInLat, row.checkInLng)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMapPoint({
+              lat: row.checkInLat,
+              lng: row.checkInLng,
+              title: row.name,
+              when: row.checkIn,
+              label: 'Visit check-in',
+            });
+          }}
+        >
+          <MapPin className="h-3 w-3" /> MAP
+        </Button>
       )
     }
   ];
@@ -256,10 +305,13 @@ export default function CustomerVisitsPage() {
         data={filteredVisits}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        storageKey="wacrm_visits_table_columns"
+        // _v2: saved column layouts would otherwise hide the new coordinate columns.
+        storageKey="wacrm_visits_table_columns_v2"
         isLoading={isLoading}
         rowKey={(row) => row.id}
       />
+
+      <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />
     </PageLayout>
   );
 }

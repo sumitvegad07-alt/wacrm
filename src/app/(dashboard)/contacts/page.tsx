@@ -42,6 +42,13 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, ConfirmDialog } from '@/components/shared';
+import { MapPin } from 'lucide-react';
+import {
+  PointMapDialog,
+  formatLatLng,
+  hasPoint,
+  type MapPoint,
+} from '@/components/location-tracking/point-map-dialog';
 
 interface ContactWithData extends Contact {
   tags?: Tag[];
@@ -77,6 +84,7 @@ export default function ContactsPage() {
   const [filterState, setFilterState] = useState<FilterState>({});
   const [globalSearch, setGlobalSearch] = useState("");
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
 
   // Lookups
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -291,6 +299,40 @@ export default function ContactsPage() {
       render: (contact) => <span className="text-sm">{contact.pincode || "-"}</span>
     },
     {
+      // The geo-tag captured when a rep tagged this customer on site.
+      id: "latLng",
+      label: "Latitude, Longitude",
+      type: "text",
+      render: (contact) => (
+        <span className="font-mono text-xs whitespace-nowrap">
+          {formatLatLng((contact as any).latitude, (contact as any).longitude)}
+        </span>
+      )
+    },
+    {
+      id: "geoMap",
+      label: "Geo Map",
+      render: (contact) => (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1 text-xs whitespace-nowrap"
+          disabled={!hasPoint((contact as any).latitude, (contact as any).longitude)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMapPoint({
+              lat: (contact as any).latitude,
+              lng: (contact as any).longitude,
+              title: contact.company || contact.name || 'Customer',
+              label: 'Customer geo-tag',
+            });
+          }}
+        >
+          <MapPin className="h-3 w-3" /> MAP
+        </Button>
+      )
+    },
+    {
       id: "created_at",
       label: "Created at",
       type: "date",
@@ -454,7 +496,8 @@ export default function ContactsPage() {
         }
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        storageKey="wacrm_contacts_table_columns"
+        // _v2: saved column layouts would otherwise hide the new geo-tag columns.
+        storageKey="wacrm_contacts_table_columns_v2"
         isLoading={loading}
         rowKey={(contact) => contact.id}
         onRowClick={(contact) => router.push(`/contacts/${contact.id}`)}
@@ -497,6 +540,8 @@ export default function ContactsPage() {
         loading={deleting}
         onConfirm={handleBulkDelete}
       />
+
+      <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />
     </PageLayout>
   );
 }
