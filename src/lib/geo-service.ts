@@ -115,7 +115,7 @@ export async function reverseGeocode(
   const shortAddress = parts.length > 0 ? parts.join(", ") : data.display_name;
 
   return {
-    address: data.display_name,
+    address: formatAddress(addr) || data.display_name,
     road,
     city,
     state,
@@ -123,6 +123,60 @@ export async function reverseGeocode(
     country,
     shortAddress,
   };
+}
+
+/**
+ * Compose a street address the way Google writes one, from OpenStreetMap's structured parts.
+ *
+ * We used to hand back Nominatim's raw `display_name`, which reads
+ * "Rajkot, Rajkot East Taluka, Rajkot, Gujarat, 360001, India" — the revenue-administration
+ * units (taluka, county, state district) are meaningless to a sales manager, and the city
+ * repeats three times. Dropping those fields and de-duplicating gives
+ * "217, Raiya Rd, Chandan Park, Rajkot, Gujarat 360005, India".
+ *
+ * Deliberately NOT switching to Google's Geocoding API: it is billed per request and this runs
+ * on hover over every point of every day. OSM has the same street data; it was only the
+ * formatting that was wrong.
+ */
+function formatAddress(addr: Record<string, string | undefined>): string {
+  const street = [addr.house_number, addr.road || addr.pedestrian]
+    .filter(Boolean)
+    .join(" ");
+
+  // Order matters: narrowest first, exactly how an address is written on an envelope.
+  // `county`, `state_district` and `region` are intentionally absent — those are the
+  // "East Taluka" style administrative labels nobody wants to read.
+  const ordered = [
+    street,
+    addr.neighbourhood,
+    addr.suburb,
+    addr.city_district,
+    addr.city || addr.town || addr.village,
+    addr.state,
+    addr.country,
+  ];
+
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const part of ordered) {
+    const value = (part || "").trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    // "Rajkot" is often both the suburb and the city; print it once.
+    if (seen.has(key)) continue;
+    seen.add(key);
+    parts.push(value);
+  }
+
+  if (parts.length === 0) return "";
+
+  // Postcode belongs beside the state, not as its own comma-separated element.
+  if (addr.postcode && addr.state) {
+    const stateIndex = parts.indexOf(addr.state);
+    if (stateIndex !== -1) parts[stateIndex] = `${addr.state} ${addr.postcode}`;
+  }
+
+  return parts.join(", ");
 }
 
 // ─── Routing: Get driving directions ──────────────────────────────────────

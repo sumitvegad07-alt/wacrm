@@ -174,6 +174,65 @@ function classifyGap(
   return "unknown_gap";
 }
 
+/**
+ * Explain a single silent stretch between two consecutive pings.
+ *
+ * Used by All Locations to answer "why is there no ping for 51 minutes" on the row itself,
+ * rather than making an admin open Tracking Health and infer it.
+ *
+ * The snapshot choice matters more than it looks, and the intuitive choices are both wrong.
+ * On the real 2026-08-10 case, battery saver switched ON at 13:08 — which is what stopped the
+ * pings — and was OFF again by 14:11 once the phone went on charge. The day's LAST snapshot
+ * would report "power save off"; so would the last snapshot inside the gap. What explains a
+ * silence is the device's state when it FELL silent, so we take the most recent snapshot at or
+ * before the gap starts, and only fall back to one inside the gap if there is nothing earlier.
+ */
+export function explainGap(input: {
+  fromIso: string;
+  toIso: string;
+  events: HealthEvent[];
+  /** Every device-health snapshot for the day, any order. */
+  snapshots: HealthSnapshot[];
+  batteryBeforeGap: number | null;
+  /** Minutes between expected pings; a gap under 2x this is normal jitter, not a fault. */
+  intervalMinutes: number;
+}): { issueCode: IssueCode; minutes: number } | null {
+  const from = ms(input.fromIso);
+  const to = ms(input.toIso);
+  const minutes = Math.round((to - from) / 60000);
+  const threshold = gapThresholdFor(input.intervalMinutes);
+  if (minutes <= threshold) return null;
+
+  // Most recent state at or before the moment tracking fell silent.
+  const atStart = input.snapshots
+    .filter((s) => ms(s.recorded_at) <= from)
+    .sort((a, b) => ms(b.recorded_at) - ms(a.recorded_at));
+  // Nothing earlier exists (first gap of the day) — use the earliest reading inside the gap.
+  const inside = input.snapshots
+    .filter((s) => ms(s.recorded_at) > from && ms(s.recorded_at) <= to)
+    .sort((a, b) => ms(a.recorded_at) - ms(b.recorded_at));
+  const snapshot = atStart[0] ?? inside[0] ?? null;
+
+  // A heartbeat inside the gap proves the app was alive, which rules out "OS killed it".
+  const heartbeatTimes = input.snapshots.map((s) => ms(s.recorded_at));
+
+  return {
+    minutes,
+    issueCode: classifyGap(
+      { fromIso: input.fromIso, toIso: input.toIso },
+      {
+        events: input.events,
+        snapshot,
+        batteryBeforeGap: input.batteryBeforeGap,
+        isTrailingGap: false,
+        sessionEndReason: null,
+        noHeartbeatDuringGap: !heartbeatTimes.some((t) => t > from && t < to),
+        gapThresholdMin: threshold,
+      },
+    ),
+  };
+}
+
 /** Gaps within a single session (start→first ping, between pings, last ping→end). */
 function sessionGaps(
   session: HealthSession,

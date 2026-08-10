@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   computeAgentHealth,
+  explainGap,
   type HealthPing,
   type HealthSession,
   type HealthSnapshot,
@@ -115,6 +116,41 @@ describe("computeAgentHealth", () => {
     });
     expect(noWindow.issueCodes).toContain("not_punched_in");
     expect(noWindow.issueCodes).not.toContain("not_punched_in_late");
+  });
+
+  it("explainGap blames battery saver using the state when tracking fell silent", () => {
+    // The real 2026-08-10 case. Display pings stopped after 13:30 and did not resume until
+    // 14:21. Battery saver went ON at 13:08 (that is what stopped them) and was OFF again by
+    // 14:11 once the phone went on charge. Reading the newest snapshot — of the day OR inside
+    // the gap — would report "power save off" and lose the real cause.
+    const at13_08 = snapshot({ recorded_at: at(0), low_power_mode: true });
+    const at14_11 = snapshot({ recorded_at: at(63), low_power_mode: false });
+
+    const result = explainGap({
+      fromIso: at(22), // 13:30
+      toIso: at(73), // 14:21
+      events: [],
+      snapshots: [at13_08, at14_11],
+      batteryBeforeGap: 27,
+      intervalMinutes: 10,
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.minutes).toBe(51);
+    expect(result!.issueCode).toBe("power_save_mode");
+  });
+
+  it("explainGap stays quiet for a normal interval", () => {
+    expect(
+      explainGap({
+        fromIso: at(0),
+        toIso: at(10), // exactly the configured interval — not a fault
+        events: [],
+        snapshots: [snapshot({})],
+        batteryBeforeGap: 80,
+        intervalMinutes: 10,
+      }),
+    ).toBeNull();
   });
 
   it("shows full coverage and no gaps when pings arrive every 10 min", () => {
