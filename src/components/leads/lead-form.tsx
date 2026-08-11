@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -66,7 +66,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         });
       } else {
         setFormData({
-          name: "", contact_person: "", whatsapp: "", email: "", source: "", industry: "", status: "",
+          name: "", contact_person: "", whatsapp: "+91", email: "", source: "", industry: "", status: "",
           address: "", city: "", state: "", country: "", latitude: "", longitude: ""
         });
       }
@@ -143,6 +143,10 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       toast.error("Business / Lead Name is required");
       return;
     }
+    if (isModuleEnabled('whatsapp') && !formData.whatsapp.trim()) {
+      toast.error("WhatsApp Number is required");
+      return;
+    }
 
     const errorMsg = validateRequiredCustomFields(customFields, customValues, formData);
     if (errorMsg) {
@@ -158,10 +162,8 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       owner_id: user.id,
       user_id: user.id,
       name: formData.name.trim(),
-      company: formData.name.trim(),
       contact_person: formData.contact_person.trim() || null,
       whatsapp: formData.whatsapp.trim() || null,
-      phone: formData.whatsapp.trim() || null,
       email: formData.email.trim() || null,
       source: formData.source.trim() || null,
       industry: formData.industry.trim() || null,
@@ -218,13 +220,20 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
     setIsSubmitting(false);
   }
 
+  const GEO_SYSTEM_KEYS = ['country', 'state', 'city', 'area'];
+  const renderedCustomFields = useMemo(() => {
+    return territoryEnabled
+      ? customFields.filter((f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)))
+      : customFields;
+  }, [customFields, territoryEnabled]);
+
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid gap-6 py-4">
         <CustomFieldsSectionRenderer
           accountId={accountId}
           moduleName="lead"
-          customFields={customFields}
+          customFields={renderedCustomFields}
           customValues={customValues}
           onChange={(fieldId, val) =>
             setCustomValues((prev) => ({ ...prev, [fieldId]: val }))
@@ -311,20 +320,48 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                 />
               );
             }
-            return null;
+            if (k === 'whatsapp') {
+              if (!isModuleEnabled('whatsapp')) return null;
+              fld.is_required = true;
+              return (
+                <div className="space-y-1">
+                  <Input
+                    value={formData.whatsapp}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, whatsapp: e.target.value }))}
+                    className="bg-muted border-border"
+                    placeholder="+91..."
+                  />
+                </div>
+              );
+            }
+            return undefined;
           }}
         />
 
         {territoryEnabled && enabledLevels(territorySettings).length > 0 && (
           <div className="space-y-3 pt-2 border-t border-border/50">
             <span className="text-xs font-medium text-muted-foreground">Territory (Area) — controls which field employee sees this lead</span>
-            <TerritoryPicker
-              rows={territoryRows}
-              settings={territorySettings}
-              value={territoryId}
-              onChange={setTerritoryId}
-            />
-          </div>
+              <TerritoryPicker
+                rows={territoryRows}
+                settings={territorySettings}
+                value={territoryId}
+                onChange={setTerritoryId}
+                onPathResolve={(pathTerritories) => {
+                  let c = '', s = '', t = '';
+                  pathTerritories.forEach(terr => {
+                    if (terr.level === 1) c = terr.name;
+                    else if (terr.level === 2) s = terr.name;
+                    else if (terr.level === 3) t = terr.name;
+                  });
+                  setFormData((prev) => ({
+                    ...prev,
+                    country: c || prev.country,
+                    state: s || prev.state,
+                    city: t || prev.city
+                  }));
+                }}
+              />
+            </div>
         )}
 
         <div className="space-y-3 pt-2 border-t border-border/50">

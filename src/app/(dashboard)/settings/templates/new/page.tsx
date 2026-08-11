@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,7 +15,6 @@ import { extractVariableIndices, TEMPLATE_LIMITS } from "@/lib/whatsapp/template
 
 export default function NewWhatsAppTemplatePage() {
   const router = useRouter();
-  const supabase = createClient();
 
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
@@ -44,48 +42,45 @@ export default function NewWhatsAppTemplatePage() {
 
     setCreating(true);
     try {
-      // First try calling our API route if available, or direct insert
-      const res = await fetch("/api/whatsapp/templates", {
+      // POST to the real submit route, in the shape it actually expects.
+      //
+      // This previously posted to /api/whatsapp/templates — a route that does
+      // not exist — in a Meta "components" shape the app never used. The 404
+      // then triggered a "fallback" insert into `whatsapp_templates`, a table
+      // that has never existed either (the real one is `message_templates`),
+      // using a column name that doesn't exist (`header_format` vs
+      // `header_type`) and omitting both NOT NULL tenancy columns. Every path
+      // was broken, so creating a template could never have worked; the only
+      // thing the user ever saw was the failure from the last one.
+      //
+      // The fallback is deleted rather than repaired: submitting to Meta needs
+      // the account's credentials, which a browser-side insert cannot do. A row
+      // written locally without reaching Meta would show as a template that
+      // silently never gets approved.
+      const res = await fetch("/api/whatsapp/templates/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
           category: form.category,
           language: form.language,
-          components: [
-            form.header_format !== "none" && {
-              type: "HEADER",
-              format: form.header_format.toUpperCase(),
-              ...(form.header_format === "text" && { text: form.header_content })
-            },
-            {
-              type: "BODY",
-              text: form.body_text
-            },
-            form.footer_text.trim() && {
-              type: "FOOTER",
-              text: form.footer_text.trim()
-            }
-          ].filter(Boolean)
-        })
+          header_type: form.header_format === "none" ? undefined : form.header_format,
+          header_content: form.header_content || undefined,
+          body_text: form.body_text,
+          footer_text: form.footer_text.trim() || undefined,
+        }),
       });
 
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // Fallback to supabase insert if API endpoint returns error or isn't running Meta sync
-        const { error } = await supabase.from("whatsapp_templates").insert({
-          name: form.name.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
-          category: form.category,
-          language: form.language,
-          header_format: form.header_format === "none" ? null : form.header_format,
-          header_content: form.header_content || null,
-          body_text: form.body_text,
-          footer_text: form.footer_text || null,
-          status: "PENDING"
-        });
-        if (error) throw error;
+        throw new Error(body?.error || "Failed to submit the template to Meta.");
       }
 
-      toast.success("WhatsApp template submitted for approval");
+      toast.success(
+        body?.status === "DRAFT"
+          ? "Saved as a draft — it was not sent to Meta. Check WhatsApp settings."
+          : "WhatsApp template submitted for approval",
+      );
       router.push("/settings?tab=templates");
     } catch (err: any) {
       console.error(err);

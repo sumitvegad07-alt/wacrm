@@ -98,6 +98,7 @@ export interface Contact {
    *  `name` holds the contact person. */
   name?: string;
   email?: string;
+  whatsapp?: string | null;
   company?: string;
   avatar_url?: string;
   employee_id?: string | null;

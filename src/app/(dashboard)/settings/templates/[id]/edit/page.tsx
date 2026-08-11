@@ -35,8 +35,10 @@ export default function EditWhatsAppTemplatePage({ params }: { params: Promise<{
   useEffect(() => {
     async function loadTemplate() {
       setLoading(true);
+      // `message_templates` is the real table — `whatsapp_templates` has never
+      // existed, so this screen could never load anything.
       const { data, error } = await supabase
-        .from("whatsapp_templates")
+        .from("message_templates")
         .select("*")
         .eq("id", templateId)
         .single();
@@ -51,7 +53,7 @@ export default function EditWhatsAppTemplatePage({ params }: { params: Promise<{
         name: data.name || "",
         category: data.category || "Marketing",
         language: data.language || "en",
-        header_format: data.header_format || "none",
+        header_format: data.header_type || "none",
         header_content: data.header_content || "",
         body_text: data.body_text || "",
         footer_text: data.footer_text || ""
@@ -74,19 +76,26 @@ export default function EditWhatsAppTemplatePage({ params }: { params: Promise<{
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("whatsapp_templates")
+      // `.select()` matters: under row-level security an UPDATE matching zero
+      // rows returns NO error and changes nothing, so checking only `error`
+      // would report success while saving nothing.
+      const { data, error } = await supabase
+        .from("message_templates")
         .update({
           category: form.category,
           language: form.language,
-          header_format: form.header_format === "none" ? null : form.header_format,
+          header_type: form.header_format === "none" ? null : form.header_format,
           header_content: form.header_content || null,
           body_text: form.body_text,
           footer_text: form.footer_text || null
         })
-        .eq("id", templateId);
+        .eq("id", templateId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Nothing was saved — you may not have permission to edit this template.");
+      }
 
       toast.success("WhatsApp template updated successfully");
       router.push("/settings?tab=templates");

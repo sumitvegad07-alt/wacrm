@@ -62,6 +62,8 @@ export function ContactForm({
 
   const [name, setName] = useState('');          // contact person
   const [phone, setPhone] = useState('');
+  const [whatsapp, setWhatsapp] = useState('+91');
+  const [sameAsPhone, setSameAsPhone] = useState(false);
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');    // company / firm name (primary)
   const [address, setAddress] = useState('');
@@ -137,6 +139,7 @@ export function ContactForm({
     if (open && accountId) {
       setName(contact?.name ?? '');
       setPhone(contact?.phone ?? '');
+      setWhatsapp(contact?.whatsapp ?? '+91');
       setEmail(contact?.email ?? '');
       setCompany(contact?.company ?? '');
       setAddress(contact?.address ?? '');
@@ -249,6 +252,7 @@ export function ContactForm({
       company,
       name,
       phone,
+      whatsapp,
       email,
       hierarchy_level: hierarchyLevel,
       address,
@@ -274,6 +278,11 @@ export function ContactForm({
       toast.error('A customer with this phone number already exists');
       return;
     }
+    
+    if (isModuleEnabled('whatsapp') && !whatsapp.trim()) {
+      toast.error('WhatsApp Number is required');
+      return;
+    }
 
     if (!accountId || !user) {
       toast.error('Not authenticated');
@@ -289,6 +298,7 @@ export function ContactForm({
       const fields = {
         name: name.trim() || null,          // contact person
         phone: phone.trim(),
+        whatsapp: whatsapp.trim() || null,
         email: email.trim() || null,
         company: company.trim() || null,    // company / firm name
         address: address.trim() || null,
@@ -300,6 +310,7 @@ export function ContactForm({
         latitude: latitude.trim() !== '' ? parseFloat(latitude) : null,
         longitude: longitude.trim() !== '' ? parseFloat(longitude) : null,
         hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
+        employee_id: assignmentMode === 'direct' ? (employeeId || null) : null,
         // Territory Master (authoritative geography). Clearing the review flag
         // once a territory is chosen resolves any "needs migration" state.
         ...(territoryEnabled
@@ -443,6 +454,36 @@ export function ContactForm({
                   </select>
                 );
               }
+              if (fld.system_key === 'whatsapp') {
+                if (!isModuleEnabled('whatsapp')) return null;
+                fld.is_required = true;
+                return (
+                  <div className="space-y-1">
+                    <Input
+                      id="cf-whatsapp"
+                      value={whatsapp}
+                      onChange={(e) => {
+                        setWhatsapp(e.target.value);
+                        setSameAsPhone(false);
+                      }}
+                      className="bg-muted border-border"
+                      placeholder="+91..."
+                    />
+                    <div className="flex items-center gap-2 mt-2">
+                      <input 
+                        type="checkbox" 
+                        id="sameAsPhone" 
+                        checked={sameAsPhone}
+                        onChange={(e) => {
+                          setSameAsPhone(e.target.checked);
+                          if (e.target.checked) setWhatsapp(phone);
+                        }}
+                      />
+                      <Label htmlFor="sameAsPhone" className="text-xs text-muted-foreground">Same as Phone Number</Label>
+                    </div>
+                  </div>
+                );
+              }
               if (fld.system_key === 'employee_id') {
                 return (
                   <div className="space-y-1">
@@ -459,7 +500,7 @@ export function ContactForm({
                   </div>
                 );
               }
-              return null;
+              return undefined;
             }}
           />
 
@@ -478,6 +519,19 @@ export function ContactForm({
                 settings={territorySettings}
                 value={territoryId}
                 onChange={setTerritoryId}
+                onPathResolve={(pathTerritories) => {
+                  let c = '', s = '', t = '', a = '';
+                  pathTerritories.forEach(terr => {
+                    if (terr.level === 1) c = terr.name;
+                    else if (terr.level === 2) s = terr.name;
+                    else if (terr.level === 3) t = terr.name;
+                    else if (terr.level === 4) a = terr.name;
+                  });
+                  if (c) setCountry(c);
+                  if (s) setStateField(s);
+                  if (t) setCity(t);
+                  if (a) setArea(a);
+                }}
               />
             </div>
           )}
