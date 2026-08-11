@@ -163,18 +163,30 @@ export default function AutomationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Automations</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Build workflows that react to WhatsApp® events automatically.
+            React automatically to WhatsApp® messages and to what happens in your business.
           </p>
         </div>
-        <GatedButton
-          canAct={!isFreeTierAndLimitReached}
-          gateReason="create multiple automations. You are allowed 1 free automation on your current plan."
-          onClick={() => router.push("/automations/new")}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Create Automation
-        </GatedButton>
+        <div className="flex items-center gap-2">
+          {/* Business-event automations (Customer / Order / Dispatch). Kept as a
+              separate entry point from the WhatsApp-trigger builder: they are a
+              different shape — one event, one message — and merging them into
+              the multi-step branching builder would make both harder to use. */}
+          <GatedButton
+            canAct={!isFreeTierAndLimitReached}
+            gateReason="create multiple automations. You are allowed 1 free automation on your current plan."
+            onClick={() => router.push("/automations/module/new")}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            Add Automation
+          </GatedButton>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/automations/new")}
+          >
+            WhatsApp workflow
+          </Button>
+        </div>
       </div>
 
       {showTemplates && (
