@@ -79,7 +79,13 @@ export default function CompanyDetailPage() {
     e.preventDefault();
     setSaving(true);
     setSaveMsg(null);
-    const { error } = await supabase
+    // `.select()` is not cosmetic here. Under row-level security an UPDATE that
+    // matches no rows succeeds with NO error and simply changes nothing — so
+    // without asking for the affected rows back, this screen cheerfully
+    // reported "Saved successfully!" while every subscription stayed exactly as
+    // it was. That is precisely how a batch of expiry extensions silently did
+    // nothing. Trust the returned rows, never the absence of an error.
+    const { data, error } = await supabase
       .from("accounts")
       .update({
         subscription_status: status,
@@ -87,11 +93,21 @@ export default function CompanyDetailPage() {
         subscription_expires_at: expiresAt || null,
         user_count: userCount === "" ? null : Number(userCount),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .select("id");
 
-    setSaveMsg(error ? `Error: ${error.message}` : "Saved successfully!");
+    if (error) {
+      setSaveMsg(`Error: ${error.message}`);
+    } else if (!data || data.length === 0) {
+      setSaveMsg(
+        "Nothing was saved — this account could not be updated. You need a superadmin account to change another company's subscription.",
+      );
+    } else {
+      setSaveMsg("Saved successfully!");
+    }
     setSaving(false);
-    setTimeout(() => setSaveMsg(null), 3000);
+    // A failure needs long enough to actually read; a success can go quickly.
+    setTimeout(() => setSaveMsg(null), error || !data?.length ? 10000 : 3000);
   };
 
   const handleDelete = async () => {

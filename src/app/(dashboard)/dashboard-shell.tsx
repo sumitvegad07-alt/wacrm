@@ -23,6 +23,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasBroadcasts,
     hasLocationTracking,
     isModuleEnabled,
+    signOut,
   } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -106,9 +107,30 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           </div>
           <h2 className="mb-2 text-xl font-semibold text-foreground">Subscription Expired</h2>
-          <p className="mb-6 text-sm text-muted-foreground">
+          <p className="mb-2 text-sm text-muted-foreground">
             Your subscription to the CRM has expired. Please renew it or contact support to restore access to your workspace.
           </p>
+          {account?.name && (
+            <p className="mb-6 text-xs text-muted-foreground">
+              Signed in to <span className="text-foreground font-medium">{account.name}</span>
+              {user?.email ? <> as {user.email}</> : null}
+            </p>
+          )}
+          {/* Without this, an expired account is a dead end: the sidebar and
+              header never render, so there is no sign-out anywhere on the
+              screen and no way to switch to another account. A user with a
+              second, perfectly valid workspace is locked out of it entirely and
+              the only escape is clearing cookies by hand. */}
+          <button
+            type="button"
+            onClick={async () => {
+              await signOut();
+              router.replace("/login");
+            }}
+            className="w-full rounded-md border border-border bg-muted px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted/70"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     );
