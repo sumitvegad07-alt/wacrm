@@ -77,9 +77,19 @@ export async function proxy(request: NextRequest) {
     return withRefreshedCookies(NextResponse.redirect(url))
   }
 
-  // API routes that need auth (not webhooks)
-  if (!user && request.nextUrl.pathname.startsWith('/api/whatsapp/') &&
-      !request.nextUrl.pathname.includes('/webhook')) {
+  // API routes that need auth.
+  //
+  // Two kinds of machine-to-machine endpoint are deliberately exempt, because
+  // they are called by systems that have no session and never will:
+  //   * /webhook — Meta posts here; it authenticates by signature.
+  //   * /cron    — the scheduler pings here; it authenticates with the shared
+  //                secret in `x-cron-secret` and returns 503 when that secret
+  //                is not configured.
+  // Without the /cron exemption the WhatsApp health check could never run: an
+  // external scheduler would receive 401 here and never reach the handler.
+  const path = request.nextUrl.pathname
+  const isMachineEndpoint = path.includes('/webhook') || path.endsWith('/cron')
+  if (!user && path.startsWith('/api/whatsapp/') && !isMachineEndpoint) {
     return withRefreshedCookies(
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )

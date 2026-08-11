@@ -111,3 +111,50 @@ describe("proxy — refreshed auth cookies survive redirects", () => {
     expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
   });
 });
+
+describe("proxy — machine-to-machine WhatsApp endpoints", () => {
+  // These are called by systems that have no session and never will. Blocking
+  // them here would make the endpoint permanently unreachable while looking
+  // perfectly healthy in the code — the health check simply never runs.
+  it("lets an unauthenticated scheduler reach a /cron endpoint", async () => {
+    mockUser = null;
+    const res = await proxy(
+      new NextRequest("https://app.test/api/whatsapp/health/cron"),
+    );
+    expect(res.status).not.toBe(401);
+  });
+
+  it("lets Meta reach the webhook without a session", async () => {
+    mockUser = null;
+    const res = await proxy(new NextRequest("https://app.test/api/whatsapp/webhook"));
+    expect(res.status).not.toBe(401);
+  });
+
+  it("still blocks every other WhatsApp API route without a session", async () => {
+    mockUser = null;
+    for (const path of [
+      "/api/whatsapp/config",
+      "/api/whatsapp/send",
+      "/api/whatsapp/templates/sync",
+    ]) {
+      const res = await proxy(new NextRequest(`https://app.test${path}`));
+      expect(res.status).toBe(401);
+    }
+  });
+
+  it("does not exempt a path that merely contains the word cron", async () => {
+    // Only a trailing /cron segment is a scheduler endpoint. Something like
+    // /api/whatsapp/cronies must stay behind auth.
+    mockUser = null;
+    const res = await proxy(new NextRequest("https://app.test/api/whatsapp/cronies"));
+    expect(res.status).toBe(401);
+  });
+
+  it("still serves the route to a signed-in user", async () => {
+    mockUser = { id: "user-1" };
+    const res = await proxy(
+      new NextRequest("https://app.test/api/whatsapp/health/cron"),
+    );
+    expect(res.status).not.toBe(401);
+  });
+});
