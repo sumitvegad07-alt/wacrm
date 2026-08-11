@@ -3003,3 +3003,30 @@ If a user prompts you with a request that violates the 18-Vector Framework (e.g.
 - **Mobile UI**: Features a ScrollingNewsBanner on all screens via pp/_layout.tsx that rotates through unexpired announcements every 15 minutes. There is also an Announcements list screen and a detail screen.
 - **Attachments**: Stored in the nnouncements Supabase storage bucket.
 - Note: This is separate from the nnouncements page under (superadmin) which was intended for system-wide notices.
+
+### Reporting Engine Architecture (Generic, Dynamic, Extensible)
+
+**Core Principles:**
+- Database-side aggregation only. No client-side aggregation logic.
+- Registry-driven: All dimensions, measures, filters, and joins are defined in SQL registries.
+- Configuration-driven: If OZZO modules (e.g. Territory, Route) are disabled, their associated filters/dimensions automatically disappear.
+- Multi-tenant secure: Every query executes via SECURITY INVOKER under the current user's JWT, automatically enforcing RLS.
+
+**Required Registry Tables:**
+- \eport_registry_dimensions\: Stores GROUP BY components (e.g. state, city, product_category) and their required LEFT JOINs.
+- \eport_registry_measures\: Stores aggregation columns (e.g. \item_amount\ = \SUM(order_items.sub_total)\) and their required LEFT JOINs.
+- \eport_registry_filters\: Stores WHERE clause templates for dynamic UI filters.
+- \eport_registry_joins\: Stores reusable LEFT JOIN snippets (e.g. joining contacts, users, products).
+- \saved_reports\: Stores JSON states of configured reports, categorized by Private, Team, or Organization sharing modes.
+
+**Security Rules:**
+- RPCs use \SECURITY INVOKER\ (NEVER \SECURITY DEFINER\) so they run safely inside the user's RLS environment.
+- Tenant isolation is strictly enforced.
+- Frontend SQL generation is strictly FORBIDDEN. All queries are built securely via parameterized \execute_dynamic_report\ RPC.
+
+**Fan-Out Prevention Strategy (Crucial for 1-to-N aggregations):**
+When joining a 1-to-N relation (like \orders\ -> \order_items\), directly summing the base table's total (e.g. \SUM(orders.sub_total)\) causes mathematically inflated totals (fan-out) because the base total repeats for every item row. To prevent this, reports grouping by item-level dimensions (e.g. \product_category\) MUST use item-level measures (e.g. \item_amount\ mapped to \SUM(order_items.sub_total)\). The generic registry supports this seamlessly without changing engine code.
+
+**Saved Reports & Future Compatibility:**
+Saved reports can be shared via 'private', 'team', or 'organization' modes. The generic architecture natively supports upcoming features: Drill Down Reports, Dashboard Widgets, Scheduled Reports, and Universal Custom Fields onboarding.
+
