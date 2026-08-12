@@ -229,7 +229,8 @@ export function ReportFilterDrawer({
                         />
                       ) : filterDef.type === 'customer' ? (
                         <AsyncSearchSelect
-                          tableName="customers"
+                          tableName="contacts"
+                          displayColumn="name"
                           value={localFilters[filterDef.key]?.contact_id || ""}
                           onChange={(val) => {
                             const next = { ...localFilters };

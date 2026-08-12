@@ -62,7 +62,7 @@ export function AsyncSearchSelect({
       if (!error && data) {
         setOptions(
           data.map((item: Record<string, any>) => ({
-            label: item[displayColumn],
+            label: item[displayColumn] || item['company'] || item['name'] || 'Unnamed',
             value: item[valueColumn],
           }))
         );

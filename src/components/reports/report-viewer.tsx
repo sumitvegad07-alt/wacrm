@@ -125,13 +125,33 @@ export function ReportViewer({ config }: ReportViewerProps) {
     setActiveTab(tabKey);
     const dimension = getTabDimension(tabKey);
     const measures = getDefaultMeasures(tabKey);
-    setReportState(s => ({
-      ...s,
-      dimensions: [dimension],
-      measures,
-      sortColumn: undefined,
-      sortDirection: 'asc',
-    }));
+
+    setReportState(s => {
+      let newPeriod = s.period;
+      let newFilters = { ...s.filters };
+
+      // If switching to time (month-on-month) tab and period is single-month 'this_month', expand to last_180_days
+      if (tabKey === 'time' && s.period === 'this_month') {
+        newPeriod = 'last_180_days';
+        const range = getDatesForPeriod('last_180_days');
+        if (range?.from && range?.to) {
+          newFilters.date_range = {
+            start_date: range.from.toISOString().split('T')[0],
+            end_date: range.to.toISOString().split('T')[0],
+          };
+        }
+      }
+
+      return {
+        ...s,
+        dimensions: [dimension],
+        measures,
+        period: newPeriod,
+        filters: newFilters,
+        sortColumn: undefined,
+        sortDirection: 'asc',
+      };
+    });
     setPage(1);
   };
 
