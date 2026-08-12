@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, startOfQuarter, endOfQuarter, startOfDay, endOfDay, subMonths, subQuarters, subYears } from "date-fns";
-import { X, Filter as FilterIcon } from "lucide-react";
+import { X, Filter as FilterIcon, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -78,8 +78,6 @@ export function getDatesForPeriod(period: string, customRange?: DateRange): Date
   }
 }
 
-import { Check } from "lucide-react";
-
 export function ReportFilterDrawer({
   config,
   filters: initialFilters,
@@ -136,7 +134,7 @@ export function ReportFilterDrawer({
           )}
         </Button>
       } />
-      <SheetContent className="w-[380px] sm:w-[450px] flex flex-col p-0">
+      <SheetContent showCloseButton={false} className="w-[380px] sm:w-[450px] flex flex-col p-0">
         {/* Header matching Screenshot 3: < Filters | CLEAR | [Blue checkmark Apply] */}
         <div className="p-4 border-b flex items-center justify-between bg-background">
           <div className="flex items-center gap-2">
@@ -215,6 +213,20 @@ export function ReportFilterDrawer({
                             ))}
                           </SelectContent>
                         </Select>
+                      ) : filterDef.type === 'territory' ? (
+                        <AsyncSearchSelect
+                          tableName="territories"
+                          displayColumn="name"
+                          value={localFilters[filterDef.key] || ""}
+                          onChange={(val) => {
+                            const next = { ...localFilters };
+                            if (!val) delete next[filterDef.key];
+                            else next[filterDef.key] = val;
+                            setLocalFilters(next);
+                          }}
+                          placeholder={`Search ${filterDef.label}`}
+                          className="h-8 text-xs bg-background"
+                        />
                       ) : filterDef.type === 'customer' ? (
                         <AsyncSearchSelect
                           tableName="customers"
@@ -253,6 +265,19 @@ export function ReportFilterDrawer({
                             setLocalFilters(next);
                           }}
                           placeholder={`Select ${filterDef.label}`}
+                          className="h-8 text-xs bg-background"
+                        />
+                      ) : (filterDef.key === 'product_category' || filterDef.key === 'product_subcategory') ? (
+                        <AsyncSearchSelect
+                          tableName="product_categories"
+                          value={localFilters[filterDef.key] || ""}
+                          onChange={(val) => {
+                            const next = { ...localFilters };
+                            if (!val) delete next[filterDef.key];
+                            else next[filterDef.key] = val;
+                            setLocalFilters(next);
+                          }}
+                          placeholder={`Search ${filterDef.label}`}
                           className="h-8 text-xs bg-background"
                         />
                       ) : (

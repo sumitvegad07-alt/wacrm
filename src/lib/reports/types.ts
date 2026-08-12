@@ -47,10 +47,20 @@ export interface ReportMeasure {
 export interface ReportFilterDef {
   key: string;
   label: string;
-  type: 'date_range' | 'select' | 'multiselect' | 'user' | 'customer' | 'product';
+  type: 'date_range' | 'select' | 'multiselect' | 'user' | 'customer' | 'product' | 'territory';
   section?: 'PERIOD' | 'SALES TYPE' | 'AREA' | 'USER' | 'CUSTOMER' | 'PRODUCT';
   options?: { label: string; value: string }[];
   requiredModule?: keyof ModuleSettings | string;
+  territoryLevel?: number;
+}
+
+export interface TabConfig {
+  key: string;
+  label: string;
+  dimension: string; // The dimension key to set when this tab is active
+  defaultMeasures: string[]; // Measure keys shown by default
+  hiddenMeasures?: string[]; // Measure keys available via Manage Column
+  requiresProductSettings?: 'category' | 'subcategory'; // Show only if product category/subcategory enabled
 }
 
 export interface ReportDefinition {
@@ -62,4 +72,5 @@ export interface ReportDefinition {
   measures: ReportMeasure[];
   filters: ReportFilterDef[];
   kpis: string[]; // Array of measure keys to display as KPI cards
+  tabConfigs?: TabConfig[];
 }

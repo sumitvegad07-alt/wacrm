@@ -92,7 +92,7 @@ export function ReportTable({ data, config, reportState, defaultCurrency, onSort
 
   const renderTotalCell = (col: Record<string, unknown>, index: number) => {
     if (col.type === 'dimension') {
-      if (index === 0) return <span className="font-bold text-foreground">Total</span>;
+      if (index === 0) return <span className="font-extrabold text-primary text-sm uppercase tracking-wider">Total</span>;
       return null;
     }
 
@@ -148,7 +148,7 @@ export function ReportTable({ data, config, reportState, defaultCurrency, onSort
               </TableRow>
             ))}
           </TableBody>
-          <TableFooter className="sticky bottom-0 bg-muted/90 backdrop-blur-xs z-10 border-t font-bold">
+          <TableFooter className="sticky bottom-0 bg-primary/10 dark:bg-primary/15 backdrop-blur-sm z-10 border-t-2 border-primary/30 font-bold">
             <TableRow>
               {visibleColumns.map((col, idx) => (
                 <TableCell

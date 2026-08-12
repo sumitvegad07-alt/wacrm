@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { type ReportDefinition, type ReportConfig } from "@/lib/reports/types";
+import { type ReportDefinition, type ReportConfig, type TabConfig } from "@/lib/reports/types";
 import { executeReport } from "@/app/actions/reports";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { 
   Loader2, Download, Save, Table as TableIcon, BarChart3, PieChart, 
-  Columns, Printer, CalendarDays, ChevronRight, Filter, X
+  Columns, Printer, CalendarDays, Filter, X
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,23 +27,86 @@ import {
 import { ReportTable } from "./report-table";
 import { ReportBarChart } from "./report-bar-chart";
 import { ReportDonutChart } from "./report-donut-chart";
-import { ReportFilterDrawer, PERIOD_PRESETS } from "./report-filter-drawer";
+import { ReportFilterDrawer, PERIOD_PRESETS, getDatesForPeriod } from "./report-filter-drawer";
 import { ReportKpiCards } from "./report-kpi-cards";
 import { ReportSaveDialog } from "./report-save-dialog";
-import { AsyncSearchSelect } from "@/components/ui/async-search-select";
 import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase/client";
 
 interface ReportViewerProps {
   config: ReportDefinition;
 }
 
 export function ReportViewer({ config }: ReportViewerProps) {
-  const { defaultCurrency } = useAuth();
+  const { defaultCurrency, accountId } = useAuth();
+  const supabase = createClient();
   
+  // Product settings state (to control category/subcategory tab visibility)
+  const [productLevelsCount, setProductLevelsCount] = useState<number>(0);
+
+  // Fetch product settings on mount
+  useEffect(() => {
+    async function fetchProductSettings() {
+      if (!accountId) return;
+      const { data } = await supabase
+        .from('accounts')
+        .select('settings')
+        .eq('id', accountId)
+        .single();
+      
+      if (data?.settings?.product_settings) {
+        setProductLevelsCount(data.settings.product_settings.levels_count || 0);
+      }
+    }
+    fetchProductSettings();
+  }, [accountId]);
+
+  // Compute visible tabs based on product settings
+  const visibleTabs = useMemo(() => {
+    if (!config.tabConfigs) return [];
+    return config.tabConfigs.filter(tab => {
+      if (tab.requiresProductSettings === 'category') {
+        return productLevelsCount >= 1;
+      }
+      if (tab.requiresProductSettings === 'subcategory') {
+        return productLevelsCount >= 2;
+      }
+      return true;
+    });
+  }, [config.tabConfigs, productLevelsCount]);
+
+  // Active tab key
+  const [activeTab, setActiveTab] = useState<string>('customer');
+
+  // Compute initial date range for "this_month"
+  const computeInitialDateFilter = useCallback(() => {
+    const range = getDatesForPeriod('this_month');
+    if (range?.from && range?.to) {
+      return {
+        start_date: range.from.toISOString().split('T')[0],
+        end_date: range.to.toISOString().split('T')[0],
+      };
+    }
+    return undefined;
+  }, []);
+
+  const initialDateRange = useMemo(() => computeInitialDateFilter(), [computeInitialDateFilter]);
+
+  // Get default measures for the active tab
+  const getDefaultMeasures = (tabKey: string) => {
+    const tab = config.tabConfigs?.find(t => t.key === tabKey);
+    return tab?.defaultMeasures || ['gross_amount', 'net_amount', 'order_count', 'product_quantity'];
+  };
+
+  const getTabDimension = (tabKey: string) => {
+    const tab = config.tabConfigs?.find(t => t.key === tabKey);
+    return tab?.dimension || tabKey;
+  };
+
   const [reportState, setReportState] = useState<ReportConfig>({
-    dimensions: [], // Initially empty
-    measures: ['gross_amount', 'net_amount', 'order_count', 'product_quantity'], // Default 4 measures requested
-    filters: {},
+    dimensions: [getTabDimension('customer')],
+    measures: getDefaultMeasures('customer'),
+    filters: initialDateRange ? { date_range: initialDateRange } : {},
     view: 'table',
     period: 'this_month',
     sortColumn: undefined,
@@ -57,23 +120,25 @@ export function ReportViewer({ config }: ReportViewerProps) {
   const [hasMore, setHasMore] = useState(false);
   const LIMIT = 50;
 
-  // Separate hierarchical group by state for cleaner UI
-  const [groupLevel1, setGroupLevel1] = useState<string>("none");
-  const [groupLevel2, setGroupLevel2] = useState<string>("none");
-  const [groupLevel3, setGroupLevel3] = useState<string>("none");
-
-  // Sync group levels to reportState.dimensions
-  useEffect(() => {
-    const newDims = [groupLevel1, groupLevel2, groupLevel3].filter(d => d !== "none");
-    setReportState(s => ({ ...s, dimensions: newDims }));
-    setPage(1); // Reset page on group change
-  }, [groupLevel1, groupLevel2, groupLevel3]);
+  // Handle tab change
+  const handleTabChange = (tabKey: string) => {
+    setActiveTab(tabKey);
+    const dimension = getTabDimension(tabKey);
+    const measures = getDefaultMeasures(tabKey);
+    setReportState(s => ({
+      ...s,
+      dimensions: [dimension],
+      measures,
+      sortColumn: undefined,
+      sortDirection: 'asc',
+    }));
+    setPage(1);
+  };
 
   const fetchReport = useCallback(async () => {
     try {
       setLoading(true);
       const offset = (page - 1) * LIMIT;
-      // Fetch LIMIT + 1 to know if there's a next page
       const result = await executeReport(
         config.moduleName,
         reportState.dimensions,
@@ -114,7 +179,6 @@ export function ReportViewer({ config }: ReportViewerProps) {
 
   const handleExport = async (format: 'csv' | 'xlsx') => {
     try {
-      // Fetch all data for export without pagination (limit 50000)
       const exportData = await executeReport(
         config.moduleName,
         reportState.dimensions,
@@ -176,7 +240,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
   const toggleMeasure = (mKey: string) => {
     setReportState(s => {
       const isSelected = s.measures.includes(mKey);
-      if (isSelected && s.measures.length === 1) return s; // prevent removing all
+      if (isSelected && s.measures.length === 1) return s;
       
       const newMeasures = isSelected 
         ? s.measures.filter(k => k !== mKey)
@@ -186,43 +250,23 @@ export function ReportViewer({ config }: ReportViewerProps) {
     });
   };
 
-  const updateQuickFilter = (key: string, value: any) => {
-    setReportState(s => {
-      const nextFilters = { ...s.filters };
-      if (!value || value === "none") {
-        delete nextFilters[key];
-      } else if (key === 'customer') {
-        nextFilters[key] = { contact_id: value };
-      } else {
-        nextFilters[key] = value;
-      }
-      return { ...s, filters: nextFilters };
-    });
-    setPage(1);
-  };
+  // Get the period label for display
+  const periodLabel = PERIOD_PRESETS.find(p => p.value === reportState.period)?.label ?? 'This Month';
 
-  // Returns allowed child dimensions for a given parent key.
-  const getAvailableChildDimensions = (parentKey: string, alreadyUsed: string[]) => {
-    const parentDef = config.dimensions.find(d => d.key === parentKey);
-    const allowed = parentDef?.allowedChildDimensions;
-    return config.dimensions.filter(d => {
-      if (alreadyUsed.includes(d.key)) return false; // already selected at a higher level
-      if (allowed && allowed.length > 0) return allowed.includes(d.key); // whitelist
-      return true; // no restriction — all other dimensions available
-    });
-  };
+  // Count active non-date filters
+  const activeFilterCount = Object.keys(reportState.filters).filter(k => k !== 'date_range').length;
 
   return (
     <div className="flex flex-col h-full space-y-4 pb-8 print:space-y-0 print:block">
-      {/* Print Header (Only visible when printing) */}
+      {/* Print Header */}
       <div className="hidden print:block mb-8">
         <h1 className="text-3xl font-bold">{config.label}</h1>
         <p className="text-sm text-gray-500 mt-2">Generated On: {new Date().toLocaleString()}</p>
-        <p className="text-sm text-gray-500">Period: {reportState.period}</p>
+        <p className="text-sm text-gray-500">Period: {periodLabel}</p>
         <hr className="my-4" />
       </div>
 
-      {/* Top Header (Hidden on print) */}
+      {/* Top Header */}
       <div className="flex items-center justify-between print:hidden">
         <div className="flex items-center space-x-2">
           {config.icon && <config.icon className="h-6 w-6 text-muted-foreground" />}
@@ -230,28 +274,6 @@ export function ReportViewer({ config }: ReportViewerProps) {
         </div>
         
         <div className="flex items-center space-x-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger 
-              render={
-                <Button variant="outline" size="sm">
-                  <Columns className="mr-2 h-4 w-4" />
-                  Columns
-                </Button>
-              } 
-            />
-            <DropdownMenuContent align="end" className="w-56">
-              {config.measures.map(m => (
-                <DropdownMenuCheckboxItem
-                  key={m.key}
-                  checked={reportState.measures.includes(m.key)}
-                  onCheckedChange={() => toggleMeasure(m.key)}
-                >
-                  {m.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           <ReportFilterDrawer 
             config={config}
             filters={reportState.filters}
@@ -290,85 +312,43 @@ export function ReportViewer({ config }: ReportViewerProps) {
 
       <ReportKpiCards config={config} filters={reportState.filters} defaultCurrency={defaultCurrency} />
 
-      {/* Main Controls Panel: Group By + Quick Filters + View Toggles */}
+      {/* Tab Navigation + View Toggles */}
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/40 p-3 print:hidden">
-        {/* Row 1: Group By & View Toggles */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          {/* Left: Period badge + Group By */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-background border border-border rounded-md px-2.5 py-1.5 mr-2">
+          {/* Left: Period badge + Horizontal Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Period badge */}
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-background border border-border rounded-md px-2.5 py-1.5 mr-1">
               <CalendarDays className="h-3.5 w-3.5" />
-              {PERIOD_PRESETS.find(p => p.value === reportState.period)?.label ?? 'This Month'}
+              {periodLabel}
             </div>
 
-            <div className="h-4 w-px bg-border hidden sm:block" />
+            <div className="h-4 w-px bg-border hidden sm:block mx-1" />
 
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Group By</span>
-
-            {/* Level 1 */}
-            <Select value={groupLevel1} onValueChange={(val) => {
-              setGroupLevel1(val || "none");
-              setGroupLevel2("none");
-              setGroupLevel3("none");
-            }}>
-              <SelectTrigger className="h-8 min-w-[140px] text-sm bg-background">
-                <SelectValue placeholder="Level 1" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">— None —</SelectItem>
-                {config.dimensions.map(d => (
-                  <SelectItem key={`l1-${d.key}`} value={d.key}>{d.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Level 2 */}
-            {groupLevel1 !== "none" && (() => {
-              const level2Options = getAvailableChildDimensions(groupLevel1, [groupLevel1]);
-              return level2Options.length > 0 ? (
-                <>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
-                  <Select value={groupLevel2} onValueChange={(val) => {
-                    setGroupLevel2(val || "none");
-                    setGroupLevel3("none");
-                  }}>
-                    <SelectTrigger className="h-8 min-w-[140px] text-sm bg-background">
-                      <SelectValue placeholder="Level 2" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">— None —</SelectItem>
-                      {level2Options.map(d => (
-                        <SelectItem key={`l2-${d.key}`} value={d.key}>{d.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </>
-              ) : null;
-            })()}
-
-            {/* Level 3 */}
-            {groupLevel2 !== "none" && groupLevel1 !== "none" && (() => {
-              const level3Options = getAvailableChildDimensions(groupLevel2, [groupLevel1, groupLevel2]);
-              return level3Options.length > 0 ? (
-                <>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
-                  <Select value={groupLevel3} onValueChange={(val) => setGroupLevel3(val || "none")}>
-                    <SelectTrigger className="h-8 min-w-[140px] text-sm bg-background">
-                      <SelectValue placeholder="Level 3" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">— None —</SelectItem>
-                      {level3Options.map(d => (
-                        <SelectItem key={`l3-${d.key}`} value={d.key}>{d.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </>
-              ) : null;
-            })()}
+            {/* Horizontal Tab Bar */}
+            <div className="flex flex-wrap items-center gap-1">
+              {visibleTabs.map(tab => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => handleTabChange(tab.key)}
+                    className={`
+                      px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150
+                      ${isActive 
+                        ? 'bg-primary text-primary-foreground shadow-sm' 
+                        : 'text-muted-foreground hover:bg-background hover:text-foreground border border-transparent hover:border-border'
+                      }
+                    `}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Right: TopN + View toggles */}
+          {/* Right: TopN (charts only) + View toggles */}
           <div className="flex items-center gap-1.5">
             {reportState.view !== 'table' && (
               <Select 
@@ -415,83 +395,9 @@ export function ReportViewer({ config }: ReportViewerProps) {
             </div>
           </div>
         </div>
-
-        {/* Row 2: Quick Filter Dropdowns Bar */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-1">Quick Filters</span>
-          
-          {/* Customer Filter */}
-          <div className="w-[160px]">
-            <AsyncSearchSelect
-              tableName="customers"
-              value={reportState.filters['customer']?.contact_id || ""}
-              onChange={(val) => updateQuickFilter('customer', val)}
-              placeholder="All Customers"
-              className="h-8 text-xs bg-background"
-            />
-          </div>
-
-          {/* Product Filter */}
-          <div className="w-[150px]">
-            <AsyncSearchSelect
-              tableName="products"
-              value={reportState.filters['product'] || ""}
-              onChange={(val) => updateQuickFilter('product', val)}
-              placeholder="All Products"
-              className="h-8 text-xs bg-background"
-            />
-          </div>
-
-          {/* Customer Level Filter */}
-          <Select 
-            value={reportState.filters['customer_type'] || "none"} 
-            onValueChange={(val) => updateQuickFilter('customer_type', val)}
-          >
-            <SelectTrigger className="h-8 w-[140px] text-xs bg-background">
-              <SelectValue placeholder="Customer Level" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">All Levels</SelectItem>
-              <SelectItem value="1">Distributor (1)</SelectItem>
-              <SelectItem value="2">Dealer (2)</SelectItem>
-              <SelectItem value="3">Retailer (3)</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Sales Type Filter */}
-          <Select 
-            value={reportState.filters['sales_type'] || "none"} 
-            onValueChange={(val) => updateQuickFilter('sales_type', val)}
-          >
-            <SelectTrigger className="h-8 w-[130px] text-xs bg-background">
-              <SelectValue placeholder="Sales Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">All Sales Types</SelectItem>
-              <SelectItem value="primary">Primary</SelectItem>
-              <SelectItem value="secondary">Secondary</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Clear Filters Button if any quick filter active */}
-          {Object.keys(reportState.filters).filter(k => k !== 'date_range').length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                const dateFilter = reportState.filters.date_range ? { date_range: reportState.filters.date_range } : {};
-                setReportState(s => ({ ...s, filters: dateFilter }));
-                setPage(1);
-              }}
-            >
-              <X className="mr-1 h-3 w-3" /> Clear Filters
-            </Button>
-          )}
-        </div>
       </div>
 
-      {/* Content Area — Ensure visible height & space for footer */}
+      {/* Content Area */}
       <Card className="flex-1 min-h-[450px] max-h-[680px] p-4 pb-6 flex flex-col relative print:border-none print:shadow-none print:p-0">
         {loading && (
           <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-20 print:hidden">
@@ -523,7 +429,6 @@ export function ReportViewer({ config }: ReportViewerProps) {
                       <Select 
                         value={LIMIT.toString()} 
                         onValueChange={(val) => {
-                          // Page limit selector
                           setPage(1);
                         }}
                       >
@@ -563,7 +468,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
                     </DropdownMenu>
                   </div>
 
-                  {/* Right: < 1 - 8 > Pagination */}
+                  {/* Right: Pagination */}
                   <div className="flex items-center space-x-3">
                     <span className="text-xs text-muted-foreground">
                       {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, (page - 1) * LIMIT + data.length)}

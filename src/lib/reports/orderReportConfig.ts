@@ -26,6 +26,8 @@ export const orderReportConfig: ReportDefinition = {
     { key: 'net_amount', label: 'Amount', type: 'currency' },
     { key: 'discount_amount', label: 'Discount Amount', type: 'currency' },
     { key: 'tax_amount', label: 'Tax Amount', type: 'currency' },
+    { key: 'customer_count', label: '# of customer', type: 'number' },
+    { key: 'avg_price', label: 'Avg Price', type: 'currency' },
   ],
   
   kpis: ['net_amount', 'gross_amount', 'order_count'],
@@ -36,10 +38,10 @@ export const orderReportConfig: ReportDefinition = {
       { label: 'Primary', value: 'primary' },
       { label: 'Secondary', value: 'secondary' },
     ]},
-    { key: 'country', label: 'Country', type: 'select', section: 'AREA' },
-    { key: 'state', label: 'State', type: 'select', section: 'AREA' },
-    { key: 'city', label: 'City', type: 'select', section: 'AREA' },
-    { key: 'area', label: 'Area', type: 'select', section: 'AREA' },
+    { key: 'country', label: 'Country', type: 'territory', section: 'AREA', territoryLevel: 1 },
+    { key: 'state', label: 'State', type: 'territory', section: 'AREA', territoryLevel: 2 },
+    { key: 'city', label: 'City', type: 'territory', section: 'AREA', territoryLevel: 3 },
+    { key: 'area', label: 'Area', type: 'territory', section: 'AREA', territoryLevel: 4 },
     { key: 'user', label: 'Ordered by', type: 'user', section: 'USER' },
     { key: 'user_role', label: 'Ordered by role', type: 'select', section: 'USER', options: [
       { label: 'Admin', value: 'admin' },
@@ -50,6 +52,53 @@ export const orderReportConfig: ReportDefinition = {
     { key: 'product', label: 'Product', type: 'product', section: 'PRODUCT' },
     { key: 'product_category', label: 'Category', type: 'select', section: 'PRODUCT' },
     { key: 'product_subcategory', label: 'Sub-Category', type: 'select', section: 'PRODUCT' },
+  ],
+
+  tabConfigs: [
+    {
+      key: 'customer',
+      label: 'Customer',
+      dimension: 'customer',
+      defaultMeasures: ['order_count', 'product_quantity', 'product_count', 'gross_amount', 'net_amount'],
+      hiddenMeasures: ['country', 'state', 'city', 'area'], // Note: these are dimension fields shown as extra columns, not measures
+    },
+    {
+      key: 'user',
+      label: 'User',
+      dimension: 'user',
+      defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+    },
+    {
+      key: 'area',
+      label: 'Area',
+      dimension: 'area',
+      defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+    },
+    {
+      key: 'time',
+      label: 'Time',
+      dimension: 'date',
+      defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+    },
+    {
+      key: 'product',
+      label: 'Product',
+      dimension: 'product',
+      defaultMeasures: ['order_count', 'customer_count', 'product_quantity', 'gross_amount', 'net_amount', 'avg_price'],
+    },
+    {
+      key: 'product_category',
+      label: 'Product Category',
+      dimension: 'product_category',
+      defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+      requiresProductSettings: 'category',
+    },
+    {
+      key: 'product_subcategory',
+      label: 'Product Sub-Category',
+      dimension: 'product_subcategory',
+      defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+      requiresProductSettings: 'subcategory',
+    },
   ]
 };
-
