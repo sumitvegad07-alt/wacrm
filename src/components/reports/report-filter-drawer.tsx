@@ -234,6 +234,7 @@ export function ReportFilterDrawer({
                         <AsyncSearchSelect
                           tableName="territories"
                           displayColumn="name"
+                          valueColumn="name"
                           value={localFilters[filterDef.key] || ""}
                           onChange={(val) => {
                             const next = { ...localFilters };
@@ -275,6 +276,7 @@ export function ReportFilterDrawer({
                         <AsyncSearchSelect
                           tableName="profiles"
                           displayColumn="full_name"
+                          valueColumn="user_id"
                           value={localFilters[filterDef.key] || ""}
                           onChange={(val) => {
                             const next = { ...localFilters };
