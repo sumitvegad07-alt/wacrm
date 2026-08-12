@@ -22,6 +22,8 @@ interface AsyncSearchSelectProps {
   emptyMessage?: string;
   className?: string;
   disabled?: boolean;
+  filterColumn?: string;
+  filterValue?: any;
 }
 
 export function AsyncSearchSelect({
@@ -35,6 +37,8 @@ export function AsyncSearchSelect({
   emptyMessage = "No results found.",
   className,
   disabled = false,
+  filterColumn,
+  filterValue,
 }: AsyncSearchSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -52,6 +56,10 @@ export function AsyncSearchSelect({
         .from(tableName)
         .select(`${valueColumn}, ${displayColumn}`)
         .limit(50);
+
+      if (filterColumn && filterValue !== undefined && filterValue !== null) {
+        query = query.eq(filterColumn, filterValue);
+      }
 
       if (search) {
         query = query.ilike(displayColumn, `%${search}%`);

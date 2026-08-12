@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { AsyncSearchSelect } from "@/components/ui/async-search-select";
-import { type ReportDefinition } from "@/lib/reports/types";
+import { type ReportDefinition, type ReportFilterDef } from "@/lib/reports/types";
 import { DateRange } from "react-day-picker";
 
 interface ReportFilterDrawerProps {
@@ -84,12 +84,20 @@ export function getDatesForPeriod(period: string, customRange?: DateRange): Date
   }
 }
 
+import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase/client";
+import type { TerritoryLevel } from "@/lib/territories/types";
+import { useEffect } from "react";
+
 export function ReportFilterDrawer({
   config,
   filters: initialFilters,
   onApplyFilters,
   period: initialPeriod,
 }: ReportFilterDrawerProps) {
+  const { accountId } = useAuth();
+  const supabase = createClient();
+
   const [open, setOpen] = useState(false);
   const [localFilters, setLocalFilters] = useState<Record<string, any>>(initialFilters);
   const [localPeriod, setLocalPeriod] = useState(initialPeriod);
@@ -99,6 +107,51 @@ export function ReportFilterDrawer({
         to: new Date(initialFilters.date_range.to)
     } : undefined
   );
+
+  const [customerHierarchyEnabled, setCustomerHierarchyEnabled] = useState(false);
+  const [productLevelsCount, setProductLevelsCount] = useState(3);
+  const [territoryLevels, setTerritoryLevels] = useState<TerritoryLevel[]>([]);
+
+  useEffect(() => {
+    async function loadSettings() {
+      if (!accountId) return;
+      const { data } = await supabase.from('accounts').select('settings').eq('id', accountId).single();
+      if (data?.settings) {
+        const s = data.settings;
+        setCustomerHierarchyEnabled(s.order_settings?.enabled ?? s.order_settings?.hierarchy_enabled ?? false);
+        setProductLevelsCount(s.product_settings?.levels_count ?? 3);
+        setTerritoryLevels((s.territory_settings?.levels as TerritoryLevel[]) ?? []);
+      }
+    }
+    loadSettings();
+  }, [accountId]);
+
+  const isFilterVisible = (filterDef: ReportFilterDef) => {
+    // 1. Customer Hierarchy filters
+    if (['sales_type', 'customer_type', 'user_role', 'hierarchy_level'].includes(filterDef.key)) {
+      if (!customerHierarchyEnabled) return false;
+    }
+
+    // 2. Product Category & Sub-Category
+    if (filterDef.key === 'product_category' && productLevelsCount < 1) {
+      return false;
+    }
+    if (filterDef.key === 'product_subcategory' && productLevelsCount < 2) {
+      return false;
+    }
+
+    // 3. Territory filters by level
+    if (filterDef.type === 'territory' && filterDef.territoryLevel) {
+      if (territoryLevels.length > 0) {
+        const levelConfig = territoryLevels.find(l => l.position === filterDef.territoryLevel);
+        if (levelConfig && levelConfig.enabled === false) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
 
   const handleApply = () => {
     const finalFilters = { ...localFilters };
@@ -172,7 +225,10 @@ export function ReportFilterDrawer({
         
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           {sections.map(section => {
-            const sectionFilters = config.filters.filter(f => f.section === section || (!f.section && section === 'PRODUCT' && f.key !== 'date_range'));
+            const sectionFilters = config.filters.filter(f => 
+              (f.section === section || (!f.section && section === 'PRODUCT' && f.key !== 'date_range')) &&
+              isFilterVisible(f)
+            );
             if (section === 'PERIOD') {
               return (
                 <div key={section} className="space-y-3 pb-4 border-b border-border/40">
@@ -235,6 +291,8 @@ export function ReportFilterDrawer({
                           tableName="territories"
                           displayColumn="name"
                           valueColumn="name"
+                          filterColumn="level"
+                          filterValue={filterDef.territoryLevel}
                           value={localFilters[filterDef.key] || ""}
                           onChange={(val) => {
                             const next = { ...localFilters };
