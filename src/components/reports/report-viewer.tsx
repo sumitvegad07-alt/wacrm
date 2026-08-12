@@ -337,11 +337,44 @@ export function ReportViewer({ config }: ReportViewerProps) {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           {/* Left: Period badge + Horizontal Tabs */}
           <div className="flex flex-wrap items-center gap-1.5">
-            {/* Period badge */}
-            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-background border border-border rounded-md px-2.5 py-1.5 mr-1">
-              <CalendarDays className="h-3.5 w-3.5" />
-              {periodLabel}
-            </div>
+            {/* Period Select Dropdown */}
+            <Select 
+              value={reportState.period} 
+              onValueChange={(val) => {
+                if (!val) return;
+                const newPeriod = val;
+                const range = getDatesForPeriod(newPeriod);
+                setReportState(s => {
+                  const nextFilters = { ...s.filters };
+                  if (range?.from && range?.to) {
+                    nextFilters.date_range = {
+                      start_date: range.from.toISOString().split('T')[0],
+                      end_date: range.to.toISOString().split('T')[0],
+                    };
+                  } else {
+                    delete nextFilters.date_range;
+                  }
+                  return {
+                    ...s,
+                    period: newPeriod,
+                    filters: nextFilters
+                  };
+                });
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-8 min-w-[135px] text-xs bg-background gap-1.5 font-semibold">
+                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <SelectValue placeholder="Select Period" />
+              </SelectTrigger>
+              <SelectContent align="start" className="w-48">
+                {PERIOD_PRESETS.map((preset) => (
+                  <SelectItem key={preset.value} value={preset.value} className="text-xs">
+                    {preset.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             <div className="h-4 w-px bg-border hidden sm:block mx-1" />
 

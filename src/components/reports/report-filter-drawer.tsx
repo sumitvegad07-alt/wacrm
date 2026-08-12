@@ -42,7 +42,9 @@ export const PERIOD_PRESETS = [
   { label: "Previous Quarter", value: "previous_quarter" },
   { label: "Current Year", value: "current_year" },
   { label: "Previous Year", value: "previous_year" },
+  { label: "Last 90 Days", value: "last_90_days" },
   { label: "Last 180 Days", value: "last_180_days" },
+  { label: "Last 365 Days", value: "last_365_days" },
   { label: "Custom Range", value: "custom" },
 ];
 
@@ -69,8 +71,12 @@ export function getDatesForPeriod(period: string, customRange?: DateRange): Date
       return { from: startOfYear(now), to: endOfYear(now) };
     case "previous_year":
       return { from: startOfYear(subYears(now, 1)), to: endOfYear(subYears(now, 1)) };
+    case "last_90_days":
+      return { from: startOfDay(subDays(now, 90)), to: endOfDay(now) };
     case "last_180_days":
       return { from: startOfDay(subDays(now, 180)), to: endOfDay(now) };
+    case "last_365_days":
+      return { from: startOfDay(subDays(now, 365)), to: endOfDay(now) };
     case "custom":
       return customRange;
     default:
@@ -116,6 +122,17 @@ export function ReportFilterDrawer({
     setLocalFilters({});
     setLocalPeriod("this_month");
     setCustomDate(undefined);
+    
+    const range = getDatesForPeriod("this_month");
+    const resetFilters: Record<string, any> = {};
+    if (range?.from && range?.to) {
+      resetFilters.date_range = {
+        start_date: range.from.toISOString().split('T')[0],
+        end_date: range.to.toISOString().split('T')[0],
+      };
+    }
+    onApplyFilters(resetFilters, "this_month");
+    setOpen(false);
   };
 
   // Group filters by section
