@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Check, ChevronsUpDown, Search, Loader2 } from "lucide-react";
+import { Check, ChevronsUpDown, Search, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -115,12 +115,33 @@ export function AsyncSearchSelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         disabled={disabled}
-        className={cn("flex w-full items-center justify-between rounded-md bg-muted border border-border px-3 py-2 text-sm font-normal text-foreground hover:bg-muted outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:cursor-not-allowed disabled:opacity-50", className)}
+        className={cn("relative flex w-full items-center justify-between rounded-md bg-muted border border-border px-3 py-2 text-sm font-normal text-foreground hover:bg-muted outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:cursor-not-allowed disabled:opacity-50", className)}
       >
-        <span className="truncate">
-          {selectedValueLabel || placeholder}
-        </span>
-        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        <div className="flex-1 truncate">
+          {value 
+            ? (selectedValueLabel || "Loading...") 
+            : placeholder}
+        </div>
+        {value && (
+          <div 
+            role="button" 
+            tabIndex={0}
+            className="mr-2 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-background cursor-pointer z-10"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                onChange("");
+              }
+            }}
+          >
+            <X className="h-3 w-3" />
+          </div>
+        )}
+        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-popover border-border">
         <div className="flex items-center border-b border-border/50 px-3">

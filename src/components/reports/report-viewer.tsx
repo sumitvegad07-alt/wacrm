@@ -30,6 +30,7 @@ import { ReportDonutChart } from "./report-donut-chart";
 import { ReportFilterDrawer, PERIOD_PRESETS, getDatesForPeriod } from "./report-filter-drawer";
 import { ReportKpiCards } from "./report-kpi-cards";
 import { ReportSaveDialog } from "./report-save-dialog";
+import { ActiveFilterSummary } from "./ActiveFilterSummary";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 
@@ -220,11 +221,60 @@ export function ReportViewer({ config }: ReportViewerProps) {
         return;
       }
 
+      const formattedExportData = exportData.map((row: any) => {
+        const newRow: any = { ...row };
+        Object.keys(newRow).forEach(k => {
+          const measureDef = config.measures.find(m => m.key === k || m.label === k);
+          if (measureDef) {
+            const val = Number(newRow[k]) || 0;
+            if (measureDef.type === 'currency') {
+              // format currency for export
+              newRow[k] = new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: defaultCurrency || 'INR',
+                currencyDisplay: 'symbol',
+              }).format(val);
+            } else if (measureDef.type === 'percent') {
+              newRow[k] = `${val.toFixed(2)}%`;
+            }
+          }
+        });
+        return newRow;
+      });
+
+      // Calculate and append Totals row
+      const totalsRow: any = {};
+      const keys = Object.keys(formattedExportData[0] || {});
+      keys.forEach((k, index) => {
+        if (index === 0) {
+          totalsRow[k] = "Total";
+        } else {
+          const measureDef = config.measures.find(m => m.key === k || m.label === k);
+          if (measureDef) {
+            const sum = exportData.reduce((acc: number, row: any) => acc + (Number(row[k]) || 0), 0);
+            if (measureDef.type === 'currency') {
+              totalsRow[k] = new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: defaultCurrency || 'INR',
+                currencyDisplay: 'symbol',
+              }).format(sum);
+            } else if (measureDef.type === 'percent') {
+              totalsRow[k] = `${sum.toFixed(2)}%`; // naive sum of percents
+            } else {
+              totalsRow[k] = sum.toString();
+            }
+          } else {
+            totalsRow[k] = "";
+          }
+        }
+      });
+      formattedExportData.push(totalsRow);
+
       if (format === 'csv') {
-        const keys = Object.keys(exportData[0]);
+        const keys = Object.keys(formattedExportData[0]);
         const csvContent = [
           keys.join(","),
-          ...exportData.map((row: any) => keys.map(k => {
+          ...formattedExportData.map((row: any) => keys.map(k => {
             let val = row[k] === null || row[k] === undefined ? "" : String(row[k]);
             if (val.includes(",") || val.includes('"')) {
               val = `"${val.replace(/"/g, '""')}"`;
@@ -242,7 +292,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
         link.click();
         document.body.removeChild(link);
       } else if (format === 'xlsx') {
-        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const worksheet = XLSX.utils.json_to_sheet(formattedExportData);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Report Data");
         XLSX.writeFile(workbook, `${config.label}_export.xlsx`);
@@ -329,6 +379,52 @@ export function ReportViewer({ config }: ReportViewerProps) {
           </DropdownMenu>
         </div>
       </div>
+
+      <ActiveFilterSummary 
+        config={config} 
+        filters={reportState.filters} 
+        period={reportState.period} 
+        onRemoveFilter={(key) => {
+          if (key === 'period') {
+            const range = getDatesForPeriod('this_month');
+            setReportState(s => {
+              const nextFilters = { ...s.filters };
+              if (range?.from && range?.to) {
+                nextFilters.date_range = {
+                  start_date: range.from.toISOString().split('T')[0],
+                  end_date: range.to.toISOString().split('T')[0],
+                };
+              } else {
+                delete nextFilters.date_range;
+              }
+              return { ...s, period: 'this_month', filters: nextFilters };
+            });
+          } else {
+            setReportState(s => {
+              const nextFilters = { ...s.filters };
+              delete nextFilters[key];
+              return { ...s, filters: nextFilters };
+            });
+          }
+          setPage(1);
+        }}
+        onClearAll={() => {
+          const range = getDatesForPeriod("this_month");
+          const resetFilters: Record<string, any> = {};
+          if (range?.from && range?.to) {
+            resetFilters.date_range = {
+              start_date: range.from.toISOString().split('T')[0],
+              end_date: range.to.toISOString().split('T')[0],
+            };
+          }
+          setReportState(s => ({
+            ...s,
+            period: 'this_month',
+            filters: resetFilters
+          }));
+          setPage(1);
+        }}
+      />
 
       <ReportKpiCards config={config} filters={reportState.filters} defaultCurrency={defaultCurrency} />
 

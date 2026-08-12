@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, startOfQuarter, endOfQuarter, startOfDay, endOfDay, subMonths, subQuarters, subYears } from "date-fns";
 import { X, Filter as FilterIcon, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -87,7 +87,6 @@ export function getDatesForPeriod(period: string, customRange?: DateRange): Date
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import type { TerritoryLevel } from "@/lib/territories/types";
-import { useEffect } from "react";
 
 export function ReportFilterDrawer({
   config,
@@ -109,22 +108,51 @@ export function ReportFilterDrawer({
   );
 
   const [customerHierarchyEnabled, setCustomerHierarchyEnabled] = useState(false);
-  const [productLevelsCount, setProductLevelsCount] = useState(3);
-  const [territoryLevels, setTerritoryLevels] = useState<TerritoryLevel[]>([]);
+  const [productLevelsCount, setProductLevelsCount] = useState<number | null>(null);
+  const [territoryLevels, setTerritoryLevels] = useState<TerritoryLevel[] | null>(null);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsError, setSettingsError] = useState(false);
 
   useEffect(() => {
     async function loadSettings() {
       if (!accountId) return;
-      const { data } = await supabase.from('accounts').select('settings').eq('id', accountId).single();
-      if (data?.settings) {
-        const s = data.settings;
-        setCustomerHierarchyEnabled(s.order_settings?.enabled ?? s.order_settings?.hierarchy_enabled ?? false);
-        setProductLevelsCount(s.product_settings?.levels_count ?? 3);
-        setTerritoryLevels((s.territory_settings?.levels as TerritoryLevel[]) ?? []);
+      try {
+        const { data, error } = await supabase.from('accounts').select('settings').eq('id', accountId).single();
+        if (error) throw error;
+        if (data?.settings) {
+          const s = data.settings;
+          setCustomerHierarchyEnabled(s.order_settings?.enabled ?? s.order_settings?.hierarchy_enabled ?? false);
+          // Level 1 Category is a mandatory hierarchy level by default
+          setProductLevelsCount(s.product_settings?.levels_count ?? 1);
+          setTerritoryLevels((s.territory_settings?.levels as TerritoryLevel[]) ?? null);
+        }
+        setSettingsLoaded(true);
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+        setSettingsError(true);
       }
     }
     loadSettings();
   }, [accountId]);
+
+  // Generate dynamic config filters
+  const dynamicConfigFilters = useMemo(() => {
+    let baseFilters = config.filters.filter(f => f.type !== 'territory');
+    
+    // Add dynamic territory filters
+    if (territoryLevels) {
+      const activeTerritoryLevels = territoryLevels.filter(l => l.enabled !== false).sort((a, b) => a.position - b.position);
+      const territoryFilters = activeTerritoryLevels.map((l: any) => ({
+        key: `territory_${l.position}`,
+        label: l.name,
+        type: 'territory' as const,
+        section: 'AREA' as const,
+        territoryLevel: l.position
+      }));
+      baseFilters = [...baseFilters, ...territoryFilters];
+    }
+    return baseFilters;
+  }, [config.filters, territoryLevels]);
 
   const isFilterVisible = (filterDef: ReportFilterDef) => {
     // 1. Customer Hierarchy filters
@@ -133,21 +161,11 @@ export function ReportFilterDrawer({
     }
 
     // 2. Product Category & Sub-Category
-    if (filterDef.key === 'product_category' && productLevelsCount < 1) {
+    if (filterDef.key === 'product_category' && (productLevelsCount === null || productLevelsCount < 1)) {
       return false;
     }
-    if (filterDef.key === 'product_subcategory' && productLevelsCount < 2) {
+    if (filterDef.key === 'product_subcategory' && (productLevelsCount === null || productLevelsCount < 2)) {
       return false;
-    }
-
-    // 3. Territory filters by level
-    if (filterDef.type === 'territory' && filterDef.territoryLevel) {
-      if (territoryLevels.length > 0) {
-        const levelConfig = territoryLevels.find(l => l.position === filterDef.territoryLevel);
-        if (levelConfig && levelConfig.enabled === false) {
-          return false;
-        }
-      }
     }
 
     return true;
@@ -224,8 +242,15 @@ export function ReportFilterDrawer({
         </div>
         
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
-          {sections.map(section => {
-            const sectionFilters = config.filters.filter(f => 
+          {!settingsLoaded && !settingsError && (
+            <div className="text-sm text-muted-foreground p-4 text-center">Loading configuration...</div>
+          )}
+          {settingsError && (
+            <div className="text-sm text-destructive p-4 text-center bg-destructive/10 rounded-md">Configuration missing — unable to load filters.</div>
+          )}
+          
+          {settingsLoaded && !settingsError && sections.map(section => {
+            const sectionFilters = dynamicConfigFilters.filter(f => 
               (f.section === section || (!f.section && section === 'PRODUCT' && f.key !== 'date_range')) &&
               isFilterVisible(f)
             );
@@ -267,37 +292,72 @@ export function ReportFilterDrawer({
                     <Label className="text-xs text-muted-foreground font-normal col-span-1">{filterDef.label}</Label>
                     <div className="col-span-2">
                       {filterDef.type === 'select' && filterDef.options ? (
-                        <Select 
-                          value={localFilters[filterDef.key] || "none"} 
-                          onValueChange={(val) => {
-                            const next = { ...localFilters };
-                            if (val === "none") delete next[filterDef.key];
-                            else next[filterDef.key] = val;
-                            setLocalFilters(next);
-                          }}
-                        >
-                          <SelectTrigger className="h-8 text-xs bg-background">
-                            <SelectValue placeholder={`Select ${filterDef.label}`} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Select {filterDef.label}</SelectItem>
-                            {filterDef.options.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="relative flex items-center">
+                          <Select 
+                            value={localFilters[filterDef.key] || "none"} 
+                            onValueChange={(val) => {
+                              const next = { ...localFilters };
+                              if (val === "none") delete next[filterDef.key];
+                              else next[filterDef.key] = val;
+                              setLocalFilters(next);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-background w-full pr-8">
+                              <SelectValue placeholder={`Select ${filterDef.label}`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Select {filterDef.label}</SelectItem>
+                              {filterDef.options.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {localFilters[filterDef.key] && localFilters[filterDef.key] !== "none" && (
+                            <button
+                              type="button"
+                              className="absolute right-7 text-muted-foreground hover:text-foreground p-1 rounded-full hover:bg-muted z-10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const next = { ...localFilters };
+                                delete next[filterDef.key];
+                                setLocalFilters(next);
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
                       ) : filterDef.type === 'territory' ? (
                         <AsyncSearchSelect
                           tableName="territories"
                           displayColumn="name"
-                          valueColumn="name"
-                          filterColumn="level"
-                          filterValue={filterDef.territoryLevel}
+                          valueColumn="id"
+                          filterColumn={filterDef.territoryLevel && filterDef.territoryLevel > 1 ? "parent_id" : "level"}
+                          filterValue={
+                            filterDef.territoryLevel && filterDef.territoryLevel > 1 
+                            ? localFilters[`territory_${filterDef.territoryLevel - 1}`] || null // pass parent id
+                            : filterDef.territoryLevel
+                          }
                           value={localFilters[filterDef.key] || ""}
                           onChange={(val) => {
                             const next = { ...localFilters };
-                            if (!val) delete next[filterDef.key];
-                            else next[filterDef.key] = val;
+                            if (!val) {
+                              delete next[filterDef.key];
+                              // Clear all lower level territories too
+                              if (filterDef.territoryLevel) {
+                                for (let l = filterDef.territoryLevel + 1; l <= 5; l++) {
+                                  delete next[`territory_${l}`];
+                                }
+                              }
+                            } else {
+                              next[filterDef.key] = val;
+                              // Clear lower level territories when parent changes
+                              if (filterDef.territoryLevel) {
+                                for (let l = filterDef.territoryLevel + 1; l <= 5; l++) {
+                                  delete next[`territory_${l}`];
+                                }
+                              }
+                            }
                             setLocalFilters(next);
                           }}
                           placeholder={`Search ${filterDef.label}`}

@@ -28,6 +28,11 @@ export async function executeReport(
   }
   const accountId = userAccounts[0].account_id;
 
+  // TEMPORARY LOGGING TO PROVE FILTER PAYLOAD REACHES RPC
+  console.log("=== EXECUTING REPORT RPC ===");
+  console.log("Payload p_filters:", JSON.stringify(filters, null, 2));
+  console.log("============================");
+
   const { data, error } = await supabase.rpc('execute_report', {
     p_account_id: accountId,
     p_module: moduleName,
