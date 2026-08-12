@@ -39,7 +39,7 @@ async function runUAT() {
   // UAT 1: No filter
   const allRPC = await rpc({});
   const { data: allSql } = await supabase.from('orders').select('sub_total, total_amount, discount_total, tax_total').eq('account_id', accountId);
-  const sqlTotals = allSql?.reduce((a, o) => ({ count: a.count + 1, sub_total: a.sub_total + Number(o.sub_total||0), total_amount: a.total_amount + Number(o.total_amount||0) }), {count:0, sub_total:0, total_amount:0});
+  const sqlTotals = allSql?.reduce((a: any, o: any) => ({ count: a.count + 1, sub_total: a.sub_total + Number(o.sub_total||0), total_amount: a.total_amount + Number(o.total_amount||0) }), {count:0, sub_total:0, total_amount:0});
   assertResult('1. No Filter', allRPC, sqlTotals);
 
   // UAT 2: Customer Filter (Test 1 customer)
@@ -48,7 +48,7 @@ async function runUAT() {
     const cid = custOrders[0].contact_id;
     const rep = await rpc({ customer: { contact_id: cid } });
     const { data: dbOrders } = await supabase.from('orders').select('sub_total, total_amount').eq('contact_id', cid);
-    const sqlC = dbOrders?.reduce((a, o) => ({ count: a.count + 1, sub_total: a.sub_total + Number(o.sub_total||0), total_amount: a.total_amount + Number(o.total_amount||0) }), {count:0, sub_total:0, total_amount:0});
+    const sqlC = dbOrders?.reduce((a: any, o: any) => ({ count: a.count + 1, sub_total: a.sub_total + Number(o.sub_total||0), total_amount: a.total_amount + Number(o.total_amount||0) }), {count:0, sub_total:0, total_amount:0});
     assertResult('2. Customer Filter', rep, sqlC);
   }
 
