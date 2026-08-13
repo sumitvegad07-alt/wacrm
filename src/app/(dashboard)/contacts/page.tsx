@@ -281,14 +281,14 @@ export default function ContactsPage() {
     {
       id: "credit_limit",
       label: "Credit Limit",
-      type: "number",
+      type: "text",
       visibleByDefault: false,
       render: (contact) => contact.credit_limit ? `₹${contact.credit_limit}` : "-"
     },
     {
       id: "credit_days",
       label: "Credit Days",
-      type: "number",
+      type: "text",
       visibleByDefault: false,
       render: (contact) => contact.credit_days ? `${contact.credit_days} days` : "-"
     },
