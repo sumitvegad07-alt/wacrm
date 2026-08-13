@@ -397,7 +397,7 @@ export default function PaymentDetailPage() {
             <p className="text-sm text-muted-foreground">Are you sure you want to cancel this payment? This action cannot be undone.</p>
             <div className="space-y-2">
               <Label>Cancellation Reason <span className="text-red-500">*</span></Label>
-              <Select value={cancellationReason} onValueChange={setCancellationReason}>
+              <Select value={cancellationReason} onValueChange={(val) => setCancellationReason(val || '')}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a reason" />
                 </SelectTrigger>

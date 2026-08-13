@@ -302,7 +302,7 @@ export default function ContactsPage() {
     {
       id: "outstanding_amount",
       label: "Outstanding Amount",
-      type: "number",
+      type: "text",
       visibleByDefault: false,
       render: (contact) => contact.outstanding_amount ? `₹${contact.outstanding_amount}` : "-"
     },

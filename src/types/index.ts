@@ -116,6 +116,10 @@ export interface Contact {
   /** Distribution-chain level (1 = top), used for order primary/secondary
    *  classification when the account enables order hierarchy. */
   hierarchy_level?: number | null;
+  opening_balance?: number | null;
+  credit_limit?: number | null;
+  credit_days?: number | null;
+  outstanding_amount?: number | null;
   created_at: string;
   updated_at: string;
 }

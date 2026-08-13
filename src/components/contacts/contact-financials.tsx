@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -108,7 +108,7 @@ export function ContactFinancials({ contact }: ContactFinancialsProps) {
         <Card>
           <CardContent className="p-4 flex flex-col items-center justify-center text-center">
             <span className="text-sm font-medium text-muted-foreground">Outstanding Balance</span>
-            <span className={\	ext-2xl font-bold mt-1 \\}>
+            <span className="text-2xl font-bold mt-1">
               {formatCurrency(financials.outstanding, currencyCode)}
             </span>
           </CardContent>
