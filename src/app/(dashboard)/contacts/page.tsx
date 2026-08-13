@@ -295,7 +295,7 @@ export default function ContactsPage() {
     {
       id: "opening_balance",
       label: "Opening Balance",
-      type: "number",
+      type: "text",
       visibleByDefault: false,
       render: (contact) => contact.opening_balance ? `₹${contact.opening_balance}` : "-"
     },
