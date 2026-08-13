@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
+import { ContactFinancials } from '@/components/contacts/contact-financials';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal, MessageTemplate } from '@/types';
 import {
@@ -477,6 +478,12 @@ export function ContactDetailView({
                   className="data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   Notes
+                </TabsTrigger>
+                <TabsTrigger
+                  value="financials"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                >
+                  Financials
                 </TabsTrigger>
                 <TabsTrigger
                   value="custom"

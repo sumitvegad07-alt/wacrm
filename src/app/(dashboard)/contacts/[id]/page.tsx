@@ -13,12 +13,14 @@ import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { ContactForm } from "@/components/contacts/contact-form";
 import { Timeline } from "@/components/shared/timeline";
+import { CustomerFinancialCard } from "@/components/payments/customer-financial-card";
 
 export default function ContactDetailsPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const supabase = createClient();
-  const { defaultCurrency, accountId } = useAuth();
+  const { defaultCurrency, accountId, isModuleEnabled } = useAuth();
+  const paymentEnabled = isModuleEnabled('payment');
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string }[] }>({ enabled: false, levels: [] });
@@ -190,6 +192,11 @@ export default function ContactDetailsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Column: Details & Custom Fields */}
         <div className="lg:col-span-2 space-y-6">
+          
+          {paymentEnabled && accountId && (
+            <CustomerFinancialCard contactId={id} accountId={accountId} />
+          )}
+
           <div className="bg-card border border-border rounded-lg p-5">
             <h3 className="text-lg font-semibold mb-4">Customer Details</h3>
             

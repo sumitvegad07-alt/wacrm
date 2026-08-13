@@ -50,6 +50,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       (pathname.startsWith("/whatsapp") && (!hasWhatsApp || !isModuleEnabled("whatsapp"))) ||
       (pathname.startsWith("/quotations") && !isModuleEnabled("quotation")) ||
       (pathname.startsWith("/expenses") && !isModuleEnabled("expense")) ||
+      (pathname.startsWith("/payments") && !isModuleEnabled("payment")) ||
       (pathname.startsWith("/dispatch") && !isModuleEnabled("dispatch")) ||
       (pathname.startsWith("/routes") && !isModuleEnabled("route"));
 

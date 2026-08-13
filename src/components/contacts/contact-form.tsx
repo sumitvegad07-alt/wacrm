@@ -74,6 +74,12 @@ export function ContactForm({
   const [pincode, setPincode] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
+  
+  // Payment Module Financials
+  const [creditLimit, setCreditLimit] = useState('');
+  const [creditDays, setCreditDays] = useState('');
+  const [openingBalance, setOpeningBalance] = useState('');
+  
   const [saving, setSaving] = useState(false);
 
   // Duplicate-phone detection for NEW contacts. `exact` (same digits)
@@ -150,6 +156,9 @@ export function ContactForm({
       setPincode(contact?.pincode ?? '');
       setLatitude(contact?.latitude != null ? String(contact.latitude) : '');
       setLongitude(contact?.longitude != null ? String(contact.longitude) : '');
+      setCreditLimit((contact as any)?.credit_limit != null ? String((contact as any).credit_limit) : '');
+      setCreditDays((contact as any)?.credit_days != null ? String((contact as any).credit_days) : '');
+      setOpeningBalance((contact as any)?.opening_balance != null ? String((contact as any).opening_balance) : '');
       setHierarchyLevel(contact?.hierarchy_level ?? null);
       setEmployeeId(contact?.employee_id ?? '');
       setDupMatch(null);
@@ -316,6 +325,11 @@ export function ContactForm({
         ...(territoryEnabled
           ? { territory_id: territoryId, needs_territory_review: territoryId ? false : needsTerritoryReview }
           : {}),
+        ...(isModuleEnabled('payment') ? {
+          credit_limit: creditLimit ? parseFloat(creditLimit) : null,
+          credit_days: creditDays ? parseInt(creditDays, 10) : null,
+          opening_balance: openingBalance ? parseFloat(openingBalance) : 0,
+        } : {}),
       };
 
       let contactId: string;
@@ -549,6 +563,26 @@ export function ContactForm({
               </div>
             </div>
           </div>
+
+          {isModuleEnabled('payment') && (
+            <div className="space-y-3 pt-4 border-t border-border/50">
+              <h4 className="text-sm font-semibold text-foreground">Financial Settings</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs">Credit Limit</Label>
+                  <Input type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0.00" className="bg-muted border-border text-foreground h-8 text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs">Credit Days</Label>
+                   <Input type="number" value={creditDays} onChange={(e) => setCreditDays(e.target.value)} placeholder="e.g. 30" className="bg-muted border-border text-foreground h-8 text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs">Opening Balance</Label>
+                   <Input type="number" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" className="bg-muted border-border text-foreground h-8 text-xs" />
+                </div>
+              </div>
+            </div>
+          )}
 
           {asPage ? (
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">

@@ -57,6 +57,9 @@ import {
   Target,
   Megaphone,
   HeartPulse,
+  Banknote,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -163,7 +166,7 @@ interface NavItem {
    * Admin-configurable module key. When set, this item is only shown if
    * the admin has enabled the corresponding module in Module Settings.
    */
-  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route";
+  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment";
 }
 
 type MenuNode =
@@ -175,7 +178,7 @@ type MenuNode =
       label: string;
       icon: React.ComponentType<{ className?: string }>;
       items: NavItem[];
-      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route";
+      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment";
     }
   | {
       type: "spacer";
@@ -267,6 +270,18 @@ function getMenuStructure(
 
     { type: "spacer" },
 
+    // ── Payment ──
+    {
+      type: "link",
+      href: "/payments",
+      label: "Payment",
+      icon: Banknote,
+      module: "payments",
+      configModule: "payment" as const,
+    },
+
+    { type: "spacer" },
+
     // ── Order, Dispatch, Pending Dispatch ──
     {
       type: "link",
@@ -343,6 +358,7 @@ function getMenuStructure(
       icon: LineChart,
       items: [
         { href: "/reports/orders", label: "Order Reports", icon: ShoppingCart, module: "orders" },
+        { href: "/reports/payments", label: "Payment Reports", icon: Banknote, module: "payments", configModule: "payment" as const },
         { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
         { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },
         { href: "/expenses", label: "Expenses Report", icon: Coins, module: "expenses" },
@@ -377,6 +393,7 @@ function getMenuStructure(
         { href: "/custom-fields/quotation", label: "Sale Quotation", icon: FileText },
         { href: "/custom-fields/lead", label: "Lead", icon: UserPlus },
         { href: "/custom-fields/deal", label: "Deal", icon: GitBranch },
+        { href: "/custom-fields/task", label: "Task", icon: CheckSquare },
         { href: "/custom-fields/customer_visit", label: "Customer Visit", icon: Building2 },
         { href: "/custom-fields/lead_visit", label: "Lead Visit", icon: MapPin },
         { href: "/custom-fields/order", label: "Order", icon: ShoppingCart },
@@ -422,6 +439,9 @@ function getMenuStructure(
         { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent },
         ...(!moduleSettings || moduleSettings.expense === true
           ? [{ href: "/settings?tab=expense_types", label: "Expense Settings", icon: Wallet }]
+          : []),
+        ...(!moduleSettings || moduleSettings.payment === true
+          ? [{ href: "/settings?tab=payments", label: "Payment Settings", icon: Banknote }]
           : []),
         ...(assignmentMode === 'area' && (!moduleSettings || moduleSettings.territory !== false)
           ? [{ href: "/settings?tab=territories", label: "Territory Master", icon: Map }]
@@ -610,6 +630,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
           "/orders",
           "/tasks",
           "/expenses",
+          "/payments",
           "/dispatches",
         ].includes(item.href.split("?")[0]) && (
           <button

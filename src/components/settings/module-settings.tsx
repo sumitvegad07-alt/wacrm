@@ -429,6 +429,18 @@ export function ModuleSettingsPanel() {
             />
           </div>
 
+          {/* Payment Collection */}
+          <div>
+            <p className="text-xs font-medium text-foreground">
+              Enable Payment Collection
+            </p>
+            <KoopsRadioToggle
+              enabled={draft.payment}
+              onChange={(val) => handleModuleToggle("payment", val)}
+              disabled={!canEditSettings}
+            />
+          </div>
+
           {/* 4. Dispatch */}
           <div>
             <p className="text-xs font-medium text-foreground">

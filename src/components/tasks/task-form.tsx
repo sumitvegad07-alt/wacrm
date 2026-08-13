@@ -50,6 +50,7 @@ interface TaskFormProps {
   defaultOrderId?: string;
   defaultDispatchId?: string;
   defaultEmployeeId?: string;
+  defaultPaymentId?: string;
   onSaved: () => void;
 }
 
@@ -71,6 +72,7 @@ export function TaskForm({
   defaultOrderId,
   defaultDispatchId,
   defaultEmployeeId,
+  defaultPaymentId,
   onSaved,
 }: TaskFormProps) {
   const supabase = createClient();
@@ -94,8 +96,9 @@ export function TaskForm({
   const [orderId, setOrderId] = useState("");
   const [dispatchId, setDispatchId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
+  const [paymentId, setPaymentId] = useState("");
 
-  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead"|"Expense"|"Order"|"Dispatch"|"Employee">("None");
+  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead"|"Expense"|"Order"|"Dispatch"|"Employee"|"Payment">("None");
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -107,6 +110,7 @@ export function TaskForm({
   const [expenses, setExpenses] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [dispatches, setDispatches] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
 
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -153,9 +157,11 @@ export function TaskForm({
         setOrderId(task.order_id || "");
         setDispatchId(task.dispatch_id || "");
         setEmployeeId(task.employee_id || "");
+        setPaymentId(task.payment_id || "");
         if (task.contact_id) setLinkedModule("Contact");
         else if (task.lead_id) setLinkedModule("Lead");
         else if (task.expense_id) setLinkedModule("Expense");
+        else if (task.payment_id) setLinkedModule("Payment");
         else if (task.deal_id) setLinkedModule("Deal");
         else if (task.quotation_id) setLinkedModule("Quotation");
         else if (task.product_id) setLinkedModule("Product");
@@ -182,10 +188,12 @@ export function TaskForm({
         setOrderId(defaultOrderId || "");
         setDispatchId(defaultDispatchId || "");
         setEmployeeId(defaultEmployeeId || "");
+        setPaymentId(defaultPaymentId || "");
 
         if (defaultContactId) setLinkedModule("Contact");
         else if (defaultLeadId) setLinkedModule("Lead");
         else if (defaultExpenseId) setLinkedModule("Expense");
+        else if (defaultPaymentId) setLinkedModule("Payment");
         else if (defaultDealId) setLinkedModule("Deal");
         else if (defaultQuotationId) setLinkedModule("Quotation");
         else if (defaultProductId) setLinkedModule("Product");
@@ -196,7 +204,7 @@ export function TaskForm({
         else setLinkedModule("None");
       }
     }
-  }, [open, task, defaultContactId, defaultDealId, defaultProductId, defaultConversationId, defaultQuotationId, defaultLeadId, defaultExpenseId, profile?.id]);
+  }, [open, task, defaultContactId, defaultDealId, defaultProductId, defaultConversationId, defaultQuotationId, defaultLeadId, defaultExpenseId, defaultPaymentId, profile?.id]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
@@ -204,7 +212,7 @@ export function TaskForm({
     let cancelled = false;
     (async () => {
       await ensureDefaultSectionsAndFields(accountId, "task", user?.id, supabase);
-      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes, expRes, oRes, dispRes] = await Promise.all([
+      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes, expRes, oRes, dispRes, payRes] = await Promise.all([
         supabase.from("profiles").select("*").order("full_name"),
         supabase.from("contacts").select("*").order("name"),
         supabase.from("deals").select("*").order("title"),
@@ -216,6 +224,7 @@ export function TaskForm({
         supabase.from("expenses").select("*, expense_type:expense_types(expense_name)").order("created_at", { ascending: false }),
         supabase.from("orders").select("id, order_number, contact:contacts(company, name)").order("created_at", { ascending: false }),
         supabase.from("order_dispatches").select("id, dispatch_number, order:orders(order_number)").order("created_at", { ascending: false }),
+        supabase.from("payments").select("id, payment_number, amount, contact:contacts(name)").order("created_at", { ascending: false }),
       ]);
       if (cancelled) return;
       setProfiles((pRes.data ?? []) as Profile[]);
@@ -228,6 +237,7 @@ export function TaskForm({
       setExpenses((expRes.data ?? []) as any[]);
       setOrders((oRes.data ?? []) as any[]);
       setDispatches((dispRes.data ?? []) as any[]);
+      setPayments((payRes.data ?? []) as any[]);
       
       const fields = cfRes.data as CustomField[] ?? [];
       setCustomFields(fields);
@@ -291,6 +301,7 @@ export function TaskForm({
       quotation_id: linkedModule === "Quotation" ? quotationId : null,
       lead_id: linkedModule === "Lead" ? leadId : null,
       expense_id: linkedModule === "Expense" ? expenseId : null,
+      payment_id: linkedModule === "Payment" ? paymentId : null,
       order_id: linkedModule === "Order" ? orderId : null,
       dispatch_id: linkedModule === "Dispatch" ? dispatchId : null,
       employee_id: linkedModule === "Employee" ? employeeId : null,
@@ -350,6 +361,7 @@ export function TaskForm({
       if (productId) logPromises.push(logModuleActivity(supabase, { moduleName: 'product', recordId: productId, action: task ? 'updated' : 'created', message: msg }));
       if (leadId) logPromises.push(logModuleActivity(supabase, { moduleName: 'lead', recordId: leadId, action: task ? 'updated' : 'created', message: msg }));
       if (expenseId) logPromises.push(logModuleActivity(supabase, { moduleName: 'expense', recordId: expenseId, action: task ? 'updated' : 'created', message: msg }));
+      if (paymentId) logPromises.push(logModuleActivity(supabase, { moduleName: 'payment', recordId: paymentId, action: task ? 'updated' : 'created', message: msg }));
       if (linkedModule === "Order" && orderId) logPromises.push(logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: task ? 'updated' : 'created', message: msg }));
       if (linkedModule === "Dispatch" && dispatchId) logPromises.push(logModuleActivity(supabase, { moduleName: 'dispatch', recordId: dispatchId, action: task ? 'updated' : 'created', message: msg }));
       await Promise.all(logPromises);
@@ -475,6 +487,22 @@ export function TaskForm({
                     if (key === "due_date") setDueDate(val);
                     if (key === "priority") setPriority(val as TaskPriority);
                   }}
+                  renderCustomSystemField={(field) => {
+                    if (field.system_key === 'priority') {
+                      return (
+                        <select
+                          value={priority}
+                          onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                          className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {PRIORITIES.map((p) => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
+                        </select>
+                      );
+                    }
+                    return undefined;
+                  }}
                 />
               </div>
 
@@ -494,6 +522,7 @@ export function TaskForm({
                     <option value="Product">Product</option>
                     <option value="Conversation">Conversation</option>
                     <option value="Expense">Expense</option>
+                    <option value="Payment">Payment</option>
                     <option value="Order">Order</option>
                     <option value="Dispatch">Dispatch</option>
                     <option value="Employee">Employee/User</option>
@@ -564,6 +593,15 @@ export function TaskForm({
                         onChange={setExpenseId}
                         placeholder="Select Expense..."
                         options={expenses.map((e) => ({ value: e.id, label: `${e.expense_type?.expense_name} - ₹${e.amount}` }))}
+                        className="h-10 bg-background"
+                      />
+                    )}
+                    {linkedModule === "Payment" && (
+                      <SearchableSelect
+                        value={paymentId}
+                        onChange={setPaymentId}
+                        placeholder="Select Payment..."
+                        options={payments.map((p) => ({ value: p.id, label: `${p.payment_number} - ₹${p.amount}` }))}
                         className="h-10 bg-background"
                       />
                     )}

@@ -729,6 +729,8 @@ export interface Task {
   dispatch_id?: string | null;
   employee_id?: string | null;
   employee?: Profile;
+  payment_id?: string | null;
+  payment?: any;
 }
 
 export interface TaskComment {
@@ -931,4 +933,75 @@ export interface EmployeeDevice {
   application_version?: string;
   database_version?: string;
   [key: string]: any;
+}
+
+// ============================================================
+// Payment Collection (migration 20260813170000)
+// ============================================================
+
+export type PaymentStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
+export type PaymentSource = 'visit' | 'customer' | 'admin' | 'import' | 'api';
+
+export interface Payment {
+  id: string;
+  account_id: string;
+  user_id: string;
+  contact_id: string | null;
+  payment_number: string;
+  amount: number;
+  verified_amount?: number | null;
+  payment_type_id: string | null;
+  payment_type: string;
+  payment_date: string;
+  reference_number?: string | null;
+  notes?: string | null;
+  source: PaymentSource;
+  status: PaymentStatus;
+  latitude?: number | null;
+  longitude?: number | null;
+  site_visit_id?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  rejected_by?: string | null;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
+  invoice_id?: string | null;
+  erp_reference?: string | null;
+  erp_sync_status?: string | null;
+  receipt_number?: string | null;
+  receipt_generated?: boolean;
+  created_at: string;
+  updated_at: string;
+  // Joined relations
+  contact?: Contact;
+  collector?: Profile;
+}
+
+export interface PaymentType {
+  id: string;
+  account_id: string;
+  name: string;
+  is_system: boolean;
+  is_active: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentAttachment {
+  id: string;
+  payment_id: string;
+  user_id: string;
+  file_name: string;
+  file_url: string;
+  file_size?: number | null;
+  content_type?: string | null;
+  created_at: string;
+}
+
+export interface PaymentCustomValue {
+  id: string;
+  payment_id: string;
+  custom_field_id: string;
+  value?: string;
 }

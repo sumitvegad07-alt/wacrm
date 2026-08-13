@@ -34,6 +34,7 @@ const CONFIGURABLE_MODULES = [
   "territory",
   "reporting_hierarchy",
   "route",
+  "payment",
 ] as const;
 
 type ModuleKey = (typeof CONFIGURABLE_MODULES)[number];
@@ -51,6 +52,7 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   reporting_hierarchy: false,
   // Route Management ships OFF by default (route is optional).
   route: false,
+  payment: false,
 };
 
 function normalizeSettings(raw: unknown): ModuleSettings {

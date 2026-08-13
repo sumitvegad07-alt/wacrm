@@ -36,10 +36,22 @@ import { LeadsSourceChart } from '@/components/dashboard/leads-source-chart'
 import { LeadsStatusChart } from '@/components/dashboard/leads-status-chart'
 import { ContactJourneyMatrix } from '@/components/dashboard/contact-journey-matrix'
 
+import { 
+  TodaysCollectionWidget, 
+  MonthlyCollectionWidget, 
+  OutstandingAmountWidget,
+  CollectionByTypeWidget,
+  CollectionByUserWidget,
+  PendingApprovalAgingWidget,
+  OverdueCustomersWidget,
+  CreditExceededWidget
+} from '@/components/dashboard/payment-widgets'
+
 type RangeDays = 7 | 30 | 90
 
 export default function DashboardPage() {
-  const { defaultCurrency } = useAuth()
+  const { defaultCurrency, isModuleEnabled } = useAuth()
+  const paymentEnabled = isModuleEnabled('payment')
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
 
@@ -178,6 +190,32 @@ export default function DashboardPage() {
           <PipelineDonut data={pipeline} loading={pipelineLoading} currency={defaultCurrency} />
         </div>
       </div>
+
+      {paymentEnabled && (
+        <div className="pt-8 border-t border-border">
+          <div className="mb-4">
+            <h2 className="text-xl font-bold text-foreground">Collections & Receivables</h2>
+            <p className="text-sm text-muted-foreground">Monitor payment inflows and outstanding dues.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-4">
+            <TodaysCollectionWidget />
+            <MonthlyCollectionWidget />
+            <OutstandingAmountWidget />
+          </div>
+          
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 mb-4">
+             <CollectionByTypeWidget />
+             <CollectionByUserWidget />
+          </div>
+          
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+             <PendingApprovalAgingWidget />
+             <OverdueCustomersWidget />
+             <CreditExceededWidget />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

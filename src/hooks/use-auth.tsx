@@ -76,6 +76,7 @@ export interface ModuleSettings {
   territory: boolean;
   reporting_hierarchy: boolean;
   route: boolean;
+  payment: boolean;
 }
 
 const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
@@ -89,6 +90,8 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   reporting_hierarchy: false,
   // Route Management ships OFF by default (route is optional; free-visit mode intact).
   route: false,
+  // Payment module defaults OFF
+  payment: false,
 };
 
 function normalizeModuleSettings(raw: unknown): ModuleSettings {
@@ -107,6 +110,7 @@ function normalizeModuleSettings(raw: unknown): ModuleSettings {
     reporting_hierarchy: typeof src.reporting_hierarchy === 'boolean' ? src.reporting_hierarchy : false,
     // Route Management also defaults OFF when absent.
     route: typeof src.route === 'boolean' ? src.route : false,
+    payment: typeof src.payment === 'boolean' ? src.payment : false,
   };
 }
 

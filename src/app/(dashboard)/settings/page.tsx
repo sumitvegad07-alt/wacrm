@@ -22,6 +22,7 @@ import { ModuleSettingsPanel } from '@/components/settings/module-settings';
 import { DealPipelinesSettings } from '@/components/settings/deal-pipelines-settings';
 import { TerritoryManager } from '@/components/territories/territory-manager';
 import { RouteSettings } from '@/components/settings/route-settings';
+import { PaymentSettings } from '@/components/settings/payments-settings';
 import {
   resolveSection,
   SECTION_META,
@@ -99,6 +100,7 @@ function SettingsContent() {
     leads: <LeadsSettings />,
     tasks: <TasksSettings />,
     orders: <OrdersSettings />,
+    payments: <PaymentSettings />,
     pricing: <PricingSchemesSettings />,
     expense_types: <ExpenseTypesSettings />,
     territories: <TerritoryManager />,

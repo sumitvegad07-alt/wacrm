@@ -264,6 +264,49 @@ export default function ContactsPage() {
       render: (contact) => <span className="text-sm">{contact.address || "-"}</span>
     },
     {
+      id: "tags",
+      label: "Tags",
+      type: "text",
+      visibleByDefault: false,
+      render: (contact) => (
+        <div className="flex flex-wrap gap-1">
+          {contact.tags?.map((t) => (
+            <span key={t.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: `${t.color}20`, color: t.color }}>
+              {t.name}
+            </span>
+          ))}
+        </div>
+      )
+    },
+    {
+      id: "credit_limit",
+      label: "Credit Limit",
+      type: "number",
+      visibleByDefault: false,
+      render: (contact) => contact.credit_limit ? `₹${contact.credit_limit}` : "-"
+    },
+    {
+      id: "credit_days",
+      label: "Credit Days",
+      type: "number",
+      visibleByDefault: false,
+      render: (contact) => contact.credit_days ? `${contact.credit_days} days` : "-"
+    },
+    {
+      id: "opening_balance",
+      label: "Opening Balance",
+      type: "number",
+      visibleByDefault: false,
+      render: (contact) => contact.opening_balance ? `₹${contact.opening_balance}` : "-"
+    },
+    {
+      id: "outstanding_amount",
+      label: "Outstanding Amount",
+      type: "number",
+      visibleByDefault: false,
+      render: (contact) => contact.outstanding_amount ? `₹${contact.outstanding_amount}` : "-"
+    },
+    {
       id: "area",
       label: "Area",
       type: "text",
@@ -386,6 +429,57 @@ export default function ContactsPage() {
         return <span className="text-muted-foreground">-</span>;
       },
     });
+  }
+
+  if (isModuleEnabled('payment')) {
+    columns.splice(columns.length - 1, 0, 
+      {
+        id: "credit_limit",
+        label: "Credit Limit",
+        type: "text",
+        visibleByDefault: false,
+        render: (contact) => {
+          const val = (contact as any).credit_limit;
+          if (val == null) return <span className="text-muted-foreground">-</span>;
+          return <span className="text-sm font-medium">{val}</span>;
+        }
+      },
+      {
+        id: "credit_days",
+        label: "Credit Days",
+        type: "text",
+        visibleByDefault: false,
+        render: (contact) => {
+          const val = (contact as any).credit_days;
+          if (val == null) return <span className="text-muted-foreground">-</span>;
+          return <span className="text-sm font-medium">{val} days</span>;
+        }
+      },
+      {
+        id: "opening_balance",
+        label: "Opening Balance",
+        type: "text",
+        visibleByDefault: false,
+        render: (contact) => {
+          const val = (contact as any).opening_balance;
+          if (val == null) return <span className="text-muted-foreground">-</span>;
+          return <span className="text-sm font-medium">{val}</span>;
+        }
+      },
+      {
+        id: "outstanding_amount",
+        label: "Outstanding (Calculated)",
+        type: "text",
+        visibleByDefault: false,
+        render: (contact) => {
+          // Note: Full calculated outstanding requires an RPC or View join.
+          // This placeholder shows the opening balance if outstanding is not joined.
+          const val = (contact as any).outstanding_amount ?? (contact as any).opening_balance;
+          if (val == null) return <span className="text-muted-foreground">-</span>;
+          return <span className="text-sm font-medium text-amber-600 dark:text-amber-500">{val}</span>;
+        }
+      }
+    );
   }
 
   // Customer Level column — only when the account uses order hierarchy.

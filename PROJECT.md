@@ -3030,3 +3030,11 @@ When joining a 1-to-N relation (like \orders\ -> \order_items\), directly summin
 **Saved Reports & Future Compatibility:**
 Saved reports can be shared via 'private', 'team', or 'organization' modes. The generic architecture natively supports upcoming features: Drill Down Reports, Dashboard Widgets, Scheduled Reports, and Universal Custom Fields onboarding.
 
+
+
+## Payment Collection Module (Added Aug 2026)
+- **Purpose**: SFA-focused payment collection (not accounting/ERP).
+- **Key Features**: Offline mobile collection, dual-amount (collected vs verified), strict status state machine (Pending -> Approved/Rejected/Cancelled), no physical deletes (soft-delete via 'Cancelled' status), customer financial visibility (outstanding balance = approved orders - approved payments + opening balance).
+- **Tables**: payments, payment_types, payment_attachments, payment_custom_values.
+- **RPCs**: update_payment_status (handles transitions and module_activities).
+- **Permissions**: approve_payments, add_payments, manage_payments.

@@ -18,6 +18,7 @@ import {
   Map,
   Route,
   SlidersHorizontal,
+  Banknote,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -43,6 +44,7 @@ export const SETTINGS_SECTIONS = [
   'leads',
   'tasks',
   'orders',
+  'payments',
   'pricing',
   'members',
   'api',
@@ -78,6 +80,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   leads: { id: 'leads', label: 'Leads Settings', icon: User, group: 'workspace' },
   tasks: { id: 'tasks', label: 'Task Settings', icon: FileText, group: 'workspace' },
   orders: { id: 'orders', label: 'Orders Settings', icon: ShoppingCart, group: 'hidden' },
+  payments: { id: 'payments', label: 'Payments', icon: Banknote, group: 'workspace' },
   pricing: { id: 'pricing', label: 'Catalogue Settings', icon: Percent, group: 'workspace' },
   expense_types: { id: 'expense_types', label: 'Expense Settings', icon: Wallet, group: 'workspace' },
   territories: { id: 'territories', label: 'Territory', icon: Map, group: 'workspace' },

@@ -17,6 +17,8 @@ import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-f
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
 import { cn } from '@/lib/utils';
+import { CustomerFinancialCard, type FinancialData } from '@/components/payments/customer-financial-card';
+import { formatCurrency } from '@/lib/currency';
 
 /**
  * Web order creation. The ONE pricing authority is the SQL function
@@ -136,7 +138,8 @@ function supaErr(e: unknown): string {
 
 export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefillContactId, prefillSiteVisitId, orderId }: OrderFormProps) {
   const supabase = createClient();
-  const { user, accountId, defaultCurrency, hasPermission } = useAuth();
+  const { user, accountId, defaultCurrency, hasPermission, isModuleEnabled } = useAuth();
+  const paymentEnabled = isModuleEnabled('payment');
   const isEdit = !!orderId;
 
   const money = useMemo(() => {
@@ -181,6 +184,9 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const [locked, setLocked] = useState(false);
   const [originalContactId, setOriginalContactId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [financialData, setFinancialData] = useState<FinancialData | null>(null);
+  const [creditLimitAction, setCreditLimitAction] = useState<'ignore' | 'warn' | 'block'>('warn');
+  const [creditDaysAction, setCreditDaysAction] = useState<'ignore' | 'warn' | 'block'>('warn');
 
   const itemDiscountAllowed = canDiscount && (discountMode === 'item' || discountMode === 'both');
   const orderDiscountAllowed = canDiscount && (discountMode === 'order' || discountMode === 'both');
@@ -221,6 +227,8 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       setTaxMode(((acct?.settings?.order_settings?.tax_mode as 'exclusive' | 'inclusive') ?? 'exclusive'));
       setGstEnabled(!!acct?.settings?.gst_enabled);
       setCompanyState((acct?.settings?.company_profile?.state || '').trim().toLowerCase());
+      setCreditLimitAction((acct?.settings?.payments?.creditLimitAction as 'ignore' | 'warn' | 'block') ?? 'warn');
+      setCreditDaysAction((acct?.settings?.payments?.creditDaysAction as 'ignore' | 'warn' | 'block') ?? 'warn');
 
       if (isEdit && orderId) {
         // ---- EDIT: load the order + its line items ----
@@ -409,6 +417,36 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       return;
     }
 
+    if (paymentEnabled && financialData) {
+      // 1. Credit Days (Overdue) check
+      if (financialData.isOverdue && creditDaysAction !== 'ignore') {
+        if (creditDaysAction === 'block') {
+          toast.error(`Customer has overdue invoices. Order cannot be saved.`);
+          return;
+        } else if (creditDaysAction === 'warn') {
+          if (!confirm(`Warning: This customer has overdue invoices. Do you want to proceed?`)) {
+            return;
+          }
+        }
+      }
+
+      // 2. Credit Limit check
+      if (financialData.creditLimit !== null && creditLimitAction !== 'ignore') {
+        const available = financialData.availableCredit ?? 0;
+        const orderTotal = pricing ? pricing.total_amount : 0;
+        if (orderTotal > available) {
+          if (creditLimitAction === 'block') {
+            toast.error(`Order amount (${formatCurrency(orderTotal, defaultCurrency || 'USD')}) exceeds available credit (${formatCurrency(available, defaultCurrency || 'USD')}).`);
+            return;
+          } else if (creditLimitAction === 'warn') {
+            if (!confirm(`Warning: This order exceeds the customer's available credit. Do you want to proceed?`)) {
+              return;
+            }
+          }
+        }
+      }
+    }
+
     const cfError = validateRequiredCustomFields(customFields, customValues, {
       date,
     });
@@ -521,6 +559,12 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
                   </p>
                 )}
               </div>
+
+              {paymentEnabled && accountId && contactId && (
+                <div className="mt-2">
+                  <CustomerFinancialCard contactId={contactId} accountId={accountId} onDataLoaded={setFinancialData} />
+                </div>
+              )}
 
               <CustomFieldsSectionRenderer
                 accountId={accountId}
