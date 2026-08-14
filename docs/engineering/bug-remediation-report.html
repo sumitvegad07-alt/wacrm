@@ -1,0 +1,421 @@
+<title>Payment Bug Remediation</title>
+<style>
+  :root{
+    --bg:#F8F7F4;--panel:#FFF;--inset:#EDEBE6;--fg:#16181B;--dim:#5E646A;
+    --line:#DDDAD3;--accent:#1F5F4E;
+    --fixed:#1F5F4E;--fixedbg:#DFEDE7;
+    --open:#A8481B;--openbg:#FBEBDF;
+    --nofix:#4A5560;--nofixbg:#E9ECEF;
+    --sans:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#101214;--panel:#171A1C;--inset:#1E2225;--fg:#E7E9EA;--dim:#949BA1;
+    --line:#2A2F33;--accent:#5FBF9C;
+    --fixed:#5FBF9C;--fixedbg:#14291F;
+    --open:#DE9A63;--openbg:#2A2018;
+    --nofix:#9AA5AF;--nofixbg:#1F2429;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#101214;--panel:#171A1C;--inset:#1E2225;--fg:#E7E9EA;--dim:#949BA1;
+    --line:#2A2F33;--accent:#5FBF9C;
+    --fixed:#5FBF9C;--fixedbg:#14291F;
+    --open:#DE9A63;--openbg:#2A2018;
+    --nofix:#9AA5AF;--nofixbg:#1F2429;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15.5px;
+    line-height:1.62;margin:0;padding:0 20px 90px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto}
+  header.top{padding:46px 0 22px;border-bottom:2px solid var(--accent);margin-bottom:28px}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 13px}
+  h1{font-size:clamp(29px,5.4vw,43px);line-height:1.08;margin:0 0 12px;letter-spacing:-.022em;
+    font-weight:680;text-wrap:balance}
+  .sub{font-size:18px;color:var(--dim);margin:0;max-width:64ch;text-wrap:pretty}
+  .meta{display:flex;flex-wrap:wrap;gap:6px 26px;margin-top:20px;font-family:var(--mono);
+    font-size:12px;color:var(--dim)}
+  .board{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:15px 17px}
+  .stat .n{font-family:var(--mono);font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;
+    line-height:1;display:block;margin-bottom:6px}
+  .stat .l{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  .verdict{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);
+    border-radius:4px;padding:23px 27px;margin:0 0 42px}
+  .verdict h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 12px}
+  .verdict p{margin:0 0 12px;max-width:72ch}.verdict p:last-child{margin-bottom:0}
+  section{margin-bottom:46px}
+  h2.sec{font-size:22px;font-weight:660;letter-spacing:-.012em;margin:0 0 4px;padding-bottom:9px;
+    border-bottom:1px solid var(--line)}
+  .note{color:var(--dim);font-size:14.5px;margin:0 0 20px;max-width:72ch}
+  p{margin:0 0 13px}
+  .scroll{overflow-x:auto;margin-bottom:18px}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:600px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);font-weight:600;padding:0 12px 8px 0;border-bottom:1px solid var(--fg)}
+  td{padding:10px 12px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  td.obs{font-family:var(--mono);font-size:12.5px}
+  .tag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;font-weight:700;padding:3px 7px;border-radius:2px;white-space:nowrap}
+  .tag.fixed{background:var(--fixedbg);color:var(--fixed)}
+  .tag.open{background:var(--openbg);color:var(--open)}
+  .tag.nofix{background:var(--nofixbg);color:var(--nofix)}
+  .bug{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:18px 20px;margin-bottom:13px}
+  .bug.f{border-left:3px solid var(--fixed)}
+  .bug.o{border-left:3px solid var(--open)}
+  .bug.n{border-left:3px solid var(--nofix)}
+  .bug h4{margin:0 0 10px;font-size:15.5px;font-weight:660;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .bug dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0;font-size:14px}
+  .bug dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--dim);padding-top:3px}
+  .bug dd{margin:0;color:var(--dim)}
+  .bug dd strong{color:var(--fg);font-weight:620}
+  code{font-family:var(--mono);font-size:.875em;background:var(--inset);padding:1.5px 5px;border-radius:2px;
+    word-break:break-word}
+  ul,ol{margin:0 0 13px;padding-left:19px}li{margin-bottom:6px}li::marker{color:var(--accent)}
+  .callout{background:var(--inset);border-radius:4px;padding:17px 20px;margin:20px 0;font-size:14.5px}
+  hr.r{border:none;border-top:1px solid var(--line);margin:38px 0}
+  .foot{font-size:13px;color:var(--dim);border-top:1px solid var(--line);padding-top:20px;margin-top:46px}
+  a{color:var(--accent)}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media(max-width:620px){.bug dl{grid-template-columns:1fr}.bug dt{padding-top:8px}}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">Remediation · Payment Module</p>
+  <h1>Eleven Fixed, Two Not Bugs</h1>
+  <p class="sub">Root cause, change and regression evidence for every finding from the
+    browser E2E round — including the two that turned out not to need a code fix.</p>
+  <div class="meta">
+    <span>15 August 2026</span>
+    <span>11 files · 1 migration</span>
+    <span>981 tests passing</span>
+    <span>Branch <code>main</code> · commit <code>2c1f513</code></span>
+  </div>
+</header>
+
+<div class="board">
+  <div class="stat"><span class="n" style="color:var(--fixed)">11</span><span class="l">Fixed</span></div>
+  <div class="stat"><span class="n" style="color:var(--nofix)">2</span><span class="l">Not a code bug</span></div>
+  <div class="stat"><span class="n" style="color:var(--open)">2</span><span class="l">Awaiting your session</span></div>
+  <div class="stat"><span class="n">+2</span><span class="l">Regression tests</span></div>
+  <div class="stat"><span class="n">0</span><span class="l">New regressions</span></div>
+</div>
+
+<div class="verdict">
+  <h2>Summary</h2>
+  <p>Both P1s are fixed and both were verified in the browser. <strong>BUG-12 is closed at the
+    database layer, not the interface</strong> — a rep scoped to "own records" now sees an empty
+    payment list where they previously saw the company's entire collection history, and a direct URL
+    to another user's payment is refused by row-level security rather than merely hidden.</p>
+  <p><strong>BUG-01 is fixed but only half-verified.</strong> The duplicated calculation is gone and
+    the regression test pins the exact pilot scenario, but reproducing it on screen needs a
+    <em>Closed</em> order, and the Sales Executive account cannot close orders. It needs one
+    Admin session to finish.</p>
+  <p>Two findings I did not "fix", because doing so would have been wrong: <strong>BUG-04 does not
+    reproduce in the code</strong>, and <strong>BUG-06 is duplicated seed data, not a query
+    fault</strong> — so no product data was deleted.</p>
+</div>
+
+<!-- ============ P1 ============ -->
+<section>
+  <h2 class="sec">P1 — financial correctness and access</h2>
+
+  <div class="bug f">
+    <h4>BUG-01 — Wrong outstanding on payment creation <span class="tag fixed">Fixed</span> <span class="tag open">Browser check pending</span></h4>
+    <dl>
+      <dt>Root cause</dt>
+      <dd>The payment form carried its <strong>own copy</strong> of the outstanding calculation and
+        filtered orders by <code>status = 'Approved'</code> where the business rule is
+        <code>'Closed'</code>. The closed ₹15,300 order was therefore excluded entirely:
+        <code>0 − 0 + 10,000 = ₹10,000</code>. Not a rounding or caching issue — a second,
+        divergent implementation of the rule.</dd>
+      <dt>Files</dt>
+      <dd><code>src/lib/payments/financials.ts</code> (new <code>fetchCustomerFinancials()</code>),
+        <code>src/components/payments/payment-form.tsx</code>,
+        <code>src/components/payments/customer-financial-card.tsx</code></dd>
+      <dt>Fix</dt>
+      <dd>The duplicate is deleted. <code>fetchCustomerFinancials()</code> is now the one place the
+        figure is derived, and both the payment form and the customer card call it — so the two
+        screens are incapable of disagreeing. The snapshot refetches whenever the selected customer
+        changes, so it reflects approvals and cancellations. <strong>The formula itself is
+        untouched.</strong></dd>
+      <dt>Regression</dt>
+      <dd>Two tests added: one asserts the query filters on <code>Closed</code> (fails if anyone
+        reintroduces <code>Approved</code>), one reproduces the pilot scenario and expects
+        <strong>25,300 outstanding / 74,700 available</strong>. Both pass.</dd>
+      <dt>Outstanding</dt>
+      <dd>Needs one Admin session to confirm on screen — see <em>Awaiting your session</em> below.</dd>
+      <dt>Impact</dt>
+      <dd>A rep collected against a figure ₹15,300 too low, on the one screen where the number is
+        used in front of a customer.</dd>
+    </dl>
+  </div>
+
+  <div class="bug f">
+    <h4>BUG-12 — "Own records" not enforced on payments <span class="tag fixed">Fixed &amp; verified</span></h4>
+    <dl>
+      <dt>Root cause</dt>
+      <dd>The RLS SELECT policy on <code>payments</code> checked only account membership. The scope
+        setting was never consulted, so every row was genuinely readable — hiding rows in the UI would
+        have left the data reachable by URL or API key.</dd>
+      <dt>Files</dt>
+      <dd><code>supabase/migrations/20260814220000_payment_scope_enforcement.sql</code> (applied),
+        <code>src/components/payments/payment-form.tsx</code></dd>
+      <dt>Fix</dt>
+      <dd>New <code>payment_scope_allows(owner_user_id, account_id)</code> resolves scope from the
+        <em>existing</em> model — the <code>*_scope</code> keys already on
+        <code>employee_roles.permissions</code>, and <code>get_all_reports()</code> for team scope —
+        in the same precedence the application's <code>getDataScope()</code> uses: module scope, then
+        global scope, then <code>own</code>. It now gates SELECT and UPDATE on payments and SELECT on
+        payment attachments. Owner, admin and the <code>all</code> wildcard are unaffected. The
+        customer picker filters server-side on the contact scope. <strong>No payment-specific scope
+        system was created.</strong></dd>
+      <dt>Regression</dt>
+      <dd>As Dhaval Vegad (<code>global_scope: own</code>): the payments list went from all three of
+        another user's collections to <strong>"No data found", 0 of 0</strong>. Navigating directly to
+        <code>/payments/b884315a…</code>, a payment owned by sumit vegad, was <strong>refused</strong>
+        and returned to an empty list. Customer picker: he owns 1 of 26 contacts and the query now
+        filters on <code>user_id</code> server-side.</dd>
+      <dt>Impact</dt>
+      <dd>A field rep could read the company's entire collection history — who collected how much,
+        from whom, when.</dd>
+    </dl>
+  </div>
+</section>
+
+<hr class="r">
+
+<!-- ============ P2/P3 ============ -->
+<section>
+  <h2 class="sec">P2 and P3</h2>
+
+  <div class="bug f">
+    <h4>BUG-02 — Payments unreachable by direct URL <span class="tag fixed">Fixed &amp; verified</span></h4>
+    <dl>
+      <dt>Root cause</dt>
+      <dd><code>DEFAULT_MODULE_SETTINGS.payment</code> is <code>false</code>. On a cold load the route
+        guard in <code>dashboard-shell.tsx</code> ran against those defaults <em>before</em> the
+        account's real settings arrived, read payment as disabled, and redirected. Sidebar clicks
+        worked because the settings were already in memory.</dd>
+      <dt>Files</dt><dd><code>src/hooks/use-auth.tsx</code>, <code>src/app/(dashboard)/dashboard-shell.tsx</code></dd>
+      <dt>Fix</dt>
+      <dd>A <code>moduleSettingsLoaded</code> flag; the guard returns early until the real settings
+        arrive. This also protects Route and Reporting Hierarchy, which likewise default to off.
+        An unauthorised user still gets the standard redirect — only the premature one is gone.</dd>
+      <dt>Regression</dt>
+      <dd>Direct navigation to <code>/payments</code> and <code>/payments/new</code> both loaded.
+        Previously reproduced three times in a row.</dd>
+    </dl>
+  </div>
+
+  <div class="bug f">
+    <h4>BUG-03 &amp; BUG-09 — Currency formatting <span class="tag fixed">Fixed</span></h4>
+    <dl>
+      <dt>Root cause</dt>
+      <dd>Two separate faults. The customer list rendered <code>{val}</code> raw, with a comment
+        conceding it was a placeholder. The payment form defined its own <code>en-IN</code>
+        <code>Intl.NumberFormat</code>, producing <code>₹1,00,000.00</code> where the shared formatter
+        gives <code>₹100,000</code>.</dd>
+      <dt>Files</dt><dd><code>src/app/(dashboard)/contacts/page.tsx</code>, <code>src/components/payments/payment-form.tsx</code>, <code>src/lib/currency.ts</code></dd>
+      <dt>Fix</dt>
+      <dd>Both use <code>formatCurrency()</code> from <code>lib/currency</code>. The local Intl
+        instance is deleted. Added <code>getCurrencySymbol()</code> to the same module for BUG-11 —
+        a lookup into the existing <code>CURRENCIES</code> table, not a second formatter.</dd>
+    </dl>
+  </div>
+
+  <div class="bug f">
+    <h4>BUG-05 — Closed and Cancelled both red <span class="tag fixed">Fixed</span></h4>
+    <dl>
+      <dt>Root cause</dt>
+      <dd><code>STATUS_MAPPINGS</code> in <code>design-tokens.ts</code> mapped
+        <code>closed: 'destructive'</code>, identical to <code>cancelled</code>.</dd>
+      <dt>Files</dt><dd><code>src/lib/design-tokens.ts</code></dd>
+      <dt>Fix</dt>
+      <dd><code>closed</code> moved to <code>success</code>, using the existing semantic variants. No
+        new colours.</dd>
+      <dt>Note</dt>
+      <dd>This token is shared, so any other module rendering a status literally called "closed" now
+        shows success. For orders that is correct — Closed means fully dispatched and booked. Worth a
+        glance if another module uses "closed" to mean lost.</dd>
+    </dl>
+  </div>
+
+  <div class="bug f">
+    <h4>BUG-07 — Financial summary did not explain itself <span class="tag fixed">Fixed</span></h4>
+    <dl>
+      <dt>Root cause</dt>
+      <dd>The card showed Outstanding, Total Closed Orders and Paid but not the opening balance, so it
+        could read <code>10,000 / 0 / 0</code> — three figures that visibly contradict each other.</dd>
+      <dt>Files</dt><dd><code>src/components/payments/customer-financial-card.tsx</code></dd>
+      <dt>Fix</dt>
+      <dd>Opening Balance is shown, with the reconciliation beneath it:
+        <em>Opening + Closed Orders − Paid = Outstanding</em>. Gated on
+        <code>view_opening_balance</code>, so the general overview is not overloaded for users without
+        that right.</dd>
+    </dl>
+  </div>
+
+  <div class="bug f">
+    <h4>BUG-08 — "Healthy" <span class="tag fixed">Fixed</span></h4>
+    <dl>
+      <dt>Fix</dt>
+      <dd>Replaced with <strong>"Within Credit Terms"</strong> — a fact rather than a judgement. It
+        sits in the shared <code>FinancialSnapshot</code>, so Customer, Order and Payment screens all
+        pick up the same wording.</dd>
+    </dl>
+  </div>
+
+  <div class="bug f">
+    <h4>BUG-13 — Negative outstanding <span class="tag fixed">Fixed</span></h4>
+    <dl>
+      <dt>Fix</dt>
+      <dd>When the balance is negative the label becomes <strong>Customer Credit</strong> and the
+        value is shown positive, with "Paid in advance of what is owed" beneath. Applied to both the
+        card and the payment form strip. <strong>The calculation is untouched and nothing is clamped
+        to zero</strong> — only the presentation of the sign changed.</dd>
+    </dl>
+  </div>
+
+  <div class="bug f">
+    <h4>BUG-10 — Order detail tax breakdown <span class="tag fixed">Fixed</span></h4>
+    <dl>
+      <dt>Root cause</dt>
+      <dd>Line totals are tax-inclusive but the detail view showed only a grand total, so
+        100 × ₹150 read as ₹15,300 and looked like an error.</dd>
+      <dt>Files</dt><dd><code>src/app/(dashboard)/orders/[id]/page.tsx</code></dd>
+      <dt>Fix</dt>
+      <dd>Sub-total, discount (when non-zero), tax and total, read from the stored
+        <code>sub_total</code>, <code>discount_total</code> and <code>tax_total</code> — the same
+        figures the creation screen shows. <strong>The pricing engine is untouched.</strong></dd>
+    </dl>
+  </div>
+
+  <div class="bug f">
+    <h4>BUG-11 — Financial input affordance <span class="tag fixed">Fixed</span></h4>
+    <dl>
+      <dt>Fix</dt>
+      <dd>Credit Limit and Opening Balance carry the account's currency symbol as a prefix; Credit
+        Days carries a "days" suffix. Behaviour, validation and the permission locking from the
+        previous round are unchanged.</dd>
+    </dl>
+  </div>
+</section>
+
+<hr class="r">
+
+<!-- ============ NOT FIXED ============ -->
+<section>
+  <h2 class="sec">Not fixed — and why</h2>
+  <p class="note">Both were investigated before deciding. Changing either would have been the wrong
+    call.</p>
+
+  <div class="bug n">
+    <h4>BUG-04 — "Contact Person" column <span class="tag nofix">Does not reproduce</span></h4>
+    <dl>
+      <dt>Investigation</dt>
+      <dd>The column already binds correctly: <code>contact_person</code> renders
+        <code>contact.name</code>, and the first column is labelled <em>Company Name</em> and renders
+        <code>contact.company</code>. The detail view separates them correctly too.</dd>
+      <dt>Likely explanation</dt>
+      <dd>Most existing customers were created with <code>name</code> equal to the company — Balaji
+        Supermarket's contact person is literally "Balaji Supermarket". So the column shows the
+        company because <em>that is the stored contact person</em>, not because it is bound to the
+        wrong field. The header in the screenshot came from a saved column layout.</dd>
+      <dt>Decision</dt>
+      <dd>No change. Rebinding a correct column would have broken it. If you want the underlying data
+        cleaned — contact person distinct from company — that is a data exercise, and I would want
+        your say before touching 25 real customer records.</dd>
+    </dl>
+  </div>
+
+  <div class="bug n">
+    <h4>BUG-06 — Duplicate products <span class="tag nofix">Test data, not a query fault</span></h4>
+    <dl>
+      <dt>Investigation</dt>
+      <dd>Every duplicate is a <em>Dummy Product N</em> with a <code>DUMMY-NNNN</code> SKU, and each
+        pair was created at two distinct timestamps — <code>2026-06-30 19:28:32</code> and
+        <code>2026-07-01 19:47:11</code>. The seed migration ran twice. The picker query is correct
+        and renders exactly what is stored.</dd>
+      <dt>Decision</dt>
+      <dd>No product data deleted, as instructed. These may be referenced by existing
+        <code>order_items</code>, so deletion needs checking first, and they are your records.</dd>
+      <dt>Cleanup, for your approval</dt>
+      <dd>Removing the later copy of each pair, only where it is referenced by no order line:
+        <code>DELETE FROM products p WHERE p.name LIKE 'Dummy Product %' AND p.created_at = '2026-07-01 19:47:11.909461+00' AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id);</code>
+        Say the word and I will run it and report the count.</dd>
+    </dl>
+  </div>
+</section>
+
+<hr class="r">
+
+<section>
+  <h2 class="sec">Regression evidence</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Check</th><th>Before</th><th>After</th></tr></thead>
+    <tbody>
+      <tr><td>BUG-12 · payments list as own-scope rep</td><td class="obs">3 payments, all "sumit vegad"</td><td class="obs">No data found · 0 of 0</td></tr>
+      <tr><td>BUG-12 · direct URL to another user's payment</td><td class="obs">readable</td><td class="obs">refused, returned to empty list</td></tr>
+      <tr><td>BUG-02 · direct /payments</td><td class="obs">redirect to /dashboard (×3)</td><td class="obs">loads</td></tr>
+      <tr><td>BUG-02 · direct /payments/new</td><td class="obs">redirect to /dashboard</td><td class="obs">loads</td></tr>
+      <tr><td>BUG-01 · query filter</td><td class="obs">status = 'Approved'</td><td class="obs">status = 'Closed' (test-pinned)</td></tr>
+      <tr><td>BUG-01 · pilot scenario</td><td class="obs">₹10,000</td><td class="obs">₹25,300 / ₹74,700 (unit test)</td></tr>
+      <tr><td>Full suite</td><td class="obs">979 passing</td><td class="obs">981 passing, 73 files</td></tr>
+      <tr><td>Typecheck</td><td class="obs">clean</td><td class="obs">clean</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<hr class="r">
+
+<section>
+  <h2 class="sec">Awaiting your session</h2>
+  <p class="note">Two checks I could not complete, stated rather than assumed.</p>
+  <ol>
+    <li><strong>BUG-01 on screen.</strong> Reproducing it needs a customer with an opening balance and
+      a <em>Closed</em> order. The Sales Executive role has no <code>manage_order_status</code>, so it
+      cannot close one. Log in as Admin and I will recreate the exact scenario and screenshot the
+      customer page and the payment form side by side showing the same ₹25,300.</li>
+    <li><strong>Customer picker scoping, visually.</strong> Verified by construction and by data —
+      Dhaval owns 1 of 26 contacts and the query now filters server-side on <code>user_id</code> — but
+      the dropdown would not render for capture after the browser tooling degraded mid-session
+      (screenshot API erroring, viewport reporting 0×0). A page reload should clear it.</li>
+  </ol>
+</section>
+
+<section>
+  <h2 class="sec">Remaining known issues &amp; production readiness</h2>
+  <ul>
+    <li><strong>No new regressions.</strong> 981 tests pass, typecheck clean, and the two fixes with
+      the widest blast radius (RLS, route guard) were both exercised in the browser.</li>
+    <li><strong>Untouched by design:</strong> the outstanding formula, the Closed-order rule, the
+      approved-payment rule, RBAC structure beyond the scope function, mobile, and audit logging.
+      No invoices, credit notes or order reversal were introduced.</li>
+    <li><strong>Still open from earlier rounds:</strong> order reversal (awaiting your A/B/C decision),
+      exports (unverified for three rounds), the three inert <code>require_*</code> settings, and
+      responsive testing.</li>
+    <li><strong>Readiness:</strong> the two pilot-blocking defects are resolved and the more dangerous
+      of them — cross-user visibility of collections — is closed at the database. I would still not
+      call the module production-proven until BUG-01 is confirmed on screen and exports are tested.</li>
+  </ul>
+</section>
+
+<div class="callout">
+  <strong>Production data.</strong> No customer, order or payment was created or deleted during
+  remediation. One migration was applied, which changes policies and adds a function — it touches no
+  rows. Counts are unchanged: 17 accounts, 27 contacts, 24 orders, 3 payments.
+</div>
+
+<p class="foot">
+  Commit <code>2c1f513</code> on <code>main</code>, not pushed. 11 files changed plus one applied
+  migration. Every fix reuses an existing mechanism — the shared formatter, the shared scope model,
+  the shared status tokens — rather than adding a parallel one.
+</p>
+
+</div>
