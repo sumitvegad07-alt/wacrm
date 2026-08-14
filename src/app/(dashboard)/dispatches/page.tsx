@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { formatCurrency } from '@/lib/currency';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
 import { PageLayout, PageHeader, PageToolbar } from '@/components/shared';
+import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 
 interface DispatchRow {
   id: string;
@@ -29,8 +30,10 @@ interface DispatchRow {
 export default function DispatchesPage() {
   const supabase = createClient();
   const router = useRouter();
-  const { accountId, defaultCurrency, hasPermission } = useAuth();
-  const canCreate = hasPermission('add_orders');
+  const searchParams = useSearchParams();
+  const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner } = useAuth();
+  
+  const canCreate = hasPermission(PERMISSIONS.CRM.CREATE_ORDERS);
 
   const [rows, setRows] = useState<DispatchRow[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);

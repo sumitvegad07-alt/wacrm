@@ -23,6 +23,7 @@ export const ORDER_STATUSES = [
   'Dispatched',
   'Rejected',
   'Cancelled',
+  'Closed',
 ] as const
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
@@ -40,9 +41,10 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number]
  */
 export const ORDER_STATUS_TRANSITIONS: Record<string, readonly OrderStatus[]> = {
   Pending: ['Approved', 'Rejected', 'Cancelled'],
-  Approved: ['Dispatched', 'Rejected', 'Cancelled', 'Part Dispatch'],
-  'Part Dispatch': ['Dispatched', 'Approved', 'Cancelled', 'Rejected'],
-  Dispatched: ['Part Dispatch', 'Approved'],
+  Approved: ['Dispatched', 'Rejected', 'Cancelled', 'Part Dispatch', 'Closed'],
+  'Part Dispatch': ['Dispatched', 'Approved', 'Cancelled', 'Rejected', 'Closed'],
+  Dispatched: ['Part Dispatch', 'Approved', 'Closed'],
+  Closed: [],
 }
 
 export function isOrderStatus(value: unknown): value is OrderStatus {

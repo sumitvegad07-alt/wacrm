@@ -27,10 +27,11 @@ interface TimelineProps {
   tasks: any[];
   notes?: any[];
   activities?: any[];
+  canViewPaymentHistory?: boolean;
   onRefresh: () => void;
 }
 
-export function Timeline({ moduleName, recordId, tasks, notes = [], activities = [], onRefresh }: TimelineProps) {
+export function Timeline({ moduleName, recordId, tasks, notes = [], activities = [], canViewPaymentHistory = true, onRefresh }: TimelineProps) {
   const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [filter, setFilter] = useState('all'); // all, activities, notes, changelog
@@ -175,11 +176,19 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
   }
 
   // Process activities to categorize into 'activity' (business logic) vs 'changelog' (field updates)
-  const processedActivities = enrichedActivities.map(a => ({
-    type: a.action === 'updated' ? 'changelog' : 'activity',
-    date: new Date(a.created_at),
-    data: a
-  }));
+  const processedActivities = enrichedActivities
+    .filter(a => {
+      // If payment history is restricted, hide all payment-related activities
+      if (!canViewPaymentHistory && (a.module_name === 'payment' || a.action?.includes('payment') || a.message?.toLowerCase().includes('payment'))) {
+        return false;
+      }
+      return true;
+    })
+    .map(a => ({
+      type: a.action === 'updated' ? 'changelog' : 'activity',
+      date: new Date(a.created_at),
+      data: a
+    }));
 
   const combinedPast: TimelineEvent[] = [
     ...notes.map(n => ({ id: `n-${n.id}`, type: 'note' as const, date: new Date(n.created_at), data: n })),

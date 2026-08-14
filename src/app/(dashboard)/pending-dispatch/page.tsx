@@ -11,6 +11,7 @@ import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { PageLayout, PageHeader, PageToolbar, StatusBadge } from '@/components/shared';
+import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 
 interface PendingRow {
   id: string;
@@ -32,7 +33,7 @@ export default function PendingDispatchPage() {
   const supabase = createClient();
   const router = useRouter();
   const { accountId, hasPermission } = useAuth();
-  const canDispatch = hasPermission('add_orders');
+  const canDispatch = hasPermission(PERMISSIONS.CRM.CREATE_ORDERS);
 
   const [rows, setRows] = useState<PendingRow[]>([]);
   const [loading, setLoading] = useState(true);

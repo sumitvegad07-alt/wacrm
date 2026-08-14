@@ -10,8 +10,10 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, Shield, Plus, AlertCircle, Save, Trash2, Edit2, Users, Check } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from '@/components/ui/badge';
 import type { RolePermissions, DataScope } from "@/lib/auth/rbac";
 import { ROUTE_PERMISSION_GROUPS } from "@/lib/route/permissions";
+import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 
@@ -28,56 +30,88 @@ const PERMISSION_GROUPS = [
   {
     category: "CRM & Sales",
     permissions: [
-      { id: "view_dashboard", label: "View Main Dashboard" },
-      { id: "view_leads", label: "View Leads" },
-      { id: "add_leads", label: "Add Leads" },
-      { id: "edit_leads", label: "Edit Leads" },
-      { id: "delete_leads", label: "Delete Leads" },
-      { id: "view_contacts", label: "View Customers" },
-      { id: "add_contacts", label: "Add Customers" },
-      { id: "edit_contacts", label: "Edit Customers" },
-      { id: "delete_contacts", label: "Delete Customers" },
-      { id: "view_deals", label: "View Pipelines / Deals" },
-      { id: "view_products", label: "View Products" },
-      { id: "view_orders", label: "View Quotations / Orders" },
-      { id: "add_orders", label: "Create Orders" },
-      { id: "edit_orders", label: "Edit Orders" },
-      { id: "manage_order_status", label: "Manage Order Status (approve / reject / cancel)" },
-      { id: "apply_order_discount", label: "Apply Discounts on Orders" },
+      { id: PERMISSIONS.CRM.VIEW_DASHBOARD, label: "View Main Dashboard" },
+      { id: PERMISSIONS.CRM.VIEW_LEADS, label: "View Leads" },
+      { id: PERMISSIONS.CRM.CREATE_LEADS, label: "Create Leads" },
+      { id: PERMISSIONS.CRM.EDIT_LEADS, label: "Edit Leads" },
+      { id: PERMISSIONS.CRM.DELETE_LEADS, label: "Delete Leads" },
+      { id: PERMISSIONS.CRM.VIEW_CONTACTS, label: "View Customers" },
+      { id: PERMISSIONS.CRM.CREATE_CONTACTS, label: "Create Customers" },
+      { id: PERMISSIONS.CRM.EDIT_CONTACTS, label: "Edit Customers" },
+      { id: PERMISSIONS.CRM.DELETE_CONTACTS, label: "Delete Customers" },
+      { id: PERMISSIONS.CRM.VIEW_DEALS, label: "View Pipelines / Deals" },
+      { id: PERMISSIONS.CRM.VIEW_PRODUCTS, label: "View Products" },
+      { id: PERMISSIONS.CRM.VIEW_ORDERS, label: "View Quotations / Orders" },
+      { id: PERMISSIONS.CRM.CREATE_ORDERS, label: "Create Orders" },
+      { id: PERMISSIONS.CRM.EDIT_ORDERS, label: "Edit Orders" },
+      { id: PERMISSIONS.CRM.MANAGE_ORDER_STATUS, label: "Manage Order Status (approve / reject / cancel)" },
+      { id: PERMISSIONS.CRM.APPLY_ORDER_DISCOUNT, label: "Apply Discounts on Orders" },
+    ]
+  },
+  {
+    category: "Payments & Finance",
+    permissions: [
+      { id: PERMISSIONS.PAYMENTS.VIEW, label: "View Payments" },
+      { id: PERMISSIONS.PAYMENTS.CREATE, label: "Create / Collect Payments" },
+      { id: PERMISSIONS.PAYMENTS.EDIT, label: "Edit Pending Payments" },
+      { id: PERMISSIONS.PAYMENTS.CANCEL, label: "Cancel Payments" },
+      { id: PERMISSIONS.PAYMENTS.APPROVE, label: "Approve Payments" },
+      { id: PERMISSIONS.PAYMENTS.REJECT, label: "Reject Payments" },
+      { id: PERMISSIONS.PAYMENTS.VIEW_ATTACHMENTS, label: "View Payment Attachments (Cheques, Receipts)" },
+      { id: PERMISSIONS.PAYMENTS.VIEW_REPORTS, label: "View Payment Reports" },
+      { id: PERMISSIONS.PAYMENTS.EXPORT_REPORTS, label: "Export Payment Reports" },
+    ]
+  },
+  {
+    category: "Customer Financials",
+    permissions: [
+      { id: PERMISSIONS.CUSTOMERS.VIEW_OUTSTANDING, label: "View Customer Outstanding" },
+      { id: PERMISSIONS.CUSTOMERS.VIEW_FINANCIALS, label: "View Customer Financial Details" },
+      { id: PERMISSIONS.CUSTOMERS.VIEW_CUSTOMER_CREDIT_LIMIT, label: "View Credit Limit & Available Credit" },
+      { id: PERMISSIONS.CUSTOMERS.VIEW_CUSTOMER_PAYMENT_HISTORY, label: "View Customer Payment History" },
+      { id: PERMISSIONS.CUSTOMERS.MANAGE_CREDIT, label: "Manage Credit Limits & Terms" },
+      { id: PERMISSIONS.CUSTOMERS.VIEW_OPENING_BALANCE, label: "View Opening Balance" },
+      { id: PERMISSIONS.CUSTOMERS.EDIT_OPENING_BALANCE, label: "Edit Opening Balance" },
+    ]
+  },
+  {
+    category: "Credit Control",
+    permissions: [
+      { id: PERMISSIONS.CREDIT_CONTROL.OVERRIDE_CREDIT_LIMIT, label: "Override Credit Limit on Orders" },
     ]
   },
   {
     category: "Task Management",
     permissions: [
-      { id: "view_tasks", label: "View Tasks" },
-      { id: "create_task", label: "Create Task" },
-      { id: "edit_task", label: "Edit Task" },
-      { id: "delete_task", label: "Delete Task" },
-      { id: "assign_tasks_parent", label: "Assign Tasks to Parent User" },
-      { id: "assign_tasks_child", label: "Assign Tasks to Child User" },
-      { id: "assign_tasks_all", label: "Assign Tasks to All Users" },
+      { id: PERMISSIONS.TASKS.VIEW, label: "View Tasks" },
+      { id: PERMISSIONS.TASKS.CREATE, label: "Create Task" },
+      { id: PERMISSIONS.TASKS.EDIT, label: "Edit Task" },
+      { id: PERMISSIONS.TASKS.DELETE, label: "Delete Task" },
+      { id: PERMISSIONS.TASKS.ASSIGN_PARENT, label: "Assign Tasks to Parent User" },
+      { id: PERMISSIONS.TASKS.ASSIGN_CHILD, label: "Assign Tasks to Child User" },
+      { id: PERMISSIONS.TASKS.ASSIGN_ALL, label: "Assign Tasks to All Users" },
     ]
   },
   {
     category: "Mobile App & Field Force",
     permissions: [
-      { id: "view_location_tracking", label: "View Location Dashboard (Web)" },
-      { id: "mobile_location_screen", label: "Location Map Screen (Mobile)" },
-      { id: "allow_logout", label: "Allow Mobile Logout" },
-      { id: "mobile_offline_mode", label: "Allow Offline Sync" },
-      { id: "mobile_visit_checkin", label: "Allow Manual Check-ins" },
-      { id: "edit_geotag", label: "Edit Customer Geo-tag (Coordinates)" },
+      { id: PERMISSIONS.MOBILE.VIEW_LOCATION_TRACKING, label: "View Location Dashboard (Web)" },
+      { id: PERMISSIONS.MOBILE.LOCATION_SCREEN, label: "Location Map Screen (Mobile)" },
+      { id: PERMISSIONS.MOBILE.ALLOW_LOGOUT, label: "Allow Mobile Logout" },
+      { id: PERMISSIONS.MOBILE.OFFLINE_MODE, label: "Allow Offline Sync" },
+      { id: PERMISSIONS.MOBILE.VISIT_CHECKIN, label: "Allow Manual Check-ins" },
+      { id: PERMISSIONS.MOBILE.EDIT_GEOTAG, label: "Edit Customer Geo-tag (Coordinates)" },
     ]
   },
   {
     category: "WhatsApp Features",
     permissions: [
-      { id: "view_whatsapp", label: "Access WhatsApp Dashboard" },
-      { id: "view_whatsapp_broadcasts", label: "Manage Broadcasts" },
-      { id: "view_whatsapp_automations", label: "Manage Automations" },
-      { id: "view_whatsapp_flows", label: "Manage Workflows" },
-      { id: "view_whatsapp_templates", label: "Manage Message Templates" },
-      { id: "view_ai_assistant", label: "Manage AI Knowledge Base" },
+      { id: PERMISSIONS.WHATSAPP.VIEW, label: "Access WhatsApp Dashboard" },
+      { id: PERMISSIONS.WHATSAPP.VIEW_BROADCASTS, label: "Manage Broadcasts" },
+      { id: PERMISSIONS.WHATSAPP.VIEW_AUTOMATIONS, label: "Manage Automations" },
+      { id: PERMISSIONS.WHATSAPP.VIEW_FLOWS, label: "Manage Workflows" },
+      { id: PERMISSIONS.WHATSAPP.VIEW_TEMPLATES, label: "Manage Message Templates" },
+      { id: PERMISSIONS.WHATSAPP.VIEW_AI_ASSISTANT, label: "Manage AI Knowledge Base" },
     ]
   },
   {
@@ -90,9 +124,9 @@ const PERMISSION_GROUPS = [
   {
     category: "Administration",
     permissions: [
-      { id: "view_team_management", label: "Manage Employees & Roles" },
-      { id: "billing", label: "Manage Subscription & Billing" },
-      { id: "settings_general", label: "Access General Settings" },
+      { id: PERMISSIONS.ADMIN.VIEW_TEAM_MANAGEMENT, label: "Manage Employees & Roles" },
+      { id: PERMISSIONS.ADMIN.BILLING, label: "Manage Subscription & Billing" },
+      { id: PERMISSIONS.ADMIN.SETTINGS_GENERAL, label: "Access General Settings" },
     ]
   }
 ];
@@ -214,6 +248,7 @@ export default function RolesPage() {
     } else {
       toast.success("Role deleted");
       setSelectedRole(null);
+      setIsEditing(false);
       fetchRoles();
     }
   };
@@ -292,9 +327,46 @@ export default function RolesPage() {
         {/* Right Content - Role Details & Permissions */}
         <div className="flex-1 flex flex-col bg-background overflow-hidden">
           {(!selectedRole && !isEditing) ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-              <Shield className="w-16 h-16 mb-4 opacity-20" />
-              <p>Select a role to view or edit permissions</p>
+            <div className="flex-1 flex flex-col p-8 overflow-y-auto bg-muted/10">
+              <div className="flex items-center gap-3 mb-6">
+                <Shield className="w-6 h-6 text-primary" />
+                <h2 className="text-xl font-semibold">Permission Audit Report</h2>
+              </div>
+              <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-muted/50 border-b text-muted-foreground uppercase text-xs font-semibold">
+                    <tr>
+                      <th className="px-6 py-4">Role Name</th>
+                      <th className="px-6 py-4 text-center">Permissions Count</th>
+                      <th className="px-6 py-4">Last Modified On</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {roles.map(role => {
+                      const count = role.permissions?.all ? 'All (Admin)' : Object.keys(role.permissions || {}).length;
+                      return (
+                        <tr key={role.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-6 py-4 font-medium">{role.name}</td>
+                          <td className="px-6 py-4 text-center">
+                            <Badge variant="outline" className="font-mono">{count}</Badge>
+                          </td>
+                          <td className="px-6 py-4 text-muted-foreground">
+                            {new Date(role.created_at).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {roles.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-8 text-center text-muted-foreground">
+                          No roles found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-sm text-muted-foreground mt-4 italic text-center">Select a role from the sidebar to view or edit detailed permissions.</p>
             </div>
           ) : (
             <>

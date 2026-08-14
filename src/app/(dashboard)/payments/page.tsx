@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Plus, CheckCircle2, XCircle, Ban, Loader2, Edit } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
@@ -57,8 +58,11 @@ export default function PaymentsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  const canCreatePayment = hasPermission('add_payments');
-  const canApprove = hasPermission('approve_payments');
+  const canCreatePayment = hasPermission(PERMISSIONS.PAYMENTS.CREATE);
+  const canApprove = hasPermission(PERMISSIONS.PAYMENTS.APPROVE);
+  const canReject = hasPermission(PERMISSIONS.PAYMENTS.REJECT);
+  const canEdit = hasPermission(PERMISSIONS.PAYMENTS.EDIT);
+  const canCancel = hasPermission(PERMISSIONS.PAYMENTS.CANCEL);
 
   const fetchData = useCallback(async () => {
     if (!accountId) return;
@@ -206,14 +210,18 @@ export default function PaymentsPage() {
       type: 'text',
       render: (p) => (
         <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
-          {p.status === 'Pending' && canApprove && (
+          {p.status === 'Pending' && (
             <>
-              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={(e) => { e.stopPropagation(); handleInlineApprove(p); }} title="Approve">
-                <CheckCircle2 className="size-4" />
-              </Button>
-              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); handleInlineReject(p); }} title="Reject">
-                <XCircle className="size-4" />
-              </Button>
+              {canApprove && (
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={(e) => { e.stopPropagation(); handleInlineApprove(p); }} title="Approve">
+                  <CheckCircle2 className="size-4" />
+                </Button>
+              )}
+              {canReject && (
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); handleInlineReject(p); }} title="Reject">
+                  <XCircle className="size-4" />
+                </Button>
+              )}
             </>
           )}
           <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); router.push(`/payments/${p.id}`); }} title="Edit">
@@ -314,18 +322,20 @@ export default function PaymentsPage() {
         selectedCount={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
         actions={
-          canApprove
-            ? BULK_ACTIONS.map((a) => {
-                const Icon = a.icon;
-                return {
-                  label: a.label,
-                  icon: <Icon className="size-4" />,
-                  variant: a.variant,
-                  onClick: () => handleBulkStatus(a.to),
-                  disabled: bulkLoading,
-                };
-              })
-            : []
+          BULK_ACTIONS.filter(a => {
+            if (a.to === 'Approved') return canApprove;
+            if (a.to === 'Rejected') return canReject;
+            return false;
+          }).map((a) => {
+            const Icon = a.icon;
+            return {
+              label: a.label,
+              icon: <Icon className="size-4" />,
+              variant: a.variant,
+              onClick: () => handleBulkStatus(a.to),
+              disabled: bulkLoading,
+            };
+          })
         }
       />
 
@@ -338,7 +348,7 @@ export default function PaymentsPage() {
         isLoading={loading}
         rowKey={(p) => p.id}
         onRowClick={(p) => router.push(`/payments/${p.id}`)}
-        selection={canApprove ? {
+        selection={(canApprove || canReject) ? {
           selectedIds,
           onSelectAll: (checked: boolean) => setSelectedIds(checked ? new Set(filtered.map((p) => p.id)) : new Set()),
           onSelect: (id: string, checked: boolean) => setSelectedIds((prev) => {

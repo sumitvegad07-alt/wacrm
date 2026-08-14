@@ -49,6 +49,7 @@ import {
   hasPoint,
   type MapPoint,
 } from '@/components/location-tracking/point-map-dialog';
+import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 
 interface ContactWithData extends Contact {
   tags?: Tag[];
@@ -61,7 +62,7 @@ export default function ContactsPage() {
   const searchParams = useSearchParams();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
-  const { accountId, isModuleEnabled } = useAuth();
+  const { accountId, isModuleEnabled, hasPermission } = useAuth();
   const territoryEnabled = isModuleEnabled('territory');
 
   const [contacts, setContacts] = useState<ContactWithData[]>([]);
@@ -278,34 +279,7 @@ export default function ContactsPage() {
         </div>
       )
     },
-    {
-      id: "credit_limit",
-      label: "Credit Limit",
-      type: "text",
-      visibleByDefault: false,
-      render: (contact) => contact.credit_limit ? `₹${contact.credit_limit}` : "-"
-    },
-    {
-      id: "credit_days",
-      label: "Credit Days",
-      type: "text",
-      visibleByDefault: false,
-      render: (contact) => contact.credit_days ? `${contact.credit_days} days` : "-"
-    },
-    {
-      id: "opening_balance",
-      label: "Opening Balance",
-      type: "text",
-      visibleByDefault: false,
-      render: (contact) => contact.opening_balance ? `₹${contact.opening_balance}` : "-"
-    },
-    {
-      id: "outstanding_amount",
-      label: "Outstanding Amount",
-      type: "text",
-      visibleByDefault: false,
-      render: (contact) => contact.outstanding_amount ? `₹${contact.outstanding_amount}` : "-"
-    },
+
     {
       id: "area",
       label: "Area",
@@ -465,8 +439,11 @@ export default function ContactsPage() {
           if (val == null) return <span className="text-muted-foreground">-</span>;
           return <span className="text-sm font-medium">{val}</span>;
         }
-      },
-      {
+      }
+    );
+    
+    if (hasPermission(PERMISSIONS.CUSTOMERS.VIEW_OUTSTANDING)) {
+      columns.splice(columns.length - 1, 0, {
         id: "outstanding_amount",
         label: "Outstanding (Calculated)",
         type: "text",
@@ -478,8 +455,8 @@ export default function ContactsPage() {
           if (val == null) return <span className="text-muted-foreground">-</span>;
           return <span className="text-sm font-medium text-amber-600 dark:text-amber-500">{val}</span>;
         }
-      }
-    );
+      });
+    }
   }
 
   // Customer Level column — only when the account uses order hierarchy.

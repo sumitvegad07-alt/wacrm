@@ -18,6 +18,7 @@ import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/cus
 import { CustomField } from '@/types';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
 import { ORDER_STATUSES } from '@/lib/orders/statuses';
+import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 
 interface OrderRow {
   id: string;
@@ -49,6 +50,7 @@ const STATUS_BADGE: Record<string, string> = {
   Dispatched: 'bg-emerald-600 text-white shadow-sm border-transparent',
   Rejected: 'bg-red-600 text-white shadow-sm border-transparent',
   Cancelled: 'bg-slate-600 text-white shadow-sm border-transparent',
+  Closed: 'bg-zinc-800 text-white shadow-sm border-transparent',
 };
 
 // Legal transitions for BULK actions only — a bulk action applies solely to
@@ -57,8 +59,9 @@ const STATUS_BADGE: Record<string, string> = {
 // 'Dispatched' goes through the per-order dispatch flow, never a bulk button.
 const LEGAL_TO: Record<string, string[]> = {
   Pending: ['Approved', 'Rejected', 'Cancelled'],
-  Approved: ['Rejected', 'Cancelled'],
-  'Part Dispatch': ['Cancelled'],
+  Approved: ['Rejected', 'Cancelled', 'Closed', 'Dispatched'],
+  'Part Dispatch': ['Cancelled', 'Closed', 'Dispatched'],
+  Dispatched: ['Closed'],
 };
 // Order status is fixed, not configurable — see src/lib/orders/statuses.ts.
 const ALL_STATUSES: readonly string[] = ORDER_STATUSES;
@@ -68,6 +71,7 @@ const BULK_ACTIONS: { to: string; label: string; icon: typeof CheckCircle2; vari
   { to: 'Approved', label: 'Approve', icon: CheckCircle2, variant: 'default' },
   { to: 'Rejected', label: 'Reject', icon: XCircle, variant: 'destructive' },
   { to: 'Cancelled', label: 'Cancel', icon: Ban, variant: 'outline' },
+  { to: 'Closed', label: 'Close Order', icon: CheckCircle2, variant: 'outline' },
 ];
 
 export default function OrdersPage() {
@@ -86,9 +90,9 @@ export default function OrdersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [hierarchyEnabled, setHierarchyEnabled] = useState(false);
-  const canCreateOrder = hasPermission('add_orders');
-  const canEditOrder = hasPermission('edit_orders');
-  const canManageStatus = hasPermission('manage_order_status');
+  const canCreateOrder = hasPermission(PERMISSIONS.CRM.CREATE_ORDERS);
+  const canEditOrder = hasPermission(PERMISSIONS.CRM.EDIT_ORDERS);
+  const canManageStatus = hasPermission(PERMISSIONS.CRM.MANAGE_ORDER_STATUS);
 
   const fetchData = useCallback(async () => {
     if (!accountId) return;
@@ -128,7 +132,7 @@ export default function OrdersPage() {
         order_number: o.order_number,
         date: o.date,
         total_amount: o.total_amount || 0,
-        status: o.status,
+        status: Object.keys(LEGAL_TO).find(k => k.toLowerCase() === (o.status || '').toLowerCase()) || o.status,
         classification: o.classification,
         user_id: o.user_id,
         contact_id: o.contact_id,

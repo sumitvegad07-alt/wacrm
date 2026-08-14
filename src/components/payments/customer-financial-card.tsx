@@ -11,6 +11,8 @@ import { AlertTriangle, CheckCircle2, XCircle, CreditCard } from "lucide-react";
 interface CustomerFinancialCardProps {
   contactId: string;
   accountId: string;
+  canViewCreditLimit?: boolean;
+  canViewOpeningBalance?: boolean;
   onDataLoaded?: (data: FinancialData | null) => void;
 }
 
@@ -27,7 +29,7 @@ export interface FinancialData {
   paymentsEnabled: boolean;
 }
 
-export function CustomerFinancialCard({ contactId, accountId, onDataLoaded }: CustomerFinancialCardProps) {
+export function CustomerFinancialCard({ contactId, accountId, canViewCreditLimit = false, canViewOpeningBalance = false, onDataLoaded }: CustomerFinancialCardProps) {
   const [data, setData] = useState<FinancialData | null>(null);
   const [loading, setLoading] = useState(true);
   const { defaultCurrency } = useAuth();
@@ -142,13 +144,28 @@ export function CustomerFinancialCard({ contactId, accountId, onDataLoaded }: Cu
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <FinancialSnapshot data={data} currency={defaultCurrency} />
+        <FinancialSnapshot 
+          data={data} 
+          currency={defaultCurrency} 
+          canViewCreditLimit={canViewCreditLimit}
+          canViewOpeningBalance={canViewOpeningBalance}
+        />
       </CardContent>
     </Card>
   );
 }
 
-export function FinancialSnapshot({ data, currency }: { data: FinancialData, currency: string }) {
+export function FinancialSnapshot({ 
+  data, 
+  currency,
+  canViewCreditLimit = false,
+  canViewOpeningBalance = false
+}: { 
+  data: FinancialData;
+  currency: string;
+  canViewCreditLimit?: boolean;
+  canViewOpeningBalance?: boolean;
+}) {
   const isWarning = data.creditLimit && data.availableCredit !== null && data.availableCredit < (data.creditLimit * 0.2);
   const isExceeded = data.creditLimit && data.availableCredit !== null && data.availableCredit < 0;
   
@@ -159,7 +176,7 @@ export function FinancialSnapshot({ data, currency }: { data: FinancialData, cur
         <p className="text-2xl font-bold">{formatCurrency(data.outstandingBalance, currency)}</p>
       </div>
       
-      {data.creditLimit !== null && (
+      {canViewCreditLimit && data.creditLimit !== null && (
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">Available Credit</p>
           <div className="flex items-center gap-2">

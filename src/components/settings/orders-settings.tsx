@@ -20,7 +20,7 @@ interface HierarchyLevel {
 const LEVEL_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
 // NOTE: Order status is not configurable, by design. It's a fixed state machine
-// (Pending → Approved → Part Dispatch → Dispatched, plus Rejected/Cancelled)
+// (Pending → Approved → Part Dispatch → Dispatched → Closed, plus Rejected/Cancelled)
 // enforced in the database (migrations 086 & 089). The editable list was removed
 // from this screen, and the backing `order_statuses` table was dropped in
 // 20260810123000 — it had drifted to names the state machine did not recognise,
@@ -109,7 +109,7 @@ export function OrdersSettings() {
     <section className="w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
         title="Orders Settings"
-        description="Configure your distribution hierarchy for primary/secondary order classification. Order statuses are fixed (Pending → Approved → Part Dispatch → Dispatched)."
+        description="Configure your distribution hierarchy for primary/secondary order classification. Order statuses are fixed (Pending → Approved → Part Dispatch → Dispatched → Closed)."
       />
 
       {loading ? (
@@ -217,7 +217,7 @@ export function OrdersSettings() {
               <div className="space-y-3 text-xs text-muted-foreground">
                 <div className="p-3 rounded-md bg-muted/50 border border-border/50">
                   <p className="font-medium text-foreground mb-1">Fixed Status Machine</p>
-                  <p>All orders follow an enforced lifecycle: <strong>Pending → Approved → Part Dispatch → Dispatched</strong> (plus Rejected/Cancelled).</p>
+                  <p>All orders follow an enforced lifecycle: <strong>Pending → Approved → Part Dispatch → Dispatched → Closed</strong> (plus Rejected/Cancelled).</p>
                 </div>
                 <div className="p-3 rounded-md bg-muted/50 border border-border/50">
                   <p className="font-medium text-foreground mb-1">Primary vs. Secondary Orders</p>

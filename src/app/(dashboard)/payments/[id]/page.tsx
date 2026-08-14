@@ -23,6 +23,7 @@ import { formatCurrency } from '@/lib/currency';
 import { Timeline } from '@/components/shared/timeline';
 import { PaymentStatusBadge } from '@/components/payments/payment-status-badge';
 import { getSourceLabel, canTransitionTo } from '@/lib/payments/statuses';
+import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 
 function supaErr(e: unknown): string {
   if (!e) return 'Unknown error';
@@ -39,7 +40,10 @@ export default function PaymentDetailPage() {
   const supabase = createClient();
   const { defaultCurrency, hasPermission } = useAuth();
   
-  const canApprove = hasPermission('approve_payments');
+  const canApprove = hasPermission(PERMISSIONS.PAYMENTS.APPROVE);
+  const canReject = hasPermission(PERMISSIONS.PAYMENTS.REJECT);
+  const canCancel = hasPermission(PERMISSIONS.PAYMENTS.CANCEL);
+  const canViewAttachments = hasPermission(PERMISSIONS.PAYMENTS.VIEW_ATTACHMENTS);
 
   const [payment, setPayment] = useState<Record<string, any> | null>(null);
   const [customValues, setCustomValues] = useState<{ label: string; value: string }[]>([]);
@@ -228,17 +232,23 @@ export default function PaymentDetailPage() {
           </div>
         </div>
 
-        {canApprove && payment.status === 'Pending' && (
+        {payment.status === 'Pending' && (
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3 bg-muted/20">
-            <Button onClick={() => { setVerifiedAmount(payment.amount.toString()); setApproveOpen(true); }} className="gap-1.5" size="sm">
-              <CheckCircle2 className="size-4" /> Approve
-            </Button>
-            <Button onClick={() => setRejectOpen(true)} variant="destructive" className="gap-1.5" size="sm">
-              <XCircle className="size-4" /> Reject
-            </Button>
-            <Button onClick={() => setCancelOpen(true)} variant="outline" className="gap-1.5" size="sm">
-              <Ban className="size-4" /> Cancel
-            </Button>
+            {canApprove && (
+              <Button onClick={() => { setVerifiedAmount(payment.amount.toString()); setApproveOpen(true); }} className="gap-1.5" size="sm">
+                <CheckCircle2 className="size-4" /> Approve
+              </Button>
+            )}
+            {canReject && (
+              <Button onClick={() => setRejectOpen(true)} variant="destructive" className="gap-1.5" size="sm">
+                <XCircle className="size-4" /> Reject
+              </Button>
+            )}
+            {canCancel && (
+              <Button onClick={() => setCancelOpen(true)} variant="outline" className="gap-1.5" size="sm">
+                <Ban className="size-4" /> Cancel
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -310,6 +320,22 @@ export default function PaymentDetailPage() {
                           className="text-primary hover:underline flex items-center gap-2"
                        >
                          View on Google Maps ({payment.latitude}, {payment.longitude})
+                       </a>
+                    </div>
+                  </div>
+                )}
+                
+                {payment.attachment_url && canViewAttachments && (
+                  <div className="border-t border-border pt-5">
+                    <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><FileText className="size-4" /> Attachment</h3>
+                    <div className="mt-2">
+                       <a 
+                          href={payment.attachment_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline flex items-center gap-2 text-sm"
+                       >
+                         View Uploaded Proof
                        </a>
                     </div>
                   </div>

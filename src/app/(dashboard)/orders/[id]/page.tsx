@@ -33,9 +33,14 @@ const NEXT_STATUS: Record<string, { to: string; label: string; icon: typeof Chec
   Approved: [
     { to: 'Rejected', label: 'Reject', icon: XCircle, variant: 'destructive' },
     { to: 'Cancelled', label: 'Cancel', icon: Ban, variant: 'outline' },
+    { to: 'Closed', label: 'Close Order', icon: CheckCircle2, variant: 'outline' },
   ],
   'Part Dispatch': [
     { to: 'Cancelled', label: 'Cancel', icon: Ban, variant: 'outline' },
+    { to: 'Closed', label: 'Close Order', icon: CheckCircle2, variant: 'outline' },
+  ],
+  Dispatched: [
+    { to: 'Closed', label: 'Close Order', icon: CheckCircle2, variant: 'outline' },
   ],
 };
 
@@ -46,6 +51,7 @@ const STATUS_BADGE: Record<string, string> = {
   Dispatched: 'bg-emerald-600 text-white shadow-sm border-transparent',
   Rejected: 'bg-red-600 text-white shadow-sm border-transparent',
   Cancelled: 'bg-slate-600 text-white shadow-sm border-transparent',
+  Closed: 'bg-zinc-800 text-white shadow-sm border-transparent',
 };
 
 // Statuses from which more items can still be dispatched.

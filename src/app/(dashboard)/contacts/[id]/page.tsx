@@ -14,13 +14,20 @@ import { useAuth } from "@/hooks/use-auth";
 import { ContactForm } from "@/components/contacts/contact-form";
 import { Timeline } from "@/components/shared/timeline";
 import { CustomerFinancialCard } from "@/components/payments/customer-financial-card";
+import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 
 export default function ContactDetailsPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const supabase = createClient();
-  const { defaultCurrency, accountId, isModuleEnabled } = useAuth();
+  const { defaultCurrency, accountId, isModuleEnabled, hasPermission } = useAuth();
   const paymentEnabled = isModuleEnabled('payment');
+  
+  const canViewFinancials = hasPermission(PERMISSIONS.CUSTOMERS.VIEW_FINANCIALS);
+  const canViewCreditLimit = hasPermission(PERMISSIONS.CUSTOMERS.VIEW_CUSTOMER_CREDIT_LIMIT);
+  const canViewPaymentHistory = hasPermission(PERMISSIONS.CUSTOMERS.VIEW_CUSTOMER_PAYMENT_HISTORY);
+  const canViewOpeningBalance = hasPermission(PERMISSIONS.CUSTOMERS.VIEW_OPENING_BALANCE);
+  const canEditOpeningBalance = hasPermission(PERMISSIONS.CUSTOMERS.EDIT_OPENING_BALANCE);
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string }[] }>({ enabled: false, levels: [] });
@@ -193,8 +200,13 @@ export default function ContactDetailsPage() {
         {/* Left Column: Details & Custom Fields */}
         <div className="lg:col-span-2 space-y-6">
           
-          {paymentEnabled && accountId && (
-            <CustomerFinancialCard contactId={id} accountId={accountId} />
+          {paymentEnabled && accountId && canViewFinancials && (
+            <CustomerFinancialCard 
+              contactId={id} 
+              accountId={accountId} 
+              canViewCreditLimit={canViewCreditLimit}
+              canViewOpeningBalance={canViewOpeningBalance}
+            />
           )}
 
           <div className="bg-card border border-border rounded-lg p-5">
@@ -326,7 +338,8 @@ export default function ContactDetailsPage() {
             tasks={tasks} 
             notes={notes}
             activities={activities} 
-            onRefresh={fetchAllData} 
+            onRefresh={fetchAllData}
+            canViewPaymentHistory={canViewPaymentHistory}
           />
         </div>
       </div>

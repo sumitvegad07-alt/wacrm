@@ -172,12 +172,12 @@ describe("buildFieldCatalog — order status options", () => {
     // The status list must come from the enforced transition machine, not the
     // order_statuses settings table, which does not match it in production.
     const { groups } = buildFieldCatalog("order", [], {
-      order: ["Pending", "Approved", "Part Dispatch", "Dispatched", "Rejected", "Cancelled"],
+      order: ["Pending", "Approved", "Part Dispatch", "Dispatched", "Rejected", "Cancelled", "Closed"],
     });
     expect(findField(groups, "order.status")?.options).toContain("Part Dispatch");
   });
 
-  it("falls back to the enforced six statuses when no list is supplied", () => {
+  it("falls back to the enforced seven statuses when no list is supplied", () => {
     const { groups } = buildFieldCatalog("order", []);
     expect(findField(groups, "order.status")?.options).toEqual([
       "Pending",
@@ -186,6 +186,7 @@ describe("buildFieldCatalog — order status options", () => {
       "Dispatched",
       "Rejected",
       "Cancelled",
+      "Closed",
     ]);
   });
 

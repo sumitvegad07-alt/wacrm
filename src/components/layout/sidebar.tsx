@@ -358,7 +358,7 @@ function getMenuStructure(
       icon: LineChart,
       items: [
         { href: "/reports/orders", label: "Order Reports", icon: ShoppingCart, module: "orders" },
-        { href: "/reports/payments", label: "Payment Reports", icon: Banknote, module: "payments", configModule: "payment" as const },
+        { href: "/reports/payments", label: "Payment Reports", icon: Banknote, module: "payment_reports", configModule: "payment" as const },
         { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
         { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },
         { href: "/expenses", label: "Expenses Report", icon: Coins, module: "expenses" },
