@@ -1,0 +1,768 @@
+<title>Payment Module Readiness</title>
+<style>
+  :root {
+    --paper: #FBFAF7;
+    --raised: #FFFFFF;
+    --sunk: #F2F0EA;
+    --ink: #191C24;
+    --muted: #676C7A;
+    --hairline: #DFDCD3;
+    --brass: #9A6B14;
+    --brass-soft: #F0E4CB;
+    --critical: #A81F27;
+    --critical-soft: #F7E2E1;
+    --warn: #8A5A10;
+    --warn-soft: #F8EBD3;
+    --good: #2A6448;
+    --good-soft: #DFEDE4;
+
+    --display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #14161B;
+      --raised: #1B1E25;
+      --sunk: #202430;
+      --ink: #E9E7E1;
+      --muted: #969BA8;
+      --hairline: #2E323C;
+      --brass: #D9A441;
+      --brass-soft: #33291645;
+      --critical: #E8757A;
+      --critical-soft: #3A1F2145;
+      --warn: #D2A054;
+      --warn-soft: #33291645;
+      --good: #6DBE93;
+      --good-soft: #1B2E2445;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #14161B;
+    --raised: #1B1E25;
+    --sunk: #202430;
+    --ink: #E9E7E1;
+    --muted: #969BA8;
+    --hairline: #2E323C;
+    --brass: #D9A441;
+    --brass-soft: #33291645;
+    --critical: #E8757A;
+    --critical-soft: #3A1F2145;
+    --warn: #D2A054;
+    --warn-soft: #33291645;
+    --good: #6DBE93;
+    --good-soft: #1B2E2445;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 24px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; }
+  .prose { max-width: 68ch; }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 56px 0 20px;
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 18px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(34px, 6vw, 52px);
+    line-height: 1.05;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 19px;
+    color: var(--muted);
+    margin: 0;
+    max-width: 60ch;
+    text-wrap: pretty;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 26px;
+  }
+
+  /* ---------- verdict ---------- */
+  .verdict {
+    background: var(--raised);
+    border: 1px solid var(--hairline);
+    border-left: 4px solid var(--critical);
+    border-radius: 3px;
+    padding: 26px 30px;
+    margin-bottom: 52px;
+  }
+  .verdict h2 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--critical);
+    margin: 0 0 12px;
+  }
+  .verdict p { margin: 0 0 12px; max-width: 68ch; }
+  .verdict p:last-child { margin-bottom: 0; }
+
+  /* ---------- sections ---------- */
+  section { margin-bottom: 60px; }
+  h2.section {
+    font-family: var(--display);
+    font-size: 27px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .section-note {
+    color: var(--muted);
+    font-size: 15px;
+    margin: 0 0 26px;
+    max-width: 66ch;
+  }
+  h3 {
+    font-family: var(--body);
+    font-size: 16px;
+    font-weight: 650;
+    margin: 34px 0 10px;
+    letter-spacing: -0.005em;
+  }
+  p { margin: 0 0 14px; }
+
+  /* ---------- findings ---------- */
+  .finding {
+    background: var(--raised);
+    border: 1px solid var(--hairline);
+    border-radius: 3px;
+    padding: 20px 22px;
+    margin-bottom: 14px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 16px;
+    align-items: start;
+  }
+  .finding.crit { border-left: 3px solid var(--critical); }
+  .finding.warn { border-left: 3px solid var(--warn); }
+  .finding.info { border-left: 3px solid var(--muted); }
+
+  .pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .pill.crit { background: var(--critical-soft); color: var(--critical); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.good { background: var(--good-soft); color: var(--good); }
+  .pill.info { background: var(--sunk); color: var(--muted); }
+
+  .finding-title { font-weight: 650; align-self: center; }
+  .finding-body { grid-column: 2; color: var(--muted); font-size: 15px; }
+  .finding-body strong { color: var(--ink); font-weight: 600; }
+  .finding-body p { margin: 0 0 8px; }
+  .finding-body p:last-child { margin-bottom: 0; }
+
+  .status {
+    grid-column: 2;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--hairline);
+    color: var(--muted);
+  }
+  .status b { color: var(--ink); font-weight: 600; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.875em;
+    background: var(--sunk);
+    padding: 1.5px 5px;
+    border-radius: 2px;
+    word-break: break-word;
+  }
+
+  /* ---------- tables ---------- */
+  .scroll { overflow-x: auto; margin-bottom: 20px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14.5px;
+    min-width: 520px;
+  }
+  th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 0 14px 9px 0;
+    border-bottom: 1px solid var(--ink);
+  }
+  td {
+    padding: 11px 14px 11px 0;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+  }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; padding-right: 20px; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--brass); }
+
+  .callout {
+    background: var(--sunk);
+    border-radius: 3px;
+    padding: 18px 22px;
+    margin: 22px 0;
+    font-size: 15px;
+  }
+  .callout strong { font-weight: 650; }
+
+  hr.rule { border: none; border-top: 1px solid var(--hairline); margin: 44px 0; }
+
+  .footnote {
+    font-size: 13.5px;
+    color: var(--muted);
+    border-top: 1px solid var(--hairline);
+    padding-top: 22px;
+    margin-top: 56px;
+  }
+
+  a { color: var(--brass); }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+  @media (max-width: 620px) {
+    .finding { grid-template-columns: 1fr; }
+    .finding-body, .status { grid-column: 1; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Engineering Review · wacrm</p>
+    <h1>Payment Module Readiness</h1>
+    <p class="standfirst">A production-readiness review of the Payment Collection module, following a
+      production data incident discovered during the same session.</p>
+    <div class="byline">
+      <span>14 August 2026</span>
+      <span>Web <code>fix/payment-module-production-readiness</code></span>
+      <span>Mobile <code>feat/mobile-payment-collection</code></span>
+    </div>
+  </header>
+
+  <div class="verdict">
+    <h2>Bottom line</h2>
+    <p><strong>The module was not production ready, and was not partially working — it was not working at all.</strong>
+      Payment creation failed on both web and mobile from the day it shipped, for the same class of reason:
+      the code wrote to columns that do not exist. <code>PROJECT.md</code> records this module as
+      &ldquo;Ready for Pilot&rdquo;. That line should be removed.</p>
+    <p>The three payments in production were created before the current code landed. No customer has
+      ever successfully collected money through this module.</p>
+    <p>Both clients now work end to end and are committed on branches. Two database migrations are
+      written and validated but <strong>not applied</strong> — they need your approval, and one of them
+      fixes a live data-exposure issue.</p>
+  </div>
+
+  <!-- ============ INCIDENT ============ -->
+  <section>
+    <h2 class="section">The incident</h2>
+    <p class="section-note">Found while investigating your report that role permissions had disappeared.
+      It was not a UI bug.</p>
+
+    <p>An automated QA run wrote into live production between 09:06 and 12:46 UTC. At its peak it had
+      created <strong>84 synthetic tenants against 17 real ones</strong> — five in six accounts in your
+      database were fake.</p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Artifact</th><th class="num">Count</th><th>Where it landed</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Synthetic tenants + auth users</td><td class="num">84</td><td><code>@ozzo.test</code></td></tr>
+          <tr><td><code>QA_*</code> roles</td><td class="num">52</td><td>40 of them inside four <strong>real customer</strong> tenants</td></tr>
+          <tr><td>Orphaned <code>QA_*</code> user rows</td><td class="num">23</td><td>Sahil Gohel, hiren patel, Pratik Maru, Next Innovation</td></tr>
+          <tr><td>Fake &ldquo;Customer A/B/C&rdquo; contacts</td><td class="num">6</td><td>Sahil Gohel, hiren patel</td></tr>
+          <tr><td>Fake <strong>approved</strong> ₹5,000 payment</td><td class="num">1</td><td>hiren patel&rsquo;s live books</td></tr>
+          <tr><td>Roles flattened to <code>{"all": true}</code></td><td class="num">2</td><td>Your tenant, and Amit nayar&rsquo;s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Why the roles screen looked empty</h3>
+    <p>The two <code>Sales Executive</code> roles were overwritten with the <code>all</code> wildcard.
+      The roles page hides every checkbox when that flag is set, so a role granting
+      <em>unrestricted access</em> renders identically to one granting none. Three real people —
+      including two field reps in a customer&rsquo;s account — silently held full admin rights,
+      payment approval included.</p>
+
+    <div class="callout">
+      <strong>The original permission sets were not recoverable.</strong> There is no audit table on
+      <code>employee_roles</code>, no entries in <code>module_activities</code>, and
+      <code>track_commit_timestamp</code> is off. Nothing in the database knew what those roles held
+      before. They were rebuilt from the permission registry to a 35-key field-sales set with your
+      sign-off — a reconstruction, not a restoration.
+    </div>
+
+    <h3>What was done</h3>
+    <ul>
+      <li>Full pre-deletion snapshot preserved at <code>docs/engineering/incidents/2026-08-14-qa-prod-pollution-snapshot.json</code>.</li>
+      <li>All QA artifacts purged. Accounts went 101 → 17, roles 75 → 23, with zero QA rows remaining.</li>
+      <li>Both damaged roles rebuilt; wildcard removed; approval rights withheld.</li>
+      <li>Your three genuine August 13 payments verified intact.</li>
+    </ul>
+
+    <p><strong>The unaddressed risk is process, not data.</strong> Nothing prevents this recurring —
+      no separate QA project, no guard against test harnesses pointing at the production URL, and no
+      audit trail that would let you reconstruct roles next time. That is the single most valuable
+      thing to fix this week.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ CRITICAL ============ -->
+  <section>
+    <h2 class="section">What was broken</h2>
+    <p class="section-note">Every item below is a pre-existing defect found during this review, not a
+      regression introduced by it.</p>
+
+    <h3>Blocking — the module could not function</h3>
+
+    <div class="finding crit">
+      <span class="pill crit">Critical</span>
+      <span class="finding-title">Web payment creation wrote to three non-existent columns</span>
+      <div class="finding-body">
+        <p>The form inserted <code>attachment_url</code>, <code>attachment_name</code> and
+          <code>attachment_type</code> onto <code>payments</code>. None exist — attachments belong in
+          the separate <code>payment_attachments</code> table. PostgREST rejects unknown columns, so
+          <strong>every web payment save failed</strong>. The detail page read the same phantom column,
+          so attachments never rendered either.</p>
+      </div>
+      <div class="status"><b>Fixed</b> — attachments now write to and read from the correct table.</div>
+    </div>
+
+    <div class="finding crit">
+      <span class="pill crit">Critical</span>
+      <span class="finding-title">Mobile collection would have failed on every attempt</span>
+      <div class="finding-body">
+        <p>The insert named <code>date</code>, <code>created_by</code>, <code>gps_lat</code> and
+          <code>gps_lng</code>; the real columns are <code>payment_date</code>, <code>user_id</code>,
+          <code>latitude</code>, <code>longitude</code>. The <code>NOT NULL</code>
+          <code>payment_type</code> was omitted entirely. The customer dropdown selected
+          <code>contacts.outstanding_balance</code> and the type dropdown filtered on
+          <code>payment_types.active</code> — neither column exists, so <strong>both lists came back
+          empty</strong>. The detail screen embedded a foreign key that does not exist
+          (<code>payments_created_by_fkey</code>) plus four more wrong columns.</p>
+        <p>This code had never been committed or run against the real schema.</p>
+      </div>
+      <div class="status"><b>Fixed</b> — payload and queries rewritten against the actual schema; typechecks clean.</div>
+    </div>
+
+    <div class="finding crit">
+      <span class="pill crit">Critical</span>
+      <span class="finding-title">Permission gate checked a key no role holds</span>
+      <div class="finding-body">
+        <p>The form required <code>add_payments</code>; production roles carry
+          <code>create_payments</code>. Owner and admin bypass the check, which is why it never showed
+          up in your own testing — <strong>every non-admin user was refused</strong>.</p>
+        <p>Both spellings genuinely coexist in production. Rather than renaming stored keys — installed
+          APKs check the legacy spelling and cannot be updated retroactively — permission lookup now
+          resolves both directions. The rename migration that would have broken those builds is deleted.</p>
+      </div>
+      <div class="status"><b>Fixed</b> — aliasing in <code>rbac.ts</code>, covered by tests.</div>
+    </div>
+
+    <h3>Security and money — validated, awaiting your approval</h3>
+
+    <div class="finding crit">
+      <span class="pill crit">Critical</span>
+      <span class="finding-title">Credit control has never blocked anything</span>
+      <div class="finding-body">
+        <p>The settings screen writes <code>payment_settings.credit_limit_enforcement</code>. The
+          database trigger reads <code>payments.creditLimitAction</code>. Different parent object,
+          different key name — so the trigger always fell back to <em>warn</em>, for every tenant,
+          however the screen was configured.</p>
+        <p><strong>Proven against production:</strong> with &ldquo;Block Orders&rdquo; selected, a
+          999,999 order against a 1,000 credit limit inserted without complaint. Writing the
+          trigger&rsquo;s own key blocked it correctly — the logic works, nothing ever fed it.</p>
+      </div>
+      <div class="status"><b>Migration written &amp; validated, NOT applied</b> — <code>20260814200000_fix_credit_control_settings.sql</code></div>
+    </div>
+
+    <div class="finding crit">
+      <span class="pill crit">Critical</span>
+      <span class="finding-title">Cheque images are publicly readable</span>
+      <div class="finding-body">
+        <p>The <code>payment_attachments</code> bucket is public, with an <code>Allow public view</code>
+          policy granted to the <code>public</code> role and no size or MIME restriction. Anyone holding
+          or guessing an object URL can read <strong>any tenant&rsquo;s</strong> proof-of-payment
+          images — cheques, bank receipts, UPI screenshots.</p>
+      </div>
+      <div class="status"><b>Migration written, NOT applied</b> — private bucket, per-tenant policies, signed URLs. Both clients already updated to match.</div>
+    </div>
+
+    <div class="finding crit">
+      <span class="pill crit">Critical</span>
+      <span class="finding-title">Turning approval off makes collection impossible</span>
+      <div class="finding-body">
+        <p>With <code>approval_required</code> false, clients create payments already marked
+          <em>Approved</em> — but the insert guard demands the <code>approve_payments</code> permission
+          for that status. Any account that switches the setting off silently locks out
+          <strong>every field rep</strong>. A latent trap: no account has flipped it yet.</p>
+      </div>
+      <div class="status"><b>Migration written, NOT applied</b> — opting out of approval no longer requires approval rights.</div>
+    </div>
+
+    <div class="finding warn">
+      <span class="pill warn">High</span>
+      <span class="finding-title">Mobile would have auto-approved the rep&rsquo;s own cash</span>
+      <div class="finding-body">
+        <p><code>approval_required</code> defaulted to <em>false</em> on mobile and <em>true</em> on
+          web. Sixteen of seventeen accounts have never set the flag, so the same collection would be
+          Pending from the office and Approved from the field — the collecting rep clearing their own
+          money, which is exactly what separation of duties exists to prevent.</p>
+      </div>
+      <div class="status"><b>Fixed</b> — mobile now fails safe to requiring approval.</div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ BUSINESS LOGIC ============ -->
+  <section>
+    <h2 class="section">Business logic — missing and weak</h2>
+    <p class="section-note">These are product decisions, not defects. I have deliberately not changed
+      financial semantics without your call.</p>
+
+    <div class="finding crit">
+      <span class="pill crit">Decision</span>
+      <span class="finding-title">An approved payment can never be reversed</span>
+      <div class="finding-body">
+        <p>The transition table makes <em>Approved</em> terminal, and the UI only offers actions while a
+          payment is Pending. So a payment approved in error — wrong customer, wrong amount, a cheque
+          that bounces next week — is <strong>permanent</strong>, and permanently understates what that
+          customer owes.</p>
+        <p>The trigger contains a rule reading &ldquo;Approved payments are read-only, except for
+          cancellation&rdquo; and <code>PROJECT.md</code> documents soft-delete via Cancelled — but the
+          transition table blocks it first, so that intent is dead code. For a module whose entire job
+          is money, there is currently no correction path at all.</p>
+        <p><strong>Recommendation:</strong> allow <em>Approved → Cancelled</em> for
+          <code>cancel_payments</code> holders, with a mandatory reason, and show a reversal on the
+          customer ledger rather than editing history.</p>
+      </div>
+      <div class="status"><b>Not changed</b> — needs your ruling before I touch settled money.</div>
+    </div>
+
+    <div class="finding warn">
+      <span class="pill warn">High</span>
+      <span class="finding-title">Seven of eight payment settings do nothing</span>
+      <div class="finding-body">
+        <p>Only <code>approval_required</code> is read anywhere in either codebase.
+          <code>require_attachment</code>, <code>require_notes</code> and
+          <code>require_reference</code> are never referenced outside the settings screen — a manager
+          can mandate proof-of-payment and reps will never be asked for it. The four credit settings
+          are read under different key names. Mobile compounds it by looking for
+          <code>show_reference</code> / <code>show_notes</code>, which nothing writes.</p>
+      </div>
+      <div class="status"><b>Credit keys fixed in the pending migration.</b> The three <code>require_*</code> toggles still need wiring or removing.</div>
+    </div>
+
+    <div class="finding warn">
+      <span class="pill warn">High</span>
+      <span class="finding-title">Outstanding counts only <em>Closed</em> orders</span>
+      <div class="finding-body">
+        <p>A customer can take delivery of goods and owe nothing on paper until someone closes the
+          order. Credit limits are therefore enforced against a number that lags reality, and a rep can
+          keep selling to a customer who is already over their ceiling.</p>
+        <p><strong>Recommendation:</strong> decide explicitly what creates a receivable — dispatch, or
+          order closure — and apply that definition in the trigger, the financial card and the reports
+          together.</p>
+      </div>
+      <div class="status"><b>Not changed</b> — this is a definition of receivable, and it is yours to set.</div>
+    </div>
+
+    <div class="finding warn">
+      <span class="pill warn">Medium</span>
+      <span class="finding-title">Ageing is measured from sync time, not order time</span>
+      <div class="finding-body">
+        <p>Overdue calculations use <code>orders.created_at</code>, which records when the row reached
+          the server. For an order written offline and synced days later, the customer is credited with
+          days they never had. The fix is a <code>client_created_at</code> stamped on the device — the
+          same gap already identified for Module Automations.</p>
+      </div>
+      <div class="status"><b>Not changed</b> — needs a schema addition and a mobile release.</div>
+    </div>
+
+    <div class="finding info">
+      <span class="pill info">Medium</span>
+      <span class="finding-title">Nothing ties a payment&rsquo;s customer to its tenant</span>
+      <div class="finding-body">
+        <p>There is no constraint requiring <code>contact_id</code> to belong to the same
+          <code>account_id</code>. Confirmed in testing: a payment can be inserted against another
+          tenant&rsquo;s customer. Row-level security stops the row being <em>read</em> across tenants,
+          and the UI only offers own-account customers — but the product ships API keys, and this is
+          the kind of hole that only shows up once someone integrates.</p>
+      </div>
+      <div class="status"><b>Not changed</b> — wants a composite foreign key; worth doing with the next migration.</div>
+    </div>
+
+    <div class="finding info">
+      <span class="pill info">Low</span>
+      <span class="finding-title">Client and database disagree on permission aliasing</span>
+      <div class="finding-body">
+        <p>Application code now resolves <code>add_</code>/<code>create_</code> in both directions; the
+          database <code>has_permission</code> function does not. Nothing exploits the gap today —
+          triggers only check <code>approve_</code>, <code>cancel_</code> and
+          <code>manage_</code> keys, which have no legacy spelling — but the two layers should agree
+          before someone adds a check that does.</p>
+      </div>
+      <div class="status"><b>Documented</b>, not changed.</div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ GOOD ============ -->
+  <section>
+    <h2 class="section">What is genuinely good</h2>
+    <p class="section-note">The design of this module is better than its execution. These parts I would
+      not change.</p>
+
+    <div class="finding">
+      <span class="pill good">Solid</span>
+      <span class="finding-title">Payment numbering</span>
+      <div class="finding-body">
+        Allocated from an atomic per-account counter in a single upsert. No race, no gaps under
+        concurrency, correctly scoped per tenant. An earlier <code>MAX() + 1</code> version — which
+        would have raced <em>and</em> crashed on the legacy number format — was never deployed; that
+        file is now a documented no-op so nobody revives it.
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="pill good">Solid</span>
+      <span class="finding-title">Status state machine, enforced in the database</span>
+      <div class="finding-body">
+        Terminal states hold, invalid transitions are rejected, and approved payments cannot have their
+        amount edited. Verified directly: <em>Approved → Pending</em>, amount edits on approved rows,
+        negative amounts, zero amounts and invalid status values were all correctly refused. Enforcement
+        sits in the database rather than the UI, so the API and mobile inherit it for free.
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="pill good">Solid</span>
+      <span class="finding-title">The dual-amount model</span>
+      <div class="finding-body">
+        Separating what a rep <em>collected</em> from what an approver <em>verified</em> is the right
+        shape for field collection, and it handles the real cases — short cash, part-honoured cheques.
+        It now needs to be applied consistently: the overdue check was summing the collected amount
+        while the UI used the verified one.
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="pill good">Solid</span>
+      <span class="finding-title">Offline sync architecture</span>
+      <div class="finding-body">
+        The queue is genuinely generic — payments needed no new machinery, and the upload-then-substitute
+        step extended cleanly to private buckets. Dead-lettering and the client-generated idempotency
+        key are the right instincts for a field app on bad networks.
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="pill good">Solid</span>
+      <span class="finding-title">The permission vocabulary itself</span>
+      <div class="finding-body">
+        The registry draws the right distinctions — collect separate from approve, view-outstanding
+        separate from view-credit-limit, override as its own grant. It is a well-designed model that
+        was simply not being consulted correctly.
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ REMOVE ============ -->
+  <section>
+    <h2 class="section">What should be removed</h2>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Item</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>receipt_number</code>, <code>receipt_generated</code>, <code>invoice_id</code>,
+                <code>erp_reference</code>, <code>erp_sync_status</code></td>
+            <td>Five columns on <code>payments</code>, all null in every row, referenced nowhere except
+                a TypeScript interface. Speculative ERP scaffolding — drop them until an integration is real.</td>
+          </tr>
+          <tr>
+            <td>The three <code>require_*</code> settings</td>
+            <td>They promise enforcement that does not exist. Either wire them into both clients or take
+                them off the screen; a toggle that does nothing is worse than an absent one.</td>
+          </tr>
+          <tr>
+            <td>&ldquo;Ready for Pilot&rdquo; in <code>PROJECT.md</code></td>
+            <td>Demonstrably untrue when written. Worth correcting so the next person does not trust it.</td>
+          </tr>
+          <tr>
+            <td>Duplicate status trigger</td>
+            <td><code>trg_payment_status_transition</code> and
+                <code>trg_enforce_payment_status_transition</code> both ran the same validation on every
+                update. Harmless while validation-only — a real problem the moment it gains a side effect.
+                <em>Consolidated in the pending migration.</em></td>
+          </tr>
+          <tr>
+            <td>The <code>permission</code> field on mobile&rsquo;s module manifest</td>
+            <td>The drawer never reads it, so every entry shows to everyone regardless. The new Payments
+                screen gates itself; the manifest field should either be honoured or dropped so it stops
+                looking like protection.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ TESTING ============ -->
+  <section>
+    <h2 class="section">How this was tested</h2>
+    <p class="section-note">The module had zero test coverage: 68 test files in the web suite, none
+      touching payments — for the only module that handles money.</p>
+
+    <h3>Automated</h3>
+    <p>39 new tests across three files, covering the areas where a silent error costs real money.
+      The suite now stands at <strong>942 passing across 71 files</strong>.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Area</th><th class="num">Tests</th><th>Representative cases</th></tr></thead>
+        <tbody>
+          <tr><td>Financial maths</td><td class="num">17</td><td>Overpayment producing negative outstanding; credit limit of 0 as a real ceiling versus unset; verified amount of 0 for a bounced cheque; FIFO settlement of oldest debt; ageing independent of row order</td></tr>
+          <tr><td>Status machine</td><td class="num">10</td><td>Every terminal state against every target status; self-transitions; unknown statuses</td></tr>
+          <tr><td>Permission gating</td><td class="num">12</td><td>Field rep can collect but not approve, reject or cancel; legacy and current key spellings both resolve; aliasing does not invent unrelated rights</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Against production, inside rolled-back transactions</h3>
+    <p>Business rules were exercised directly against the live database in transactions that roll back,
+      so nothing persisted — deliberately, given how the day started.</p>
+    <ul>
+      <li>Status machine: 7 of 8 cases behaved correctly; the failure exposed the irreversibility gap above.</li>
+      <li>Numbering: sequential and gapless under repeated inserts; duplicates correctly rejected.</li>
+      <li>Credit limits: verified at the boundaries — under, exactly at, over, zero-limit, and no-limit.</li>
+      <li>Permission model: confirmed all three restored users can collect and none can approve.</li>
+    </ul>
+
+    <div class="callout">
+      <strong>One correction worth recording.</strong> My first credit-limit run reported the rule
+      working. It was not — the test inserts were failing on an unrelated wrong column name, and a
+      catch-all handler was reading that failure as &ldquo;correctly blocked&rdquo;. Capturing the actual
+      error text showed the opposite: credit control had never blocked anything. A test that passes for
+      the wrong reason is worse than no test, and it is worth assuming other green results in this
+      codebase deserve the same scrutiny.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ NEXT ============ -->
+  <section>
+    <h2 class="section">What needs you</h2>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Action</th><th>Why it needs you</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Apply the two migrations</strong></td>
+            <td>Both are written and validated; applying them was blocked by a permission prompt.
+                One closes the public cheque-image exposure, the other makes credit control real.
+                Nothing else in this review matters as much.</td>
+          </tr>
+          <tr>
+            <td><strong>Rule on reversing approved payments</strong></td>
+            <td>I will not change settled-money semantics without your decision. Today there is no
+                correction path at all.</td>
+          </tr>
+          <tr>
+            <td><strong>Tell Amit nayar</strong></td>
+            <td>Two of their field reps held full admin rights, including payment approval, for roughly
+                nine hours. Their tenant also received QA roles and fake users, now removed.</td>
+          </tr>
+          <tr>
+            <td><strong>Decide: dispatch or closure creates a receivable</strong></td>
+            <td>Credit enforcement is only as honest as this definition, and it must match across
+                trigger, UI and reports.</td>
+          </tr>
+          <tr>
+            <td><strong>Separate QA from production</strong></td>
+            <td>A test harness reached your live database and, in 79 minutes, outnumbered your real
+                tenants five to one. This will happen again otherwise.</td>
+          </tr>
+          <tr>
+            <td><strong>Review and merge both branches, then cut an APK</strong></td>
+            <td>Nothing is pushed. Mobile collection has never existed in a build, so the field cannot
+                use any of this until one ships.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>One thing I did not do: no end-to-end run through a real browser or a device. Every fix is
+      verified by typecheck, unit test, or direct database exercise — which catches schema and logic
+      faults but would not catch a broken layout or a mis-wired button. The first APK needs a human
+      collecting one real payment before any customer sees it.</p>
+  </section>
+
+  <p class="footnote">
+    Prepared 14 August 2026. Findings are reproducible from the branches named above; the incident
+    snapshot is committed alongside them. Counts and behaviours in this report were read from the
+    production database at the time of writing rather than inferred from code.
+  </p>
+
+</div>
