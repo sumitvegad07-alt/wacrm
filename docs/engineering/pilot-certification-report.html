@@ -1,0 +1,430 @@
+<title>OZZO Pilot Certification</title>
+<style>
+  :root {
+    --bg: #F6F7F5;
+    --panel: #FFFFFF;
+    --inset: #EBEDE9;
+    --fg: #14181A;
+    --dim: #5F676B;
+    --line: #D9DDD7;
+    --accent: #1C6B54;
+    --pass: #1C6B54;
+    --pass-bg: #DFEDE7;
+    --fail: #A32A22;
+    --fail-bg: #F8E4E1;
+    --hold: #8A6510;
+    --hold-bg: #F9EFD6;
+
+    --sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F1214; --panel: #161A1C; --inset: #1D2225; --fg: #E6E9E7;
+      --dim: #929B9C; --line: #29302F; --accent: #63C4A2;
+      --pass: #63C4A2; --pass-bg: #162A24;
+      --fail: #E8807A; --fail-bg: #2C1B1A;
+      --hold: #D3A855; --hold-bg: #2A2417;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F1214; --panel: #161A1C; --inset: #1D2225; --fg: #E6E9E7;
+    --dim: #929B9C; --line: #29302F; --accent: #63C4A2;
+    --pass: #63C4A2; --pass-bg: #162A24;
+    --fail: #E8807A; --fail-bg: #2C1B1A;
+    --hold: #D3A855; --hold-bg: #2A2417;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--sans);
+    font-size: 15.5px; line-height: 1.62; margin: 0; padding: 0 20px 90px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  header.top { padding: 48px 0 22px; border-bottom: 2px solid var(--accent); margin-bottom: 30px; }
+  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
+  h1 { font-size: clamp(30px,5.5vw,44px); line-height: 1.08; margin: 0 0 12px;
+    letter-spacing: -.022em; font-weight: 680; text-wrap: balance; }
+  .sub { font-size: 18px; color: var(--dim); margin: 0; max-width: 64ch; text-wrap: pretty; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 26px; margin-top: 20px;
+    font-family: var(--mono); font-size: 12px; color: var(--dim); }
+
+  .board { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
+    gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 16px 18px; }
+  .stat .n { font-family: var(--mono); font-size: 30px; font-weight: 600;
+    font-variant-numeric: tabular-nums; line-height: 1; display: block; margin-bottom: 7px; }
+  .stat .l { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--dim); }
+  .n.pass { color: var(--pass); } .n.hold { color: var(--hold); }
+
+  .verdict { background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid var(--pass); border-radius: 4px; padding: 24px 28px; margin: 0 0 44px; }
+  .verdict h2 { font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--pass); margin: 0 0 12px; }
+  .verdict p { margin: 0 0 12px; max-width: 72ch; } .verdict p:last-child { margin-bottom: 0; }
+
+  section { margin-bottom: 50px; }
+  h2.sec { font-size: 22px; font-weight: 660; letter-spacing: -.012em; margin: 0 0 4px;
+    padding-bottom: 9px; border-bottom: 1px solid var(--line); }
+  .note { color: var(--dim); font-size: 14.5px; margin: 0 0 22px; max-width: 72ch; }
+  h3 { font-size: 15.5px; font-weight: 660; margin: 26px 0 10px; }
+  p { margin: 0 0 13px; }
+
+  .scroll { overflow-x: auto; margin-bottom: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+  th { text-align: left; font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--dim); font-weight: 600;
+    padding: 0 12px 8px 0; border-bottom: 1px solid var(--fg); }
+  td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.id { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; color: var(--dim); }
+  td.obs { font-family: var(--mono); font-size: 12px; }
+  td.num { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+
+  .tag { display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: .08em;
+    text-transform: uppercase; font-weight: 700; padding: 3px 7px; border-radius: 2px; white-space: nowrap; }
+  .tag.pass { background: var(--pass-bg); color: var(--pass); }
+  .tag.fail { background: var(--fail-bg); color: var(--fail); }
+  .tag.hold { background: var(--hold-bg); color: var(--hold); }
+
+  .rc { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 4px; padding: 18px 20px; margin-bottom: 12px; }
+  .rc h4 { margin: 0 0 8px; font-size: 15px; font-weight: 660; }
+  .rc p { margin: 0 0 8px; font-size: 14.5px; color: var(--dim); }
+  .rc p:last-child { margin-bottom: 0; }
+  .rc strong { color: var(--fg); font-weight: 620; }
+  .chain { font-family: var(--mono); font-size: 12px; background: var(--inset);
+    border-radius: 3px; padding: 10px 12px; margin: 10px 0; color: var(--dim); overflow-x: auto; }
+
+  .opt { background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    padding: 20px 22px; margin-bottom: 14px; }
+  .opt.rec { border-left: 3px solid var(--pass); }
+  .opt h4 { margin: 0 0 4px; font-size: 16px; font-weight: 670; }
+  .opt .verd { font-family: var(--mono); font-size: 11px; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--dim); margin-bottom: 12px; }
+
+  code { font-family: var(--mono); font-size: .875em; background: var(--inset);
+    padding: 1.5px 5px; border-radius: 2px; word-break: break-word; }
+  ul, ol { margin: 0 0 13px; padding-left: 19px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--accent); }
+  .callout { background: var(--inset); border-radius: 4px; padding: 17px 20px;
+    margin: 20px 0; font-size: 14.5px; }
+  hr.r { border: none; border-top: 1px solid var(--line); margin: 40px 0; }
+  .foot { font-size: 13px; color: var(--dim); border-top: 1px solid var(--line);
+    padding-top: 20px; margin-top: 48px; }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">Pilot Certification · Remediation Round 1</p>
+  <h1>Eight of Nine, Verified</h1>
+  <p class="sub">Root cause, fix, tests and executed verification for every scenario that blocked a
+    supervised pilot — plus the order-reversal analysis, held for your decision.</p>
+  <div class="meta">
+    <span>14 August 2026</span>
+    <span>16 scenarios re-executed live</span>
+    <span>979 automated tests</span>
+    <span>Production build: passing</span>
+  </div>
+</header>
+
+<div class="board">
+  <div class="stat"><span class="n pass">8</span><span class="l">Fixed &amp; verified</span></div>
+  <div class="stat"><span class="n hold">1</span><span class="l">Held for decision</span></div>
+  <div class="stat"><span class="n">+37</span><span class="l">New tests</span></div>
+  <div class="stat"><span class="n">87</span><span class="l">Readiness / 100</span></div>
+  <div class="stat"><span class="n hold">0</span><span class="l">Device tests run</span></div>
+</div>
+
+<div class="verdict">
+  <h2>Recommendation — Pilot Ready (supervised)</h2>
+  <p><strong>Pilot Ready. Not Production Ready.</strong> Every pilot-blocking scenario is fixed and
+    verified by execution, except order reversal, which was analysis-only by instruction and is
+    presented below for your decision.</p>
+  <p>The honest limit of this work: <strong>verification was database-level and unit-level.</strong>
+    Business logic, permissions, triggers and RPCs were exercised as real users against the live
+    schema. The React changes compile and the production build passes, but <em>nobody has clicked the
+    Cancel button in a browser</em>, and no APK exists so nothing has run on a phone.</p>
+  <p>That is why this is 87 and not higher. The remaining 13 points are almost entirely
+    "unproven in the hands of a human", not "known broken".</p>
+</div>
+
+<!-- ============ ROOT CAUSE ============ -->
+<section>
+  <h2 class="sec">Root cause analysis</h2>
+  <p class="note">Traced UI → API → RPC → trigger → constraint → schema, as instructed. Each failure
+    had a different cause; they were not one bug with four symptoms.</p>
+
+  <div class="rc">
+    <h4>S12b — the Cancel call never reached the database</h4>
+    <p>The dialog sends five named arguments. The deployed function accepted four.
+      PostgREST resolves an RPC by its argument names, finds no match, and rejects the request
+      before any business logic runs.</p>
+    <div class="chain">UI handleCancel({cancellation_reason}) → rpc(update_payment_status, 5 args)
+→ PostgREST → <span style="color:var(--fail)">function update_payment_status(uuid,unknown,unknown,unknown,unknown) does not exist</span></div>
+    <p><strong>Fix:</strong> the four-argument function was dropped and replaced with a five-argument
+      one. Dropped, not overloaded — keeping both would have made every four-argument call ambiguous.</p>
+  </div>
+
+  <div class="rc">
+    <h4>S12 — the reversal was forbidden two layers down</h4>
+    <p>Even a resolvable call could not have worked. <code>payment_status_transition_allowed()</code>
+      listed no transition out of <em>Approved</em>, so the trigger's own rule —
+      "Approved payments are read-only, <em>except for cancellation</em>" — was unreachable code
+      guarding a path the table below it refused.</p>
+    <p><strong>Fix:</strong> <code>('Approved','Cancelled')</code> added. Approved still cannot return
+      to Pending or be Rejected after the fact; cancellation is its single audited exit.</p>
+  </div>
+
+  <div class="rc">
+    <h4>S12c / S13 — there was nowhere to put a reason</h4>
+    <p>No <code>cancellation_reason</code> column, no RPC parameter, no constraint. The shipping
+      commit advertised "mandatory cancellation reasons and audit logging"; none of it existed.</p>
+    <p><strong>Fix:</strong> <code>cancellation_reason</code>, <code>cancelled_by</code> and
+      <code>cancelled_at</code> added and populated automatically. The mandatory check lives in the
+      <strong>trigger</strong>, not only the RPC — the mobile app writes the payments table directly
+      through its sync queue and never calls the RPC, so a rule enforced only there would not exist
+      for the field.</p>
+  </div>
+
+  <div class="rc">
+    <h4>S3b / S3c — one field was guarded, two were not</h4>
+    <p><code>enforce_customer_credit_permissions()</code> checked only <code>credit_limit</code>.
+      <code>opening_balance</code> and <code>credit_days</code> passed through untouched, so a rep
+      could restate what a customer owed or push an overdue account out of sight.</p>
+    <p><strong>Fix:</strong> both now sit behind permissions that <em>already existed</em> in the
+      registry — <code>manage_customer_credit</code> for credit terms,
+      <code>edit_opening_balance</code> for the carried balance. No new permission was invented where
+      a correct one was already defined and unused.</p>
+  </div>
+
+  <div class="rc">
+    <h4>S19c — payment_date had no bounds at all</h4>
+    <p>Any date was accepted. Since the credit-days engine ages from that date, a backdated
+      collection can make an overdue account appear settled in an earlier period.</p>
+    <p><strong>Fix:</strong> future dates refused outright. Anything older than the account's
+      <code>allow_backdate_days</code> (default 30) requires the new
+      <code>backdate_payments</code> permission — gated rather than banned, because a cheque handed
+      over last week and entered today is legitimate.</p>
+  </div>
+
+  <div class="rc">
+    <h4>S27b — only the primary key stood between finance and ten identical payments</h4>
+    <p>The idempotency key correctly stops a <em>technical</em> duplicate from a retried queue item.
+      It says nothing about a <em>human</em> one: ten saves with ten new ids and identical content
+      were all accepted.</p>
+    <p><strong>Fix:</strong> <code>check_duplicate_payment()</code> is called before save on web and
+      mobile, and an insert trigger logs a warning regardless — so a duplicate arriving from the API
+      or an offline sync is still visible to finance afterwards. <strong>Warn, never block</strong>:
+      a genuine second collection at the same counter must not be refused.</p>
+  </div>
+</section>
+
+<hr class="r">
+
+<!-- ============ RESULTS ============ -->
+<section>
+  <h2 class="sec">Verification — executed, not asserted</h2>
+  <p class="note">Every row below was produced by running the workflow as the named role against the
+    live migrated schema, inside transactions that were rolled back.</p>
+
+  <div class="scroll"><table>
+    <thead><tr><th>ID</th><th>Scenario</th><th>Before</th><th>Observed now</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="id">S3b</td><td>Rep edits Opening Balance</td><td class="obs">ALLOWED</td><td class="obs">blocked — edit_opening_balance required</td><td><span class="tag pass">Fixed</span></td></tr>
+      <tr><td class="id">S3c</td><td>Rep edits Credit Days</td><td class="obs">ALLOWED</td><td class="obs">blocked — manage_customer_credit required</td><td><span class="tag pass">Fixed</span></td></tr>
+      <tr><td class="id">S3d</td><td>Finance edits all three (control)</td><td class="obs">—</td><td class="obs">allowed</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S12</td><td>Cancel approved payment restores outstanding</td><td class="obs">transition rejected</td><td class="obs">Cancelled · 17,500 → 27,500</td><td><span class="tag pass">Fixed</span></td></tr>
+      <tr><td class="id">S12-audit</td><td>Stores who / when / why</td><td class="obs">no columns existed</td><td class="obs">by, at and reason all populated</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S12b</td><td>Web Cancel dialog RPC path</td><td class="obs">function does not exist</td><td class="obs">accepted · reason "Cheque Bounced"</td><td><span class="tag pass">Fixed</span></td></tr>
+      <tr><td class="id">S12c</td><td>RPC cancel with no reason</td><td class="obs">ALLOWED</td><td class="obs">blocked — reason required</td><td><span class="tag pass">Fixed</span></td></tr>
+      <tr><td class="id">S13</td><td>Direct table cancel, no reason (mobile path)</td><td class="obs">ALLOWED</td><td class="obs">blocked — reason required</td><td><span class="tag pass">Fixed</span></td></tr>
+      <tr><td class="id">S19c</td><td>Rep backdates 400 days</td><td class="obs">ALLOWED</td><td class="obs">blocked</td><td><span class="tag pass">Fixed</span></td></tr>
+      <tr><td class="id">S19d</td><td>Rep future-dates a payment</td><td class="obs">not tested</td><td class="obs">blocked</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S19e</td><td>Rep dates 20 days back (inside window)</td><td class="obs">not tested</td><td class="obs">allowed</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S19f</td><td>backdate_payments holder dates 400 days back</td><td class="obs">not tested</td><td class="obs">allowed</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S27b</td><td>10 identical collections</td><td class="obs">10 accepted silently</td><td class="obs">10 accepted · 9 warnings logged</td><td><span class="tag pass">Fixed</span></td></tr>
+      <tr><td class="id">S27c</td><td>Duplicate RPC reports the match</td><td class="obs">no such check</td><td class="obs">is_duplicate=true · 60min window</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S27d</td><td>A genuinely new amount is not flagged</td><td class="obs">—</td><td class="obs">is_duplicate=false</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S6</td><td>Closed order → Cancelled</td><td class="obs">rejected</td><td class="obs">still rejected — analysis only, by instruction</td><td><span class="tag hold">Held</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Automated regression cover</h3>
+  <p>37 new tests, 979 total across 73 files, all passing. Each locks a specific failure so it cannot
+    silently return.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Suite</th><th class="num">Tests</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>statuses.test.ts</code></td><td class="num">+7</td><td>Approved→Cancelled allowed; Approved→Pending/Rejected still forbidden; reason required and whitespace-only rejected</td></tr>
+      <tr><td><code>payment-date.test.ts</code></td><td class="num">12</td><td>Future dates, the 400-day case, the exact window boundary, permission override, per-account windows, a zero-day window</td></tr>
+      <tr><td><code>duplicates.test.ts</code></td><td class="num">12</td><td>Match on customer+amount+date; window edges; cancelled payments excluded; warn-never-throw contract</td></tr>
+      <tr><td><code>payment-permissions.test.ts</code></td><td class="num">+6</td><td>Financial fields denied to reps, granted to finance, wildcard for owner; backdate withheld by default</td></tr>
+      <tr><td><code>financials.test.ts</code></td><td class="num">+3</td><td>Outstanding restored after cancellation; credit freed again</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<hr class="r">
+
+<!-- ============ PHASE 3 ============ -->
+<section>
+  <h2 class="sec">Phase 3 — Order reversal analysis</h2>
+  <p class="note">Analysis only, as instructed. Nothing was implemented and S6 remains failing.
+    Context: there is no credit note, return, invoice or ledger table in the schema today, so option B
+    is entirely greenfield.</p>
+
+  <div class="opt">
+    <h4>Option A — allow Closed → Cancelled</h4>
+    <p class="verd">Mirrors what was just built for payments</p>
+    <ul>
+      <li><strong>Accounting:</strong> the order leaves the <code>Closed</code> set, so outstanding
+        drops by its full value immediately. Clean when the order was booked in error; <em>wrong</em>
+        when goods actually shipped and only part is coming back — it erases the whole sale rather
+        than recording a return.</li>
+      <li><strong>Reporting:</strong> historical revenue changes retroactively. A month already
+        reported to the founder can move after the fact, with no artefact explaining why.</li>
+      <li><strong>Credit control:</strong> correct and immediate — the customer's limit frees up.</li>
+      <li><strong>Complexity:</strong> lowest. One transition entry, a mandatory reason, and the
+        audit columns — perhaps half a day, reusing exactly the pattern now proven for payments.</li>
+      <li><strong>Risk:</strong> a dispatched order can be cancelled while stock has physically left
+        the warehouse, putting the books and the godown out of step.</li>
+    </ul>
+  </div>
+
+  <div class="opt rec">
+    <h4>Option B — credit note</h4>
+    <p class="verd">Recommended, with Option A as an immediate stopgap</p>
+    <ul>
+      <li><strong>Accounting:</strong> correct. The original order is never altered; a separate
+        negative document offsets it in full or in part. Partial returns — the common real case — are
+        representable, which Option A cannot do.</li>
+      <li><strong>Reporting:</strong> history is immutable. Revenue for a closed month stays as
+        reported, and the reversal appears in the period it actually happened. This is what an
+        auditor expects.</li>
+      <li><strong>Credit control:</strong> needs the outstanding formula extended to
+        <em>opening + closed orders − approved payments − credit notes</em>, touching the trigger, the
+        financial card, the dashboard and the reports together.</li>
+      <li><strong>Complexity:</strong> highest. New table, numbering sequence, approval workflow,
+        permissions, UI, mobile surface, report columns. Realistically one to two weeks, and it is a
+        module rather than a fix.</li>
+      <li><strong>Risk:</strong> too large to land before a pilot; shipping it half-built would be
+        worse than either alternative.</li>
+    </ul>
+  </div>
+
+  <div class="opt">
+    <h4>Option C — reversal window</h4>
+    <p class="verd">The pragmatic middle</p>
+    <ul>
+      <li>Allow Closed → Cancelled only within N days of closure, only for a
+        <code>reverse_orders</code> permission, only when no dispatch exists against the order, and
+        always with a mandatory reason.</li>
+      <li><strong>Accounting:</strong> same as A, but bounded to the window where a mistake is still
+        plausibly a data-entry error rather than a commercial return.</li>
+      <li><strong>Reporting:</strong> retroactive change is confined to the current period, so closed
+        months stop moving.</li>
+      <li><strong>Credit control:</strong> identical to A.</li>
+      <li><strong>Complexity:</strong> low-to-moderate — one to two days on top of A.</li>
+    </ul>
+  </div>
+
+  <p><strong>Recommendation:</strong> ship <strong>Option C</strong> now to unblock the pilot, and put
+    <strong>Option B</strong> on the roadmap before a second customer. C gives finance a correction
+    path for the mistake a pilot will actually produce — an order closed on the wrong customer in week
+    one — without pretending the product has a returns process it does not have. Pure Option A I would
+    avoid: cancelling a dispatched order with no guard is how stock and books drift apart.</p>
+
+  <div class="callout">
+    <strong>Awaiting your decision.</strong> Nothing has been built. Tell me A, B or C and I will
+    implement, test and verify it the same way as the eight above.
+  </div>
+</section>
+
+<hr class="r">
+
+<!-- ============ RISKS ============ -->
+<section>
+  <h2 class="sec">Remaining risks</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Risk</th><th>Severity</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>No order reversal</td><td><span class="tag hold">High</span></td><td>S6 unresolved by instruction. A wrongly closed order is still permanent, and a pilot will produce one.</td></tr>
+      <tr><td>Mobile entirely unverified</td><td><span class="tag fail">High</span></td><td>No APK exists. Offline collection, sync, force-close recovery and the new duplicate prompt have never run on a device — and mobile is the product's reason to exist.</td></tr>
+      <tr><td>UI unclicked</td><td><span class="tag hold">Medium</span></td><td>The Cancel button, bulk-cancel prompt, disabled financial fields and duplicate toast compile and build, but no human has operated them. Logic is proven; rendering and wiring are not.</td></tr>
+      <tr><td>Offline queue vs 30-day window</td><td><span class="tag hold">Medium</span></td><td>A collection stranded in the sync queue for more than <code>allow_backdate_days</code> will now be refused on arrival. Correct behaviour, but it surfaces as a sync failure a rep cannot self-diagnose.</td></tr>
+      <tr><td>No partial payment adjustment</td><td><span class="tag hold">Medium</span></td><td>Cancellation is all-or-nothing. A part-honoured cheque must be cancelled and re-entered rather than adjusted.</td></tr>
+      <tr><td>Export path unverified</td><td><span class="tag hold">Low</span></td><td>S31 still not executed — export runs in the browser.</td></tr>
+      <tr><td>Three inert settings</td><td><span class="tag hold">Low</span></td><td><code>require_attachment</code>, <code>require_notes</code>, <code>require_reference</code> still do nothing. Unchanged from the earlier review.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<hr class="r">
+
+<section>
+  <h2 class="sec">Readiness score</h2>
+  <p class="note">Same rubric as the pilot simulation, so the numbers are comparable. Scored against
+    what has been <em>proven</em>, not what has been written.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Dimension</th><th class="num">Before</th><th class="num">Now</th><th>Basis for the remaining gap</th></tr></thead>
+    <tbody>
+      <tr><td>Financial correctness</td><td class="num">18 / 20</td><td class="num">18 / 20</td><td>Payment reversal proven; order reversal still absent</td></tr>
+      <tr><td>Credit control</td><td class="num">20 / 20</td><td class="num">20 / 20</td><td>—</td></tr>
+      <tr><td>Security &amp; permissions</td><td class="num">13 / 20</td><td class="num">19 / 20</td><td>All three vectors closed; RLS row-isolation still not exercised directly</td></tr>
+      <tr><td>Payment lifecycle</td><td class="num">8 / 20</td><td class="num">17 / 20</td><td>Cancellation complete and audited; no partial adjustment; UI unclicked</td></tr>
+      <tr><td>Reporting</td><td class="num">13 / 15</td><td class="num">13 / 15</td><td>Export still unverified</td></tr>
+      <tr><td>Mobile / offline</td><td class="num">0 / 5</td><td class="num">0 / 5</td><td>Still no build, still no device test</td></tr>
+      <tr><td><strong>Total</strong></td><td class="num"><strong>72</strong></td><td class="num"><strong>87</strong></td><td></td></tr>
+    </tbody>
+  </table></div>
+  <p>I have deliberately not credited the mobile dimension or the UI work. Both are written, typechecked
+    and building — none of it is <em>proven</em>, and this scoring only counts proof. Note also that the
+    rubric gives mobile 5 points, which understates it for a field-sales product: a 100 here would still
+    not mean "safe for reps in the field".</p>
+</section>
+
+<hr class="r">
+
+<section>
+  <h2 class="sec">Conditions before a rep touches this</h2>
+  <ol>
+    <li><strong>Decide A, B or C on order reversal.</strong> The only remaining functional gap.</li>
+    <li><strong>Click the cancel flow once, in a browser.</strong> Approve a payment, cancel it with a
+      reason, confirm the customer's outstanding rises by that amount and the reason appears on the
+      record. Fifteen minutes, and it converts the largest unproven area into a proven one.</li>
+    <li><strong>Build the APK and collect one real payment on a phone</strong>, including in airplane
+      mode. Nothing about mobile has been executed.</li>
+    <li><strong>Grant permissions deliberately.</strong> <code>backdate_payments</code> is new and
+      unassigned; <code>cancel_payments</code> and <code>edit_opening_balance</code> should sit with
+      finance only. Check the roles screen before day one rather than discovering it mid-pilot.</li>
+    <li><strong>Then run the pilot supervised</strong>, with finance reviewing the approval queue and
+      the new duplicate warnings daily.</li>
+  </ol>
+</section>
+
+<div class="callout">
+  <strong>Production data integrity.</strong> All verification ran inside rolled-back transactions.
+  Counts before and after are identical: 17 accounts, 17 auth users, 17 profiles, 23 roles,
+  27 contacts, 24 orders, 3 payments. No cancellation reason was written to any real payment, and no
+  pilot record persists. The two schema migrations are additive — three new nullable columns, updated
+  functions — and touched no existing row.
+</div>
+
+<p class="foot">
+  Prepared 14 August 2026. Migration <code>20260814210000_payment_cancellation_and_guards.sql</code>
+  applied and verified. Web <code>fix/payment-module-production-readiness</code>,
+  mobile <code>feat/mobile-payment-collection</code>; neither pushed. Verification is
+  database-level and unit-level; the production build passes but no browser or device session was run,
+  and the score reflects that.
+</p>
+
+</div>
