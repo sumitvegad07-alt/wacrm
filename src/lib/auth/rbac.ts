@@ -28,7 +28,19 @@ export function hasPermission(
   // Super Admin / Owner override
   if (permissions.all === true) return true;
 
-  return permissions[key] === true;
+  if (permissions[key] === true) return true;
+
+  // Creation rights were stored as `add_<module>` before the move to `create_<module>`,
+  // and roles in the wild still carry either spelling. Installed mobile builds check the
+  // legacy keys directly and cannot be updated retroactively, so both prefixes must keep
+  // resolving instead of renaming the stored data out from under them.
+  const alias = key.startsWith("create_")
+    ? `add_${key.slice("create_".length)}`
+    : key.startsWith("add_")
+      ? `create_${key.slice("add_".length)}`
+      : null;
+
+  return alias !== null && permissions[alias] === true;
 }
 
 /**

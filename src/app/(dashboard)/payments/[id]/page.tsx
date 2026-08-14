@@ -60,6 +60,7 @@ export default function PaymentDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   
+  const [attachments, setAttachments] = useState<Record<string, any>[]>([]);
   const [verifiedAmount, setVerifiedAmount] = useState<string>('');
   const [rejectionReason, setRejectionReason] = useState<string>('');
   const [cancellationReason, setCancellationReason] = useState<string>('');
@@ -76,10 +77,11 @@ export default function PaymentDetailPage() {
     setPayment(p);
 
     const [
-      { data: cvData }, 
-      { data: activityData }, 
-      { data: taskData }, 
-      ownerRes
+      { data: cvData },
+      { data: activityData },
+      { data: taskData },
+      ownerRes,
+      { data: attachData }
     ] = await Promise.all([
       supabase.from('payment_custom_values').select('value, custom_fields(field_name)').eq('payment_id', id),
       supabase.from('module_activities').select('*').eq('module_name', 'payment').eq('record_id', id).order('created_at', { ascending: false }),
@@ -87,7 +89,25 @@ export default function PaymentDetailPage() {
       p.user_id
         ? supabase.from('profiles').select('full_name, email').eq('user_id', p.user_id).maybeSingle()
         : Promise.resolve({ data: null }),
+      supabase.from('payment_attachments').select('*').eq('payment_id', id).order('created_at', { ascending: true }),
     ]);
+
+    // The bucket is private, so each stored object path is exchanged for a short-lived
+    // signed URL. Links expire in an hour rather than living forever in browser history.
+    const rawAttachments = (attachData || []) as Record<string, any>[];
+    if (rawAttachments.length > 0) {
+      const signed = await Promise.all(
+        rawAttachments.map(async (a) => {
+          const { data: s } = await supabase.storage
+            .from('payment_attachments')
+            .createSignedUrl(a.file_url, 60 * 60);
+          return { ...a, signed_url: s?.signedUrl ?? null };
+        })
+      );
+      setAttachments(signed);
+    } else {
+      setAttachments([]);
+    }
 
     setCustomValues((cvData || []).map((c: Record<string, any>) => ({ label: c.custom_fields?.field_name || 'Field', value: c.value })).filter((c) => c.value));
     setTasks((taskData || []) as Record<string, any>[]);
@@ -325,18 +345,33 @@ export default function PaymentDetailPage() {
                   </div>
                 )}
                 
-                {payment.attachment_url && canViewAttachments && (
+                {attachments.length > 0 && canViewAttachments && (
                   <div className="border-t border-border pt-5">
-                    <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><FileText className="size-4" /> Attachment</h3>
-                    <div className="mt-2">
-                       <a 
-                          href={payment.attachment_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary hover:underline flex items-center gap-2 text-sm"
-                       >
-                         View Uploaded Proof
-                       </a>
+                    <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                      <FileText className="size-4" /> Attachments
+                    </h3>
+                    <div className="mt-2 space-y-2">
+                      {attachments.map((a) => (
+                        <div key={a.id} className="flex items-center gap-2 text-sm">
+                          {a.signed_url ? (
+                            <a
+                              href={a.signed_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              {a.file_name}
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground">{a.file_name} (unavailable)</span>
+                          )}
+                          {a.file_size ? (
+                            <span className="text-muted-foreground text-xs">
+                              {(a.file_size / 1024).toFixed(0)} KB
+                            </span>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

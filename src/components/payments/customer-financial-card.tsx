@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/currency";
+import { computeCustomerFinancials } from "@/lib/payments/financials";
 import { AlertTriangle, CheckCircle2, XCircle, CreditCard } from "lucide-react";
 
 
@@ -64,54 +65,17 @@ export function CustomerFinancialCard({ contactId, accountId, canViewCreditLimit
       }
       
       const serverTime = timeRes.data ? new Date(timeRes.data as string).getTime() : new Date().getTime();
-      
-      const totalOrders = (ordersRes.data || []).reduce((sum, o) => sum + o.total_amount, 0);
-      const approvedPayments = (paymentsRes.data || []).reduce((sum, p) => sum + (p.verified_amount ?? p.amount), 0);
-      const openingBalance = contact.opening_balance || 0;
-      const outstandingBalance = totalOrders - approvedPayments + openingBalance;
-      
-      const creditLimit = contact.credit_limit;
-      const availableCredit = creditLimit ? creditLimit - outstandingBalance : null;
-      
-      let isOverdue = false;
-      let overdueDays = 0;
-      
-      if (contact.credit_days) {
-        let paidAmount = approvedPayments;
-        let currentOutstanding = openingBalance;
-        
-        if (paidAmount >= currentOutstanding) {
-          paidAmount -= currentOutstanding;
-        } else {
-          paidAmount = 0;
-        }
-        
-        for (const o of (ordersRes.data || [])) {
-          if (paidAmount >= o.total_amount) {
-            paidAmount -= o.total_amount;
-          } else {
-            paidAmount = 0;
-            const daysOld = Math.floor((serverTime - new Date(o.created_at).getTime()) / (1000 * 3600 * 24));
-            if (daysOld > contact.credit_days) {
-              isOverdue = true;
-              overdueDays = Math.max(overdueDays, daysOld - contact.credit_days);
-            }
-          }
-        }
-      }
-      
-      const finalData = {
-        totalOrders,
-        approvedPayments,
-        openingBalance,
-        outstandingBalance,
-        creditLimit,
-        availableCredit,
+
+      const computed = computeCustomerFinancials({
+        openingBalance: contact.opening_balance,
+        creditLimit: contact.credit_limit,
         creditDays: contact.credit_days,
-        isOverdue,
-        overdueDays,
-        paymentsEnabled: true
-      };
+        orders: ordersRes.data || [],
+        payments: paymentsRes.data || [],
+        now: serverTime,
+      });
+
+      const finalData = { ...computed, paymentsEnabled: true };
       
       setData(finalData);
       if (onDataLoaded) onDataLoaded(finalData);

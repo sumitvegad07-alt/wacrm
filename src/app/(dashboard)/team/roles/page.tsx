@@ -440,6 +440,40 @@ export default function RolesPage() {
                 <div className="w-full max-w-none space-y-8">
                   
 
+                  {/* A role carrying the `all` wildcard grants every permission in the
+                      product. Without this banner the matrix below simply renders empty,
+                      which reads as "no access" when it actually means "unrestricted". */}
+                  {permissions.all && (
+                    <Card className="p-4 border-destructive/50 bg-destructive/5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <Shield className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
+                          <div>
+                            <h3 className="font-semibold text-foreground">Full Access (unrestricted)</h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              This role bypasses every permission check, including payment approval,
+                              credit limits and billing. The checklist below is hidden because nothing
+                              in it applies.
+                            </p>
+                          </div>
+                        </div>
+                        {isEditing && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              const { all, ...rest } = permissions;
+                              setPermissions(rest);
+                            }}
+                          >
+                            Switch to granular
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  )}
+
                   {/* General Data Scope Setting */}
                   {!permissions.all && (
                     <Card className="p-4">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useForm, Controller } from 'react-hook-form'; // Wait, I should use react-hook-form
+import { Controller } from 'react-hook-form';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-f
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
 import { logModuleActivity } from '@/lib/activities';
+import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { cn } from '@/lib/utils';
 
 // Zod and react-hook-form imports
@@ -195,7 +196,7 @@ export function PaymentForm({
   }, [selectedContactId, accountId, supabase]);
 
   const onSubmit = async (data: PaymentFormData) => {
-    if (!hasPermission('add_payments')) {
+    if (!hasPermission(PERMISSIONS.PAYMENTS.CREATE)) {
       toast.error('You do not have permission to add payments.');
       return;
     }
@@ -208,30 +209,25 @@ export function PaymentForm({
 
     setSaving(true);
     try {
-      let proofUrl = null;
-      let proofFileName = null;
-      let proofFileSize = null;
-      let proofContentType = null;
+      // Proof of payment lives in the private `payment_attachments` bucket. We store the
+      // object path (not a URL) and mint short-lived signed URLs on read — cheque images
+      // and bank receipts must never be reachable by guessing a public URL.
+      let proofPath: string | null = null;
 
       if (proofFile) {
         const fileExt = proofFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `${accountId}/${user?.id}/${fileName}`;
-        
+        const filePath = `${accountId}/${user?.id}/${crypto.randomUUID()}.${fileExt}`;
+
         const { error: uploadError } = await supabase.storage
           .from('payment_attachments')
           .upload(filePath, proofFile);
-          
+
         if (uploadError) {
           console.error("Storage upload error", uploadError);
-          // Don't fail the whole payment if storage bucket is missing, just warn
-          toast.warning("Payment saved but could not upload file. Please ensure 'payment_attachments' bucket exists.");
+          // The payment itself is the record of record — never lose it over a failed upload.
+          toast.warning("Payment saved, but the proof image could not be uploaded. You can attach it again from the payment detail page.");
         } else {
-          const { data: publicUrlData } = supabase.storage.from('payment_attachments').getPublicUrl(filePath);
-          proofUrl = publicUrlData.publicUrl;
-          proofFileName = proofFile.name;
-          proofFileSize = proofFile.size;
-          proofContentType = proofFile.type;
+          proofPath = filePath;
         }
       }
 
@@ -262,9 +258,6 @@ export function PaymentForm({
         source: source,
         site_visit_id: siteVisitId || null,
         status: status,
-        attachment_url: proofUrl || null,
-        attachment_name: proofFileName || null,
-        attachment_type: proofContentType || null,
       }).select('id').single();
 
       if (error) {
@@ -280,6 +273,22 @@ export function PaymentForm({
       }
       
       const newPaymentId = paymentResult?.id || idempotencyKey.current;
+
+      // 3. Link the uploaded proof to the payment
+      if (proofPath) {
+        const { error: attachErr } = await supabase.from('payment_attachments').insert({
+          payment_id: newPaymentId,
+          user_id: user!.id,
+          file_name: proofFile!.name,
+          file_url: proofPath,
+          file_size: proofFile!.size,
+          content_type: proofFile!.type,
+        });
+        if (attachErr) {
+          console.error('Attachment link error', attachErr);
+          toast.warning('Payment saved, but the proof image could not be linked to it.');
+        }
+      }
 
       // 4. Save Custom Fields
       const cvInserts = Object.entries(customValues)
