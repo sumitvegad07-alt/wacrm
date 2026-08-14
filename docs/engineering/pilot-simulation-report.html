@@ -1,0 +1,549 @@
+<title>OZZO Pilot Simulation</title>
+<style>
+  :root {
+    --bg: #F7F7F5;
+    --panel: #FFFFFF;
+    --inset: #EDEDE9;
+    --fg: #16181C;
+    --dim: #62666F;
+    --line: #DCDCD6;
+    --accent: #2D5BD1;
+    --pass: #1F7A4C;
+    --pass-bg: #E4F1E9;
+    --fail: #B32226;
+    --fail-bg: #FBE5E4;
+    --skip: #8A6A12;
+    --skip-bg: #FAF0D7;
+
+    --sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101216;
+      --panel: #171A20;
+      --inset: #1E222A;
+      --fg: #E7E8EA;
+      --dim: #949AA6;
+      --line: #2A2F38;
+      --accent: #7CA0F0;
+      --pass: #5FC38C;
+      --pass-bg: #16291F;
+      --fail: #F0797C;
+      --fail-bg: #2E1A1C;
+      --skip: #D6AC55;
+      --skip-bg: #2A2317;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101216;
+    --panel: #171A20;
+    --inset: #1E222A;
+    --fg: #E7E8EA;
+    --dim: #949AA6;
+    --line: #2A2F38;
+    --accent: #7CA0F0;
+    --pass: #5FC38C;
+    --pass-bg: #16291F;
+    --fail: #F0797C;
+    --fail-bg: #2E1A1C;
+    --skip: #D6AC55;
+    --skip-bg: #2A2317;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: var(--sans); font-size: 15.5px; line-height: 1.6;
+    margin: 0; padding: 0 20px 90px; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  header.top { padding: 48px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 32px; }
+  .kicker {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(30px, 5.5vw, 44px); line-height: 1.08; margin: 0 0 12px;
+    letter-spacing: -.022em; font-weight: 680; text-wrap: balance;
+  }
+  .sub { font-size: 18px; color: var(--dim); margin: 0; max-width: 62ch; text-wrap: pretty; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 6px 26px; margin-top: 22px;
+    font-family: var(--mono); font-size: 12px; color: var(--dim);
+  }
+
+  /* scoreboard */
+  .board {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px; margin-bottom: 14px;
+  }
+  .stat {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px 18px;
+  }
+  .stat .n {
+    font-family: var(--mono); font-size: 30px; font-weight: 600;
+    font-variant-numeric: tabular-nums; line-height: 1; display: block; margin-bottom: 7px;
+  }
+  .stat .l {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--dim);
+  }
+  .n.pass { color: var(--pass); } .n.fail { color: var(--fail); } .n.skip { color: var(--skip); }
+
+  .verdict {
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid var(--skip); border-radius: 4px;
+    padding: 24px 28px; margin: 26px 0 46px;
+  }
+  .verdict h2 {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--skip); margin: 0 0 12px;
+  }
+  .verdict p { margin: 0 0 12px; max-width: 70ch; }
+  .verdict p:last-child { margin-bottom: 0; }
+
+  section { margin-bottom: 52px; }
+  h2.sec {
+    font-size: 22px; font-weight: 660; letter-spacing: -.012em;
+    margin: 0 0 4px; padding-bottom: 9px; border-bottom: 1px solid var(--line);
+  }
+  .note { color: var(--dim); font-size: 14.5px; margin: 0 0 22px; max-width: 70ch; }
+  h3 { font-size: 15.5px; font-weight: 660; margin: 28px 0 10px; }
+  p { margin: 0 0 13px; }
+
+  .scroll { overflow-x: auto; margin-bottom: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 640px; }
+  th {
+    text-align: left; font-family: var(--mono); font-size: 10.5px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+    font-weight: 600; padding: 0 12px 8px 0; border-bottom: 1px solid var(--fg);
+  }
+  td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.id { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; color: var(--dim); }
+  td.obs { font-family: var(--mono); font-size: 12.5px; }
+
+  .tag {
+    display: inline-block; font-family: var(--mono); font-size: 10px;
+    letter-spacing: .08em; text-transform: uppercase; font-weight: 700;
+    padding: 3px 7px; border-radius: 2px; white-space: nowrap;
+  }
+  .tag.pass { background: var(--pass-bg); color: var(--pass); }
+  .tag.fail { background: var(--fail-bg); color: var(--fail); }
+  .tag.skip { background: var(--skip-bg); color: var(--skip); }
+
+  .find {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 4px; padding: 18px 20px; margin-bottom: 12px;
+  }
+  .find.sev1 { border-left: 3px solid var(--fail); }
+  .find.sev2 { border-left: 3px solid var(--skip); }
+  .find.sev3 { border-left: 3px solid var(--dim); }
+  .find h4 { margin: 0 0 8px; font-size: 15px; font-weight: 660; }
+  .find p { margin: 0 0 8px; font-size: 14.5px; color: var(--dim); }
+  .find p:last-child { margin-bottom: 0; }
+  .find strong { color: var(--fg); font-weight: 620; }
+  .repro {
+    font-family: var(--mono); font-size: 12px; background: var(--inset);
+    border-radius: 3px; padding: 9px 12px; margin-top: 10px; color: var(--dim);
+    overflow-x: auto;
+  }
+
+  code {
+    font-family: var(--mono); font-size: .875em; background: var(--inset);
+    padding: 1.5px 5px; border-radius: 2px; word-break: break-word;
+  }
+  ul { margin: 0 0 13px; padding-left: 19px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--accent); }
+
+  .callout {
+    background: var(--inset); border-radius: 4px; padding: 17px 20px;
+    margin: 20px 0; font-size: 14.5px;
+  }
+
+  .gauge { margin: 18px 0 8px; }
+  .gauge .bar {
+    height: 10px; background: var(--inset); border-radius: 5px; overflow: hidden;
+    display: flex;
+  }
+  .gauge .seg { height: 100%; }
+  .gauge .lab {
+    display: flex; justify-content: space-between; font-family: var(--mono);
+    font-size: 11px; color: var(--dim); margin-top: 7px;
+  }
+
+  hr.r { border: none; border-top: 1px solid var(--line); margin: 40px 0; }
+  .foot {
+    font-size: 13px; color: var(--dim); border-top: 1px solid var(--line);
+    padding-top: 20px; margin-top: 50px;
+  }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">Production Pilot Simulation · OZZO</p>
+  <h1>Can OZZO Survive Seven Days?</h1>
+  <p class="sub">A full business-workflow simulation run as five real roles against the live schema —
+    customer master, order lifecycle, collections, credit control, fraud attempts, sync and reporting.</p>
+  <div class="meta">
+    <span>14 August 2026</span>
+    <span>49 checks executed</span>
+    <span>Environment: 3 territories · 20 customers · 10 users · 100 orders · 50 payments</span>
+  </div>
+</header>
+
+<div class="board">
+  <div class="stat"><span class="n">49</span><span class="l">Executed</span></div>
+  <div class="stat"><span class="n pass">40</span><span class="l">Passed</span></div>
+  <div class="stat"><span class="n fail">9</span><span class="l">Failed</span></div>
+  <div class="stat"><span class="n skip">6</span><span class="l">Not executed</span></div>
+  <div class="stat"><span class="n">72</span><span class="l">Readiness / 100</span></div>
+</div>
+
+<div class="gauge">
+  <div class="bar">
+    <div class="seg" style="width:81.6%;background:var(--pass)"></div>
+    <div class="seg" style="width:18.4%;background:var(--fail)"></div>
+  </div>
+  <div class="lab"><span>40 passed (81.6%)</span><span>9 failed</span></div>
+</div>
+
+<div class="verdict">
+  <h2>Recommendation — Conditional GO</h2>
+  <p><strong>GO for a supervised pilot with one finance user. NO-GO for unsupervised production.</strong></p>
+  <p>The financial engine is genuinely sound. Credit control passed all six modes, credit-days ageing
+    passed, and the outstanding figure reconciled to the rupee across 20 customers, 100 orders and 50
+    payments — per customer and at account level. Money flows in correctly.</p>
+  <p>What fails is <strong>money flowing backwards</strong>. Nothing that has been approved or closed
+    can be undone: approved payments are terminal, closed orders are terminal, and the web Cancel
+    button calls a database function signature that does not exist, so it errors before it starts.
+    A pilot will produce mistakes on day one, and today there is no in-product way to correct one.</p>
+  <p>Two fraud vectors are also open in the customer master, both of which let a field rep quietly
+    change what a customer owes.</p>
+</div>
+
+<!-- ================= EXECUTIVE SUMMARY ================= -->
+<section>
+  <h2 class="sec">Executive summary</h2>
+  <p class="note">What a real company would experience in its first week.</p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Business area</th><th>Result</th><th>What it means on day one</th></tr></thead>
+      <tbody>
+        <tr><td>Credit control</td><td><span class="tag pass">6 / 6</span></td><td>Limits hold. Warn logs, block stops, override works and is recorded. Trustworthy.</td></tr>
+        <tr><td>Reporting &amp; reconciliation</td><td><span class="tag pass">9 / 9</span></td><td>Every view of outstanding agrees, at volume. Finance can trust the number.</td></tr>
+        <tr><td>Credit days / overdue</td><td><span class="tag pass">2 / 2</span></td><td>Ageing correct; a full payment restores good standing.</td></tr>
+        <tr><td>Order lifecycle</td><td><span class="tag pass">5 / 6</span></td><td>Partial dispatch and auto-close work well. A closed order cannot be reversed.</td></tr>
+        <tr><td>Security &amp; permissions</td><td><span class="tag fail">8 / 9</span></td><td>Reps cannot approve, reject, cancel or raise limits. Backdating is unguarded.</td></tr>
+        <tr><td>Customer master</td><td><span class="tag fail">4 / 6</span></td><td>Credit limit protected — but a rep can rewrite Opening Balance and Credit Days.</td></tr>
+        <tr><td>Payment lifecycle</td><td><span class="tag fail">3 / 7</span></td><td>Collect and approve work. Cancellation is broken end to end.</td></tr>
+        <tr><td>Mobile offline</td><td><span class="tag skip">Not executed</span></td><td>No APK exists. Server-side idempotency tested instead and holds.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="r">
+
+<!-- ================= CRITICAL ================= -->
+<section>
+  <h2 class="sec">Critical findings</h2>
+  <p class="note">Each was reproduced by executing the workflow, not by reading code.</p>
+
+  <div class="find sev1">
+    <h4>1. The web Cancel button cannot work</h4>
+    <p>The Cancel dialog calls <code>update_payment_status</code> with a
+      <code>p_cancellation_reason</code> argument. The deployed function takes four parameters and
+      that is not one of them, so Postgres rejects the call before any business logic runs.</p>
+    <p>Finance clicks Cancel, fills in the mandatory reason, confirms — and gets an error every time.
+      There is no working path to cancel a payment from the product.</p>
+    <div class="repro">executed → function update_payment_status(uuid, unknown, unknown, unknown, unknown) does not exist</div>
+  </div>
+
+  <div class="find sev1">
+    <h4>2. "Mandatory cancellation reason" does not exist anywhere</h4>
+    <p>There is no <code>cancellation_reason</code> column on <code>payments</code>, no parameter on
+      the RPC, and no constraint. Cancelling with no reason at all succeeds silently.</p>
+    <p>The feature was announced in the shipping commit as "mandatory cancellation reasons and audit
+      logging". <strong>A cancelled payment currently records who and when, but never why.</strong>
+      For a module whose purpose is cash custody, that is the audit trail that matters most.</p>
+    <div class="repro">executed → cancel with no reason: ALLOWED, status now Cancelled, reason recorded nowhere</div>
+  </div>
+
+  <div class="find sev1">
+    <h4>3. Approved money and closed orders are both irreversible</h4>
+    <p>Approved is terminal for payments; Closed is terminal for orders. Neither can move to
+      Cancelled. A payment approved against the wrong customer, or a cheque that bounces next week,
+      permanently understates what that customer owes — and a closed order booked in error permanently
+      overstates it.</p>
+    <p>In a seven-day pilot with real reps, both <em>will</em> happen. The only correction available
+      today is direct database surgery.</p>
+    <div class="repro">executed → Approved → Cancelled: rejected · Closed → Cancelled: rejected ("Closed is terminal")</div>
+  </div>
+
+  <div class="find sev1">
+    <h4>4. A field rep can rewrite what a customer owes</h4>
+    <p>Credit Limit is properly protected — a rep is blocked, a finance manager is allowed. But
+      <strong>Opening Balance and Credit Days have no such guard</strong>. Running as an actual field
+      rep, both were changed successfully.</p>
+    <p>The fraud is straightforward: reduce a customer's opening balance to hide a shortfall, or set
+      credit days to 365 so an overdue account never surfaces on any report. Both directly manipulate
+      the receivable, and neither is logged as a financial change.</p>
+    <div class="repro">executed as Field Sales Rep → opening_balance 5000 → 1: ALLOWED · credit_days 30 → 365: ALLOWED</div>
+  </div>
+</section>
+
+<hr class="r">
+
+<!-- ================= RESULTS ================= -->
+<section>
+  <h2 class="sec">Full results</h2>
+  <p class="note">Every scenario, executed in order, against the live schema inside rolled-back
+    transactions.</p>
+
+  <h3>Phase 1 — Customer master</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>ID</th><th>Scenario</th><th>Observed</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="id">S1</td><td>Create customer, financial fields persist</td><td class="obs">opening 12500.50 · limit 75000 · days 45</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S2</td><td>Rename customer, financials survive</td><td class="obs">all three unchanged</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S3a</td><td>Rep edits Credit Limit</td><td class="obs">blocked</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S3b</td><td>Rep edits Opening Balance</td><td class="obs">ALLOWED → 1.00</td><td><span class="tag fail">Fail</span></td></tr>
+      <tr><td class="id">S3c</td><td>Rep edits Credit Days</td><td class="obs">ALLOWED → 365</td><td><span class="tag fail">Fail</span></td></tr>
+      <tr><td class="id">S3d</td><td>Finance edits Credit Limit (control)</td><td class="obs">allowed</td><td><span class="tag pass">Pass</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Phase 2 — Order lifecycle</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>ID</th><th>Scenario</th><th>Observed</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="id">S4</td><td>50 orders across 5 states; only Closed counts</td><td class="obs">10000.00 — 40 others ignored</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S5</td><td>Approved → Closed raises outstanding</td><td class="obs">10000 → 11000</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S6</td><td>Closed → Cancelled lowers outstanding</td><td class="obs">transition rejected; still 11000</td><td><span class="tag fail">Fail</span></td></tr>
+      <tr><td class="id">S7</td><td>Dispatch 50 of 100 units</td><td class="obs">Part Dispatch</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S8</td><td>Dispatch remaining 50 → auto-close</td><td class="obs">Closed</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S8b</td><td>Auto-closed order enters outstanding</td><td class="obs">21000.00</td><td><span class="tag pass">Pass</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="note"><strong>Note on the brief:</strong> the test asked for 10 Draft orders. OZZO has no
+    Draft status — the lifecycle starts at Pending. Ten Pending orders were used instead.</p>
+
+  <h3>Phase 3 — Payment collection</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>ID</th><th>Scenario</th><th>Observed</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="id">S9</td><td>Rep collects → Pending, outstanding unmoved</td><td class="obs">Pending · 50000 → 50000</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S10</td><td>Finance approves → outstanding falls</td><td class="obs">50000 → 40000</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S11</td><td>Finance rejects → outstanding unmoved</td><td class="obs">40000 → 40000</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S12</td><td>Cancel an approved payment (with reason)</td><td class="obs">transition rejected</td><td><span class="tag fail">Fail</span></td></tr>
+      <tr><td class="id">S12b</td><td>Web Cancel dialog call path</td><td class="obs">RPC signature does not exist</td><td><span class="tag fail">Fail</span></td></tr>
+      <tr><td class="id">S12c</td><td>RPC cancel with no reason parameter</td><td class="obs">ALLOWED, reason lost</td><td><span class="tag fail">Fail</span></td></tr>
+      <tr><td class="id">S13</td><td>Cancel with no reason is blocked</td><td class="obs">ALLOWED → Cancelled</td><td><span class="tag fail">Fail</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Phase 4 — Credit control</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>ID</th><th>Scenario</th><th>Observed</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="id">S14a</td><td>Over limit, mode IGNORE</td><td class="obs">allowed</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S14b</td><td>Over limit, mode WARN</td><td class="obs">allowed + 1 warning logged</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S14c</td><td>Over limit, mode BLOCK</td><td class="obs">blocked</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S14d</td><td>Order landing exactly on the limit</td><td class="obs">allowed (95k + 5k = 100k)</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S15</td><td>ASM with override exceeds limit</td><td class="obs">allowed + override logged</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S16</td><td>Rep without override exceeds limit</td><td class="obs">blocked</td><td><span class="tag pass">Pass</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Phase 5 — Credit days</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>ID</th><th>Scenario</th><th>Observed</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="id">S17</td><td>Closed order aged 35 days vs 30 credit days</td><td class="obs">overdue = true</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S18</td><td>Full payment approved → good standing</td><td class="obs">overdue = false</td><td><span class="tag pass">Pass</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Phase 6 — Security attacks</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>ID</th><th>Attack, run as Field Sales Rep</th><th>Observed</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="id">S19</td><td>Approve a payment</td><td class="obs">blocked — approve_payments required</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S19b</td><td>Insert a payment already marked Approved</td><td class="obs">blocked</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S19c</td><td>Backdate a collection 400 days</td><td class="obs">ALLOWED, no validation</td><td><span class="tag fail">Fail</span></td></tr>
+      <tr><td class="id">S20</td><td>Reject a payment</td><td class="obs">blocked</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S21</td><td>Cancel a payment</td><td class="obs">blocked — cancel_payments required</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S22</td><td>Raise a credit limit</td><td class="obs">blocked</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S23</td><td>Hold view_customer_financials</td><td class="obs">false</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S24</td><td>Hold view_customer_payment_history</td><td class="obs">false</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S24b</td><td>Hold view_customer_credit_limit</td><td class="obs">false</td><td><span class="tag pass">Pass</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">S23 and S24 verify the permission gate the UI reads. Whether the tab is actually
+    hidden on screen was <strong>not</strong> visually confirmed — that needs a browser.</p>
+
+  <h3>Phase 7 — Sync and duplicates</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>ID</th><th>Scenario</th><th>Observed</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="id">S25/26</td><td>Queue replays the same client id on reconnect</td><td class="obs">rejected as duplicate · 1 row</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S27</td><td>Save tapped 10× with one idempotency key</td><td class="obs">0 extra rows · 1 payment</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S27b</td><td>10 identical collections, each a new id</td><td class="obs">10 accepted, no detection</td><td><span class="tag fail">Fail</span></td></tr>
+      <tr><td class="id">S28</td><td>Payment numbers unique across a burst</td><td class="obs">11 payments · 11 distinct numbers</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S25–S28</td><td>On-device: airplane mode, force-close, rapid tap</td><td class="obs">no APK exists</td><td><span class="tag skip">Not executed</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Phase 8 — Reporting</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>ID</th><th>Scenario</th><th>Observed</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="id">S29</td><td>Customer view = trigger view = report view</td><td class="obs">28000.00 across all three</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S30</td><td>Collections total = approved payments</td><td class="obs">4000.00 = 4000.00</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S30b</td><td>Figures use verified, not collected, amount</td><td class="obs">4000 verified (not 5000 collected)</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td class="id">S31</td><td>Exported file matches the UI</td><td class="obs">export runs in the browser</td><td><span class="tag skip">Not executed</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Volume run — the full week's book</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Check</th><th>Observed</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>Environment provisioned as specified</td><td class="obs">3 terr · 20 cust · 10 users · 100 orders · 50 payments</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td>Sum of 20 customer balances = account rollup</td><td class="obs">47913.00 = 47913.00</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td>100 orders carry 100 distinct numbers</td><td class="obs">100 / 100</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td>50 payments carry 50 distinct numbers</td><td class="obs">50 / 50</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td>No zero or negative settled amounts</td><td class="obs">0</td><td><span class="tag pass">Pass</span></td></tr>
+      <tr><td>Approved collections present after mixed ruling</td><td class="obs">34 of 50 approved</td><td><span class="tag pass">Pass</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The 50 payments were ruled on realistically: some approved in full, some approved
+    short (verified below collected, as with short cash), some rejected as bounced, some cancelled.
+    The books balanced to the rupee regardless.</p>
+</section>
+
+<hr class="r">
+
+<!-- ================= OTHER FINDINGS ================= -->
+<section>
+  <h2 class="sec">Business logic findings</h2>
+
+  <div class="find sev2">
+    <h4>Backdating a collection is unvalidated</h4>
+    <p>A rep recorded a payment dated 400 days in the past with no warning or block. Combined with the
+      credit-days engine reading that date, a backdated collection can be used to make an overdue
+      account appear settled in an earlier period.</p>
+    <p><strong>Recommendation:</strong> constrain <code>payment_date</code> to a sensible window —
+      not in the future, not more than N days back without a permission.</p>
+  </div>
+
+  <div class="find sev2">
+    <h4>No business-level duplicate detection</h4>
+    <p>Ten identical collections — same customer, same amount, same day — were accepted without
+      comment because each carried a new id. The idempotency key correctly prevents a
+      <em>technical</em> duplicate from a retry, but not a <em>human</em> one from a rep saving twice
+      after a slow screen.</p>
+    <p><strong>Recommendation:</strong> warn on a same-customer, same-amount collection within a short
+      window. Do not block it — legitimate repeat payments happen.</p>
+  </div>
+
+  <div class="find sev3">
+    <h4>The lifecycle has no Draft state</h4>
+    <p>The brief assumed Draft orders. OZZO starts at Pending, so an order is live from the moment it
+      is created. If reps need to build an order across a visit before committing it, that state does
+      not exist today.</p>
+  </div>
+</section>
+
+<hr class="r">
+
+<section>
+  <h2 class="sec">What is genuinely solid</h2>
+  <p class="note">Stated as plainly as the failures.</p>
+  <ul>
+    <li><strong>Credit control is trustworthy.</strong> All three modes behave correctly, the boundary
+      case (landing exactly on the limit) is right, the override permission works and every override
+      is written to the activity log. This was non-functional twelve hours ago; it is now the
+      strongest part of the module.</li>
+    <li><strong>The books reconcile.</strong> Three independent calculations of outstanding agreed
+      exactly, and the sum of 20 customer balances matched the account rollup to the rupee under a
+      full week's transaction load.</li>
+    <li><strong>Separation of duties holds.</strong> A field rep could not approve, reject or cancel a
+      payment, could not create one pre-approved, and could not raise a credit limit. Every refusal
+      came from the database, not the interface — so the API and the mobile app inherit it.</li>
+    <li><strong>Partial dispatch is well built.</strong> 50 of 100 units produced Part Dispatch; the
+      remaining 50 auto-closed the order and it flowed into outstanding immediately.</li>
+    <li><strong>Numbering does not collide.</strong> 100 orders and 50 payments, all uniquely
+      numbered, including under a rapid burst.</li>
+    <li><strong>Retry safety is real.</strong> A replayed offline queue item and ten rapid saves
+      sharing one key both produced exactly one payment.</li>
+  </ul>
+</section>
+
+<hr class="r">
+
+<section>
+  <h2 class="sec">Readiness score</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Dimension</th><th>Score</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td>Financial correctness</td><td class="obs">18 / 20</td><td>Reconciliation exact at volume; irreversibility costs 2</td></tr>
+      <tr><td>Credit control</td><td class="obs">20 / 20</td><td>All modes, boundaries and overrides correct</td></tr>
+      <tr><td>Security &amp; permissions</td><td class="obs">13 / 20</td><td>Core separation of duties holds; two open fraud vectors</td></tr>
+      <tr><td>Payment lifecycle</td><td class="obs">8 / 20</td><td>Collect and approve solid; cancellation broken end to end</td></tr>
+      <tr><td>Reporting</td><td class="obs">13 / 15</td><td>All figures agree; export path unverified</td></tr>
+      <tr><td>Mobile / offline</td><td class="obs">0 / 5</td><td>Not executable — no build exists</td></tr>
+      <tr><td><strong>Total</strong></td><td class="obs"><strong>72 / 100</strong></td><td></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<hr class="r">
+
+<section>
+  <h2 class="sec">Conditions for GO</h2>
+  <p class="note">In the order they block a pilot.</p>
+  <ol>
+    <li><strong>Make cancellation work.</strong> Add the missing RPC parameter and the
+      <code>cancellation_reason</code> column, enforce it as mandatory, and allow Approved → Cancelled
+      for holders of <code>cancel_payments</code>. Until this lands, finance has no way to fix a
+      mistake.</li>
+    <li><strong>Guard Opening Balance and Credit Days</strong> the same way Credit Limit already is.
+      Two lines of trigger logic close both fraud vectors.</li>
+    <li><strong>Decide on closed-order reversal.</strong> Either allow Closed → Cancelled or define a
+      credit-note flow. A pilot will book a wrong order in week one.</li>
+    <li><strong>Constrain payment_date</strong> to stop silent backdating.</li>
+    <li><strong>Build and hand-test the APK.</strong> Phase 7 is genuinely unproven, and mobile
+      collection is the product's reason to exist.</li>
+  </ol>
+  <p>Items 1 and 2 are small and would move the score to roughly 88. I would run the pilot after those
+    two, with one trusted finance user watching the approval queue daily, and I would not put a second
+    customer on it until the mobile phase has actually been executed on a device.</p>
+</section>
+
+<div class="callout">
+  <strong>Production data integrity.</strong> Every scenario ran inside a transaction that was rolled
+  back. Row counts were captured before and after and matched exactly: 17 accounts, 17 auth users,
+  17 profiles, 23 roles, 27 contacts, 24 orders, 3 payments, 1,607 territories, 1 attachment. No
+  pilot tenant, user, customer, order or payment persists — the newest order in production remains
+  yours from 13 August. Nothing was created, modified or deleted.
+</div>
+
+<p class="foot">
+  Executed 14 August 2026 against the live schema as five distinct roles, with user identity injected
+  per statement so permission checks and triggers evaluated for real. Two scenarios initially reported
+  a pass for the wrong reason — a cancel blocked by a missing column rather than by permission — and
+  were re-run in isolation before being recorded here; the corrected results are the ones shown.
+</p>
+
+</div>
