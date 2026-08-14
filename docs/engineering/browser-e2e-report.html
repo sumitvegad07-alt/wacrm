@@ -1,0 +1,429 @@
+<title>OZZO Browser E2E Findings</title>
+<style>
+  :root {
+    --bg:#F7F6F3; --panel:#FFF; --inset:#ECEAE5; --fg:#17191C; --dim:#5F656B;
+    --line:#DCD9D2; --accent:#3B4E8C;
+    --p0:#9E1B1B; --p0bg:#F9E3E1; --p1:#B4531A; --p1bg:#FBEADB;
+    --p2:#8A6A12; --p2bg:#F9F0D8; --p3:#4A5560; --p3bg:#E9ECEF;
+    --ok:#1E6B47; --okbg:#DFEDE6;
+    --sans:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#111316; --panel:#181B1E; --inset:#1F2327; --fg:#E7E9EA; --dim:#959CA2;
+    --line:#2B3034; --accent:#8FA3DE;
+    --p0:#EE8079; --p0bg:#2E1B1A; --p1:#E0985C; --p1bg:#2B2118;
+    --p2:#D4B25E; --p2bg:#2A2517; --p3:#9AA5AF; --p3bg:#20252A;
+    --ok:#63C295; --okbg:#152A21;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#111316; --panel:#181B1E; --inset:#1F2327; --fg:#E7E9EA; --dim:#959CA2;
+    --line:#2B3034; --accent:#8FA3DE;
+    --p0:#EE8079; --p0bg:#2E1B1A; --p1:#E0985C; --p1bg:#2B2118;
+    --p2:#D4B25E; --p2bg:#2A2517; --p3:#9AA5AF; --p3bg:#20252A;
+    --ok:#63C295; --okbg:#152A21;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15.5px;
+    line-height:1.62;margin:0;padding:0 20px 90px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto}
+  header.top{padding:46px 0 22px;border-bottom:2px solid var(--accent);margin-bottom:28px}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 13px}
+  h1{font-size:clamp(29px,5.4vw,43px);line-height:1.08;margin:0 0 12px;letter-spacing:-.022em;
+    font-weight:680;text-wrap:balance}
+  .sub{font-size:18px;color:var(--dim);margin:0;max-width:64ch;text-wrap:pretty}
+  .meta{display:flex;flex-wrap:wrap;gap:6px 26px;margin-top:20px;font-family:var(--mono);
+    font-size:12px;color:var(--dim)}
+  .board{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:15px 17px}
+  .stat .n{font-family:var(--mono);font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;
+    line-height:1;display:block;margin-bottom:6px}
+  .stat .l{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  .verdict{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--p1);
+    border-radius:4px;padding:23px 27px;margin:0 0 42px}
+  .verdict h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--p1);margin:0 0 12px}
+  .verdict p{margin:0 0 12px;max-width:72ch}.verdict p:last-child{margin-bottom:0}
+  section{margin-bottom:48px}
+  h2.sec{font-size:22px;font-weight:660;letter-spacing:-.012em;margin:0 0 4px;padding-bottom:9px;
+    border-bottom:1px solid var(--line)}
+  .note{color:var(--dim);font-size:14.5px;margin:0 0 20px;max-width:72ch}
+  h3{font-size:15.5px;font-weight:660;margin:26px 0 10px}
+  p{margin:0 0 13px}
+  .scroll{overflow-x:auto;margin-bottom:18px}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:620px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);font-weight:600;padding:0 12px 8px 0;border-bottom:1px solid var(--fg)}
+  td{padding:10px 12px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  td.id{font-family:var(--mono);font-size:12.5px;white-space:nowrap;color:var(--dim)}
+  td.obs{font-family:var(--mono);font-size:12.5px}
+  .tag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;font-weight:700;padding:3px 7px;border-radius:2px;white-space:nowrap}
+  .tag.p0{background:var(--p0bg);color:var(--p0)}
+  .tag.p1{background:var(--p1bg);color:var(--p1)}
+  .tag.p2{background:var(--p2bg);color:var(--p2)}
+  .tag.p3{background:var(--p3bg);color:var(--p3)}
+  .tag.ok{background:var(--okbg);color:var(--ok)}
+  .bug{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:18px 20px;margin-bottom:13px}
+  .bug.b1{border-left:3px solid var(--p1)}
+  .bug.b2{border-left:3px solid var(--p2)}
+  .bug.b3{border-left:3px solid var(--p3)}
+  .bug h4{margin:0 0 6px;font-size:15px;font-weight:660}
+  .bug .id{font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:9px}
+  .bug dl{display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;margin:0;font-size:14px}
+  .bug dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--dim);padding-top:3px}
+  .bug dd{margin:0;color:var(--dim)}
+  .bug dd strong{color:var(--fg);font-weight:620}
+  code{font-family:var(--mono);font-size:.875em;background:var(--inset);padding:1.5px 5px;border-radius:2px;
+    word-break:break-word}
+  ul,ol{margin:0 0 13px;padding-left:19px}li{margin-bottom:6px}li::marker{color:var(--accent)}
+  .callout{background:var(--inset);border-radius:4px;padding:17px 20px;margin:20px 0;font-size:14.5px}
+  hr.r{border:none;border-top:1px solid var(--line);margin:38px 0}
+  .foot{font-size:13px;color:var(--dim);border-top:1px solid var(--line);padding-top:20px;margin-top:46px}
+  a{color:var(--accent)}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media(max-width:620px){.bug dl{grid-template-columns:1fr}.bug dt{padding-top:8px}}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">Browser E2E · UI/UX · CTO Review</p>
+  <h1>What the Screen Actually Says</h1>
+  <p class="sub">Two real-browser sessions driven as live users against the running application —
+    as Admin, then as a Sales Executive — creating a customer, an order and a payment, and following
+    the money through every screen.</p>
+  <div class="meta">
+    <span>15 August 2026, 00:54–01:45 IST</span>
+    <span>Chrome · localhost:3000 · production database</span>
+    <span>Admin + Sales Executive sessions</span>
+    <span>27 screenshots</span>
+  </div>
+</header>
+
+<div class="board">
+  <div class="stat"><span class="n" style="color:var(--ok)">14</span><span class="l">Checks passed</span></div>
+  <div class="stat"><span class="n" style="color:var(--p1)">2</span><span class="l">P1</span></div>
+  <div class="stat"><span class="n" style="color:var(--p2)">5</span><span class="l">P2</span></div>
+  <div class="stat"><span class="n" style="color:var(--p3)">6</span><span class="l">P3 / UX</span></div>
+  <div class="stat"><span class="n" style="color:var(--dim)">13</span><span class="l">Sections not run</span></div>
+</div>
+
+<div class="verdict">
+  <h2>Recommendation — NO-GO until BUG-01 is fixed</h2>
+  <p><strong>The headline is genuinely good news:</strong> payment collection, approval and
+    <em>cancellation</em> all work end to end in a real browser. Cancelling an approved payment
+    restored ₹5,000 to the customer's balance, recorded who, when and why, kept the record, and wrote
+    a timeline entry. That flow was completely broken twelve hours ago and had never once been
+    clicked. It now works.</p>
+  <p><strong>The headline problem is that one screen lies about money.</strong> The payment collection
+    form told me this customer owed <strong>₹10,000</strong>. The customer's own page, the database and
+    every other surface said <strong>₹25,300</strong>. A field rep standing at a counter would collect
+    against a figure that is ₹15,300 too low. That is the exact failure mode this round existed to
+    find, and no amount of backend testing would have caught it.</p>
+  <p><strong>A second session then ran as a real non-Admin</strong> (Dhaval Vegad, Sales Executive),
+    which unlocked the permission scenarios. Those results were the strongest of the round: a
+    non-admin collected a payment successfully, the action bar rendered his exact rights, and the
+    customer's financial fields were locked with an explanation. Two of this round's own fixes are now
+    proven at the UI layer, not just in the database.</p>
+  <p>It found one more problem, though: <strong>data scoping is enforced inconsistently.</strong> A rep
+    scoped to "own records" could see the entire company's collection history.</p>
+  <p>This is not a verdict on the whole product — <strong>13 of 28 sections were still not run</strong>,
+    including exports, responsive and credit-limit enforcement. It is a verdict on what was seen.</p>
+</div>
+
+<!-- ===== ENVIRONMENT ===== -->
+<section>
+  <h2 class="sec">Environment &amp; constraints</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>Application</td><td>Next.js 16.2.6 dev server, <code>localhost:3000</code></td></tr>
+      <tr><td>Database</td><td><strong>Production</strong> (<code>gxurqwpfvfktmreqmzqb</code>) — no staging environment exists</td></tr>
+      <tr><td>User</td><td>Admin / owner only (<code>sumitvegad07@gmail.com</code>)</td></tr>
+      <tr><td>Customers created</td><td>1 — ABC Distributors (₹10,000 opening / ₹100,000 limit / 30 days)</td></tr>
+      <tr><td>Orders created</td><td>1 — ORD-0025, ₹15,300, driven Pending → Approved → Closed</td></tr>
+      <tr><td>Payments created</td><td>1 — PAY-000004, ₹5,000, driven Pending → Approved → Cancelled</td></tr>
+      <tr><td>Data after test</td><td>All test rows purged; every table back to baseline exactly</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout">
+    <strong>Why only Admin.</strong> Creating accounts and entering passwords are actions I am not
+    permitted to perform, so the four role logins the brief specifies could not be established. Every
+    permission-dependent section is therefore reported as <em>not executed</em> rather than guessed at.
+    Customers B and C were also skipped once the session budget went into the cancellation flow, which
+    was the highest-value untested path.
+  </div>
+</section>
+
+<hr class="r">
+
+<!-- ===== PASSED ===== -->
+<section>
+  <h2 class="sec">What passed</h2>
+  <p class="note">Each verified by watching the number change on screen, then confirming against the
+    database.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Check</th><th>Observed</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Customer financial fields persist</td><td class="obs">opening 10,000 · limit 100,000 · days 30 — stored exactly</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td>Pending order does NOT affect outstanding</td><td class="obs">₹15,300 order created · outstanding stayed ₹10,000</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td>Closing an order raises outstanding</td><td class="obs">₹10,000 → ₹25,300</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td>Available credit tracks outstanding</td><td class="obs">₹90,000 → ₹74,700 against a ₹100,000 limit</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td>Total Closed Orders updates</td><td class="obs">₹0 → ₹15,300</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td>Live order pricing</td><td class="obs">100 × ₹150 + 2% IGST = ₹15,300, recalculated on every change</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td>Payment created and numbered</td><td class="obs">PAY-000004, status Pending, source Admin Console</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td>Approval with verified amount</td><td class="obs">dialog pre-fills collected amount; verified ₹5,000 recorded</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td>Approved payment becomes immutable</td><td class="obs">Approve and Reject disappear; only Cancel remains</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td><strong>Cancellation requires a reason</strong></td><td class="obs">"Cancellation reason is required" — dialog stays open</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td><strong>Cancellation restores the money</strong></td><td class="obs">₹5,000 returned · outstanding back to ₹25,300 · reason, author and timestamp shown · record kept</td><td><span class="tag ok">Pass</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The full arithmetic held through the whole journey, on screen:
+    <code>₹10,000 opening → +₹15,300 order closed → −₹5,000 payment approved → +₹5,000 cancelled = ₹25,300</code>.</p>
+
+  <h3>Session 2 — as Dhaval Vegad, Sales Executive (non-Admin)</h3>
+  <p class="note">Role: 40 permission keys. Holds approve, cancel, backdate and every <em>view</em>
+    financial right. Denied reject, manage_customer_credit, edit_opening_balance and
+    override_credit_limit. Scope set to <code>own</code>.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Check</th><th>Observed</th><th></th></tr></thead>
+    <tbody>
+      <tr><td><strong>A non-admin can collect a payment</strong></td><td class="obs">PAY-000005 · ₹2,500 · Collected By "Dhaval Vegad"</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td><strong>Action bar matches the role exactly</strong></td><td class="obs">Approve and Cancel shown · <strong>Reject absent</strong> (Admin saw all three)</td><td><span class="tag ok">Pass</span></td></tr>
+      <tr><td><strong>Financial fields locked in the customer form</strong></td><td class="obs">Credit Limit, Credit Days and Opening Balance all disabled, with "Some financial fields are locked…"</td><td><span class="tag ok">Pass</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>The first of those matters more than it looks. Until this morning the payment form checked
+    <code>add_payments</code>, a key no role holds, so <em>every non-admin was refused</em> — and
+    owner/admin bypass meant it never showed up in the founder's own testing. This is the first time a
+    real non-admin has successfully collected money through the product.</p>
+  <p>The second proves the UI reads individual permission keys rather than a lumped "manages payments"
+    flag — the distinction that separates working RBAC from decorative RBAC. The third is the browser
+    proof of this round's S3b/S3c fix, and it fails <em>gracefully</em>: the field is disabled with an
+    explanation rather than accepting input and erroring on save.</p>
+</section>
+
+<hr class="r">
+
+<!-- ===== BUGS ===== -->
+<section>
+  <h2 class="sec">Findings</h2>
+
+  <div class="bug b1">
+    <h4>The payment collection screen shows the wrong outstanding balance</h4>
+    <p class="id">BUG-01 · <span class="tag p1">P1</span> · Admin (all roles affected) · New Payment</p>
+    <dl>
+      <dt>Steps</dt><dd>Create a customer with a ₹10,000 opening balance. Create an order, approve it, close it. Open <em>Payment → New Payment</em> and select that customer.</dd>
+      <dt>Expected</dt><dd>The financial strip shows the current outstanding, <strong>₹25,300</strong>.</dd>
+      <dt>Actual</dt><dd>It shows <strong>Outstanding ₹10,000.00</strong> and <strong>Available Credit ₹90,000.00</strong> — the opening balance only. The ₹15,300 closed order is ignored.</dd>
+      <dt>Evidence</dt><dd>The customer detail page, loaded moments earlier, correctly showed ₹25,300 / ₹74,700. Database confirms 10,000 + 15,300 − 0 = 25,300. Both pages were fresh loads.</dd>
+      <dt>Impact</dt><dd>A rep collects against a figure <strong>₹15,300 too low</strong> and leaves money on the table. It is also the one screen where the number is used to make a decision in front of a customer, and the one screen that is wrong. Two screens showing different balances for the same customer destroys trust in both.</dd>
+      <dt>Note</dt><dd>Backend reconciliation passed every automated test. The engine is right; this screen's read is wrong.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b1">
+    <h4>"Own records only" scope is not applied to payments</h4>
+    <p class="id">BUG-12 · <span class="tag p1">P1</span> · Sales Executive · Payments list, New Payment</p>
+    <dl>
+      <dt>Steps</dt><dd>Sign in as a user whose role sets <code>global_scope: own</code> and <code>contacts_scope: own</code>. Open Payments. Then open New Payment and expand the customer picker.</dd>
+      <dt>Expected</dt><dd>Only that user's own collections and own customers.</dd>
+      <dt>Actual</dt><dd>All three existing payments were listed, every one showing <strong>Collected By "sumit vegad"</strong> — another user's records, including a ₹15,900 collection. The customer picker offered <strong>every customer in the account</strong>.</dd>
+      <dt>Evidence</dt><dd>Scoping <em>is</em> applied elsewhere: the same user's dashboard correctly showed 0 leads and 0 converted customers where Admin saw 1 and 3. So the setting works — it is simply not enforced on the payments module.</dd>
+      <dt>Impact</dt><dd>A field rep sees the company's entire collection history: who collected how much, from whom, when. In a distribution business that is commercially sensitive between reps, and it is the exact thing "own records only" was configured to prevent. An admin who sets that scope will reasonably believe it is being honoured.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b2">
+    <h4>Payments module is unreachable by direct URL</h4>
+    <p class="id">BUG-02 · <span class="tag p2">P2</span> · Admin · /payments</p>
+    <dl>
+      <dt>Steps</dt><dd>Navigate directly to <code>/payments</code> or <code>/payments/new</code> — typed, bookmarked, or refreshed.</dd>
+      <dt>Expected</dt><dd>The payments list loads.</dd>
+      <dt>Actual</dt><dd>Silently redirected to <code>/dashboard</code>. Reproduced <strong>three times</strong>. Clicking Payment in the sidebar works every time.</dd>
+      <dt>Impact</dt><dd>Bookmarks, shared links and browser refresh all dump the user on the dashboard with no explanation. Finance lives on this page all day; a refresh losing their place is a daily irritation, and a shared payment link is unusable.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b2">
+    <h4>Outstanding column in the customer list has no currency formatting</h4>
+    <p class="id">BUG-03 · <span class="tag p2">P2</span> · Customer list</p>
+    <dl>
+      <dt>Expected</dt><dd><code>₹10,000</code>, consistent with every other screen.</dd>
+      <dt>Actual</dt><dd>Raw <code>10000</code> and <code>0</code>, no symbol, no separators — in the single column a rep scans to answer "who owes me money?"</dd>
+      <dt>Impact</dt><dd>At six or seven figures this becomes genuinely hard to read at a glance, and it is inconsistent with the dashboard, order list and financial cards, all of which format correctly.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b2">
+    <h4>"Contact Person" column displays the company name</h4>
+    <p class="id">BUG-04 · <span class="tag p2">P2</span> · Customer list</p>
+    <dl>
+      <dt>Expected</dt><dd>Rakesh Shah — the contact person entered.</dd>
+      <dt>Actual</dt><dd>ABC Distributors — the company. The customer <em>detail</em> page separates the two correctly, so the list is mislabelled or bound to the wrong field.</dd>
+      <dt>Impact</dt><dd>A rep looking for who to ask for at the shop sees the shop's name instead. The data is captured correctly; only the list is wrong.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b2">
+    <h4>Closed and Cancelled orders are both red</h4>
+    <p class="id">BUG-05 · <span class="tag p2">P2</span> · Order list</p>
+    <dl>
+      <dt>Actual</dt><dd>Pending is amber, Approved is green, and <strong>Closed and Cancelled are the same red</strong>.</dd>
+      <dt>Impact</dt><dd>Closed is a <em>successful</em> outcome — goods delivered, revenue booked, the only status that counts toward outstanding. Cancelled is the opposite. Colouring them identically means the list cannot be scanned for business health, and Closed reading as "bad" is actively misleading.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b2">
+    <h4>Duplicate products with identical SKUs in the order picker</h4>
+    <p class="id">BUG-06 · <span class="tag p2">P2</span> · New Order</p>
+    <dl>
+      <dt>Actual</dt><dd><code>Dummy Product 10 (DUMMY-0010)</code> and <code>Dummy Product 11 (DUMMY-0011)</code> each appear <strong>twice</strong>, same name, same SKU.</dd>
+      <dt>Impact</dt><dd>A rep cannot tell them apart, and the two copies may carry different prices or tax settings. Sales reporting by product silently splits across duplicates. Likely seed data, but it is in the live catalogue.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b3">
+    <h4>The financial summary does not show its own workings</h4>
+    <p class="id">BUG-07 · <span class="tag p3">UX</span> · Customer detail</p>
+    <dl>
+      <dt>Actual</dt><dd>The card shows Outstanding ₹10,000, Total Closed Orders ₹0, Paid ₹0. <strong>Those three numbers contradict each other</strong> — unless you know there is a ₹10,000 opening balance, which appears nowhere on the card.</dd>
+      <dt>Impact</dt><dd>Section 26 asks whether Finance would trust this screen enough to make a decision. As shown, a finance user cannot reconcile it without opening the edit form. Adding Opening Balance as a fourth figure would make the card self-explanatory.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b3">
+    <h4>"Healthy" for a customer who owes money and has never paid</h4>
+    <p class="id">BUG-08 · <span class="tag p3">UX</span> · Customer detail, New Order, New Payment</p>
+    <dl>
+      <dt>Actual</dt><dd>ABC Distributors owed ₹25,300 with ₹0 ever collected, and Payment Status read a green <strong>Healthy</strong>.</dd>
+      <dt>Impact</dt><dd>Technically correct — nothing is past its credit days yet — but "Healthy" is a judgement, not a fact, and it is the most prominent word on the card. "Within terms" would say the same thing without implying the relationship is fine.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b3">
+    <h4>Two different number formats for the same currency</h4>
+    <p class="id">BUG-09 · <span class="tag p3">P3</span> · Across screens</p>
+    <dl>
+      <dt>Actual</dt><dd>Customer card: <code>₹100,000</code> (international grouping). Payment form: <code>₹1,00,000.00</code> (Indian grouping, two decimals). Order list: <code>₹15,300</code> (no decimals).</dd>
+      <dt>Impact</dt><dd>Cosmetic individually; together they make the product feel assembled rather than designed, and mixed grouping is a real misreading risk at scale.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b3">
+    <h4>Order line total does not equal quantity × price</h4>
+    <p class="id">BUG-10 · <span class="tag p3">UX</span> · Order detail</p>
+    <dl>
+      <dt>Actual</dt><dd>The Details tab shows Qty 100, Price ₹150, Total ₹15,300 — with no tax line. The ₹300 of IGST is only visible during creation.</dd>
+      <dt>Impact</dt><dd>Anyone checking the arithmetic gets 15,000 and concludes the order is wrong. The creation screen breaks tax out properly; the detail view should too.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b3">
+    <h4>A customer in credit shows a negative balance and a green "Healthy"</h4>
+    <p class="id">BUG-13 · <span class="tag p3">UX</span> · Customer detail</p>
+    <dl>
+      <dt>Actual</dt><dd>Balaji Supermarket has a ₹4,500 approved payment and no closed orders, so the card reads <strong>Outstanding Balance −₹4,500</strong>, Payment Status <strong>Healthy</strong>, Total Closed Orders ₹0, Paid ₹4,500.</dd>
+      <dt>Impact</dt><dd>The arithmetic is right — the customer is in credit — but nothing on screen says so. A rep sees a negative number next to a green tick and cannot tell whether it is good, bad, or a bug. This is the contradiction test from section 18, met organically: "Advance / credit balance ₹4,500" would communicate the same fact honestly.</dd>
+    </dl>
+  </div>
+
+  <div class="bug b3">
+    <h4>Financial inputs carry no currency affordance</h4>
+    <p class="id">BUG-11 · <span class="tag p3">P3</span> · Customer form</p>
+    <dl>
+      <dt>Actual</dt><dd>Credit Limit, Credit Days and Opening Balance are bare number boxes. Credit Limit and Opening Balance both show placeholder <code>0.00</code> with no ₹ prefix; Credit Days sits between them in the same style but is a day count, not money.</dd>
+      <dt>Impact</dt><dd>Easy to type a rupee value into Credit Days, or to mistake the scale of a limit. A ₹ prefix on the two money fields and a "days" suffix on the third removes the ambiguity.</dd>
+    </dl>
+  </div>
+</section>
+
+<hr class="r">
+
+<!-- ===== NOT EXECUTED ===== -->
+<section>
+  <h2 class="sec">Not executed</h2>
+  <p class="note">Stated plainly so the coverage is not overread. These are untested, not passing.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Section</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>3 — Create the four test users</td><td>Account creation is not an action I can perform</td></tr>
+      <tr><td>5 / C-01 — Customer list as Field Rep</td><td><strong>Partially run</strong> in session 2 — see BUG-12 on scoping</td></tr>
+      <tr><td>6 — Permission-based hiding of financials</td><td><strong>Partially run</strong> in session 2: financial fields correctly locked. Credit-limit visibility was inconclusive — the test customer had no limit set.</td></tr>
+      <tr><td>12 — Attachments (PDF/JPG/PNG, invalid, large)</td><td>Not reached; the upload control was seen but never exercised</td></tr>
+      <tr><td>13 — Approval where verified ≠ collected</td><td>Only the equal case was run in the browser</td></tr>
+      <tr><td>14 — Unauthorised approve / reject / cancel</td><td><strong>Run.</strong> Reject correctly hidden from a user without the permission. Approve and Cancel were legitimately granted to this role, so the fully-denied case is still untested.</td></tr>
+      <tr><td>16 — Credit limit ignore / warn / block</td><td>Not reached</td></tr>
+      <tr><td>17 — Credit days and overdue wording</td><td>Not reached; needs a backdated closed order</td></tr>
+      <tr><td>18 — The ₹1,000 limit vs ₹5,732 outstanding contradiction test</td><td>Not reached</td></tr>
+      <tr><td>19 — Responsive at tablet and mobile widths</td><td>Desktop only</td></tr>
+      <tr><td>20 — Reports cross-check</td><td>Not reached</td></tr>
+      <tr><td>21 — <strong>Exports</strong> (Excel / CSV / PDF)</td><td>Not reached — <strong>unverified for a third consecutive round</strong>. Dhaval now holds export_payment_reports, so this is ready to run next session.</td></tr>
+      <tr><td>22 — Field Rep timeline isolation</td><td>Not reached. This role holds view_customer_payment_history, so a further role would be needed to test the denied case.</td></tr>
+      <tr><td>23 — Settings UX and the three inert settings</td><td>Not reached. The payment form does label attachment "(Optional)", which is consistent with <code>require_attachment</code> still being inert — but the setting itself was not inspected, so this is an observation, not a finding.</td></tr>
+      <tr><td>24 — Error handling sweep</td><td>Only the missing-cancellation-reason case was tested (it passed, with a clear message)</td></tr>
+      <tr><td>25 — Full navigation journeys per role</td><td>Rep journey partially walked (login → customer → payment → save). Finance and ASM journeys need those logins.</td></tr>
+      <tr><td>10 — Closed → Cancelled</td><td>Out of scope by your instruction</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<hr class="r">
+
+<section>
+  <h2 class="sec">CTO questions, on the evidence seen</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+    <tbody>
+      <tr><td>Business correctness</td><td>The order and payment lifecycles behave the way a distribution business expects. Outstanding moves only on Closed, and only on Approved money.</td></tr>
+      <tr><td>UX for a non-accountant</td><td>Mixed. The flows are clear and the dialogs explain consequences well. The vocabulary — "Outstanding (Calculated)", "Healthy", a card whose figures do not visibly reconcile — assumes more than a rep has.</td></tr>
+      <tr><td>Can a user corrupt financial data?</td><td>Not through the Admin paths exercised. Every destructive action asked for confirmation, and cancellation demanded a reason.</td></tr>
+      <tr><td>Is the user seeing what they shouldn't?</td><td><strong>Unknown.</strong> Not testable in an Admin-only session.</td></tr>
+      <tr><td>Consistency</td><td><strong>No.</strong> BUG-01 is a direct contradiction between two screens about the same customer's debt, plus three currency formats.</td></tr>
+      <tr><td>Would Finance trust this screen?</td><td>The payment detail and timeline, yes — clear, complete, auditable. The customer financial card, not yet: its own numbers do not add up on screen.</td></tr>
+      <tr><td>Can a rep collect quickly?</td><td>Yes. Customer → New Payment → amount → type → Save is four interactions with sensible defaults. But BUG-01 means the figure they see while doing it is wrong.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<hr class="r">
+
+<section>
+  <h2 class="sec">Recommended actions</h2>
+  <ol>
+    <li><strong>Fix BUG-01 before anyone collects money.</strong> Everything else here can ship with a
+      known issue; this one causes under-collection at the counter.</li>
+    <li><strong>Fix BUG-02.</strong> Small, and it removes a daily annoyance for the heaviest user of
+      the module.</li>
+    <li><strong>Add Opening Balance to the financial card</strong> and take Closed out of the red
+      status colour. Two small changes that make the finance screens trustworthy at a glance.</li>
+    <li><strong>Run the sections that were not executed</strong> — especially exports, which have now
+      gone unverified three rounds running, and every permission scenario, which needs the four logins
+      created.</li>
+    <li><strong>Then re-run this round with a Field Rep session</strong>, which is where the
+      permission-hiding and unauthorised-action findings actually live.</li>
+  </ol>
+</section>
+
+<div class="callout">
+  <strong>Production data integrity.</strong> Baseline was captured before starting, and nothing in
+  production predated 14 August 19:00 UTC, giving a clean cutoff. One customer, one order, one payment
+  and seven activity rows were created through the UI and have all been purged. Final counts match
+  baseline exactly: 17 accounts, 27 contacts, 24 orders, 3 payments, 150 activities, 23 roles,
+  17 profiles. Your three genuine 13 August payments are untouched.
+</div>
+
+<p class="foot">
+  Executed 15 August 2026 in Chrome against the running application, as the signed-in Admin. No source
+  code, migration, schema, permission or setting was modified at any point. Findings were reproduced
+  before being recorded; one suspected date bug and one suspected dropdown bug were both investigated
+  and discarded as false positives rather than reported.
+</p>
+
+</div>

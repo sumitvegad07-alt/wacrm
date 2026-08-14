@@ -30,6 +30,7 @@ import { ContactForm } from '@/components/contacts/contact-form';
 import { ImportModal } from '@/components/contacts/import-modal';
 import { useCan } from '@/hooks/use-can';
 import { useAuth } from '@/hooks/use-auth';
+import { formatCurrency } from '@/lib/currency';
 import { GatedButton } from '@/components/ui/gated-button';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
@@ -62,7 +63,7 @@ export default function ContactsPage() {
   const searchParams = useSearchParams();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
-  const { accountId, isModuleEnabled, hasPermission } = useAuth();
+  const { accountId, isModuleEnabled, hasPermission, defaultCurrency } = useAuth();
   const territoryEnabled = isModuleEnabled('territory');
 
   const [contacts, setContacts] = useState<ContactWithData[]>([]);
@@ -449,11 +450,15 @@ export default function ContactsPage() {
         type: "text",
         visibleByDefault: false,
         render: (contact) => {
-          // Note: Full calculated outstanding requires an RPC or View join.
-          // This placeholder shows the opening balance if outstanding is not joined.
           const val = (contact as any).outstanding_amount ?? (contact as any).opening_balance;
           if (val == null) return <span className="text-muted-foreground">-</span>;
-          return <span className="text-sm font-medium text-amber-600 dark:text-amber-500">{val}</span>;
+          // Uses the shared formatter — this column previously rendered a raw number
+          // ("10000") in the one place a rep scans to see who owes money.
+          return (
+            <span className="text-sm font-medium text-amber-600 dark:text-amber-500">
+              {formatCurrency(Number(val), defaultCurrency)}
+            </span>
+          );
         }
       });
     }

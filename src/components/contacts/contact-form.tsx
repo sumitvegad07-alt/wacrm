@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { getCurrencySymbol } from '@/lib/currency';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, CustomField, Profile } from '@/types';
@@ -57,10 +58,11 @@ export function ContactForm({
   onViewExisting,
 }: ContactFormProps) {
   const supabase = createClient();
-  const { accountId, user, isModuleEnabled, hasPermission } = useAuth();
+  const { accountId, user, isModuleEnabled, hasPermission, defaultCurrency } = useAuth();
   // These three fields decide what a customer owes, so the database refuses to change
   // them without the matching permission. Mirror that here rather than letting someone
   // fill in a value that will be rejected on save.
+  const currencySymbol = getCurrencySymbol(defaultCurrency);
   const isEditingExisting = Boolean(contact?.id);
   const canEditCreditTerms = !isEditingExisting || hasPermission(PERMISSIONS.CUSTOMERS.MANAGE_CREDIT);
   const canEditOpeningBalance = !isEditingExisting || hasPermission(PERMISSIONS.CUSTOMERS.EDIT_OPENING_BALANCE);
@@ -575,17 +577,29 @@ export function ContactForm({
             <div className="space-y-3 pt-4 border-t border-border/50">
               <h4 className="text-sm font-semibold text-foreground">Financial Settings</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Two of these are money and one is a day count. They were three
+                    identical number boxes, which invited typing a rupee value into
+                    Credit Days. Affordances only — behaviour is unchanged. */}
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs">Credit Limit</Label>
-                  <Input type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0.00" disabled={!canEditCreditTerms} className="bg-muted border-border text-foreground h-8 text-xs disabled:opacity-60" />
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{currencySymbol}</span>
+                    <Input type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0.00" disabled={!canEditCreditTerms} className="bg-muted border-border text-foreground h-8 text-xs pl-6 disabled:opacity-60" />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs">Credit Days</Label>
-                   <Input type="number" value={creditDays} onChange={(e) => setCreditDays(e.target.value)} placeholder="e.g. 30" disabled={!canEditCreditTerms} className="bg-muted border-border text-foreground h-8 text-xs disabled:opacity-60" />
+                  <div className="relative">
+                    <Input type="number" value={creditDays} onChange={(e) => setCreditDays(e.target.value)} placeholder="30" disabled={!canEditCreditTerms} className="bg-muted border-border text-foreground h-8 text-xs pr-12 disabled:opacity-60" />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">days</span>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs">Opening Balance</Label>
-                   <Input type="number" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" disabled={!canEditOpeningBalance} className="bg-muted border-border text-foreground h-8 text-xs disabled:opacity-60" />
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{currencySymbol}</span>
+                    <Input type="number" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" disabled={!canEditOpeningBalance} className="bg-muted border-border text-foreground h-8 text-xs pl-6 disabled:opacity-60" />
+                  </div>
                 </div>
                 {(!canEditCreditTerms || !canEditOpeningBalance) && (
                   <p className="md:col-span-3 text-xs text-muted-foreground">

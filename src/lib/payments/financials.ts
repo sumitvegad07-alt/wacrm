@@ -125,6 +125,48 @@ export function computeCustomerFinancials(input: CustomerFinancialInput): Custom
 }
 
 /**
+ * Load a customer's financial position from the database and compute it.
+ *
+ * This is the ONE place the outstanding figure is derived for the UI. Before this
+ * existed, the payment form carried its own copy of the query and filtered orders by
+ * `status = 'Approved'` instead of `'Closed'` — so a closed order was invisible and the
+ * form told collectors a customer owed far less than they did. Anything that needs to
+ * show what a customer owes must call this rather than re-deriving it.
+ *
+ * The business rule itself is unchanged:
+ *   Outstanding = opening balance + Closed orders - Approved payments
+ */
+export async function fetchCustomerFinancials(
+  // Structurally typed so this works with the browser and server Supabase clients
+  // alike without dragging the generated DB types through the signature.
+  db: {
+    from: (t: string) => any;
+    rpc: (fn: string) => any;
+  },
+  contactId: string
+): Promise<CustomerFinancials> {
+  const [contactRes, ordersRes, paymentsRes, timeRes] = await Promise.all([
+    db.from('contacts').select('credit_limit, credit_days, opening_balance').eq('id', contactId).single(),
+    db.from('orders').select('total_amount, created_at').eq('contact_id', contactId).eq('status', 'Closed'),
+    db.from('payments').select('amount, verified_amount').eq('contact_id', contactId).eq('status', 'Approved'),
+    db.rpc('get_server_time'),
+  ]);
+
+  const contact = contactRes?.data ?? {};
+  // Server clock, so ageing never depends on the device's timezone or drift.
+  const now = timeRes?.data ? new Date(timeRes.data as string).getTime() : Date.now();
+
+  return computeCustomerFinancials({
+    openingBalance: contact.opening_balance,
+    creditLimit: contact.credit_limit,
+    creditDays: contact.credit_days,
+    orders: ordersRes?.data ?? [],
+    payments: paymentsRes?.data ?? [],
+    now,
+  });
+}
+
+/**
  * Whether a new order of `orderValue` would breach the customer's limit.
  * No configured limit means no ceiling to breach.
  */

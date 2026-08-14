@@ -332,10 +332,30 @@ export default function OrderDetailPage() {
                       ))}
                     </tbody>
                   </table>
+                  {/* The line totals are tax-inclusive, so quantity x price does not equal
+                      the order total. Without the breakdown the detail view looks like it has
+                      dropped money — 100 x ₹150 reading as ₹15,300. Same figures the creation
+                      screen shows, taken from the stored order. */}
                   <div className="flex justify-end mt-4 pt-3 border-t border-border">
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Total</p>
-                      <p className="text-xl font-bold">{formatCurrency(order.total_amount, defaultCurrency)}</p>
+                    <div className="w-full max-w-xs space-y-1.5">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Sub-total</span>
+                        <span>{formatCurrency(order.sub_total ?? 0, defaultCurrency)}</span>
+                      </div>
+                      {Number(order.discount_total ?? 0) > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Discount</span>
+                          <span>&minus;{formatCurrency(order.discount_total, defaultCurrency)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Tax</span>
+                        <span>{formatCurrency(order.tax_total ?? 0, defaultCurrency)}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t border-border">
+                        <span className="font-semibold">Total</span>
+                        <span className="text-xl font-bold">{formatCurrency(order.total_amount, defaultCurrency)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>

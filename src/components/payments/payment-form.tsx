@@ -16,6 +16,8 @@ import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/
 import { CustomField } from '@/types';
 import { logModuleActivity } from '@/lib/activities';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
+import { formatCurrency } from '@/lib/currency';
+import { fetchCustomerFinancials } from '@/lib/payments/financials';
 import { cn } from '@/lib/utils';
 
 // Zod and react-hook-form imports
@@ -49,6 +51,8 @@ interface FinancialSnapshot {
   credit_limit: number;
   available_credit: number;
   overdue_days: number;
+  /** Distinguishes "no limit configured" from a limit of zero. */
+  has_credit_limit: boolean;
 }
 
 export function PaymentForm({
@@ -61,7 +65,8 @@ export function PaymentForm({
   source = 'admin',
 }: PaymentFormProps) {
   const supabase = createClient();
-  const { accountId, defaultCurrency, hasPermission, user } = useAuth();
+  const { accountId, defaultCurrency, hasPermission, user, getDataScope } = useAuth();
+  const contactScope = getDataScope('contacts');
   
   const [contacts, setContacts] = useState<{ value: string; label: string }[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<{ id: string; name: string }[]>([]);
@@ -101,6 +106,19 @@ export function PaymentForm({
     if (!open || !accountId) return;
 
     let alive = true;
+
+    // Honour the account's contact data scope. A rep restricted to their own customers
+    // was previously offered every customer in the account in this picker. Filtered in
+    // the query, not after the fact, so the rows are never sent to the browser.
+    const contactsQuery = () => {
+      const q = supabase
+        .from('contacts')
+        .select('id, company, name')
+        .eq('account_id', accountId);
+      return (contactScope === 'own' && user?.id ? q.eq('user_id', user.id) : q)
+        .order('company', { ascending: true });
+    };
+
     const loadDependencies = async () => {
       setLoading(true);
       const [
@@ -108,11 +126,7 @@ export function PaymentForm({
         { data: paymentTypesData },
         { data: fieldsData },
       ] = await Promise.all([
-        supabase
-          .from('contacts')
-          .select('id, company, name')
-          .eq('account_id', accountId)
-          .order('company', { ascending: true }),
+        contactsQuery(),
         supabase
           .from('payment_types')
           .select('id, name')
@@ -163,31 +177,20 @@ export function PaymentForm({
     let alive = true;
     const fetchFinancials = async () => {
       setFinancialsLoading(true);
-      
-      // Attempt to calculate financial snapshot
-      // Outstanding = sum of approved order totals - sum of approved payment COALESCE(verified_amount, amount) + opening_balance
-      const [{ data: contactData }, { data: ordersData }, { data: paymentsData }] = await Promise.all([
-        supabase.from('contacts').select('credit_limit, opening_balance').eq('id', selectedContactId).single(),
-        supabase.from('orders').select('total_amount').eq('contact_id', selectedContactId).eq('status', 'Approved'),
-        supabase.from('payments').select('amount, verified_amount').eq('contact_id', selectedContactId).eq('status', 'Approved'),
-      ]);
+
+      // Single source of truth — see fetchCustomerFinancials(). This form used to carry
+      // its own copy of the query and filtered orders by 'Approved' rather than 'Closed',
+      // so it under-reported what a customer owed to the person collecting the money.
+      const result = await fetchCustomerFinancials(supabase, selectedContactId);
 
       if (!alive) return;
 
-      const openingBalance = contactData?.opening_balance || 0;
-      const creditLimit = contactData?.credit_limit || 0;
-      
-      const ordersTotal = (ordersData || []).reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
-      const paymentsTotal = (paymentsData || []).reduce((sum, p) => sum + Number(p.verified_amount ?? p.amount ?? 0), 0);
-      
-      const outstanding = ordersTotal - paymentsTotal + openingBalance;
-      const availableCredit = creditLimit - outstanding;
-      
       setFinancials({
-        outstanding,
-        credit_limit: creditLimit,
-        available_credit: availableCredit,
-        overdue_days: 0, // Placeholder
+        outstanding: result.outstandingBalance,
+        credit_limit: result.creditLimit ?? 0,
+        available_credit: result.availableCredit ?? 0,
+        overdue_days: result.overdueDays,
+        has_credit_limit: result.creditLimit !== null,
       });
       setFinancialsLoading(false);
     };
@@ -350,12 +353,10 @@ export function PaymentForm({
     }
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: defaultCurrency || 'INR',
-    }).format(val);
-  };
+  // Uses the shared formatter from @/lib/currency. This form previously defined its own
+  // `en-IN` Intl instance, which rendered ₹1,00,000.00 here while every other screen
+  // showed ₹100,000 for the same figure.
+  const money = (val: number) => formatCurrency(val, defaultCurrency);
 
   const content = loading ? (
     <div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -481,17 +482,25 @@ export function PaymentForm({
       {financials && !financialsLoading && (
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Outstanding</p>
-            <p className="text-lg font-bold">{formatCurrency(financials.outstanding)}</p>
+            {/* A negative balance means the customer is in credit — showing "-₹4,500"
+                asks the collector to interpret a negative liability. Label it instead. */}
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+              {financials.outstanding < 0 ? 'Customer Credit' : 'Outstanding'}
+            </p>
+            <p className="text-lg font-bold">{money(Math.abs(financials.outstanding))}</p>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Credit Limit</p>
-            <p className="text-lg font-bold">{formatCurrency(financials.credit_limit)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Available Credit</p>
-            <p className="text-lg font-bold">{formatCurrency(financials.available_credit)}</p>
-          </div>
+          {financials.has_credit_limit && (
+            <>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Credit Limit</p>
+                <p className="text-lg font-bold">{money(financials.credit_limit)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Available Credit</p>
+                <p className="text-lg font-bold">{money(financials.available_credit)}</p>
+              </div>
+            </>
+          )}
           <div>
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Overdue Days</p>
             <p className="text-lg font-bold">{financials.overdue_days}</p>

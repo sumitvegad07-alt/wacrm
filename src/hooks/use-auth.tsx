@@ -182,6 +182,9 @@ interface AuthContextValue {
   moduleSettings: ModuleSettings;
   /** Returns true if the given module key is enabled for this account. */
   isModuleEnabled: (key: keyof ModuleSettings) => boolean;
+  /** False until the account's real module settings have been read. Route guards
+   *  must wait for this, or they will act on the all-defaults snapshot. */
+  moduleSettingsLoaded: boolean;
   /** Re-fetches module settings (call after admin saves changes). */
   refreshModuleSettings: () => Promise<void>;
 
@@ -203,6 +206,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [account, setAccount] = useState<AccountSummary | null>(null);
   const [moduleSettings, setModuleSettings] = useState<ModuleSettings>({ ...DEFAULT_MODULE_SETTINGS });
+  // Route guards must not act on the defaults. Several modules (payment, route,
+  // reporting_hierarchy) default to OFF, so a guard that runs before the real settings
+  // arrive will bounce a user off a perfectly valid page on any cold load or refresh.
+  const [moduleSettingsLoaded, setModuleSettingsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   // Tracked separately from `loading`. The session settles fast (one
   // local cookie read); the profile fetch crosses the network and
@@ -287,6 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!modErr && modData) {
               setModuleSettings(normalizeModuleSettings((modData as any).module_settings));
             }
+            setModuleSettingsLoaded(true);
           }
         }
 
@@ -395,6 +403,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfile(currentUser.id);
       } else {
         setModuleSettings({ ...DEFAULT_MODULE_SETTINGS });
+        setModuleSettingsLoaded(false);
         setProfile(null);
         setAccount(null);
         setProfileLoading(false);
@@ -431,6 +440,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const json = await res.json();
         setModuleSettings(normalizeModuleSettings(json.module_settings));
+        setModuleSettingsLoaded(true);
       }
     } catch (err) {
       console.error('[AuthProvider] refreshModuleSettings error:', err);
@@ -479,6 +489,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         defaultCurrency: account?.default_currency ?? DEFAULT_CURRENCY,
         ...derived,
         moduleSettings,
+        moduleSettingsLoaded,
         isModuleEnabled: (key: keyof ModuleSettings) => moduleSettings[key] ?? true,
         refreshModuleSettings,
         hasPermission: (key: string) => {
@@ -534,6 +545,7 @@ export function useAuth(): AuthContextValue {
       hasAdvancedAI: false,
       hasLocationTracking: false,
       moduleSettings: { ...DEFAULT_MODULE_SETTINGS },
+      moduleSettingsLoaded: false,
       isModuleEnabled: () => true,
       refreshModuleSettings: async () => {},
       permissions: null,

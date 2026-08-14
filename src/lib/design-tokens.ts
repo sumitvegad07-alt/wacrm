@@ -152,6 +152,10 @@ export const STATUS_MAPPINGS: Record<string, StatusVariant> = {
   paid: 'success',
   converted: 'success',
   won: 'success',
+  // An order reaches Closed when it is fully dispatched and booked — a completed
+  // outcome. It previously shared the destructive treatment with Cancelled, which made
+  // a healthy order list unreadable at a glance.
+  closed: 'success',
   open: 'success',
   dispatched: 'success',
 
@@ -175,7 +179,6 @@ export const STATUS_MAPPINGS: Record<string, StatusVariant> = {
   overdue: 'destructive',
   expired: 'destructive',
   lost: 'destructive',
-  closed: 'destructive',
   high: 'destructive',
   urgent: 'destructive',
 

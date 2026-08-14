@@ -45,6 +45,15 @@ export const CURRENCIES: CurrencyOption[] = [
 ];
 
 /**
+ * The symbol for a currency code, from the same CURRENCIES table the picker uses.
+ * For prefixing an input where a full formatted value would be wrong.
+ */
+export function getCurrencySymbol(code?: string | null): string {
+  const match = CURRENCIES.find((c) => c.code === (code || DEFAULT_CURRENCY));
+  return match?.symbol ?? (code || DEFAULT_CURRENCY);
+}
+
+/**
  * Format a deal value as a currency string. Whole-number output
  * (no minor units) — deal values are tracked to the dollar across
  * the app. `currency` defaults to USD so callers with nothing better

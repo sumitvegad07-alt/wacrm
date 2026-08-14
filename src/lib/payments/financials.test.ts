@@ -3,6 +3,7 @@ import {
   computeCustomerFinancials,
   exceedsCreditLimit,
   settledAmount,
+  fetchCustomerFinancials,
 } from './financials';
 
 const DAY = 86_400_000;
@@ -244,5 +245,46 @@ describe('exceedsCreditLimit', () => {
     expect(
       exceedsCreditLimit({ creditLimit: null, outstandingBalance: 999_999 }, 999_999)
     ).toBe(false);
+  });
+});
+
+describe('fetchCustomerFinancials — the single source of truth', () => {
+  // BUG-01: the payment form carried its own copy of this query and filtered orders by
+  // status 'Approved' instead of 'Closed'. A closed order was therefore invisible, and
+  // the collection screen under-reported what the customer owed.
+  function fakeDb(captured: { orderStatus?: string }) {
+    return {
+      from(table: string) {
+        const builder: any = {
+          select: () => builder,
+          eq(col: string, val: string) {
+            if (table === 'orders' && col === 'status') captured.orderStatus = val;
+            return builder;
+          },
+          single: () =>
+            Promise.resolve({ data: { credit_limit: 100000, credit_days: 30, opening_balance: 10000 } }),
+          then: (res: (v: unknown) => unknown) =>
+            Promise.resolve(
+              table === 'orders'
+                ? { data: [{ total_amount: 15300, created_at: daysAgo(1) }] }
+                : { data: [] }
+            ).then(res),
+        };
+        return builder;
+      },
+      rpc: () => Promise.resolve({ data: new Date(NOW).toISOString() }),
+    };
+  }
+
+  it('filters orders by Closed, not Approved', async () => {
+    const captured: { orderStatus?: string } = {};
+    await fetchCustomerFinancials(fakeDb(captured), 'contact-1');
+    expect(captured.orderStatus).toBe('Closed');
+  });
+
+  it('reproduces the pilot scenario: 10,000 opening + 15,300 closed = 25,300', async () => {
+    const r = await fetchCustomerFinancials(fakeDb({}), 'contact-1');
+    expect(r.outstandingBalance).toBe(25300);
+    expect(r.availableCredit).toBe(74700);
   });
 });

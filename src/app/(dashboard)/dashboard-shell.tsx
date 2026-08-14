@@ -23,6 +23,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasBroadcasts,
     hasLocationTracking,
     isModuleEnabled,
+    moduleSettingsLoaded,
     signOut,
   } = useAuth();
   const router = useRouter();
@@ -41,7 +42,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   // Route protection: restrict direct navigation to disabled module routes
   useEffect(() => {
-    if (loading || !user || !pathname) return;
+    // Wait for the account's real module settings. Modules that ship OFF by default
+    // would otherwise look disabled for the moment before they load, redirecting the
+    // user away from a page they are entitled to — which is what made /payments
+    // unreachable by direct URL, bookmark or refresh while the sidebar link worked.
+    if (loading || !user || !pathname || !moduleSettingsLoaded) return;
 
     const isRestricted =
       (pathname.startsWith("/automations") && !hasAutomations) ||
@@ -66,6 +71,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasLocationTracking,
     hasWhatsApp,
     isModuleEnabled,
+    moduleSettingsLoaded,
     router,
   ]);
 
