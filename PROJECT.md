@@ -3033,8 +3033,21 @@ Saved reports can be shared via 'private', 'team', or 'organization' modes. The 
 
 
 ## Payment Collection Module (Added Aug 2026)
+- **Status (2026-08-14): repaired, in UAT — NOT production-proven.** As shipped on 2026-08-13 the
+  module did not function: both web and mobile wrote to columns that do not exist, so no payment
+  could be created from either client. The commit message for `a03b22a` calls it "Ready for Pilot"
+  with "end-to-end" flow and working credit enforcement; none of that was true. Fixed on
+  `fix/payment-module-production-readiness` (web) and `feat/mobile-payment-collection` (mobile).
+  Full findings: `docs/engineering/payment-module-readiness-report.html`.
+- **Known gap**: an Approved payment cannot be reversed — the transition table makes it terminal, so
+  there is no correction path for a mis-keyed payment or a bounced cheque. Open product decision.
 - **Purpose**: SFA-focused payment collection (not accounting/ERP).
 - **Key Features**: Offline mobile collection, dual-amount (collected vs verified), strict status state machine (Pending -> Approved/Rejected/Cancelled), no physical deletes (soft-delete via 'Cancelled' status), customer financial visibility (outstanding balance = approved orders - approved payments + opening balance).
 - **Tables**: payments, payment_types, payment_attachments, payment_custom_values.
 - **RPCs**: update_payment_status (handles transitions and module_activities).
-- **Permissions**: approve_payments, add_payments, manage_payments.
+- **Permissions**: `view_payments`, `create_payments`, `edit_payments`, `approve_payments`,
+  `reject_payments`, `cancel_payments`. Roles in the wild store creation rights as either
+  `create_*` or the legacy `add_*`; `hasPermission` resolves both, because installed APKs check the
+  legacy spelling and cannot be updated retroactively. Do not "normalise" these keys in the database.
+- **Settings**: only `approval_required` and the four credit keys are consumed. The three
+  `require_*` toggles are still inert — wire them or remove them.

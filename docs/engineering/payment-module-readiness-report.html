@@ -293,13 +293,18 @@
     <h2>Bottom line</h2>
     <p><strong>The module was not production ready, and was not partially working — it was not working at all.</strong>
       Payment creation failed on both web and mobile from the day it shipped, for the same class of reason:
-      the code wrote to columns that do not exist. <code>PROJECT.md</code> records this module as
-      &ldquo;Ready for Pilot&rdquo;. That line should be removed.</p>
+      the code wrote to columns that do not exist. The shipping commit
+      (<code>a03b22a</code>) described it as &ldquo;Complete end-to-end payment collection flow&rdquo;
+      with &ldquo;Credit Limit &amp; Credit Days enforcement&rdquo; and &ldquo;Ready for Pilot&rdquo;.
+      None of those three claims was true.</p>
     <p>The three payments in production were created before the current code landed. No customer has
       ever successfully collected money through this module.</p>
-    <p>Both clients now work end to end and are committed on branches. Two database migrations are
-      written and validated but <strong>not applied</strong> — they need your approval, and one of them
-      fixes a live data-exposure issue.</p>
+    <p>Both clients now work end to end and are committed on branches. Both database migrations have
+      since been <strong>applied and verified</strong> against production — the public cheque-image
+      exposure is closed and credit control now enforces what the settings screen says.</p>
+    <p>Status today: <strong>functionally repaired and materially safer, but not production-proven.</strong>
+      No end-to-end run through a browser or a device has happened. This is ready for UAT, not for
+      customers.</p>
   </div>
 
   <!-- ============ INCIDENT ============ -->
@@ -425,7 +430,7 @@
           999,999 order against a 1,000 credit limit inserted without complaint. Writing the
           trigger&rsquo;s own key blocked it correctly — the logic works, nothing ever fed it.</p>
       </div>
-      <div class="status"><b>Migration written &amp; validated, NOT applied</b> — <code>20260814200000_fix_credit_control_settings.sql</code></div>
+      <div class="status"><b>Applied &amp; verified</b> — <code>20260814200000_fix_credit_control_settings.sql</code>. Re-tested after apply: over-limit blocked, within-limit allowed, zero-limit enforced, null-limit unrestricted.</div>
     </div>
 
     <div class="finding crit">
@@ -437,7 +442,7 @@
           or guessing an object URL can read <strong>any tenant&rsquo;s</strong> proof-of-payment
           images — cheques, bank receipts, UPI screenshots.</p>
       </div>
-      <div class="status"><b>Migration written, NOT applied</b> — private bucket, per-tenant policies, signed URLs. Both clients already updated to match.</div>
+      <div class="status"><b>Applied &amp; verified</b> — bucket private, 10&nbsp;MB and MIME limited, three account-scoped <code>authenticated</code> policies. Confirmed no remaining policy can match the bucket.</div>
     </div>
 
     <div class="finding crit">
@@ -449,7 +454,40 @@
           for that status. Any account that switches the setting off silently locks out
           <strong>every field rep</strong>. A latent trap: no account has flipped it yet.</p>
       </div>
-      <div class="status"><b>Migration written, NOT applied</b> — opting out of approval no longer requires approval rights.</div>
+      <div class="status"><b>Applied &amp; verified</b> — with approval off, a pre-approved payment now inserts cleanly.</div>
+    </div>
+
+    <div class="finding crit">
+      <span class="pill crit">Critical</span>
+      <span class="finding-title">The security fix nearly shipped without closing the hole</span>
+      <div class="finding-body">
+        <p>The migration was written to drop policies named <code>Allow public view</code> and
+          <code>Allow authenticated uploads</code> — the names in the original bucket migration. The
+          policies actually present in production were named <code>Public Access</code>,
+          <code>Authenticated users can upload attachments</code> and two more.</p>
+        <p>Dropping names that do not exist succeeds silently. Had this been applied as written,
+          the bucket would have gone private while <strong><code>Public Access</code> — a SELECT
+          granted to the <code>public</code> role across the whole bucket — survived</strong>, and the
+          exposure would have stayed open behind an apparently successful migration. Caught by reading
+          the live policy list before applying rather than trusting the repo.</p>
+      </div>
+      <div class="status"><b>Corrected before apply</b> — verified after: exactly one SELECT policy can match the bucket, scoped to account members.</div>
+    </div>
+
+    <div class="finding warn">
+      <span class="pill warn">High</span>
+      <span class="finding-title">QA residue in four customers&rsquo; credit settings</span>
+      <div class="finding-body">
+        <p>Found while checking that no tenant would start blocking orders unexpectedly: hiren patel,
+          Sahil Gohel, Pratik Maru and Next Innovation all carried
+          <code>settings.payments.creditLimitAction = "block"</code>, timestamped inside the QA window.
+          The harness had written enforcement config into four real customers&rsquo; accounts, and the
+          first purge only removed rows, not settings.</p>
+        <p>Harmless today — none of those tenants has a customer with a credit limit set, and the
+          trigger exits early without one. It would have started blocking their orders the moment they
+          set their first limit, with nothing in the UI explaining why.</p>
+      </div>
+      <div class="status"><b>Removed</b> — all 17 tenants now resolve to the safe <code>warn</code> default.</div>
     </div>
 
     <div class="finding warn">
@@ -645,8 +683,11 @@
                 them off the screen; a toggle that does nothing is worse than an absent one.</td>
           </tr>
           <tr>
-            <td>&ldquo;Ready for Pilot&rdquo; in <code>PROJECT.md</code></td>
-            <td>Demonstrably untrue when written. Worth correcting so the next person does not trust it.</td>
+            <td>The &ldquo;Ready for Pilot&rdquo; claim</td>
+            <td>It lives in commit <code>a03b22a</code>&rsquo;s message, not in a file, so it cannot be
+                edited without rewriting pushed history &mdash; not worth it. The real gap is that
+                <code>PROJECT.md</code> carried no status line at all; an accurate one has been added
+                so the next person reads the state rather than the sales pitch.</td>
           </tr>
           <tr>
             <td>Duplicate status trigger</td>
@@ -719,10 +760,9 @@
         <thead><tr><th>Action</th><th>Why it needs you</th></tr></thead>
         <tbody>
           <tr>
-            <td><strong>Apply the two migrations</strong></td>
-            <td>Both are written and validated; applying them was blocked by a permission prompt.
-                One closes the public cheque-image exposure, the other makes credit control real.
-                Nothing else in this review matters as much.</td>
+            <td><strong>Run UAT before any customer sees this</strong></td>
+            <td>Both migrations are applied and verified, so the remaining gap is real-world proof.
+                The checklist below is the gate.</td>
           </tr>
           <tr>
             <td><strong>Rule on reversing approved payments</strong></td>
@@ -755,8 +795,31 @@
 
     <p>One thing I did not do: no end-to-end run through a real browser or a device. Every fix is
       verified by typecheck, unit test, or direct database exercise — which catches schema and logic
-      faults but would not catch a broken layout or a mis-wired button. The first APK needs a human
-      collecting one real payment before any customer sees it.</p>
+      faults but would not catch a broken layout or a mis-wired button.</p>
+
+    <h3>UAT gate</h3>
+    <p>Run these against a real browser and a real APK. Each maps to a defect found in this review, so
+      a pass genuinely means something.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Scenario</th><th>What a pass proves</th></tr></thead>
+        <tbody>
+          <tr><td>Create a payment as a <strong>non-admin</strong> web user</td><td>The permission key fix — this was refused for every non-admin before.</td></tr>
+          <tr><td>Attach a cheque photo, then reopen the payment</td><td>Attachments write to the right table and the signed URL resolves against the now-private bucket.</td></tr>
+          <tr><td>Open that image URL in a logged-out window</td><td>Should now <strong>fail</strong>. Before today it succeeded.</td></tr>
+          <tr><td>Approve with a corrected verified amount</td><td>Dual-amount model, and outstanding moves by the verified figure not the collected one.</td></tr>
+          <tr><td>Reject with a reason</td><td>Rejection path and mandatory reason capture.</td></tr>
+          <tr><td>Collect on mobile in airplane mode, then reconnect</td><td>The offline queue, and the rewritten payload against the real schema.</td></tr>
+          <tr><td>Collect on mobile as a rep, check the status</td><td>Must be <em>Pending</em>, not Approved — the auto-approval fix.</td></tr>
+          <tr><td>Set a customer&rsquo;s credit limit, choose Block, exceed it</td><td>Credit control, which has never once blocked an order.</td></tr>
+          <tr><td>Same order as a user holding <code>override_credit_limit</code></td><td>The override path, and that it logs rather than silently permits.</td></tr>
+          <tr><td>Open Payments as a rep without <code>view_payments</code></td><td>The mobile screen gate, since the drawer itself does not check.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Your 20–30 real transactions before declaring production-ready is the right bar. I would add one
+      condition: at least one of them should be a payment someone gets <em>wrong</em> and needs undone —
+      that is the case with no answer today.</p>
   </section>
 
   <p class="footnote">

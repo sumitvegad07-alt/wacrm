@@ -19,8 +19,24 @@ SET public = false,
     allowed_mime_types = ARRAY['image/jpeg','image/png','image/webp','image/heic','application/pdf']
 WHERE id = 'payment_attachments';
 
+-- The policies actually present in production are named differently from the ones the
+-- original bucket migration declared, so both sets are dropped. Missing either leaves
+-- "Public Access" — a SELECT granted to the `public` role over the whole bucket — in
+-- place, and privatising the bucket alone would NOT close the exposure, because that
+-- policy still serves the object to an anon key through the authenticated endpoint.
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can upload attachments" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own attachments" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own attachments" ON storage.objects;
 DROP POLICY IF EXISTS "Allow authenticated uploads" ON storage.objects;
 DROP POLICY IF EXISTS "Allow public view" ON storage.objects;
+
+-- Existing rows stored a full public URL rather than an object path. Signed-URL reads
+-- take a path, so those rows are rewritten in place — the file itself is untouched and
+-- the attachment keeps working instead of breaking when the bucket goes private.
+UPDATE payment_attachments
+SET file_url = regexp_replace(file_url, '^.*/storage/v1/object/(public|sign)/payment_attachments/', '')
+WHERE file_url LIKE 'http%';
 
 -- Object paths are `<account_id>/<user_id>/<uuid>.<ext>`, so the first path segment
 -- is the tenant boundary we authorise against.
