@@ -71,6 +71,7 @@ export function PaymentForm({
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
   
   const [financials, setFinancials] = useState<FinancialSnapshot | null>(null);
   const [financialsLoading, setFinancialsLoading] = useState(false);
@@ -207,6 +208,26 @@ export function PaymentForm({
       return;
     }
 
+    // Same customer, same amount, same date, recorded moments ago — almost always a
+    // double-save, occasionally genuine. Warn and let the collector decide; never block.
+    if (!duplicateAcknowledged) {
+      const { data: dup } = await supabase.rpc('check_duplicate_payment', {
+        p_account_id: accountId!,
+        p_contact_id: data.contact_id,
+        p_amount: data.amount,
+        p_payment_date: data.payment_date,
+      });
+      if (dup?.is_duplicate) {
+        const first = dup.matches?.[0];
+        setDuplicateAcknowledged(true);
+        toast.warning(
+          `${first?.payment_number ?? 'A payment'} for this customer already has the same amount and date. Press Save again to record it anyway.`,
+          { duration: 8000 }
+        );
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       // Proof of payment lives in the private `payment_attachments` bucket. We store the
@@ -317,6 +338,7 @@ export function PaymentForm({
       reset();
       setCustomValues({});
       setProofFile(null);
+      setDuplicateAcknowledged(false);
       setFinancials(null);
       onSaved();
       if (!asPage) onOpenChange(false);

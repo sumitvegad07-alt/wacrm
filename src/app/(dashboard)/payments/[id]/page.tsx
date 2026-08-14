@@ -61,6 +61,7 @@ export default function PaymentDetailPage() {
   const [cancelOpen, setCancelOpen] = useState(false);
   
   const [attachments, setAttachments] = useState<Record<string, any>[]>([]);
+  const [cancelledByName, setCancelledByName] = useState<string>('');
   const [verifiedAmount, setVerifiedAmount] = useState<string>('');
   const [rejectionReason, setRejectionReason] = useState<string>('');
   const [cancellationReason, setCancellationReason] = useState<string>('');
@@ -124,6 +125,14 @@ export default function PaymentDetailPage() {
     
     const owner = ownerRes?.data as { full_name?: string; email?: string } | null;
     setCreatedBy(owner?.full_name || owner?.email || 'Unknown');
+
+    if (p.cancelled_by) {
+      const { data: canceller } = await supabase
+        .from('profiles').select('full_name, email').eq('user_id', p.cancelled_by).maybeSingle();
+      setCancelledByName(canceller?.full_name || canceller?.email || 'Unknown');
+    } else {
+      setCancelledByName('');
+    }
     setLoading(false);
   }, [id, supabase, router]);
 
@@ -252,14 +261,17 @@ export default function PaymentDetailPage() {
           </div>
         </div>
 
-        {payment.status === 'Pending' && (
+        {/* Pending payments can be ruled on. An Approved payment is otherwise immutable,
+            but must stay cancellable — a cheque bounces, or the wrong customer was
+            credited, and finance needs a way to reverse it that leaves a trail. */}
+        {(payment.status === 'Pending' || payment.status === 'Approved') && (
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3 bg-muted/20">
-            {canApprove && (
+            {payment.status === 'Pending' && canApprove && (
               <Button onClick={() => { setVerifiedAmount(payment.amount.toString()); setApproveOpen(true); }} className="gap-1.5" size="sm">
                 <CheckCircle2 className="size-4" /> Approve
               </Button>
             )}
-            {canReject && (
+            {payment.status === 'Pending' && canReject && (
               <Button onClick={() => setRejectOpen(true)} variant="destructive" className="gap-1.5" size="sm">
                 <XCircle className="size-4" /> Reject
               </Button>
@@ -268,6 +280,11 @@ export default function PaymentDetailPage() {
               <Button onClick={() => setCancelOpen(true)} variant="outline" className="gap-1.5" size="sm">
                 <Ban className="size-4" /> Cancel
               </Button>
+            )}
+            {payment.status === 'Approved' && canCancel && (
+              <span className="text-xs text-muted-foreground ml-1">
+                Cancelling restores this amount to the customer&apos;s outstanding balance.
+              </span>
             )}
           </div>
         )}
@@ -302,6 +319,18 @@ export default function PaymentDetailPage() {
                       <div className="col-span-2">
                         <p className="text-muted-foreground mb-1 text-red-600">Rejection Reason</p>
                         <p className="font-medium text-red-600 bg-red-50 p-3 rounded-md">{payment.rejection_reason}</p>
+                      </div>
+                    )}
+                    {payment.status === 'Cancelled' && (
+                      <div className="col-span-2">
+                        <p className="text-muted-foreground mb-1">Cancellation</p>
+                        <div className="bg-muted/50 border border-border p-3 rounded-md space-y-1">
+                          <p className="font-medium">{payment.cancellation_reason || 'No reason recorded'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {cancelledByName ? `Cancelled by ${cancelledByName}` : 'Cancelled'}
+                            {payment.cancelled_at ? ` on ${new Date(payment.cancelled_at).toLocaleString('en-IN')}` : ''}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -455,7 +484,11 @@ export default function PaymentDetailPage() {
             <DialogTitle>Cancel Payment</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground">Are you sure you want to cancel this payment? This action cannot be undone.</p>
+            <p className="text-sm text-muted-foreground">
+              {payment.status === 'Approved'
+                ? `This payment is already approved. Cancelling it adds ${formatCurrency(payment.verified_amount ?? payment.amount, defaultCurrency)} back to the customer's outstanding balance. The record is kept, not deleted.`
+                : 'Cancelling keeps the record for audit; it is never deleted. This cannot be undone.'}
+            </p>
             <div className="space-y-2">
               <Label>Cancellation Reason <span className="text-red-500">*</span></Label>
               <Select value={cancellationReason} onValueChange={(val) => setCancellationReason(val || '')}>

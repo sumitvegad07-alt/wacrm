@@ -181,6 +181,46 @@ describe('overdue ageing', () => {
   });
 });
 
+describe('outstanding after a cancellation', () => {
+  // S12: cancelling an approved payment must put the money back on the customer's
+  // balance. Cancelled payments simply stop being Approved, so they drop out of the
+  // settled total — this pins that behaviour so a future filter change cannot lose it.
+  const orders = [{ total_amount: 50000, created_at: daysAgo(5) }];
+
+  it('restores the balance when an approved payment is cancelled', () => {
+    const beforeCancel = computeCustomerFinancials({
+      orders,
+      payments: [{ amount: 10000, verified_amount: 10000 }],
+      now: NOW,
+    });
+    expect(beforeCancel.outstandingBalance).toBe(40000);
+
+    // After cancellation the payment is no longer Approved, so it is not passed in.
+    const afterCancel = computeCustomerFinancials({ orders, payments: [], now: NOW });
+    expect(afterCancel.outstandingBalance).toBe(50000);
+  });
+
+  it('restores only the cancelled payment, leaving others settled', () => {
+    const after = computeCustomerFinancials({
+      orders,
+      payments: [{ amount: 4000, verified_amount: 4000 }],
+      now: NOW,
+    });
+    expect(after.outstandingBalance).toBe(46000);
+  });
+
+  it('frees the credit the cancelled payment had released', () => {
+    const after = computeCustomerFinancials({
+      creditLimit: 60000,
+      orders,
+      payments: [],
+      now: NOW,
+    });
+    expect(after.availableCredit).toBe(10000);
+    expect(exceedsCreditLimit(after, 15000)).toBe(true);
+  });
+});
+
 describe('exceedsCreditLimit', () => {
   it('allows an order that fits inside the remaining limit', () => {
     expect(

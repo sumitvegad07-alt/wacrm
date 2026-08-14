@@ -33,9 +33,12 @@ interface PaymentRow {
   collectedByName: string;
 }
 
+// Mirrors payment_status_transition_allowed() in the database. An approved payment
+// cannot be retrospectively Rejected — cancellation is its only reversal, and it
+// requires a reason.
 const LEGAL_TO: Record<string, string[]> = {
   Pending: ['Approved', 'Rejected', 'Cancelled'],
-  Approved: ['Rejected', 'Cancelled'],
+  Approved: ['Cancelled'],
 };
 
 const BULK_ACTIONS = [
@@ -130,10 +133,23 @@ export default function PaymentsPage() {
       toast.error(`None of the selected payments can be moved to ${newStatus}.`);
       return;
     }
+    // A cancellation without a reason is refused by the database, so collect one
+    // up front rather than letting every row fail.
+    let bulkReason: string | null = null;
+    if (newStatus === 'Cancelled') {
+      bulkReason = window.prompt(`Reason for cancelling ${targets.length} payment(s):`);
+      if (bulkReason === null) return;
+      if (!bulkReason.trim()) { toast.error('Cancellation reason is required'); return; }
+    }
+
     setBulkLoading(true);
     let ok = 0, failed = 0;
     for (const p of targets) {
-      const { error } = await supabase.rpc('update_payment_status', { p_payment_id: p.id, p_new_status: newStatus });
+      const { error } = await supabase.rpc('update_payment_status', {
+        p_payment_id: p.id,
+        p_new_status: newStatus,
+        p_cancellation_reason: bulkReason?.trim() ?? undefined,
+      });
       if (error) failed++; else ok++;
     }
     setBulkLoading(false);

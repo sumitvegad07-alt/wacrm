@@ -60,6 +60,7 @@ const PERMISSION_GROUPS = [
       { id: PERMISSIONS.PAYMENTS.VIEW_ATTACHMENTS, label: "View Payment Attachments (Cheques, Receipts)" },
       { id: PERMISSIONS.PAYMENTS.VIEW_REPORTS, label: "View Payment Reports" },
       { id: PERMISSIONS.PAYMENTS.EXPORT_REPORTS, label: "Export Payment Reports" },
+      { id: PERMISSIONS.PAYMENTS.BACKDATE, label: "Backdate Payments (beyond the allowed window)" },
     ]
   },
   {

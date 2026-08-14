@@ -36,6 +36,10 @@ export const PERMISSIONS = {
     VIEW_ATTACHMENTS: 'view_payment_attachments',
     VIEW_REPORTS: 'view_payment_reports',
     EXPORT_REPORTS: 'export_payment_reports',
+    // Recording a collection dated further back than the account's
+    // `allow_backdate_days` window. Withheld from field reps by default: a
+    // backdated collection can make an overdue account look settled.
+    BACKDATE: 'backdate_payments',
   },
 
   // Customer Financials

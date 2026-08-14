@@ -14,10 +14,34 @@ export const PAYMENT_STATUS_COLORS: Record<string, string> = {
   Cancelled: 'bg-slate-600 text-white shadow-sm border-transparent',
 };
 
+/**
+ * Mirrors payment_status_transition_allowed() in the database, which is the real
+ * enforcement point — the mobile app writes the table directly and never sees this.
+ *
+ * Approved is not fully terminal: a payment approved in error, or a cheque that
+ * bounces afterwards, has to be reversible or the customer's outstanding balance
+ * stays permanently wrong. Cancellation is that single audited exit, and it requires
+ * a reason. Approved -> Pending and Approved -> Rejected remain forbidden.
+ * Rejected and Cancelled are terminal.
+ */
 export const PAYMENT_STATUS_TRANSITIONS: Record<string, readonly PaymentStatus[]> = {
   Pending: ['Approved', 'Rejected', 'Cancelled'],
-  // Approved, Rejected, Cancelled are terminal states — no further transitions allowed
+  Approved: ['Cancelled'],
 };
+
+/** Statuses whose transition to Cancelled must carry a reason. */
+export function requiresCancellationReason(nextStatus: string): boolean {
+  return nextStatus === 'Cancelled';
+}
+
+/**
+ * Client-side mirror of the database's cancellation guard, so the form can refuse
+ * before a round trip. The database check remains authoritative.
+ */
+export function validateCancellation(reason: string | null | undefined): string | null {
+  if (!reason || reason.trim() === '') return 'Cancellation reason is required';
+  return null;
+}
 
 export const PAYMENT_SOURCES = ['visit', 'customer', 'admin', 'import', 'api'] as const;
 

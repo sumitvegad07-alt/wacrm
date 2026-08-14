@@ -4,10 +4,12 @@ import {
   canTransitionTo,
   getSourceLabel,
   getStatusColor,
+  validateCancellation,
+  requiresCancellationReason,
   type PaymentStatus,
 } from './statuses';
 
-const TERMINAL: PaymentStatus[] = ['Approved', 'Rejected', 'Cancelled'];
+const TERMINAL: PaymentStatus[] = ['Rejected', 'Cancelled'];
 
 describe('payment status state machine', () => {
   it('lets a pending payment be approved, rejected or cancelled', () => {
@@ -16,9 +18,19 @@ describe('payment status state machine', () => {
     expect(canTransitionTo('Pending', 'Cancelled')).toBe(true);
   });
 
-  it('treats approved, rejected and cancelled as terminal', () => {
-    // Money that has been ruled on must not silently change state again — the DB
-    // trigger enforces the same rule, this guards the UI half.
+  it('lets an approved payment be cancelled', () => {
+    // S12: without this there is no way to reverse a payment approved in error or a
+    // cheque that bounces later, and the customer's outstanding stays wrong forever.
+    expect(canTransitionTo('Approved', 'Cancelled')).toBe(true);
+  });
+
+  it('does not let an approved payment go back to Pending or be Rejected', () => {
+    expect(canTransitionTo('Approved', 'Pending')).toBe(false);
+    expect(canTransitionTo('Approved', 'Rejected')).toBe(false);
+    expect(canTransitionTo('Approved', 'Approved')).toBe(false);
+  });
+
+  it('treats rejected and cancelled as fully terminal', () => {
     for (const from of TERMINAL) {
       for (const to of PAYMENT_STATUSES) {
         expect(canTransitionTo(from, to)).toBe(false);
@@ -33,6 +45,27 @@ describe('payment status state machine', () => {
   it('rejects unknown source statuses', () => {
     expect(canTransitionTo('Draft', 'Approved')).toBe(false);
     expect(canTransitionTo('', 'Approved')).toBe(false);
+  });
+});
+
+describe('cancellation reason', () => {
+  it('is required only when cancelling', () => {
+    expect(requiresCancellationReason('Cancelled')).toBe(true);
+    expect(requiresCancellationReason('Approved')).toBe(false);
+    expect(requiresCancellationReason('Rejected')).toBe(false);
+  });
+
+  it('rejects a missing, empty or whitespace-only reason', () => {
+    // S13: cancelling with no reason used to succeed, leaving no record of why the
+    // money was reversed.
+    expect(validateCancellation(undefined)).toBe('Cancellation reason is required');
+    expect(validateCancellation(null)).toBe('Cancellation reason is required');
+    expect(validateCancellation('')).toBe('Cancellation reason is required');
+    expect(validateCancellation('   ')).toBe('Cancellation reason is required');
+  });
+
+  it('accepts a real reason', () => {
+    expect(validateCancellation('Cheque Bounced')).toBeNull();
   });
 });
 

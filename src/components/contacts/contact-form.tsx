@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, CustomField, Profile } from '@/types';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -56,7 +57,13 @@ export function ContactForm({
   onViewExisting,
 }: ContactFormProps) {
   const supabase = createClient();
-  const { accountId, user, isModuleEnabled } = useAuth();
+  const { accountId, user, isModuleEnabled, hasPermission } = useAuth();
+  // These three fields decide what a customer owes, so the database refuses to change
+  // them without the matching permission. Mirror that here rather than letting someone
+  // fill in a value that will be rejected on save.
+  const isEditingExisting = Boolean(contact?.id);
+  const canEditCreditTerms = !isEditingExisting || hasPermission(PERMISSIONS.CUSTOMERS.MANAGE_CREDIT);
+  const canEditOpeningBalance = !isEditingExisting || hasPermission(PERMISSIONS.CUSTOMERS.EDIT_OPENING_BALANCE);
   const isEdit = !!contact;
   const territoryEnabled = isModuleEnabled('territory');
 
@@ -570,16 +577,22 @@ export function ContactForm({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs">Credit Limit</Label>
-                  <Input type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0.00" className="bg-muted border-border text-foreground h-8 text-xs" />
+                  <Input type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0.00" disabled={!canEditCreditTerms} className="bg-muted border-border text-foreground h-8 text-xs disabled:opacity-60" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs">Credit Days</Label>
-                   <Input type="number" value={creditDays} onChange={(e) => setCreditDays(e.target.value)} placeholder="e.g. 30" className="bg-muted border-border text-foreground h-8 text-xs" />
+                   <Input type="number" value={creditDays} onChange={(e) => setCreditDays(e.target.value)} placeholder="e.g. 30" disabled={!canEditCreditTerms} className="bg-muted border-border text-foreground h-8 text-xs disabled:opacity-60" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs">Opening Balance</Label>
-                   <Input type="number" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" className="bg-muted border-border text-foreground h-8 text-xs" />
+                   <Input type="number" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" disabled={!canEditOpeningBalance} className="bg-muted border-border text-foreground h-8 text-xs disabled:opacity-60" />
                 </div>
+                {(!canEditCreditTerms || !canEditOpeningBalance) && (
+                  <p className="md:col-span-3 text-xs text-muted-foreground">
+                    Some financial fields are locked. Changing a customer&apos;s credit terms or
+                    opening balance needs a finance permission.
+                  </p>
+                )}
               </div>
             </div>
           )}

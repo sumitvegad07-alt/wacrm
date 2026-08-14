@@ -91,6 +91,47 @@ describe('legacy add_/create_ prefix compatibility', () => {
   });
 });
 
+describe('customer financial field protection', () => {
+  // S3b / S3c: a field rep changed Opening Balance and Credit Days in the pilot.
+  // Both now sit behind the same finance permissions the credit limit already used.
+  it('denies a field rep every financial field', () => {
+    expect(hasPermission(FIELD_REP, PERMISSIONS.CUSTOMERS.MANAGE_CREDIT)).toBe(false);
+    expect(hasPermission(FIELD_REP, PERMISSIONS.CUSTOMERS.EDIT_OPENING_BALANCE)).toBe(false);
+  });
+
+  it('allows finance to manage credit terms', () => {
+    expect(hasPermission(FINANCE, PERMISSIONS.CUSTOMERS.MANAGE_CREDIT)).toBe(false);
+    const financeWithCredit: RolePermissions = {
+      ...FINANCE,
+      manage_customer_credit: true,
+      edit_opening_balance: true,
+    };
+    expect(hasPermission(financeWithCredit, PERMISSIONS.CUSTOMERS.MANAGE_CREDIT)).toBe(true);
+    expect(hasPermission(financeWithCredit, PERMISSIONS.CUSTOMERS.EDIT_OPENING_BALANCE)).toBe(true);
+  });
+
+  it('gives an owner every financial field through the wildcard', () => {
+    expect(hasPermission(OWNER, PERMISSIONS.CUSTOMERS.MANAGE_CREDIT)).toBe(true);
+    expect(hasPermission(OWNER, PERMISSIONS.CUSTOMERS.EDIT_OPENING_BALANCE)).toBe(true);
+  });
+});
+
+describe('backdating', () => {
+  it('is withheld from a field rep by default', () => {
+    // S19c: an unguarded payment_date let a rep date a collection 400 days back.
+    expect(hasPermission(FIELD_REP, PERMISSIONS.PAYMENTS.BACKDATE)).toBe(false);
+    expect(hasPermission(FINANCE, PERMISSIONS.PAYMENTS.BACKDATE)).toBe(false);
+  });
+
+  it('is granted when explicitly assigned', () => {
+    expect(hasPermission({ ...FINANCE, backdate_payments: true }, PERMISSIONS.PAYMENTS.BACKDATE)).toBe(true);
+  });
+
+  it('is covered by the owner wildcard', () => {
+    expect(hasPermission(OWNER, PERMISSIONS.PAYMENTS.BACKDATE)).toBe(true);
+  });
+});
+
 describe('data scope', () => {
   it('scopes a field rep to their own records', () => {
     expect(getDataScope(FIELD_REP, 'payments')).toBe('own');
