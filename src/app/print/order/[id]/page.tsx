@@ -146,8 +146,10 @@ async function loadCustomFieldValues(
 ): Promise<{ label: string; value: string }[]> {
   if (fieldIds.length === 0) return [];
 
+  // `field_name`, not `label` — custom_fields has no label column, and asking for one
+  // makes PostgREST reject the query, which silently printed no custom fields at all.
   const [{ data: fields }, { data: values }] = await Promise.all([
-    supabase.from('custom_fields').select('id, label, field_name').in('id', fieldIds),
+    supabase.from('custom_fields').select('id, field_name').in('id', fieldIds),
     supabase.from('order_custom_values').select('custom_field_id, value').eq('order_id', orderId),
   ]);
 
@@ -160,7 +162,7 @@ async function loadCustomFieldValues(
       const field = (fields ?? []).find((f: any) => f.id === fid);
       const value = valueById.get(fid);
       if (!field || !value || String(value).trim() === '') return null;
-      return { label: field.label || field.field_name || 'Field', value: String(value) };
+      return { label: field.field_name || 'Field', value: String(value) };
     })
     .filter((x): x is { label: string; value: string } => x !== null);
 }

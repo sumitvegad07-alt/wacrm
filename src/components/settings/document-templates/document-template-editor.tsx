@@ -172,17 +172,28 @@ export function DocumentTemplateEditor({
     let alive = true;
 
     (async () => {
-      const { data } = await supabase
+      // `custom_fields` names its display column `field_name`. There is no `label` column,
+      // and selecting one makes PostgREST reject the whole query — which this code then
+      // swallowed, so the section rendered "No custom fields defined" for every module.
+      const { data, error } = await supabase
         .from("custom_fields")
-        .select("id, label, field_name")
+        .select("id, field_name")
         .eq("account_id", accountId)
         .eq("module_name", module)
         .eq("is_active", true)
-        .order("label");
+        .order("field_name");
 
       if (!alive) return;
+
+      if (error) {
+        // Say so rather than showing an empty list that looks like "you have none".
+        toast.error(`Could not load custom fields: ${error.message}`);
+        setCustomFields([]);
+        return;
+      }
+
       setCustomFields(
-        (data ?? []).map((f: any) => ({ id: f.id, label: f.label || f.field_name || "Untitled" }))
+        (data ?? []).map((f: any) => ({ id: f.id, label: f.field_name || "Untitled" }))
       );
     })();
 
