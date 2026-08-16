@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/currency';
 import { buildDefaultConfig, type DocumentTemplateConfig } from '@/lib/document-templates/schema';
 import { resolveTemplateConfig } from '@/lib/document-templates/repository';
 import { fetchLetterhead, type CompanyLetterhead } from '@/lib/document-templates/company-profile';
+import { fetchCustomFieldValues } from '@/lib/document-templates/custom-fields';
 import {
   DocumentTemplatePreview,
   type DocumentRenderData,
@@ -75,7 +76,7 @@ export default function DispatchPrintView() {
         for (const p of products ?? []) productsById.set(p.id, p);
       }
 
-      const customFieldValues = await loadCustomFieldValues(supabase, id, templateConfig.customFieldIds);
+      const customFieldValues = await fetchCustomFieldValues(supabase, 'dispatch', id, templateConfig.customFieldIds);
 
       setConfig(templateConfig);
       setData(build(dispatch, lines, productsById, profile, letterhead, customFieldValues));
@@ -123,30 +124,6 @@ export default function DispatchPrintView() {
       </div>
     </div>
   );
-}
-
-async function loadCustomFieldValues(
-  supabase: ReturnType<typeof createClient>,
-  dispatchId: string,
-  fieldIds: string[]
-): Promise<{ label: string; value: string }[]> {
-  if (fieldIds.length === 0) return [];
-
-  const [{ data: fields }, { data: values }] = await Promise.all([
-    supabase.from('custom_fields').select('id, field_name').in('id', fieldIds),
-    supabase.from('dispatch_custom_values').select('custom_field_id, value').eq('dispatch_id', dispatchId),
-  ]);
-
-  const valueById = new Map((values ?? []).map((v: any) => [v.custom_field_id, v.value]));
-
-  return fieldIds
-    .map((fid) => {
-      const field = (fields ?? []).find((f: any) => f.id === fid);
-      const value = valueById.get(fid);
-      if (!field || !value || String(value).trim() === '') return null;
-      return { label: field.field_name || 'Field', value: String(value) };
-    })
-    .filter((x): x is { label: string; value: string } => x !== null);
 }
 
 function build(

@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/currency';
 import { buildDefaultConfig, type DocumentTemplateConfig } from '@/lib/document-templates/schema';
 import { resolveTemplateConfig } from '@/lib/document-templates/repository';
 import { fetchLetterhead, type CompanyLetterhead } from '@/lib/document-templates/company-profile';
+import { fetchCustomFieldValues } from '@/lib/document-templates/custom-fields';
 import {
   DocumentTemplatePreview,
   type DocumentRenderData,
@@ -80,9 +81,9 @@ export default function OrderPrintView() {
         for (const p of products ?? []) productsById.set(p.id, p);
       }
 
-      const customFieldValues = await loadCustomFieldValues(
+      const customFieldValues = await fetchCustomFieldValues(
         supabase,
-        order.account_id,
+        'order',
         id,
         templateConfig.customFieldIds
       );
@@ -136,35 +137,6 @@ export default function OrderPrintView() {
       </div>
     </div>
   );
-}
-
-async function loadCustomFieldValues(
-  supabase: ReturnType<typeof createClient>,
-  accountId: string,
-  orderId: string,
-  fieldIds: string[]
-): Promise<{ label: string; value: string }[]> {
-  if (fieldIds.length === 0) return [];
-
-  // `field_name`, not `label` — custom_fields has no label column, and asking for one
-  // makes PostgREST reject the query, which silently printed no custom fields at all.
-  const [{ data: fields }, { data: values }] = await Promise.all([
-    supabase.from('custom_fields').select('id, field_name').in('id', fieldIds),
-    supabase.from('order_custom_values').select('custom_field_id, value').eq('order_id', orderId),
-  ]);
-
-  const valueById = new Map((values ?? []).map((v: any) => [v.custom_field_id, v.value]));
-
-  // Ordered by the template's own list, and blank values are dropped rather than printed as
-  // an empty labelled slot.
-  return fieldIds
-    .map((fid) => {
-      const field = (fields ?? []).find((f: any) => f.id === fid);
-      const value = valueById.get(fid);
-      if (!field || !value || String(value).trim() === '') return null;
-      return { label: field.field_name || 'Field', value: String(value) };
-    })
-    .filter((x): x is { label: string; value: string } => x !== null);
 }
 
 function buildOrderRenderData(

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { formatCurrency } from '@/lib/currency';
 import { resolveTemplateConfig } from '@/lib/document-templates/repository';
 import { fetchLetterhead } from '@/lib/document-templates/company-profile';
+import { fetchCustomFieldValues } from '@/lib/document-templates/custom-fields';
 import {
   DocumentTemplatePreview,
   type DocumentRenderData,
@@ -43,7 +44,7 @@ export default async function PaymentPrintView(props: { params: Promise<{ id: st
     fetchLetterhead(supabase, payment.account_id),
   ]);
 
-  const customFieldValues = await loadPaymentCustomFields(supabase, id, config.customFieldIds);
+  const customFieldValues = await fetchCustomFieldValues(supabase, 'payment', id, config.customFieldIds);
 
   const money = (v: unknown) => formatCurrency(Number(v || 0));
   const cust = payment.contacts || payment.leads || {};
@@ -111,26 +112,3 @@ export default async function PaymentPrintView(props: { params: Promise<{ id: st
   );
 }
 
-async function loadPaymentCustomFields(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  paymentId: string,
-  fieldIds: string[]
-): Promise<{ label: string; value: string }[]> {
-  if (fieldIds.length === 0) return [];
-
-  const [{ data: fields }, { data: values }] = await Promise.all([
-    supabase.from('custom_fields').select('id, field_name').in('id', fieldIds),
-    supabase.from('payment_custom_values').select('custom_field_id, value').eq('payment_id', paymentId),
-  ]);
-
-  const valueById = new Map((values ?? []).map((v: any) => [v.custom_field_id, v.value]));
-
-  return fieldIds
-    .map((fid) => {
-      const field = (fields ?? []).find((f: any) => f.id === fid);
-      const value = valueById.get(fid);
-      if (!field || !value || String(value).trim() === '') return null;
-      return { label: field.field_name || 'Field', value: String(value) };
-    })
-    .filter((x): x is { label: string; value: string } => x !== null);
-}

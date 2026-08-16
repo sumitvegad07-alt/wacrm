@@ -43,6 +43,7 @@ import {
   getTemplate,
   updateTemplate,
 } from "@/lib/document-templates/repository";
+import { listTemplateCustomFields } from "@/lib/document-templates/custom-fields";
 import { DocumentTemplatePreview } from "./document-template-preview";
 
 const PARTY_FIELDS: { key: keyof PartyBlock; label: string }[] = [
@@ -172,29 +173,20 @@ export function DocumentTemplateEditor({
     let alive = true;
 
     (async () => {
-      // `custom_fields` names its display column `field_name`. There is no `label` column,
-      // and selecting one makes PostgREST reject the whole query — which this code then
-      // swallowed, so the section rendered "No custom fields defined" for every module.
-      const { data, error } = await supabase
-        .from("custom_fields")
-        .select("id, field_name")
-        .eq("account_id", accountId)
-        .eq("module_name", module)
-        .eq("is_active", true)
-        .order("field_name");
-
-      if (!alive) return;
-
-      if (error) {
-        // Say so rather than showing an empty list that looks like "you have none".
-        toast.error(`Could not load custom fields: ${error.message}`);
+      try {
+        // Shared with the print routes, so the editor cannot offer a field the document
+        // then fails to render. Excludes system fields the template already exposes as
+        // their own Document Info row — otherwise the same value prints twice under two
+        // different labels.
+        const fields = await listTemplateCustomFields(supabase, accountId, module);
+        if (!alive) return;
+        setCustomFields(fields.map((f) => ({ id: f.id, label: f.label })));
+      } catch (err: any) {
+        if (!alive) return;
+        // Say so rather than showing an empty list that reads as "you have none".
+        toast.error(`Could not load custom fields: ${err.message}`);
         setCustomFields([]);
-        return;
       }
-
-      setCustomFields(
-        (data ?? []).map((f: any) => ({ id: f.id, label: f.field_name || "Untitled" }))
-      );
     })();
 
     return () => {

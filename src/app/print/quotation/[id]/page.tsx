@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/currency';
 import { buildDefaultConfig, type DocumentTemplateConfig } from '@/lib/document-templates/schema';
 import { resolveTemplateConfig } from '@/lib/document-templates/repository';
 import { fetchLetterhead, type CompanyLetterhead } from '@/lib/document-templates/company-profile';
+import { fetchCustomFieldValues } from '@/lib/document-templates/custom-fields';
 import {
   DocumentTemplatePreview,
   type DocumentRenderData,
@@ -69,7 +70,7 @@ export default function QuotationPrintView() {
         for (const p of products ?? []) productsById.set(p.id, p);
       }
 
-      const customFieldValues = await loadCustomFieldValues(supabase, id, templateConfig.customFieldIds);
+      const customFieldValues = await fetchCustomFieldValues(supabase, 'quotation', id, templateConfig.customFieldIds);
 
       // Terms typed on this quotation beat the template's house footer.
       const effectiveConfig: DocumentTemplateConfig = quotation.terms_conditions?.trim()
@@ -128,30 +129,6 @@ export default function QuotationPrintView() {
       </div>
     </div>
   );
-}
-
-async function loadCustomFieldValues(
-  supabase: ReturnType<typeof createClient>,
-  quotationId: string,
-  fieldIds: string[]
-): Promise<{ label: string; value: string }[]> {
-  if (fieldIds.length === 0) return [];
-
-  const [{ data: fields }, { data: values }] = await Promise.all([
-    supabase.from('custom_fields').select('id, field_name').in('id', fieldIds),
-    supabase.from('quotation_custom_values').select('custom_field_id, value').eq('quotation_id', quotationId),
-  ]);
-
-  const valueById = new Map((values ?? []).map((v: any) => [v.custom_field_id, v.value]));
-
-  return fieldIds
-    .map((fid) => {
-      const field = (fields ?? []).find((f: any) => f.id === fid);
-      const value = valueById.get(fid);
-      if (!field || !value || String(value).trim() === '') return null;
-      return { label: field.field_name || 'Field', value: String(value) };
-    })
-    .filter((x): x is { label: string; value: string } => x !== null);
 }
 
 function build(
