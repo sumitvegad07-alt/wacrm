@@ -31,6 +31,18 @@ interface ReportFilterDrawerProps {
   period: string;
 }
 
+/**
+ * Format a Date as the calendar day the user actually picked.
+ *
+ * NEVER use `toISOString().split('T')[0]` here. The date pickers produce local
+ * midnight, and in any timezone east of UTC that serialises to the PREVIOUS day
+ * (IST 2026-08-14T00:00+05:30 → "2026-08-13T18:30Z" → "2026-08-13"). Every report
+ * was silently querying one day early on the start of every range.
+ */
+export function toReportDate(d: Date): string {
+  return format(d, 'yyyy-MM-dd');
+}
+
 export const PERIOD_PRESETS = [
   { label: "Today", value: "today" },
   { label: "Yesterday", value: "yesterday" },
@@ -178,8 +190,8 @@ export function ReportFilterDrawer({
     const range = getDatesForPeriod(localPeriod, customDate);
     if (range?.from && range?.to) {
       finalFilters.date_range = {
-        start_date: range.from.toISOString().split('T')[0],
-        end_date: range.to.toISOString().split('T')[0],
+        start_date: toReportDate(range.from),
+        end_date: toReportDate(range.to),
       };
     } else {
       delete finalFilters.date_range;
@@ -198,16 +210,27 @@ export function ReportFilterDrawer({
     const resetFilters: Record<string, any> = {};
     if (range?.from && range?.to) {
       resetFilters.date_range = {
-        start_date: range.from.toISOString().split('T')[0],
-        end_date: range.to.toISOString().split('T')[0],
+        start_date: toReportDate(range.from),
+        end_date: toReportDate(range.to),
       };
     }
     onApplyFilters(resetFilters, "this_month");
     setOpen(false);
   };
 
-  // Group filters by section
-  const sections = ['PERIOD', 'SALES TYPE', 'AREA', 'USER', 'CUSTOMER', 'PRODUCT'];
+  // Section headings come from the report's own filters rather than a fixed list,
+  // so each module groups its filters its own way — payments have no PRODUCT
+  // section at all, and gain a PAYMENT one. PERIOD is always rendered first.
+  const sections = useMemo(() => {
+    const found = dynamicConfigFilters
+      .map(f => f.section)
+      .filter((s): s is string => Boolean(s) && s !== 'PERIOD');
+    const ordered = ['PERIOD', ...Array.from(new Set(found))];
+    // Anything without a section used to be dumped into PRODUCT, which silently
+    // hid it on any module that has no PRODUCT section.
+    const hasUnsectioned = dynamicConfigFilters.some(f => !f.section && f.key !== 'date_range');
+    return hasUnsectioned ? [...ordered, 'OTHER'] : ordered;
+  }, [dynamicConfigFilters]);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -250,8 +273,8 @@ export function ReportFilterDrawer({
           )}
           
           {settingsLoaded && !settingsError && sections.map(section => {
-            const sectionFilters = dynamicConfigFilters.filter(f => 
-              (f.section === section || (!f.section && section === 'PRODUCT' && f.key !== 'date_range')) &&
+            const sectionFilters = dynamicConfigFilters.filter(f =>
+              (f.section === section || (!f.section && section === 'OTHER' && f.key !== 'date_range')) &&
               isFilterVisible(f)
             );
             if (section === 'PERIOD') {
@@ -395,6 +418,38 @@ export function ReportFilterDrawer({
                           tableName="profiles"
                           displayColumn="full_name"
                           valueColumn="user_id"
+                          value={localFilters[filterDef.key] || ""}
+                          onChange={(val) => {
+                            const next = { ...localFilters };
+                            if (!val) delete next[filterDef.key];
+                            else next[filterDef.key] = val;
+                            setLocalFilters(next);
+                          }}
+                          placeholder={`Select ${filterDef.label}`}
+                          className="h-8 text-xs bg-background"
+                        />
+                      ) : filterDef.type === 'lead' ? (
+                        <AsyncSearchSelect
+                          tableName="leads"
+                          displayColumn="name"
+                          value={localFilters[filterDef.key] || ""}
+                          onChange={(val) => {
+                            const next = { ...localFilters };
+                            if (!val) delete next[filterDef.key];
+                            else next[filterDef.key] = val;
+                            setLocalFilters(next);
+                          }}
+                          placeholder={`Select ${filterDef.label}`}
+                          className="h-8 text-xs bg-background"
+                        />
+                      ) : filterDef.type === 'payment_type' ? (
+                        // Payment types are per-account configurable, so they are
+                        // looked up rather than hardcoded. payments.payment_type
+                        // stores the NAME, so the value column is `name` too.
+                        <AsyncSearchSelect
+                          tableName="payment_types"
+                          displayColumn="name"
+                          valueColumn="name"
                           value={localFilters[filterDef.key] || ""}
                           onChange={(val) => {
                             const next = { ...localFilters };

@@ -60,6 +60,7 @@ import {
   Banknote,
   AlertTriangle,
   Clock,
+  TrendingUp,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -358,6 +359,10 @@ function getMenuStructure(
       icon: LineChart,
       items: [
         { href: "/reports/orders", label: "Order Reports", icon: ShoppingCart, module: "orders" },
+        // Sales = the same report over fully-dispatched (Closed) orders only.
+        { href: "/reports/sales", label: "Sales Reports", icon: TrendingUp, module: "orders" },
+        // Gated like the Quotation module itself (see the Quotation nav entry above).
+        { href: "/reports/quotations", label: "Quotation Reports", icon: FileText, module: "orders", configModule: "quotation" as const },
         { href: "/reports/payments", label: "Payment Reports", icon: Banknote, module: "payment_reports", configModule: "payment" as const },
         { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
         { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },

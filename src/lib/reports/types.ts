@@ -47,8 +47,11 @@ export interface ReportMeasure {
 export interface ReportFilterDef {
   key: string;
   label: string;
-  type: 'date_range' | 'select' | 'multiselect' | 'user' | 'customer' | 'product' | 'territory';
-  section?: 'PERIOD' | 'SALES TYPE' | 'AREA' | 'USER' | 'CUSTOMER' | 'PRODUCT';
+  type: 'date_range' | 'select' | 'multiselect' | 'user' | 'customer' | 'lead' | 'product' | 'territory' | 'payment_type';
+  /** Drawer group heading. Free text so each module can name its own sections
+   *  (payments have PAYMENT, orders have SALES TYPE / PRODUCT). PERIOD always
+   *  renders first; remaining sections follow the order they appear in `filters`. */
+  section?: string;
   options?: { label: string; value: string }[];
   requiredModule?: keyof ModuleSettings | string;
   territoryLevel?: number;
@@ -58,8 +61,18 @@ export interface TabConfig {
   key: string;
   label: string;
   dimension: string; // The dimension key to set when this tab is active
+  /** Additional dimension columns shown alongside the primary one — e.g. the
+   *  Product tab also showing each product's category. Only use dimensions that
+   *  are functionally determined by the primary one, otherwise grouping by them
+   *  splits rows. */
+  extraDimensions?: string[];
   defaultMeasures: string[]; // Measure keys shown by default
   hiddenMeasures?: string[]; // Measure keys available via Manage Column
+  /** Restricts Manage Column to these measures on this tab. Needed where a module
+   *  registers two arithmetics for the same column — quotations have record-level
+   *  and item-level twins sharing a label, and only one is valid per tab.
+   *  Omit to offer every measure (the default for all other reports). */
+  availableMeasures?: string[];
   requiresProductSettings?: 'category' | 'subcategory'; // Show only if product category/subcategory enabled
 }
 

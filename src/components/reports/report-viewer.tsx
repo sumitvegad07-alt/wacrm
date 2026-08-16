@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { type ReportDefinition, type ReportConfig, type TabConfig } from "@/lib/reports/types";
-import { executeReport } from "@/app/actions/reports";
+import { executeReport, getDefaultReportView } from "@/app/actions/reports";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { 
@@ -27,9 +27,9 @@ import {
 import { ReportTable } from "./report-table";
 import { ReportBarChart } from "./report-bar-chart";
 import { ReportDonutChart } from "./report-donut-chart";
-import { ReportFilterDrawer, PERIOD_PRESETS, getDatesForPeriod } from "./report-filter-drawer";
+import { ReportFilterDrawer, PERIOD_PRESETS, getDatesForPeriod, toReportDate } from "./report-filter-drawer";
 import { ReportKpiCards } from "./report-kpi-cards";
-import { ReportSaveDialog } from "./report-save-dialog";
+import { ReportDefaultViewDialog } from "./report-default-view-dialog";
 import { ActiveFilterSummary } from "./ActiveFilterSummary";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
@@ -84,8 +84,8 @@ export function ReportViewer({ config }: ReportViewerProps) {
     const range = getDatesForPeriod('this_month');
     if (range?.from && range?.to) {
       return {
-        start_date: range.from.toISOString().split('T')[0],
-        end_date: range.to.toISOString().split('T')[0],
+        start_date: toReportDate(range.from),
+        end_date: toReportDate(range.to),
       };
     }
     return undefined;
@@ -99,13 +99,16 @@ export function ReportViewer({ config }: ReportViewerProps) {
     return tab?.defaultMeasures || ['gross_amount', 'net_amount', 'order_count', 'product_quantity'];
   };
 
-  const getTabDimension = (tabKey: string) => {
+  /** Every dimension column a tab shows: its primary one, then any extras
+   *  (e.g. Product also showing Product Category). */
+  const getTabDimensions = (tabKey: string) => {
     const tab = config.tabConfigs?.find(t => t.key === tabKey);
-    return tab?.dimension || tabKey;
+    if (!tab) return [tabKey];
+    return [tab.dimension, ...(tab.extraDimensions ?? [])];
   };
 
   const [reportState, setReportState] = useState<ReportConfig>({
-    dimensions: [getTabDimension('customer')],
+    dimensions: getTabDimensions('customer'),
     measures: getDefaultMeasures('customer'),
     filters: initialDateRange ? { date_range: initialDateRange } : {},
     view: 'table',
@@ -121,10 +124,66 @@ export function ReportViewer({ config }: ReportViewerProps) {
   const [hasMore, setHasMore] = useState(false);
   const LIMIT = 50;
 
+  // The user's saved default view. `hydrated` gates the first data fetch so we
+  // don't query with the built-in layout and then immediately re-query with the
+  // saved one.
+  const [hydrated, setHydrated] = useState(false);
+  const [defaultViewName, setDefaultViewName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDefaultView() {
+      try {
+        const saved = await getDefaultReportView(config.moduleName);
+        if (cancelled) return;
+
+        if (saved?.config) {
+          const cfg = saved.config as Partial<ReportConfig>;
+          setDefaultViewName(saved.name);
+          setReportState((s) => {
+            // Never trust a stale saved layout to reference measures or dimensions
+            // that have since been removed from the module's config — drop unknown
+            // keys, and fall back to the built-in layout if nothing survives.
+            const dimensions = (cfg.dimensions ?? s.dimensions).filter((d) =>
+              config.dimensions.some((cd) => cd.key === d)
+            );
+            const measures = (cfg.measures ?? s.measures).filter((m) =>
+              config.measures.some((cm) => cm.key === m)
+            );
+            return {
+              ...s,
+              ...cfg,
+              dimensions: dimensions.length ? dimensions : s.dimensions,
+              measures: measures.length ? measures : s.measures,
+            };
+          });
+
+          // Keep the tab highlight in step with the restored dimension.
+          const restoredDimension = cfg.dimensions?.[0];
+          const matchingTab = config.tabConfigs?.find((t) => t.dimension === restoredDimension);
+          if (matchingTab) setActiveTab(matchingTab.key);
+        }
+      } catch (e) {
+        // A broken saved view must never block the report — fall back to the
+        // built-in layout.
+        console.error("Failed to load default report view", e);
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    }
+
+    loadDefaultView();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.moduleName]);
+
   // Handle tab change
   const handleTabChange = (tabKey: string) => {
     setActiveTab(tabKey);
-    const dimension = getTabDimension(tabKey);
+    const dimensions = getTabDimensions(tabKey);
     const measures = getDefaultMeasures(tabKey);
 
     setReportState(s => {
@@ -137,15 +196,15 @@ export function ReportViewer({ config }: ReportViewerProps) {
         const range = getDatesForPeriod('last_180_days');
         if (range?.from && range?.to) {
           newFilters.date_range = {
-            start_date: range.from.toISOString().split('T')[0],
-            end_date: range.to.toISOString().split('T')[0],
+            start_date: toReportDate(range.from),
+            end_date: toReportDate(range.to),
           };
         }
       }
 
       return {
         ...s,
-        dimensions: [dimension],
+        dimensions,
         measures,
         period: newPeriod,
         filters: newFilters,
@@ -157,6 +216,8 @@ export function ReportViewer({ config }: ReportViewerProps) {
   };
 
   const fetchReport = useCallback(async () => {
+    // Wait for the saved default view so the first query uses the right layout.
+    if (!hydrated) return;
     try {
       setLoading(true);
       const offset = (page - 1) * LIMIT;
@@ -190,8 +251,9 @@ export function ReportViewer({ config }: ReportViewerProps) {
     reportState.measures, 
     reportState.filters, 
     reportState.sortColumn, 
-    reportState.sortDirection, 
-    page
+    reportState.sortDirection,
+    page,
+    hydrated
   ]);
 
   useEffect(() => {
@@ -320,6 +382,15 @@ export function ReportViewer({ config }: ReportViewerProps) {
     });
   };
 
+  // Manage Column offers every measure unless the active tab narrows the list.
+  // Quotations register record-level and item-level measures under the same label
+  // (e.g. two "Quantity" columns computed differently); only one is valid per tab.
+  const manageableMeasures = useMemo(() => {
+    const allowed = config.tabConfigs?.find(t => t.key === activeTab)?.availableMeasures;
+    if (!allowed) return config.measures;
+    return config.measures.filter(m => allowed.includes(m.key));
+  }, [config.measures, config.tabConfigs, activeTab]);
+
   // Get the period label for display
   const periodLabel = PERIOD_PRESETS.find(p => p.value === reportState.period)?.label ?? 'This Month';
 
@@ -354,7 +425,12 @@ export function ReportViewer({ config }: ReportViewerProps) {
             }}
           />
           
-          <ReportSaveDialog moduleName={config.moduleName} reportState={reportState} />
+          <ReportDefaultViewDialog
+            moduleName={config.moduleName}
+            reportState={reportState}
+            savedName={defaultViewName}
+            onChanged={setDefaultViewName}
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger 
@@ -391,8 +467,8 @@ export function ReportViewer({ config }: ReportViewerProps) {
               const nextFilters = { ...s.filters };
               if (range?.from && range?.to) {
                 nextFilters.date_range = {
-                  start_date: range.from.toISOString().split('T')[0],
-                  end_date: range.to.toISOString().split('T')[0],
+                  start_date: toReportDate(range.from),
+                  end_date: toReportDate(range.to),
                 };
               } else {
                 delete nextFilters.date_range;
@@ -413,8 +489,8 @@ export function ReportViewer({ config }: ReportViewerProps) {
           const resetFilters: Record<string, any> = {};
           if (range?.from && range?.to) {
             resetFilters.date_range = {
-              start_date: range.from.toISOString().split('T')[0],
-              end_date: range.to.toISOString().split('T')[0],
+              start_date: toReportDate(range.from),
+              end_date: toReportDate(range.to),
             };
           }
           setReportState(s => ({
@@ -426,7 +502,9 @@ export function ReportViewer({ config }: ReportViewerProps) {
         }}
       />
 
-      <ReportKpiCards config={config} filters={reportState.filters} defaultCurrency={defaultCurrency} />
+      {hydrated && (
+        <ReportKpiCards config={config} filters={reportState.filters} defaultCurrency={defaultCurrency} />
+      )}
 
       {/* Tab Navigation + View Toggles */}
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/40 p-3 print:hidden">
@@ -444,8 +522,8 @@ export function ReportViewer({ config }: ReportViewerProps) {
                   const nextFilters = { ...s.filters };
                   if (range?.from && range?.to) {
                     nextFilters.date_range = {
-                      start_date: range.from.toISOString().split('T')[0],
-                      end_date: range.to.toISOString().split('T')[0],
+                      start_date: toReportDate(range.from),
+                      end_date: toReportDate(range.to),
                     };
                   } else {
                     delete nextFilters.date_range;
@@ -604,7 +682,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
                         } 
                       />
                       <DropdownMenuContent align="start" className="w-56">
-                        {config.measures.map(m => (
+                        {manageableMeasures.map(m => (
                           <DropdownMenuCheckboxItem
                             key={m.key}
                             checked={reportState.measures.includes(m.key)}

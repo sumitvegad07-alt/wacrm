@@ -1,10 +1,34 @@
 import type { ReportDefinition } from './types';
 
-export const orderReportConfig: ReportDefinition = {
-  moduleName: 'order',
-  label: 'Order Reports',
+/**
+ * Sales Report — the Order Report, restricted to revenue that has shipped.
+ *
+ * An order counts as a sale once it reaches status 'Closed'. The dispatch trigger
+ * auto-closes an order the moment its last outstanding item ships (migration
+ * 20260814151500_autoclose_fully_dispatched.sql). The `sales` module in
+ * `execute_report` hard-wires `status = 'Closed'` into every query — it is not a
+ * filter the UI can drop.
+ *
+ * Two deliberate differences from orderReportConfig, both founder decisions
+ * (2026-08-16, see migration 20260816210000_sales_report_module.sql):
+ *
+ *  1. The Period filter and the Time tab run on the DISPATCH COMPLETION date (the
+ *     order's latest dispatch), not the order date. An order placed 9 Aug and
+ *     fully dispatched 14 Aug is August-14 revenue. So Sales totals will NOT
+ *     reconcile row-for-row against Order Reports for the same period — that is
+ *     intended, not a bug.
+ *  2. A partially dispatched order contributes nothing until it completes, then
+ *     contributes its full order value.
+ *
+ * Everything else (dimensions, measures, area/user/customer/product filters, tabs)
+ * is identical, and the DB reuses the same registry rows so the two reports cannot
+ * drift apart.
+ */
+export const salesReportConfig: ReportDefinition = {
+  moduleName: 'sales',
+  label: 'Sales Reports',
   requiredModule: 'orders',
-  
+
   dimensions: [
     { key: 'customer', label: 'Customer', category: 'customer' },
     { key: 'user', label: 'User', category: 'user' },
@@ -12,28 +36,28 @@ export const orderReportConfig: ReportDefinition = {
     { key: 'state', label: 'State', category: 'area' },
     { key: 'city', label: 'City', category: 'area' },
     { key: 'area', label: 'Area', category: 'area' },
-    { key: 'date', label: 'Period', category: 'time' },
+    { key: 'date', label: 'Period', category: 'time' }, // groups by dispatch completion date, not order date
     { key: 'product', label: 'Product', category: 'product' },
     { key: 'product_category', label: 'Product Category', category: 'product' },
     { key: 'product_subcategory', label: 'Product Sub-Category', category: 'product' },
   ],
-  
+
   measures: [
     { key: 'order_count', label: '# of order', type: 'number' },
     { key: 'product_count', label: '# of product', type: 'number' },
     { key: 'product_quantity', label: 'Quantity', type: 'number' },
     { key: 'gross_amount', label: 'Sub Amount', type: 'currency' },
-    { key: 'net_amount', label: 'Amount', type: 'currency' },
+    { key: 'net_amount', label: 'Sales Amount', type: 'currency' },
     { key: 'discount_amount', label: 'Discount Amount', type: 'currency' },
     { key: 'tax_amount', label: 'Tax Amount', type: 'currency' },
     { key: 'customer_count', label: '# of customer', type: 'number' },
     { key: 'avg_price', label: 'Avg Price', type: 'currency' },
   ],
-  
+
   kpis: ['net_amount', 'gross_amount', 'order_count'],
 
   filters: [
-    { key: 'date_range', label: 'Period', type: 'date_range', section: 'PERIOD' },
+    { key: 'date_range', label: 'Dispatch Period', type: 'date_range', section: 'PERIOD' },
     { key: 'sales_type', label: 'Sales Type', type: 'select', section: 'SALES TYPE', options: [
       { label: 'Primary', value: 'primary' },
       { label: 'Secondary', value: 'secondary' },

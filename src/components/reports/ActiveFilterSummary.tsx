@@ -8,6 +8,10 @@ import { createClient } from "@/lib/supabase/client";
 import { type ReportFilterDef } from "@/lib/reports/types";
 import { PERIOD_PRESETS } from "./report-filter-drawer";
 
+/** Territory filters are generated per account level (territory_1..N), not declared
+ *  in any report config, so they need matching by shape. */
+const TERRITORY_KEY = /^territory_\d+$/;
+
 interface ActiveFilterSummaryProps {
   config: { filters: ReportFilterDef[] };
   filters: Record<string, any>;
@@ -30,6 +34,22 @@ export function ActiveFilterSummary({ config, filters, period, onRemoveFilter, o
       for (const [key, value] of Object.entries(filters)) {
         if (key === 'date_range') continue;
         const filterDef = config.filters.find(f => f.key === key);
+
+        // The drawer builds territory filters dynamically from the account's
+        // configured levels (territory_1..N), so they are absent from
+        // config.filters and used to be skipped here — an applied territory
+        // filter showed no chip at all.
+        if (!filterDef && TERRITORY_KEY.test(key) && typeof value === 'string') {
+          if (!newLabels[key]) {
+            const { data } = await supabase.from('territories').select('name').eq('id', value).single();
+            if (data?.name) {
+              newLabels[key] = data.name;
+              changed = true;
+            }
+          }
+          continue;
+        }
+
         if (!filterDef || !value) continue;
 
         // Skip resolving if it's already a string name or a simple select
@@ -77,6 +97,18 @@ export function ActiveFilterSummary({ config, filters, period, onRemoveFilter, o
           continue;
         }
 
+        // For lead, value is uuid
+        if (filterDef.type === 'lead' && typeof value === 'string') {
+          if (!newLabels[key]) {
+            const { data } = await supabase.from('leads').select('name').eq('id', value).single();
+            if (data?.name) {
+              newLabels[key] = data.name;
+              changed = true;
+            }
+          }
+          continue;
+        }
+
         // For product, value is uuid
         if (filterDef.type === 'product' && typeof value === 'string') {
           if (!newLabels[key]) {
@@ -87,6 +119,13 @@ export function ActiveFilterSummary({ config, filters, period, onRemoveFilter, o
             }
           }
           continue;
+        }
+
+        // Anything whose stored value is already the display value (payment type,
+        // for instance). Without this the chip sat on "Loading..." forever.
+        if (typeof value === 'string' && newLabels[key] !== value) {
+          newLabels[key] = value;
+          changed = true;
         }
       }
       
@@ -117,13 +156,15 @@ export function ActiveFilterSummary({ config, filters, period, onRemoveFilter, o
 
       {activeKeys.map(key => {
         const filterDef = config.filters.find(f => f.key === key);
-        if (!filterDef) return null;
-        
+        const isTerritory = !filterDef && TERRITORY_KEY.test(key);
+        if (!filterDef && !isTerritory) return null;
+
+        const chipLabel = filterDef?.label ?? 'Territory';
         const labelText = resolvedLabels[key] || 'Loading...';
         
         return (
           <Badge key={key} variant="secondary" className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary border-primary/20">
-            <span className="font-medium text-muted-foreground">{filterDef.label}:</span>
+            <span className="font-medium text-muted-foreground">{chipLabel}:</span>
             {labelText}
             <button onClick={() => onRemoveFilter(key)} className="ml-1 rounded-full hover:bg-primary/20 p-0.5 text-primary print:hidden">
               <X className="h-3 w-3" />
