@@ -3032,6 +3032,103 @@ Saved reports can be shared via 'private', 'team', or 'organization' modes. The 
 
 
 
+## Document Templates (Added Aug 2026)
+- **Status (2026-08-16): complete for all four document types.** Storage, editor, user
+  assignment, signature images, and template-driven rendering on **all four print routes**
+  (order, quotation, dispatch, payment). Before this the module was a front-end mockup: a
+  hardcoded `DUMMY_TEMPLATES` array and a `// Simulate save` setTimeout, with no table.
+- **Governing rule (founder, 2026-08-16): a template must be able to show everything its
+  module's creation screen captures.** `MODULE_CAPABILITIES` encodes this per module and is
+  the first place to extend when a creation form gains a field. It is why the order table
+  carries Discount, Unit, MRP and Rate incl. Tax, and why the dispatch document-info rows are
+  exactly the dispatch form's fields (dispatch code, invoice no/date, LR no/date, transport,
+  transport contact, tracking).
+- **Correction to an earlier note in this file: a dispatch DOES have prices.** `dispatch_items`
+  stores none of its own, but every row carries `order_item_id` and both the dispatch creation
+  screen and its print route follow it. All production dispatch lines are linked. A dispatch has
+  no *tax* column, because its creation screen has none. Dispatch lines are priced on the
+  quantity dispatched, not ordered, so a part dispatch never prints the whole order's value.
+- **Quotations get no discount columns** — `quotation_items` has no discount fields at all.
+  Same rule, not an inconsistency with orders.
+- **Every module auto-creates a "Default" template on first view** of its tab, so the screen is
+  never empty and there is always something to clone. Done in the panel rather than by a
+  migration because the built-in config lives in TypeScript — a seeded row would drift the
+  moment those defaults changed. Racing tabs are harmless: the unique name index rejects the
+  second insert and the panel re-reads.
+- **Clone / Assign / Make Default are always-visible buttons on each card.** They were
+  hover-only, which made them undiscoverable and left them completely unreachable on a touch
+  screen, where there is no hover.
+- **Removed `priceGroup` (2026-08-16):** the toggle existed but `orders` has no price-list
+  column and the order form has no such field, so it could only ever print nothing.
+- **`remark` renamed to `notes`**, matching the order form's own label and `orders.notes`.
+  Quotations do **not** offer it — the quotations table has no notes column; `terms_conditions`
+  is their free-text field and it already overrides the template footer on the printed page.
+- **The order screen's "Line total incl." and "Line Total" collapse to one template column**
+  (Net Amount): once a line's tax mode is applied they are the same figure, and two columns
+  printing an identical number on every row is worse than one.
+- **Assignments** (`document_template_assignments`): assigning a template to a user means BOTH
+  — they print with it, and only they may edit it. **Admins can always edit**, deliberately:
+  without that escape hatch, assigning a template to one rep would lock the owner out of a
+  layout the whole business prints with. A user holds at most one template per module (unique
+  index); the assign dialog says which template a tick would move them off, rather than letting
+  the save fail on a constraint. `account_id`/`module_name` are copied from the template by
+  trigger, never trusted from the client.
+- **Print precedence**, resolved in one round trip by `resolve_document_template(account, module,
+  user)`: template assigned to the viewer → account default → built-in module default. Resolved
+  for **whoever is printing**, not whoever created the record.
+- **Signature images** live in the public `document_assets` bucket (2 MB, PNG/JPEG/WebP), path
+  `<account_id>/signatures/...` with membership checked on the first path segment. Public
+  deliberately, matching the company logo: the mobile app renders these print pages in a webview
+  to build PDFs, and an expiring signed URL there yields a broken image with no obvious cause.
+- **🔴 Found 2026-08-16: `products.hsn_code` was written by the product form but did not exist.**
+  The HSN input shipped in `a3fdc91` on 2026-08-09 and the save payload has included `hsn_code`
+  ever since, against a column that was never created — so **product create/edit would have
+  failed outright**. Latent only because no product has been saved since 2026-07-26. The column
+  was added by `20260816160000_document_templates`. The product form already had the full input;
+  no UI work was needed.
+- **Four document types only**: `order`, `quotation`, `dispatch`, `payment` — each already had a
+  print route. The mockup's **"Estimate" is not a real module**; the product's equivalent is
+  **Quotation**, and it was renamed rather than built. **"Outstanding" was dropped**: it would be
+  a statement of account, a document that must be built before it can be styled.
+- **Tables**: `document_templates` (account-scoped, RLS, `config jsonb`). One default per module
+  enforced by a **partial unique index**, not a trigger, so a second default is refused outright
+  instead of racing. Names are unique per module, case- and space-insensitive.
+- **`set_default_document_template(uuid)`** RPC — promoting is unset-then-set, which must not be
+  half-applied or a module ends up with no default. `SECURITY INVOKER`, so RLS still applies.
+- **Config shape lives in `src/lib/document-templates/schema.ts`, not in Postgres.** jsonb buys
+  flexibility and loses validation, so `buildDefaultConfig()` + `normalizeConfig()` are the
+  substitute: a template saved before a field existed gets that field's default, and anything the
+  module cannot support is forced off on read.
+- **`MODULE_CAPABILITIES` is the "show only what applies" rule, driven by real schema limits.**
+  A **payment has no line items** (`payments` is one row with an amount) so it has no item table
+  and no quantity summary. A **dispatch has no prices** (`dispatch_items` is product_name, unit,
+  quantity only) so every currency column and total is unavailable — a delivery note could
+  otherwise offer a Price column that can only print blank.
+- **One renderer for preview and print**: `document-template-preview.tsx` is used by both the
+  editor and `/print/order/[id]`, with the editor passing sample data. The mockup's preview
+  rendered nothing real, which is exactly how a preview drifts from the document it claims to
+  show. Callers pass pre-formatted strings; the renderer lays out and does not calculate.
+- **🔴 Fixed a live bug in every printed document**: the print routes read `account.business_name`,
+  `account.phone`, `account.email`, `account.gst_number`, `account.gstin` — **none of those
+  columns exist on `accounts`**. Real details live in `accounts.settings.company_profile`. Every
+  order and quotation PDF was printing the raw account name, an empty contact line and the literal
+  text "GST No :" with nothing after it, and the uploaded company logo was never rendered.
+  Resolved once in `src/lib/document-templates/company-profile.ts`.
+- **`company_profile.gst_number` added** (jsonb, no migration): the header offers a GST line and
+  no field existed to hold a company GST number.
+- **`products.hsn_code` added**: the editor offers an HSN column and `settings.hsn_enabled` was
+  already true, but no HSN column existed anywhere in the schema. Free text — 4, 6 and 8 digit
+  codes are all valid, so no CHECK constraint.
+- **Item code / HSN / category / image are NOT on `order_items`** — they live on `products` and
+  need a join, fetched once per document and tolerant of a since-deleted product (the line still
+  prints, without its catalogue extras).
+- **Quantity totals are grouped by unit**, because "Total 42" across kilograms and pieces is
+  meaningless. Note units are still free text (`kg`/`Kg`/`KG` all exist in production), so the
+  grouping is only as clean as the data — see the configurable-units backlog item.
+- **Custom fields are stored as ids, not names**, so renaming a field in Settings does not
+  silently drop it from every document. `payment` has 0 custom fields, so that section is hidden
+  for it rather than shown empty.
+
 ## Payment Collection Module (Added Aug 2026)
 - **Status (2026-08-14): repaired, in UAT — NOT production-proven.** As shipped on 2026-08-13 the
   module did not function: both web and mobile wrote to columns that do not exist, so no payment
@@ -3049,5 +3146,22 @@ Saved reports can be shared via 'private', 'team', or 'organization' modes. The 
   `reject_payments`, `cancel_payments`. Roles in the wild store creation rights as either
   `create_*` or the legacy `add_*`; `hasPermission` resolves both, because installed APKs check the
   legacy spelling and cannot be updated retroactively. Do not "normalise" these keys in the database.
-- **Settings**: only `approval_required` and the four credit keys are consumed. The three
-  `require_*` toggles are still inert — wire them or remove them.
+- **Settings**: `approval_required`, the four credit keys, and — since 2026-08-16 — the three
+  `require_*` toggles are all consumed. `require_notes` / `require_reference` are enforced by
+  `enforce_payment_required_fields()` on INSERT (and on an edit that would blank a required
+  field, never on an unrelated update, so historical rows stay approvable). `require_attachment`
+  is enforced by `enforce_payment_attachment_on_approval()` on the transition into Approved,
+  **not** on insert: the client writes the payment, uploads to storage, then inserts
+  `payment_attachments` in three separate transactions, so at insert time the proof provably
+  does not exist yet. Both clients mirror the rules at capture time
+  (`src/lib/payments/requirements.ts`, `wacrm-mobile/lib/payments/requirements.ts`) purely for a
+  readable message — the triggers are the authority, because mobile writes the table directly.
+- **`payment_types.requires_reference`** (added 2026-08-16) marks the instruments that actually
+  carry a reference: Cheque, UPI, NEFT, RTGS, Bank Transfer. Cash, Credit Note and Other do not,
+  so `require_reference` never blocks a cash collection. Stored as a column rather than matched
+  on the type name in SQL — name matching would silently disable the rule the first time somebody
+  renamed "Cheque". New custom types default to `false` so adding a type cannot start blocking
+  saves by surprise.
+- **Known limit, documented not hidden**: with `approval_required` OFF a payment is born Approved
+  on insert and never crosses the approval transition, so the database cannot verify its proof. In
+  that configuration the capture-time client rule is the only attachment guard.

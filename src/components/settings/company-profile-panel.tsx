@@ -30,6 +30,12 @@ interface CompanyProfileData {
   pincode: string;
   territory_id: string | null;
   logo_url?: string;
+  /**
+   * Printed on documents when a template enables the GST line in its header. Added
+   * 2026-08-16: the print routes had always tried to render a company GST number and no
+   * field existed to hold one, so every document printed "GST No :" and nothing after it.
+   */
+  gst_number: string;
 }
 
 const DEFAULT_PROFILE: CompanyProfileData = {
@@ -41,6 +47,7 @@ const DEFAULT_PROFILE: CompanyProfileData = {
   address: '',
   pincode: '',
   territory_id: null,
+  gst_number: '',
 };
 
 export function CompanyProfilePanel() {
@@ -305,6 +312,19 @@ export function CompanyProfilePanel() {
                 disabled={!canEdit}
                 placeholder="Name"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>GST Number</Label>
+              <Input
+                value={data.gst_number}
+                onChange={(e) => handleChange('gst_number', e.target.value)}
+                disabled={!canEdit}
+                placeholder="22AAAAA0000A1Z5"
+              />
+              <p className="text-xs text-muted-foreground">
+                Printed on orders, quotations, dispatches and receipts when the template
+                includes the GST line.
+              </p>
             </div>
           </div>
         </div>
