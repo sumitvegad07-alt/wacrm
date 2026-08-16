@@ -18,6 +18,12 @@ import { logModuleActivity } from '@/lib/activities';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { formatCurrency } from '@/lib/currency';
 import { fetchCustomerFinancials } from '@/lib/payments/financials';
+import {
+  resolvePaymentRequirements,
+  findMissingRequirement,
+  type PaymentSettings,
+  type PaymentTypeOption,
+} from '@/lib/payments/requirements';
 import { cn } from '@/lib/utils';
 
 // Zod and react-hook-form imports
@@ -69,7 +75,8 @@ export function PaymentForm({
   const contactScope = getDataScope('contacts');
   
   const [contacts, setContacts] = useState<{ value: string; label: string }[]>([]);
-  const [paymentTypes, setPaymentTypes] = useState<{ id: string; name: string }[]>([]);
+  const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const idempotencyKey = useRef(crypto.randomUUID());
@@ -101,6 +108,16 @@ export function PaymentForm({
   });
 
   const selectedContactId = watch('contact_id');
+  const selectedPaymentTypeId = watch('payment_type');
+
+  // Mirrors the database triggers so the collector is told what is missing before they
+  // hit save, rather than after. The triggers remain the authority — see
+  // @/lib/payments/requirements.
+  const requirements = resolvePaymentRequirements({
+    settings: paymentSettings,
+    paymentTypes,
+    selectedPaymentTypeId,
+  });
 
   useEffect(() => {
     if (!open || !accountId) return;
@@ -125,11 +142,14 @@ export function PaymentForm({
         { data: contactsData },
         { data: paymentTypesData },
         { data: fieldsData },
+        { data: accountData },
       ] = await Promise.all([
         contactsQuery(),
+        // `requires_reference` marks the instruments that actually carry a reference
+        // number, so the form can demand one for a cheque and not for cash.
         supabase
           .from('payment_types')
-          .select('id, name')
+          .select('id, name, requires_reference')
           .eq('account_id', accountId)
           .eq('is_active', true)
           .order('name', { ascending: true }),
@@ -139,6 +159,11 @@ export function PaymentForm({
           .eq('account_id', accountId)
           .eq('module_name', 'payment')
           .eq('is_active', true),
+        supabase
+          .from('accounts')
+          .select('settings')
+          .eq('id', accountId)
+          .single(),
       ]);
 
       if (!alive) return;
@@ -155,6 +180,8 @@ export function PaymentForm({
       if (paymentTypesData) {
         setPaymentTypes(paymentTypesData);
       }
+
+      setPaymentSettings(accountData?.settings?.payment_settings ?? null);
 
       if (fieldsData) {
         await ensureDefaultSectionsAndFields(accountId, 'payment', undefined, supabase);
@@ -208,6 +235,23 @@ export function PaymentForm({
     const valErr = validateRequiredCustomFields(customFields, customValues);
     if (valErr) {
       toast.error(`Required custom field missing: ${valErr}`);
+      return;
+    }
+
+    // The account's Require Notes / Reference / Attachment rules. Checked here purely so
+    // the message is readable; the database refuses the same saves regardless of which
+    // client sends them.
+    const missing = findMissingRequirement(
+      requirements,
+      {
+        notes: data.notes,
+        reference_number: data.reference_number,
+        hasAttachment: proofFile !== null,
+      },
+      paymentTypes.find((t) => t.id === data.payment_type)?.name
+    );
+    if (missing) {
+      toast.error(missing);
       return;
     }
 
@@ -433,7 +477,10 @@ export function PaymentForm({
         </div>
 
         <div className="space-y-2">
-          <Label>Reference Number</Label>
+          <Label>
+            Reference Number
+            {requirements.reference && <span className="text-red-500"> *</span>}
+          </Label>
           <Controller
             control={control}
             name="reference_number"
@@ -441,21 +488,44 @@ export function PaymentForm({
               <Input value={field.value} onChange={field.onChange} placeholder="Cheque #, UTR, etc." />
             )}
           />
+          {requirements.reference && (
+            <p className="text-xs text-muted-foreground">
+              Required for {paymentTypes.find((t) => t.id === selectedPaymentTypeId)?.name} payments.
+            </p>
+          )}
         </div>
-        
+
         <div className="space-y-2 md:col-span-2">
-          <Label>Notes</Label>
+          <Label>
+            Notes
+            {requirements.notes && <span className="text-red-500"> *</span>}
+          </Label>
           <Controller
             control={control}
             name="notes"
             render={({ field }) => (
-              <Input value={field.value} onChange={field.onChange} placeholder="Optional notes" />
+              <Input
+                value={field.value}
+                onChange={field.onChange}
+                placeholder={requirements.notes ? 'Describe this collection' : 'Optional notes'}
+              />
             )}
           />
         </div>
-        
+
         <div className="space-y-2 md:col-span-2">
-          <Label>Attachment (Optional)</Label>
+          <Label>
+            {requirements.attachment ? (
+              <>Proof of Payment <span className="text-red-500">*</span></>
+            ) : (
+              'Attachment (Optional)'
+            )}
+          </Label>
+          {requirements.attachment && !proofFile && (
+            <p className="text-xs text-muted-foreground">
+              A photo of the receipt or cheque is required before this payment can be approved.
+            </p>
+          )}
           {proofFile ? (
             <div className="flex items-center justify-between p-3 border rounded-md">
               <span className="text-sm truncate mr-4">{proofFile.name}</span>

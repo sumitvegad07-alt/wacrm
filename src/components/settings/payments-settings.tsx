@@ -521,7 +521,8 @@ export function PaymentSettings() {
                 <div className="space-y-0.5 pr-4">
                   <h4 className="text-sm font-medium">Require Attachment</h4>
                   <p className="text-xs text-muted-foreground">
-                    Mandate proof/receipt upload for all payments.
+                    Collectors must attach a receipt photo, and a payment cannot be
+                    approved until its proof has arrived.
                   </p>
                 </div>
                 <Switch 
@@ -549,7 +550,8 @@ export function PaymentSettings() {
                 <div className="space-y-0.5 pr-4">
                   <h4 className="text-sm font-medium">Require Payment Reference</h4>
                   <p className="text-xs text-muted-foreground">
-                    Mandate reference number (e.g. cheque/transaction ID).
+                    Mandate a reference number for instruments that carry one — cheque,
+                    UPI, NEFT, RTGS and bank transfer. Cash is never asked for one.
                   </p>
                 </div>
                 <Switch 
