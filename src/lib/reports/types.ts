@@ -95,4 +95,9 @@ export interface ReportDefinition {
   filters: ReportFilterDef[];
   kpis: string[]; // Array of measure keys to display as KPI cards
   tabConfigs?: TabConfig[];
+  /** Tab the report opens on. Defaults to the first tab, which is not always the
+   *  right landing screen: Quotations and Deals list Lead first because that is
+   *  the pipeline order, but most accounts have far more customer records, so
+   *  opening there would show an empty table on a perfectly healthy report. */
+  defaultTab?: string;
 }

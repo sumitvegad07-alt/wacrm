@@ -87,7 +87,10 @@ export function ReportViewer({ config }: ReportViewerProps) {
   // The report's own first tab, not a hardcoded 'customer' — the Lead report has
   // no customer tab at all, and defaulting to a tab a module doesn't define left
   // the viewer asking the engine for a dimension that doesn't exist.
-  const initialTabKey = config.tabConfigs?.[0]?.key ?? 'customer';
+  const initialTabKey =
+    config.tabConfigs?.find((t) => t.key === config.defaultTab)?.key
+    ?? config.tabConfigs?.[0]?.key
+    ?? 'customer';
   const [activeTab, setActiveTab] = useState<string>(initialTabKey);
 
   // Compute initial date range for "this_month"

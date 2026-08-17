@@ -105,6 +105,11 @@ export const quotationReportConfig: ReportDefinition = {
 
   kpis: ['net_amount', 'gross_amount', 'quotation_count'],
 
+  // Lead is listed first because that is the pipeline order, but almost every
+  // quotation is raised against an existing customer — opening on Lead showed an
+  // empty table on a healthy report.
+  defaultTab: 'customer',
+
   filters: [
     { key: 'date_range', label: 'Period', type: 'date_range', section: 'PERIOD' },
     { key: 'status', label: 'Status', type: 'select', section: 'QUOTATION', options: [

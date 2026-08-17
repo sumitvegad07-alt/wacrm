@@ -95,6 +95,9 @@ export const dealReportConfig: ReportDefinition = {
 
   kpis: ['net_amount', 'gross_amount', 'deal_count'],
 
+  // Lead leads the tab order, but Customer is the fuller view on most accounts.
+  defaultTab: 'customer',
+
   filters: [
     { key: 'date_range', label: 'Period', type: 'date_range', section: 'PERIOD' },
     { key: 'status', label: 'Status', type: 'select', section: 'DEAL', options: [
