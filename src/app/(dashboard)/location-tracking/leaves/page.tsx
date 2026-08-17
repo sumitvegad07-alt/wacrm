@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { PageLayout, PageToolbar, StatusBadge } from "@/components/shared";
+import { PageLayout, PageHeader, PageToolbar, StatusBadge } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import type { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -209,6 +209,11 @@ export default function LeavesPage() {
 
   return (
     <PageLayout>
+      <PageHeader
+        title="Leaves"
+        subtitle="Apply for leave, and approve or reject your team's requests."
+      />
+
       <PageToolbar
         filters={
           <div className="flex items-center gap-1">

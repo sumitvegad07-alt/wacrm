@@ -49,6 +49,7 @@ export default function EmployeesPage() {
   const { accountId, hasPermission, isSuperadmin } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
+  const [holidayLists, setHolidayLists] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [search, setSearch] = useState("");
@@ -89,11 +90,18 @@ export default function EmployeesPage() {
     
     const { data: empData, error: empError } = await supabase
       .from("profiles")
-      .select("*, employee_roles(name)")
+      .select("*, employee_roles(name), holiday_lists(id, name, is_default)")
       .order("full_name");
 
     if (empError) toast.error("Failed to load employees");
     else setEmployees(empData || []);
+
+    // Needed for the Holiday List column filter options and to name the default list.
+    const { data: listData } = await supabase
+      .from("holiday_lists")
+      .select("id, name, is_default")
+      .order("name");
+    setHolidayLists(listData || []);
 
     const { data: roleData } = await supabase
       .from("employee_roles")
@@ -294,6 +302,24 @@ export default function EmployeesPage() {
       },
     },
     {
+      id: "holiday_list",
+      label: "Holiday List",
+      type: "select",
+      options: holidayLists.map((l) => ({ label: l.name, value: l.id })),
+      render: (emp) => {
+        // A NULL assignment is not "none" — it means the employee follows the account default,
+        // so showing a blank here would read as "no calendar", which is never true.
+        const assigned = (emp as any).holiday_lists as { name: string } | null;
+        const fallback = holidayLists.find((l) => l.is_default);
+        if (assigned) return <span className="text-sm">{assigned.name}</span>;
+        return (
+          <span className="text-sm text-muted-foreground">
+            {fallback ? `${fallback.name} (default)` : "—"}
+          </span>
+        );
+      },
+    },
+    {
       id: "status",
       label: "Status",
       type: "select",
@@ -333,7 +359,7 @@ export default function EmployeesPage() {
         );
       },
     },
-  ], [roles, router]);
+  ], [roles, router, holidayLists]);
 
   return (
     <PageLayout>

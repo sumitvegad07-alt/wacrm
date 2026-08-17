@@ -253,7 +253,7 @@ export function LeaveFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-[1400px] max-h-[92vh] overflow-y-auto">
+      <DialogContent size="full">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Edit ${leave?.leave_number}` : "Apply for Leave"}</DialogTitle>
         </DialogHeader>
