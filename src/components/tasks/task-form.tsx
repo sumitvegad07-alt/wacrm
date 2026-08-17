@@ -51,6 +51,7 @@ interface TaskFormProps {
   defaultDispatchId?: string;
   defaultEmployeeId?: string;
   defaultPaymentId?: string;
+  defaultLeaveId?: string;
   onSaved: () => void;
 }
 
@@ -73,6 +74,7 @@ export function TaskForm({
   defaultDispatchId,
   defaultEmployeeId,
   defaultPaymentId,
+  defaultLeaveId,
   onSaved,
 }: TaskFormProps) {
   const supabase = createClient();
@@ -193,6 +195,7 @@ export function TaskForm({
         setDispatchId(defaultDispatchId || "");
         setEmployeeId(defaultEmployeeId || "");
         setPaymentId(defaultPaymentId || "");
+        setLeaveId(defaultLeaveId || "");
 
         if (defaultContactId) setLinkedModule("Contact");
         else if (defaultLeadId) setLinkedModule("Lead");
@@ -203,6 +206,7 @@ export function TaskForm({
         else if (defaultProductId) setLinkedModule("Product");
         else if (defaultConversationId) setLinkedModule("Conversation");
         else if (defaultOrderId) setLinkedModule("Order");
+        else if (defaultLeaveId) setLinkedModule("Leave");
         else if (defaultDispatchId) setLinkedModule("Dispatch");
         else if (defaultEmployeeId) setLinkedModule("Employee");
         else setLinkedModule("None");

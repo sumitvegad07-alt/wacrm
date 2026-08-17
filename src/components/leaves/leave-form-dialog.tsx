@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import type { LeaveWeightage } from "@/lib/location/attendance-status";
 import { LEAVE_DAY_VALUE } from "@/lib/location/attendance-status";
 import { classifyDay, eachDay, fromDateKey, toDateKey } from "@/lib/location/working-days";
@@ -117,13 +118,6 @@ export function LeaveFormDialog({
    * picker shows "quarter" instead of "Quarter Day" — which is exactly what shipped first.
    * `expense-types-settings.tsx` sets the precedent for this prop.
    */
-  const employeeItems = useMemo(
-    () =>
-      Object.fromEntries(
-        employees.map((e) => [e.id, e.full_name?.trim() || "Unnamed employee"]),
-      ) as Record<string, string>,
-    [employees],
-  );
   const leaveTypeItems = useMemo(
     () => Object.fromEntries(activeTypes.map((t) => [t.id, t.name])) as Record<string, string>,
     [activeTypes],
@@ -262,23 +256,22 @@ export function LeaveFormDialog({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Employee</Label>
-              <Select
+              {/* SearchableSelect, not a plain Select: an account with a hundred employees needs a
+                  search box, and this one opens as a popover BELOW the trigger rather than
+                  overlaying it upwards the way the Base UI select does. Same component the task
+                  form uses for its customer, order and employee pickers. */}
+              <SearchableSelect
                 value={employeeId}
-                items={employeeItems}
-                onValueChange={(v) => setEmployeeId(v ?? "")}
+                onChange={setEmployeeId}
+                placeholder="Select employee..."
+                searchPlaceholder="Search employees..."
+                options={employees.map((e) => ({
+                  value: e.id,
+                  label: e.full_name?.trim() || "Unnamed employee",
+                }))}
                 disabled={!canManageOthers || isEdit}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.full_name?.trim() || "Unnamed employee"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                className="h-9 w-full"
+              />
               {!canManageOthers && (
                 <p className="text-xs text-muted-foreground">
                   You can only apply for your own leave.

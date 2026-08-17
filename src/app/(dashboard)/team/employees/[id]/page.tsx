@@ -220,6 +220,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         department: form.department.trim() || null,
         employee_role_id: form.employee_role_id || null,
         manager_id: form.manager_id || null,
+        // Empty means "follow the account default", which is a NULL assignment, not a blank id.
+        holiday_list_id: form.holiday_list_id || null,
         account_role: derivedAccountRole,
         status: form.status,
         avatar_url: form.avatar_url || null
@@ -296,28 +298,6 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const defaultHolidayListLabel = defaultHolidayList
     ? `Company default (${defaultHolidayList.name})`
     : "Company default";
-
-  /**
-   * Saves immediately rather than waiting for the page's Edit/Save cycle. The holiday list is a
-   * standalone assignment with no bearing on roles or access, and burying it behind Edit made it
-   * easy to change and then lose by navigating away.
-   */
-  const saveHolidayList = async (listId: string | null) => {
-    setForm((prev) => ({ ...prev, holiday_list_id: listId ?? "" }));
-    const { error } = await supabase
-      .from("profiles")
-      .update({ holiday_list_id: listId })
-      .eq("id", employeeId);
-    if (error) {
-      toast.error("Could not change the holiday list");
-      return;
-    }
-    toast.success(
-      listId
-        ? `Now following “${holidayLists.find((l) => l.id === listId)?.name}”`
-        : "Now following the company default list",
-    );
-  };
 
   const renderCustomSystemField = (field: CustomField) => {
     if (!field.system_key) return null;
@@ -480,27 +460,39 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 Decides this employee&apos;s weekly offs and holidays. Leave taken across those days
                 is not counted, and the attendance page judges them against this calendar.
               </p>
-              <Select
-                value={form.holiday_list_id || "__default__"}
-                items={Object.fromEntries([
-                  ["__default__", defaultHolidayListLabel],
-                  ...holidayLists.map((l) => [l.id, l.name] as [string, string]),
-                ])}
-                onValueChange={(v) => saveHolidayList(v === "__default__" ? null : (v ?? null))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {/* "Follow the default" is a real choice, not an empty one — picking it means
-                      the employee tracks whatever the company default becomes later. */}
-                  <SelectItem value="__default__">{defaultHolidayListLabel}</SelectItem>
-                  {holidayLists.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isEditing ? (
+                <Select
+                  value={form.holiday_list_id || "__default__"}
+                  items={Object.fromEntries([
+                    ["__default__", defaultHolidayListLabel],
+                    ...holidayLists.map((l) => [l.id, l.name] as [string, string]),
+                  ])}
+                  onValueChange={(v) =>
+                    setForm({ ...form, holiday_list_id: v === "__default__" ? "" : (v ?? "") })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* "Follow the default" is a real choice, not an empty one — picking it means
+                        the employee tracks whatever the company default becomes later. */}
+                    <SelectItem value="__default__">{defaultHolidayListLabel}</SelectItem>
+                    {holidayLists.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="font-medium text-foreground text-base">
+                  {holidayLists.find((l) => l.id === form.holiday_list_id)?.name ??
+                    defaultHolidayListLabel}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
+                {isEditing
+                  ? "Saved when you press Save."
+                  : "Press Edit to change which calendar this employee follows."}{" "}
                 Lists are built in <strong>Settings → Leave Settings → Holiday Lists</strong>.
               </p>
             </div>
