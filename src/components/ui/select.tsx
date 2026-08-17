@@ -61,9 +61,14 @@ function SelectContent({
   children,
   side = "bottom",
   sideOffset = 4,
-  align = "center",
+  align = "start",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  // Default deliberately FALSE. When true, Base UI aligns the selected item with the trigger,
+  // so a value near the bottom of a long list makes the popup open upwards over the field —
+  // which read as random inconsistency between dropdowns. False gives a plain dropdown below
+  // the trigger, the same direction every time. Pass true explicitly if a menu ever needs the
+  // old behaviour.
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<

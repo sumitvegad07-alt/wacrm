@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, Loader2, X, ArrowLeft, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -57,6 +58,24 @@ interface TaskFormProps {
 
 const STATUSES: TaskStatus[] = ["Pending", "In Progress", "Waiting", "Completed", "Cancelled"];
 const PRIORITIES: TaskPriority[] = ["Low", "Medium", "High", "Urgent"];
+
+/** Value -> label for the "Linked To" picker. Also feeds Select's `items` so the trigger shows
+ *  the label rather than the raw value. */
+const LINKED_MODULE_LABELS: Record<string, string> = {
+  None: "None",
+  Contact: "Customer",
+  Lead: "Lead",
+  Deal: "Deal",
+  Quotation: "Quotation",
+  Product: "Product",
+  Conversation: "Conversation",
+  Expense: "Expense",
+  Payment: "Payment",
+  Order: "Order",
+  Leave: "Leave",
+  Dispatch: "Dispatch",
+  Employee: "Employee/User",
+};
 
 export function TaskForm({
   open,
@@ -212,7 +231,7 @@ export function TaskForm({
         else setLinkedModule("None");
       }
     }
-  }, [open, task, defaultContactId, defaultDealId, defaultProductId, defaultConversationId, defaultQuotationId, defaultLeadId, defaultExpenseId, defaultPaymentId, profile?.id]);
+  }, [open, task, defaultContactId, defaultDealId, defaultProductId, defaultConversationId, defaultQuotationId, defaultLeadId, defaultExpenseId, defaultPaymentId, defaultOrderId, defaultDispatchId, defaultEmployeeId, defaultLeaveId, profile?.id]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
@@ -466,19 +485,22 @@ export function TaskForm({
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-muted-foreground text-xs uppercase font-medium">Assigned To</Label>
-                  <select
+                  {/* Searchable: an account with a hundred employees cannot be scrolled. */}
+                  <SearchableSelect
                     value={assignedUserId}
-                    onChange={(e) => setAssignedUserId(e.target.value)}
+                    onChange={setAssignedUserId}
                     disabled={!canAssignOthers}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary disabled:opacity-75"
-                  >
-                    {canAssignOthers && <option value="">Unassigned</option>}
-                    {assignableProfiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.full_name || p.email}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Unassigned"
+                    searchPlaceholder="Search employees..."
+                    options={[
+                      ...(canAssignOthers ? [{ value: "", label: "Unassigned" }] : []),
+                      ...assignableProfiles.map((p) => ({
+                        value: p.id,
+                        label: p.full_name || p.email,
+                      })),
+                    ]}
+                    className="h-10 w-full"
+                  />
                 </div>
               </div>
 
@@ -502,15 +524,20 @@ export function TaskForm({
                   renderCustomSystemField={(field) => {
                     if (field.system_key === 'priority') {
                       return (
-                        <select
+                        <Select
                           value={priority}
-                          onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                          className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          items={Object.fromEntries(PRIORITIES.map((p) => [p, p]))}
+                          onValueChange={(v) => setPriority((v as TaskPriority) ?? priority)}
                         >
-                          {PRIORITIES.map((p) => (
-                            <option key={p} value={p}>{p}</option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="h-10 w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PRIORITIES.map((p) => (
+                              <SelectItem key={p} value={p}>{p}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       );
                     }
                     return undefined;
@@ -521,25 +548,23 @@ export function TaskForm({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border/50">
                 <div className="grid gap-2">
                   <Label className="text-muted-foreground text-xs uppercase font-medium">Linked To</Label>
-                  <select
+                  {/* A native <select> renders a BROWSER dropdown, which opens whichever way the
+                      browser feels like and cannot be styled. Using the house Select keeps this
+                      opening downward like every other dropdown on the form. */}
+                  <Select
                     value={linkedModule}
-                    onChange={(e) => setLinkedModule(e.target.value as any)}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary"
+                    items={LINKED_MODULE_LABELS}
+                    onValueChange={(v) => setLinkedModule((v as typeof linkedModule) ?? "None")}
                   >
-                    <option value="None">None</option>
-                    <option value="Contact">Customer</option>
-                    <option value="Lead">Lead</option>
-                    <option value="Deal">Deal</option>
-                    <option value="Quotation">Quotation</option>
-                    <option value="Product">Product</option>
-                    <option value="Conversation">Conversation</option>
-                    <option value="Expense">Expense</option>
-                    <option value="Payment">Payment</option>
-                    <option value="Order">Order</option>
-                    <option value="Leave">Leave</option>
-                    <option value="Dispatch">Dispatch</option>
-                    <option value="Employee">Employee/User</option>
-                  </select>
+                    <SelectTrigger className="h-10 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(LINKED_MODULE_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {linkedModule !== "None" && (

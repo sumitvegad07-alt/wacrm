@@ -390,6 +390,18 @@ timelines), `products`, `quotations`, `expenses`, `geofences`, `tracking_session
 
 - **Full Screen Width for Forms & Panels (`w-full`)**: Do NOT use narrow wrappers (`max-w-2xl`, `max-w-xl`) or constrained centered containers on create, edit, view, or settings screens. All main screens and settings forms must use full screen width (`w-full` / `max-w-[95vw]`).
 - **Multi-Column Responsive Grids**: To prevent empty/wasted white space on the right-hand side of large desktop monitors, arrange form fields, settings toggles, and metadata panels in responsive multi-column grids (`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6` or `gap-8`).
+- **Dropdowns: why some opened UP and some DOWN.** `SelectContent` used to default
+  `alignItemWithTrigger` to `true`, which positions the popup so the SELECTED ITEM sits over
+  the trigger — for a value low down a long list the popup opens upwards over the field. The
+  default is now `false` (plain dropdown below the trigger) and `align` is `"start"`. Changed
+  globally in `src/components/ui/select.tsx`; pass `alignItemWithTrigger` explicitly if a menu
+  ever wants the old behaviour.
+- **Native `<select>` is the other half of that inconsistency.** A native select renders a
+  BROWSER dropdown: it opens whichever way the browser chooses, cannot be styled, and has no
+  search. ~50 remain across ~20 files (automation-builder 10, monthly-planner 6, product-form 5,
+  deal-form 3, custom-fields-manager 3, …). Convert to the house `<Select>` — or
+  `<SearchableSelect>` when the list can grow past ~20 rows (employees, customers, products).
+  `<AsyncSearchSelect>` exists for lists in the thousands.
 - **A page's TITLE comes from the route map in `src/components/layout/header.tsx`, not from
   `<PageHeader>`.** `PageHeader` deliberately `return null`s when it has no `actions`, `badge`
   or `breadcrumbs` — a title+subtitle alone renders nothing at all. A new page with no entry in
