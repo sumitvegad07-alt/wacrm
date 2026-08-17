@@ -74,7 +74,7 @@ export const paymentReportConfig: ReportDefinition = {
       { label: 'Rejected', value: 'Rejected' },
       { label: 'Cancelled', value: 'Cancelled' },
     ]},
-    { key: 'payment_type', label: 'Payment Type', type: 'payment_type', section: 'PAYMENT' },
+    { key: 'payment_type', label: 'Payment Type', type: 'lookup', lookupTable: 'payment_types', section: 'PAYMENT' },
     { key: 'source', label: 'Source', type: 'select', section: 'PAYMENT', options: [
       { label: 'Admin', value: 'admin' },
       { label: 'Visit', value: 'visit' },

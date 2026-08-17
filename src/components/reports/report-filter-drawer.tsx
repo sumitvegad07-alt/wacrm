@@ -442,14 +442,14 @@ export function ReportFilterDrawer({
                           placeholder={`Select ${filterDef.label}`}
                           className="h-8 text-xs bg-background"
                         />
-                      ) : filterDef.type === 'payment_type' ? (
-                        // Payment types are per-account configurable, so they are
-                        // looked up rather than hardcoded. payments.payment_type
-                        // stores the NAME, so the value column is `name` too.
+                      ) : filterDef.type === 'lookup' ? (
+                        // Account-configurable lists (payment types, lead sources,
+                        // statuses, industries, pipelines). Looked up live so
+                        // options added in settings appear without a code change.
                         <AsyncSearchSelect
-                          tableName="payment_types"
+                          tableName={filterDef.lookupTable ?? ''}
                           displayColumn="name"
-                          valueColumn="name"
+                          valueColumn={filterDef.lookupValueColumn ?? 'name'}
                           value={localFilters[filterDef.key] || ""}
                           onChange={(val) => {
                             const next = { ...localFilters };

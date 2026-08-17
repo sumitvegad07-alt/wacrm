@@ -47,7 +47,7 @@ export interface ReportMeasure {
 export interface ReportFilterDef {
   key: string;
   label: string;
-  type: 'date_range' | 'select' | 'multiselect' | 'user' | 'customer' | 'lead' | 'product' | 'territory' | 'payment_type';
+  type: 'date_range' | 'select' | 'multiselect' | 'user' | 'customer' | 'lead' | 'product' | 'territory' | 'lookup';
   /** Drawer group heading. Free text so each module can name its own sections
    *  (payments have PAYMENT, orders have SALES TYPE / PRODUCT). PERIOD always
    *  renders first; remaining sections follow the order they appear in `filters`. */
@@ -55,6 +55,15 @@ export interface ReportFilterDef {
   options?: { label: string; value: string }[];
   requiredModule?: keyof ModuleSettings | string;
   territoryLevel?: number;
+  /** For type 'lookup': the table holding the account's configurable list
+   *  (payment_types, lead_sources, lead_statuses, lead_industries, pipelines…).
+   *  Values are looked up live rather than hardcoded, so options the account adds
+   *  in settings appear without a code change. */
+  lookupTable?: string;
+  /** For type 'lookup': the column stored in the filter payload. Defaults to
+   *  'name' because most of these columns store the label as free text; use 'id'
+   *  where the record stores a foreign key (e.g. a deal's pipeline). */
+  lookupValueColumn?: 'name' | 'id';
 }
 
 export interface TabConfig {

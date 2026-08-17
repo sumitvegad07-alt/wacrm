@@ -45,6 +45,8 @@ Rather than duplicate 11 dimensions, 10 measures, 19 filters and 5 joins under `
 | `sales` | `orders` | `['sales', 'order']` |
 | `payment` | `payments` | `['payment']` |
 | `quotation` | `quotations` | `['quotation']` |
+| `lead` | `leads` | `['lead']` |
+| `deal` | `deals` | `['deal']` |
 | `expense` | `expenses` | `['expense']` |
 
 A row registered under `sales` wins; otherwise the `order` row is used verbatim. Sales registers exactly **three** rows of its own — the `sales_date` join, the `date` dimension and the `date_range` filter — because a sale is dated by *dispatch completion* (the order's latest `order_dispatches.dispatched_at`, falling back to the order date when an order was closed without any dispatch). Every other dimension, measure, filter and join is inherited from `order` and cannot drift.
@@ -90,6 +92,12 @@ Verified on prod: record-level and item-level quantity both total **85**. (Amoun
 ### Nullable-entity dimensions
 
 A quotation belongs to a lead **or** a customer. Grouping on a nullable column would collapse the entire other side into one blank row, so the Lead and Customer dimensions **INNER JOIN** their own entity (aliases `lq` / `cq`) while geography keeps LEFT JOINs (`c` / `l`) and `COALESCE`s across both. Use this shape for any dimension whose entity is optional.
+
+## 5e. Ratios are computed, never summed
+
+The Lead report's conversion ratio is computed in SQL per group, so each row is right. It is **not** additive, so the table footer renders a dash for any `percent` measure instead of a total — summing one source at 100% and four at 0% would read 100% when the true overall figure is 11%. The honest overall number is the KPI card, which issues its own grand-total query and therefore recomputes the ratio across the whole result set.
+
+Register any rate, ratio or average as `type: 'percent'` so it inherits this behaviour. Never register a ratio as a `number`.
 
 ## 6. Future Compatibility & Onboarding Modules
 To onboard a new module (e.g. `Visits`):

@@ -38,6 +38,13 @@ interface ReportViewerProps {
   config: ReportDefinition;
 }
 
+/** Product-hierarchy dimensions and the `levels_count` they require, mirroring
+ *  TabConfig.requiresProductSettings for extra columns rather than whole tabs. */
+const PRODUCT_LEVEL_DIMENSIONS: Record<string, number> = {
+  product_category: 1,
+  product_subcategory: 2,
+};
+
 export function ReportViewer({ config }: ReportViewerProps) {
   const { defaultCurrency, accountId } = useAuth();
   const supabase = createClient();
@@ -77,7 +84,11 @@ export function ReportViewer({ config }: ReportViewerProps) {
   }, [config.tabConfigs, productLevelsCount]);
 
   // Active tab key
-  const [activeTab, setActiveTab] = useState<string>('customer');
+  // The report's own first tab, not a hardcoded 'customer' — the Lead report has
+  // no customer tab at all, and defaulting to a tab a module doesn't define left
+  // the viewer asking the engine for a dimension that doesn't exist.
+  const initialTabKey = config.tabConfigs?.[0]?.key ?? 'customer';
+  const [activeTab, setActiveTab] = useState<string>(initialTabKey);
 
   // Compute initial date range for "this_month"
   const computeInitialDateFilter = useCallback(() => {
@@ -100,16 +111,25 @@ export function ReportViewer({ config }: ReportViewerProps) {
   };
 
   /** Every dimension column a tab shows: its primary one, then any extras
-   *  (e.g. Product also showing Product Category). */
-  const getTabDimensions = (tabKey: string) => {
+   *  (e.g. Product also showing Product Category).
+   *
+   *  Extra product-hierarchy columns respect the account's configured depth, the
+   *  same rule that shows or hides the Category / Sub-Category tabs — so a Product
+   *  tab does not sprout a Sub-Category column on an account that has no
+   *  sub-categories. */
+  const getTabDimensions = useCallback((tabKey: string) => {
     const tab = config.tabConfigs?.find(t => t.key === tabKey);
     if (!tab) return [tabKey];
-    return [tab.dimension, ...(tab.extraDimensions ?? [])];
-  };
+    const extras = (tab.extraDimensions ?? []).filter(dim => {
+      const requiredLevel = PRODUCT_LEVEL_DIMENSIONS[dim];
+      return requiredLevel === undefined || productLevelsCount >= requiredLevel;
+    });
+    return [tab.dimension, ...extras];
+  }, [config.tabConfigs, productLevelsCount]);
 
   const [reportState, setReportState] = useState<ReportConfig>({
-    dimensions: getTabDimensions('customer'),
-    measures: getDefaultMeasures('customer'),
+    dimensions: getTabDimensions(initialTabKey),
+    measures: getDefaultMeasures(initialTabKey),
     filters: initialDateRange ? { date_range: initialDateRange } : {},
     view: 'table',
     period: 'this_month',

@@ -96,9 +96,16 @@ export function ReportTable({ data, config, reportState, defaultCurrency, onSort
       return null;
     }
 
+    // Percentages are not summable — adding a column of per-row ratios produces a
+    // meaningless number (a lead source at 100% and four at 0% would total 100%
+    // when the real overall ratio is 11%). The true figure for the whole result
+    // set is the KPI card, which is its own grand-total query.
+    if (col.format === 'percent') {
+      return <span className="font-bold text-muted-foreground" title="Percentages cannot be summed — see the KPI card above for the overall figure">—</span>;
+    }
+
     const totalVal = columnTotals[col.key as string] || 0;
     if (col.format === 'currency') return <span className="font-bold text-foreground">{formatCurrency(totalVal, defaultCurrency)}</span>;
-    if (col.format === 'percent') return <span className="font-bold text-foreground">{totalVal.toFixed(2)}%</span>;
     return <span className="font-bold text-foreground">{totalVal.toLocaleString()}</span>;
   };
 

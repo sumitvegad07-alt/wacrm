@@ -364,6 +364,8 @@ function getMenuStructure(
         // Gated like the Quotation module itself (see the Quotation nav entry above).
         { href: "/reports/quotations", label: "Quotation Reports", icon: FileText, module: "orders", configModule: "quotation" as const },
         { href: "/reports/payments", label: "Payment Reports", icon: Banknote, module: "payment_reports", configModule: "payment" as const },
+        { href: "/reports/leads", label: "Lead Reports", icon: UserPlus, module: "leads" },
+        { href: "/reports/deals", label: "Deal Reports", icon: GitBranch, module: "deals" },
         { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
         { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },
         { href: "/expenses", label: "Expenses Report", icon: Coins, module: "expenses" },
