@@ -18,6 +18,7 @@ import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { AISettingsPanel } from '@/components/settings/ai-settings-panel';
 import { ExpenseTypesSettings } from '@/components/settings/expense-types-settings';
+import { LeaveTypesSettings } from '@/components/settings/leave-types-settings';
 import { ModuleSettingsPanel } from '@/components/settings/module-settings';
 import { DealPipelinesSettings } from '@/components/settings/deal-pipelines-settings';
 import { TerritoryManager } from '@/components/territories/territory-manager';
@@ -103,6 +104,7 @@ function SettingsContent() {
     payments: <PaymentSettings />,
     pricing: <PricingSchemesSettings />,
     expense_types: <ExpenseTypesSettings />,
+    leave_types: <LeaveTypesSettings />,
     territories: <TerritoryManager />,
     route: <RouteSettings />,
     members: <MembersTab />,

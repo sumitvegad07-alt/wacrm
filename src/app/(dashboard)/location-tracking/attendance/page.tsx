@@ -26,8 +26,11 @@ import {
   attendancePrimaryLabel,
   computeAttendanceDay,
   formatWorkedMinutes,
+  LEAVE_DAY_VALUE,
   type AttendanceTone,
 } from "@/lib/location/attendance-status";
+import { monthWorkingDays, toDateKey } from "@/lib/location/working-days";
+import { listApprovedLeaveDays, listHolidays } from "@/lib/leave/api";
 
 export default function UserAttendancePage() {
   const { accountId } = useAuth();
@@ -53,9 +56,11 @@ export default function UserAttendancePage() {
     if (!accountId) return;
     setIsLoading(true);
 
+    // `id` is needed as well as `user_id`: sessions key on user_id, but leave_days keys on
+    // profiles.id. Those are different columns and mixing them up returns nothing at all.
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('user_id, full_name, avatar_url');
+      .select('id, user_id, full_name, avatar_url');
 
     if (!profiles) {
       setAttendanceData([]);
@@ -96,6 +101,25 @@ export default function UserAttendancePage() {
       new Date(s.started_at) >= startOfDay && new Date(s.started_at) <= endOfDay
     ) || [];
 
+    // Leave and holidays for the whole month, in ONE query each — never one per employee or per
+    // day. Only APPROVED leave is fetched: a pending request must not turn a red Absent green.
+    const monthFrom = toDateKey(startOfMonth);
+    const monthTo = toDateKey(endOfMonth);
+    const [approvedLeave, monthHolidays] = await Promise.all([
+      listApprovedLeaveDays(accountId, monthFrom, monthTo).catch(() => []),
+      listHolidays(accountId).catch(() => [] as { name: string; holiday_date: string }[]),
+    ]);
+
+    const holidayByDate = new Map(monthHolidays.map(h => [h.holiday_date, h.name]));
+    const holidayKeys = new Set(holidayByDate.keys());
+    // Keyed by profile id + date, which is exactly how the day rows are looked up below.
+    const leaveByKey = new Map(
+      approvedLeave.map(l => [
+        `${l.employee_id}|${l.leave_date}`,
+        { weightage: l.weightage, typeName: l.leave_type_name },
+      ]),
+    );
+
     // Punch coordinates are NOT on tracking_sessions — the app records them as location_pings
     // tagged punch_in / punch_out against the session. Sessions from before that tagging existed
     // still have the coordinates, just labelled 'auto', so fall back to the session's first and
@@ -131,10 +155,13 @@ export default function UserAttendancePage() {
     const formattedDaily = profiles.map(p => {
       // Every session the rep started today, not just the first — a lunch break makes two.
       const userSessions = dailySessions.filter(s => s.user_id === p.user_id);
+      const dayKey = toDateKey(day);
       const attendance = computeAttendanceDay({
         sessions: userSessions,
         day,
         settings: shiftSettings,
+        leave: leaveByKey.get(`${p.id}|${dayKey}`) ?? null,
+        holidayName: holidayByDate.get(dayKey) ?? null,
       });
 
       // The selfie belongs to the first punch-in of the day.
@@ -168,21 +195,14 @@ export default function UserAttendancePage() {
     });
     setAttendanceData(formattedDaily);
 
-    const getWorkingDays = (dateStr: string) => {
-      const targetDate = new Date(dateStr);
-      const now = new Date();
-      if (targetDate.getFullYear() > now.getFullYear() || (targetDate.getFullYear() === now.getFullYear() && targetDate.getMonth() > now.getMonth())) return 0;
-      const isCurrentMonth = targetDate.getMonth() === now.getMonth() && targetDate.getFullYear() === now.getFullYear();
-      const lastDay = isCurrentMonth ? now.getDate() : new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
-      let count = 0;
-      for (let i = 1; i <= lastDay; i++) {
-          const d = new Date(targetDate.getFullYear(), targetDate.getMonth(), i);
-          if (d.getDay() !== 0 && d.getDay() !== 6) count++;
-      }
-      return count;
-    };
-
-    const totalWorkingDays = getWorkingDays(selectedDate);
+    /**
+     * The working week used to be hardcoded here as Monday–Friday, which understated Total Days
+     * by roughly four a month for the six-day companies this product sells to — and correspondingly
+     * overstated everyone's presence. It now comes from the configured working days minus the
+     * company's holidays. See src/lib/location/working-days.ts.
+     */
+    const monthTotals = monthWorkingDays(startOfMonth, shiftSettings, holidayKeys);
+    const totalWorkingDays = monthTotals.workingDays;
 
     /** Local YYYY-MM-DD. Deliberately not toISOString(), which shifts a late-evening punch-in
      *  into the next day for anyone east of UTC and would mis-bucket the whole month. */
@@ -190,6 +210,13 @@ export default function UserAttendancePage() {
       const d = new Date(iso);
       return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     };
+
+    // Approved leave per employee for the month, as a sum of day values (a half day counts 0.5).
+    const leaveDaysByProfile = new Map<string, number>();
+    approvedLeave.forEach(l => {
+      const value = LEAVE_DAY_VALUE[l.weightage] ?? 0;
+      leaveDaysByProfile.set(l.employee_id, (leaveDaysByProfile.get(l.employee_id) ?? 0) + value);
+    });
 
     const summaryFormatted = profiles.map(p => {
       const userSessions = monthSessions?.filter(s => s.user_id === p.user_id) || [];
@@ -208,10 +235,14 @@ export default function UserAttendancePage() {
       let shortPresent = 0;
       let missingPunchOut = 0;
       byDay.forEach(sessions => {
+        const dayDate = new Date(sessions[0].started_at);
+        const key = toDateKey(dayDate);
         const d = computeAttendanceDay({
           sessions,
-          day: new Date(sessions[0].started_at),
+          day: dayDate,
           settings: shiftSettings,
+          leave: leaveByKey.get(`${p.id}|${key}`) ?? null,
+          holidayName: holidayByDate.get(key) ?? null,
         });
         if (d.flags.includes('missing_punch_out')) missingPunchOut++;
         if (d.flags.includes('late_start')) lateStart++;
@@ -220,7 +251,13 @@ export default function UserAttendancePage() {
       });
 
       const present = byDay.size;
-      const absent = Math.max(0, totalWorkingDays - present);
+      // Rounded because half days sum in 0.5 steps and raw float arithmetic would otherwise
+      // print 24.499999999999996 in an attendance record.
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const leaveDays = round2(leaveDaysByProfile.get(p.id) ?? 0);
+      // Leave is neither presence nor absence — it is accounted for separately, so a rep who took
+      // approved leave is not left looking absent for those days.
+      const absent = round2(Math.max(0, totalWorkingDays - present - leaveDays));
       const presencePct = totalWorkingDays > 0 ? Math.round((present / totalWorkingDays) * 100) + '%' : '0%';
 
       return {
@@ -229,8 +266,8 @@ export default function UserAttendancePage() {
         totalDays: totalWorkingDays,
         present,
         absent,
-        leave: 0,
-        holidays: 0,
+        leave: leaveDays,
+        holidays: monthTotals.holidays,
         presencePct,
         lateStart,
         earlyLeave,

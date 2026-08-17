@@ -39,12 +39,37 @@ describe("normalizeTrackingSettings", () => {
         end_time: "19:00",
         interval_minutes: 15,
         grace_minutes: 30,
+        working_days: [1, 3, 5],
       }),
     ).toEqual({
       start_time: "08:15",
       end_time: "19:00",
       interval_minutes: 15,
       grace_minutes: 30,
+      working_days: [1, 3, 5],
+    });
+  });
+
+  describe("working_days", () => {
+    it("defaults to Mon–Sat when absent or unusable", () => {
+      expect(normalizeTrackingSettings({}).working_days).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(normalizeTrackingSettings({ working_days: "sat" } as never).working_days).toEqual([
+        1, 2, 3, 4, 5, 6,
+      ]);
+    });
+
+    it("sorts, de-duplicates and drops out-of-range days", () => {
+      expect(
+        normalizeTrackingSettings({ working_days: [6, 1, 1, 9, -2, 0] } as never).working_days,
+      ).toEqual([0, 1, 6]);
+    });
+
+    it("falls back rather than accepting a zero-day week", () => {
+      // A company with no working days would make every date a weekly off, wiping out every
+      // Absent and every leave day at once. Far more likely to be corrupt data than an answer.
+      expect(normalizeTrackingSettings({ working_days: [] } as never).working_days).toEqual([
+        1, 2, 3, 4, 5, 6,
+      ]);
     });
   });
 

@@ -216,6 +216,11 @@ export function SettingsOverview({
       subtitle: 'Expense policies, mileage & odometer checks',
     },
     {
+      section: 'leave_types',
+      loading: false,
+      subtitle: 'Leave types & the company holiday calendar',
+    },
+    {
       section: 'territories',
       loading: false,
       subtitle: 'Geography hierarchy, areas & employee assignment',

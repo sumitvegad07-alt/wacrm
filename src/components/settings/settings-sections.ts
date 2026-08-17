@@ -19,6 +19,7 @@ import {
   Route,
   SlidersHorizontal,
   Banknote,
+  CalendarOff,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -49,6 +50,7 @@ export const SETTINGS_SECTIONS = [
   'members',
   'api',
   'expense_types',
+  'leave_types',
   'territories',
   'route',
   'module_settings',
@@ -83,6 +85,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   payments: { id: 'payments', label: 'Payments', icon: Banknote, group: 'workspace' },
   pricing: { id: 'pricing', label: 'Catalogue Settings', icon: Percent, group: 'workspace' },
   expense_types: { id: 'expense_types', label: 'Expense Settings', icon: Wallet, group: 'workspace' },
+  leave_types: { id: 'leave_types', label: 'Leave Settings', icon: CalendarOff, group: 'workspace' },
   territories: { id: 'territories', label: 'Territory', icon: Map, group: 'workspace' },
   route: { id: 'route', label: 'Route Settings', icon: Route, group: 'workspace' },
   members: { id: 'members', label: 'Team', icon: UsersRound, group: 'hidden' },

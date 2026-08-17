@@ -44,6 +44,7 @@ describe("computeAgentHealth", () => {
       end_time: "18:00",
       interval_minutes: 10,
       grace_minutes: 15,
+        working_days: [1, 2, 3, 4, 5, 6],
     };
 
     // 08:00 local — before the shift starts: still just neutral info.
@@ -72,6 +73,7 @@ describe("computeAgentHealth", () => {
         end_time: "18:00",
         interval_minutes: 10,
         grace_minutes: 15,
+        working_days: [1, 2, 3, 4, 5, 6],
       },
       evaluateMissingPunchIn: false,
       nowMs: localAt(11),
@@ -91,7 +93,12 @@ describe("computeAgentHealth", () => {
       latestSnapshot: null,
       evaluateMissingPunchIn: false,
     };
-    const shift = { start_time: "09:00", end_time: "18:00", grace_minutes: 15 };
+    const shift = {
+      start_time: "09:00",
+      end_time: "18:00",
+      grace_minutes: 15,
+      working_days: [1, 2, 3, 4, 5, 6],
+    };
 
     const halfHourly = computeAgentHealth({
       ...base,

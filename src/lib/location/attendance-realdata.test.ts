@@ -14,6 +14,14 @@ import { DEFAULT_TRACKING } from "./tracking-window";
 // Real timings, expressed as local (IST-equivalent) wall-clock times.
 const AUG_8 = new Date(2026, 7, 8);
 const AUG_9 = new Date(2026, 7, 9);
+
+/**
+ * 9 Aug 2026 is a Sunday, which is a weekly off under the default Mon–Sat week — and a shift
+ * worked on a non-working day is deliberately not judged against the shift window. These cases
+ * are about the night-shift boundary maths, so they run against a seven-day week to keep testing
+ * what they were written to test.
+ */
+const SEVEN_DAY_WEEK = [0, 1, 2, 3, 4, 5, 6];
 const local = (y: number, mo: number, d: number, h: number, mi: number) =>
   new Date(y, mo, d, h, mi, 0).toISOString();
 
@@ -41,7 +49,7 @@ describe("attendance against real production sessions", () => {
     const day = computeAttendanceDay({
       sessions: [{ started_at: local(2026, 7, 9, 1, 26), ended_at: null }],
       day: AUG_9,
-      settings: DEFAULT_TRACKING,
+      settings: { ...DEFAULT_TRACKING, working_days: SEVEN_DAY_WEEK },
       nowMs: new Date(2026, 7, 9, 3, 7, 0).getTime(),
     });
 
@@ -56,7 +64,12 @@ describe("attendance against real production sessions", () => {
     const nightShift = (start: string) =>
       computeAttendanceDay({
         sessions: [{ started_at: local(2026, 7, 9, 1, 26), ended_at: local(2026, 7, 9, 4, 0) }],
-        settings: { ...DEFAULT_TRACKING, start_time: start, end_time: "09:00" },
+        settings: {
+          ...DEFAULT_TRACKING,
+          start_time: start,
+          end_time: "09:00",
+          working_days: SEVEN_DAY_WEEK,
+        },
         day: AUG_9,
         nowMs: new Date(2026, 7, 9, 10, 0, 0).getTime(),
       });

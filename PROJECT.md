@@ -450,6 +450,117 @@ territories" tree tab + "Hierarchy & assignment" config tab) — NOT the main si
   assignment `employee-area-assignment.tsx`; contact cascade `territory-picker.tsx`.
 - **Not offline on mobile** — read-only cache only (see CLAUDE mobile.md).
 
+### Leave Management v1 (migrations `20260817170000_leave_management` + `20260817170500_leave_working_days_backfill`, applied to prod 2026-08-17 — verified)
+
+Spec: `docs/engineering/specifications/leave-management-v1.md`. Rollback:
+`supabase/migrations/ROLLBACK-leave-management.md`. Built by Claude Code, not Antigravity.
+
+**Tables (all RLS-enabled, `account_id`, `update_updated_at_column` triggers):**
+- `leave_types` — admin-configured, `status` Active/Inactive (defaults **Active** on insert),
+  `color`. Unique on `(account_id, lower(name))` so "Casual Leave" and "casual leave" cannot
+  coexist. `ON DELETE RESTRICT` from `leaves`, so a used type must be deactivated, not deleted.
+- `holidays` — `(account_id, holiday_date)` unique. **No recurring flag on purpose**: Diwali/Holi/
+  Eid move every year and a recurring rule would silently generate wrong dates.
+- `leaves` — the request header. `leave_number` `LV-YYYY-NNNNNN` via `account_sequences.leave_seq`
+  + `trg_set_leave_number` (copied from the payment numbering — **never generate client-side**).
+  `reason` is `NOT NULL` with a non-blank CHECK: the mandatory-reason rule lives in the DB, not in
+  three separate forms (the payment `require_*` lesson). `applied_by` distinguishes self-service
+  from admin-on-behalf; `is_backdated` marks a past-date entry.
+- `leave_days` — **one row per calendar day**, carrying `weightage`
+  (`full|first_half|second_half|quarter`), `day_value` (1/0.5/0.5/0.25) and a **denormalised**
+  `account_id`/`employee_id`/`status`. That denormalisation is deliberate: the attendance page asks
+  "who is on leave on this date" for a whole month and answers it with one index hit and no join,
+  and RLS is checked without a subquery into `leaves`.
+- **The overlap guard is a partial unique index**, not app logic:
+  `UNIQUE (employee_id, leave_date) WHERE status IN ('Pending','Approved')`. Rejected and Cancelled
+  rows are kept for the record and stop reserving the date.
+- `status` on `leave_days` is mirrored from the parent by `sync_leave_days_status()`
+  (**SECURITY DEFINER** — the parent update was already authorised; re-deriving it per child row
+  would mean an approving manager also needed write rights on `leave_days`).
+
+**RPCs (all SECURITY INVOKER, WHERE-qualified for pg_safeupdate):** `create_leave_request`,
+`update_leave_status`, `update_leave_request`. Plus helpers `account_working_days`,
+`leave_eligible_dates`, `leave_day_value`, `leave_status_transition_allowed`, `write_leave_days`.
+- **Why RPCs at all** when the rest of the app inserts directly: four rules cannot live in a form —
+  the past-date restriction, expanding a range into day rows, the overlap message, and the audit
+  entry. Mobile writes to tables directly, so a validation that exists only in React does not exist.
+- `create_leave_request` **recomputes the eligible dates server-side and rejects a mismatch**, so a
+  stale client holding an old holiday list cannot book a holiday as leave. It is also idempotent on
+  a client-supplied `p_leave_id` (a replay returns the same row and burns no leave number).
+- Transitions: `Pending → Approved|Rejected|Cancelled`, `Approved → Cancelled`. Nothing else.
+- **Approver = admin OR `approve_leaves` OR `is_in_downline(caller, employee)`** — reuses migration
+  106's traversal, no new recursion. A non-admin **cannot approve their own leave**; an owner/admin
+  can, because a single-admin account would otherwise deadlock, and the log records
+  `self_approved: true`.
+- Audit trail reuses **`module_activities`** (`module_name = 'leave'`) — no new table. Actions:
+  `leave_applied` / `leave_approved` / `leave_rejected` / `leave_cancelled` / `leave_edited`.
+  ⚠️ `module_activities.user_id` FKs **auth.users, not profiles** — the same embed trap as orders;
+  fetch plainly and enrich with a separate profiles query (`src/lib/leave/api.ts` does this).
+
+**Permission keys** (flat, owner/admin bypass via `has_permission`): `view_leaves`, `manage_leaves`
+(apply on behalf / backdate / edit others), `approve_leaves`. **Enforced server-side in the RPCs**,
+not UI-only — deliberately stricter than the rest of the app, because approving your own leave is
+exactly the action a hidden button does not protect. Not yet in the roles editor UI.
+
+**Web surfaces:** Settings → **Leave Settings** (`leave-types-settings.tsx`: types + the holiday
+calendar); Organisation Settings gained **Working Days**; Location Tracking → **Leaves**
+(`location-tracking/leaves/page.tsx` — DataTable, status tabs, apply/edit dialog, detail sheet with
+the full history and Approve/Reject/Edit/Cancel). Client layer: `src/lib/leave/api.ts`.
+
+**Attendance integration (`src/lib/location/attendance-status.ts` — shared code, 132 location tests):**
+- New statuses `on_leave` / `holiday` / `weekly_off`, new flag `worked_on_leave`.
+- **Only APPROVED leave is ever passed in.** A pending request must not turn a red Absent green.
+- No sessions + full-day leave → **On Leave**. No sessions + PART-day leave → still **Absent**, with
+  the leave as a second badge — the other half was owed and nobody turned up; calling that On Leave
+  would hide a real no-show.
+- Part-day leave **moves the goalposts rather than removing them**: first-half leave shifts the
+  expected start to the shift midpoint, second-half shifts the expected end back, and expected
+  minutes scale by `1 - day_value`. So a 13:30 arrival on first-half leave is no longer Late Start,
+  but a 15:00 arrival still is. A quarter day carries **no position** (there is no "which quarter"),
+  so it reduces the hours owed and suppresses Early Leaving rather than guessing.
+- A shift worked on a **holiday or weekly off is not judged at all** — there is no shift that day,
+  so Late/Early/Short would be measured against a window that does not apply.
+- A holiday **wins over leave** approved before it was declared (edge case: an admin adds a holiday
+  later). The approved leave record is left untouched rather than silently rewritten.
+- Monthly tab: `leave` and `holidays` were **hardcoded `0`** and are now real; `absent` is
+  `workingDays − present − leaveDays`, floored at 0 and rounded (half days sum in 0.5 steps).
+
+**🔴 Fixed a real pre-existing bug: the working week was hardcoded Monday–Friday**
+(`location-tracking/attendance/page.tsx`, `getWorkingDays` skipped `getDay() 0 and 6`). For the
+six-day companies this product sells to that understated Total Days by ~4/month and overstated
+presence. It now reads `accounts.settings.tracking_settings.working_days` (int array, 0=Sun…6=Sat,
+**default Mon–Sat**), normalised by `normalizeTrackingSettings` and counted by the new
+`src/lib/location/working-days.ts`. **This changes numbers already on screen.** A zero-day week is
+refused in both the normaliser and the Settings toggle — it would make every date a weekly off and
+wipe out every Absent and every leave day at once.
+
+**⚠️ Migration bug found by verification, worth remembering:**
+`jsonb_set(settings, '{tracking_settings,working_days}', …, create_missing => true)` only creates
+the **final** key — it cannot create a missing intermediate object, so 15 of 17 accounts were
+silently skipped. The fix (`20260817170500`) merges with `||` at each level. **Never assume
+`jsonb_set` will build a nested path.**
+
+**Mobile:** `app/leaves/index.tsx` (list, search by leave number + type, filters on from/to date,
+weightage, type, status), `app/leaves/new.tsx` (apply), `app/leaves/[id].tsx` (detail + withdraw),
+Menu tab entry, and `app/punch.tsx` gained an "Apply for leave" secondary action plus an
+approved-leave warning before punching in. Service: `src/services/LeaveService.ts`.
+- **Applying is ONLINE ONLY and deliberately NOT wired into SyncEngine.** The overlap check can only
+  run server-side; a queued request that syncs days later and is then rejected leaves the rep
+  believing they are approved and not turning up. Leave is planned work, not an urgent capture like
+  a punch-out. READS are cache-first (AsyncStorage, last-known-good), so the list and the type
+  picker still paint with no signal — only the write is gated, with `showAppDialog` (never a toast:
+  an error that fades is an error the rep does not see).
+- The punch-in leave check **fails open**: an error or a timeout lets the punch proceed. Blocking
+  attendance because a leave lookup failed would be far worse than a missing warning.
+
+**Deliberately NOT built (v1):** leave balances / quotas / accrual / carry-forward; paid-vs-unpaid;
+notifications (WhatsApp is blocked anyway — zero approved templates, 10 of 13 profiles have no
+phone); multi-level approval; two different leave types on the same day (blocked by the overlap
+index); offline apply; a leave report in the generic report engine.
+
+**Correction to this document:** the updated-at trigger function in this repo is
+`update_updated_at_column()`, **not `set_updated_at()`** as stated elsewhere here.
+
 ### Reporting Hierarchy (migration 106, applied to prod 2026-07-31 — verified)
 
 Who-reports-to-whom, reusing the pre-existing (previously empty, **undocumented**)
@@ -3013,10 +3124,14 @@ If a user prompts you with a request that violates the 18-Vector Framework (e.g.
 - Multi-tenant secure: Every query executes via SECURITY INVOKER under the current user's JWT, automatically enforcing RLS.
 
 **Required Registry Tables:**
-- \eport_registry_dimensions\: Stores GROUP BY components (e.g. state, city, product_category) and their required LEFT JOINs.
-- \eport_registry_measures\: Stores aggregation columns (e.g. \item_amount\ = \SUM(order_items.sub_total)\) and their required LEFT JOINs.
-- \eport_registry_filters\: Stores WHERE clause templates for dynamic UI filters.
-- \eport_registry_joins\: Stores reusable LEFT JOIN snippets (e.g. joining contacts, users, products).
+- \
+eport_registry_dimensions\: Stores GROUP BY components (e.g. state, city, product_category) and their required LEFT JOINs.
+- \
+eport_registry_measures\: Stores aggregation columns (e.g. \item_amount\ = \SUM(order_items.sub_total)\) and their required LEFT JOINs.
+- \
+eport_registry_filters\: Stores WHERE clause templates for dynamic UI filters.
+- \
+eport_registry_joins\: Stores reusable LEFT JOIN snippets (e.g. joining contacts, users, products).
 - \saved_reports\: Stores JSON states of configured reports, categorized by Private, Team, or Organization sharing modes.
 
 **Security Rules:**

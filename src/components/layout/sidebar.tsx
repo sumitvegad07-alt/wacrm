@@ -21,6 +21,7 @@ import {
   UserCog,
   Users,
   UsersRound,
+  CalendarOff,
   Workflow,
   X,
   Zap,
@@ -346,6 +347,7 @@ function getMenuStructure(
         { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
         // Track report was merged into Tracking Health — one table, nothing lost.
         { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
+        { href: "/location-tracking/leaves", label: "Leaves", icon: CalendarOff, module: "location_tracking" },
         { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking" },
       ],
     },
