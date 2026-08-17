@@ -65,6 +65,98 @@ export interface Holiday {
   id: string;
   name: string;
   holiday_date: string;
+  holiday_list_id: string;
+}
+
+/**
+ * A named calendar of weekly offs plus holidays, assignable to employees.
+ *
+ * `weekly_offs` holds the days OFF (0 = Sunday … 6 = Saturday) — that is how an admin thinks
+ * about it ("set weekend"), and working days are derived as the complement. Field staff and
+ * office staff routinely need different ones, which is the whole reason lists exist.
+ */
+export interface HolidayList {
+  id: string;
+  account_id: string;
+  name: string;
+  weekly_offs: number[];
+  is_default: boolean;
+  created_at: string;
+}
+
+export const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+/** Working days implied by a list's weekly offs. Mirrors `employee_working_days()` in SQL. */
+export function workingDaysOf(list: Pick<HolidayList, "weekly_offs"> | null | undefined): number[] {
+  const offs = new Set(list?.weekly_offs ?? [0]);
+  return [0, 1, 2, 3, 4, 5, 6].filter((d) => !offs.has(d));
+}
+
+export async function listHolidayLists(accountId: string): Promise<HolidayList[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("holiday_lists")
+    .select("id, account_id, name, weekly_offs, is_default, created_at")
+    .eq("account_id", accountId)
+    .order("is_default", { ascending: false })
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as HolidayList[];
+}
+
+/** Everyone's holiday-list assignment. NULL means they follow the account's default list. */
+export async function listEmployeeAssignments(
+  accountId: string,
+): Promise<{ id: string; full_name: string | null; holiday_list_id: string | null }[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, holiday_list_id")
+    .eq("account_id", accountId)
+    .order("full_name");
+  if (error) throw error;
+  return (data ?? []) as { id: string; full_name: string | null; holiday_list_id: string | null }[];
+}
+
+/**
+ * The weekly offs and holidays that apply to each employee, resolved through their assigned list
+ * (falling back to the account default). Used by the attendance page, which needs this for a
+ * whole month of employees at once — so it is two queries total, not two per person.
+ */
+export async function resolveEmployeeCalendars(accountId: string): Promise<
+  Map<string, { workingDays: number[]; holidays: Map<string, string> }>
+> {
+  const [lists, assignments, holidays] = await Promise.all([
+    listHolidayLists(accountId),
+    listEmployeeAssignments(accountId),
+    listHolidays(accountId),
+  ]);
+
+  const defaultList = lists.find((l) => l.is_default) ?? lists[0] ?? null;
+  const holidaysByList = new Map<string, Map<string, string>>();
+  holidays.forEach((h) => {
+    const bucket = holidaysByList.get(h.holiday_list_id) ?? new Map<string, string>();
+    bucket.set(h.holiday_date, h.name);
+    holidaysByList.set(h.holiday_list_id, bucket);
+  });
+
+  const out = new Map<string, { workingDays: number[]; holidays: Map<string, string> }>();
+  assignments.forEach((a) => {
+    const list = lists.find((l) => l.id === a.holiday_list_id) ?? defaultList;
+    out.set(a.id, {
+      workingDays: workingDaysOf(list),
+      holidays: holidaysByList.get(list?.id ?? "") ?? new Map<string, string>(),
+    });
+  });
+  return out;
 }
 
 export interface LeaveActivity {
@@ -130,8 +222,9 @@ export async function listHolidays(accountId: string): Promise<Holiday[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("holidays")
-    .select("id, name, holiday_date")
-    .eq("account_id", accountId);
+    .select("id, name, holiday_date, holiday_list_id")
+    .eq("account_id", accountId)
+    .order("holiday_date");
   if (error) throw error;
   return (data ?? []) as Holiday[];
 }

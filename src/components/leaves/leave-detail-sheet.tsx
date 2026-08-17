@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { CheckCircle, Clock, Edit2, Loader2, Paperclip, XCircle } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -121,17 +121,17 @@ export function LeaveDetailSheet({
   const canEditThis = canManage || (isOwn && isPending);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-3">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[95vw] max-w-[1400px] max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
             {leave.leave_number}
             <StatusBadge status={leave.status.toLowerCase()} label={leave.status} />
-          </SheetTitle>
-        </SheetHeader>
+          </DialogTitle>
+        </DialogHeader>
 
         <div className="space-y-6 py-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 text-sm">
             <Field label="Employee" value={leave.employee?.full_name?.trim() || "-"} />
             <Field label="Leave Type" value={leave.leave_type?.name ?? "-"} />
             <Field label="From" value={format(new Date(leave.from_date), "dd MMM yyyy")} />
@@ -146,6 +146,7 @@ export function LeaveDetailSheet({
             </p>
           )}
 
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
           <div>
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Reason</p>
             <p className="text-sm whitespace-pre-wrap">{leave.reason}</p>
@@ -183,6 +184,7 @@ export function LeaveDetailSheet({
                 <p className="px-3 py-2 text-sm text-muted-foreground">No day breakdown recorded.</p>
               )}
             </div>
+          </div>
           </div>
 
           {/* Actions */}
@@ -282,8 +284,8 @@ export function LeaveDetailSheet({
             )}
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 

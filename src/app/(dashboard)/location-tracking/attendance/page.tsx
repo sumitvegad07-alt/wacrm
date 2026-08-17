@@ -30,7 +30,7 @@ import {
   type AttendanceTone,
 } from "@/lib/location/attendance-status";
 import { monthWorkingDays, toDateKey } from "@/lib/location/working-days";
-import { listApprovedLeaveDays, listHolidays } from "@/lib/leave/api";
+import { listApprovedLeaveDays, resolveEmployeeCalendars } from "@/lib/leave/api";
 
 export default function UserAttendancePage() {
   const { accountId } = useAuth();
@@ -105,13 +105,21 @@ export default function UserAttendancePage() {
     // day. Only APPROVED leave is fetched: a pending request must not turn a red Absent green.
     const monthFrom = toDateKey(startOfMonth);
     const monthTo = toDateKey(endOfMonth);
-    const [approvedLeave, monthHolidays] = await Promise.all([
+    // Weekly offs and holidays are PER EMPLOYEE — they come from the holiday list assigned to
+    // each person, because field staff and office staff routinely work different weeks. Both
+    // calls fetch the whole month at once, never one query per employee or per day.
+    const [approvedLeave, calendars] = await Promise.all([
       listApprovedLeaveDays(accountId, monthFrom, monthTo).catch(() => []),
-      listHolidays(accountId).catch(() => [] as { name: string; holiday_date: string }[]),
+      resolveEmployeeCalendars(accountId).catch(
+        () => new Map<string, { workingDays: number[]; holidays: Map<string, string> }>(),
+      ),
     ]);
 
-    const holidayByDate = new Map(monthHolidays.map(h => [h.holiday_date, h.name]));
-    const holidayKeys = new Set(holidayByDate.keys());
+    const calendarFor = (profileId: string) =>
+      calendars.get(profileId) ?? {
+        workingDays: shiftSettings.working_days,
+        holidays: new Map<string, string>(),
+      };
     // Keyed by profile id + date, which is exactly how the day rows are looked up below.
     const leaveByKey = new Map(
       approvedLeave.map(l => [
@@ -156,12 +164,14 @@ export default function UserAttendancePage() {
       // Every session the rep started today, not just the first — a lunch break makes two.
       const userSessions = dailySessions.filter(s => s.user_id === p.user_id);
       const dayKey = toDateKey(day);
+      const calendar = calendarFor(p.id);
       const attendance = computeAttendanceDay({
         sessions: userSessions,
         day,
         settings: shiftSettings,
+        workingDays: calendar.workingDays,
         leave: leaveByKey.get(`${p.id}|${dayKey}`) ?? null,
-        holidayName: holidayByDate.get(dayKey) ?? null,
+        holidayName: calendar.holidays.get(dayKey) ?? null,
       });
 
       // The selfie belongs to the first punch-in of the day.
@@ -201,8 +211,6 @@ export default function UserAttendancePage() {
      * overstated everyone's presence. It now comes from the configured working days minus the
      * company's holidays. See src/lib/location/working-days.ts.
      */
-    const monthTotals = monthWorkingDays(startOfMonth, shiftSettings, holidayKeys);
-    const totalWorkingDays = monthTotals.workingDays;
 
     /** Local YYYY-MM-DD. Deliberately not toISOString(), which shifts a late-evening punch-in
      *  into the next day for anyone east of UTC and would mis-bucket the whole month. */
@@ -220,6 +228,12 @@ export default function UserAttendancePage() {
 
     const summaryFormatted = profiles.map(p => {
       const userSessions = monthSessions?.filter(s => s.user_id === p.user_id) || [];
+      // Each employee is measured against THEIR OWN working week and holiday list.
+      const calendar = calendarFor(p.id);
+      const employeeSettings = { ...shiftSettings, working_days: calendar.workingDays };
+      const holidayKeys = new Set(calendar.holidays.keys());
+      const monthTotals = monthWorkingDays(startOfMonth, employeeSettings, holidayKeys);
+      const totalWorkingDays = monthTotals.workingDays;
 
       // Group the month's sessions by the day they started on, then classify each day with the
       // same engine the daily tab uses — so the columns here can never disagree with that view.
@@ -240,9 +254,9 @@ export default function UserAttendancePage() {
         const d = computeAttendanceDay({
           sessions,
           day: dayDate,
-          settings: shiftSettings,
+          settings: employeeSettings,
           leave: leaveByKey.get(`${p.id}|${key}`) ?? null,
-          holidayName: holidayByDate.get(key) ?? null,
+          holidayName: calendar.holidays.get(key) ?? null,
         });
         if (d.flags.includes('missing_punch_out')) missingPunchOut++;
         if (d.flags.includes('late_start')) lateStart++;

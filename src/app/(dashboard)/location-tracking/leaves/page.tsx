@@ -10,13 +10,11 @@ import { PageLayout, PageToolbar, StatusBadge } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import type { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
-import { normalizeTrackingSettings, type TrackingSettings } from "@/lib/location/tracking-window";
 import {
-  listHolidays,
   listLeaveTypes,
   listLeaves,
+  resolveEmployeeCalendars,
   summariseDays,
-  type Holiday,
   type Leave,
   type LeaveType,
 } from "@/lib/leave/api";
@@ -31,9 +29,11 @@ export default function LeavesPage() {
 
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-  const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [settings, setSettings] = useState<TrackingSettings>(normalizeTrackingSettings(null));
+  // Working days and holidays per employee, from the holiday list assigned to each of them.
+  const [calendars, setCalendars] = useState<
+    Map<string, { workingDays: number[]; holidays: Map<string, string> }>
+  >(new Map());
   const [reportIds, setReportIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
@@ -51,11 +51,10 @@ export default function LeavesPage() {
     if (!accountId || !profile?.id) return;
     setLoading(true);
     try {
-      const [leaveRows, types, holidayRows, account, employeeRows, reports] = await Promise.all([
+      const [leaveRows, types, employeeCalendars, employeeRows, reports] = await Promise.all([
         listLeaves(accountId),
         listLeaveTypes(accountId),
-        listHolidays(accountId),
-        supabase.from("accounts").select("settings").eq("id", accountId).single(),
+        resolveEmployeeCalendars(accountId),
         supabase
           .from("profiles")
           .select("id, full_name")
@@ -68,8 +67,7 @@ export default function LeavesPage() {
 
       setLeaves(leaveRows);
       setLeaveTypes(types);
-      setHolidays(holidayRows);
-      setSettings(normalizeTrackingSettings(account.data?.settings?.tracking_settings));
+      setCalendars(employeeCalendars);
       setEmployees((employeeRows.data ?? []) as EmployeeOption[]);
       setReportIds(new Set(((reports.data as string[] | null) ?? [])));
     } catch {
@@ -263,8 +261,7 @@ export default function LeavesPage() {
         employees={employees}
         ownProfileId={profile?.id ?? ""}
         canManageOthers={canManageOthers}
-        settings={settings}
-        holidays={holidays}
+        calendars={calendars}
         onSaved={() => {
           setEditing(null);
           void load();

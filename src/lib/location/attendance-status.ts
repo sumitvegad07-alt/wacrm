@@ -104,6 +104,14 @@ export interface ComputeAttendanceInput {
   leave?: AttendanceLeave | null;
   /** Name of the company holiday on this date, if there is one. */
   holidayName?: string | null;
+  /**
+   * This employee's own working days, overriding `settings.working_days`.
+   *
+   * Weekly offs are per employee, not per company: they come from the holiday list assigned to
+   * the person, because field staff and office staff routinely work different weeks. Omit it and
+   * the account-level default in `settings` applies.
+   */
+  workingDays?: number[];
 }
 
 const ms = (iso: string) => new Date(iso).getTime();
@@ -116,7 +124,8 @@ export function computeAttendanceDay(input: ComputeAttendanceInput): AttendanceD
   const holidayName = input.holidayName ?? null;
   const { startMs, endMs, durationMinutes } = shiftBoundsFor(day, settings);
 
-  const isWeeklyOff = !settings.working_days.includes(day.getDay());
+  const workingDays = input.workingDays ?? settings.working_days;
+  const isWeeklyOff = !workingDays.includes(day.getDay());
   // A holiday or weekly off is checked BEFORE leave on purpose. A leave cannot normally be
   // booked on either (the database excludes them), but an admin can add a holiday over leave that
   // was already approved — in that case the day is a holiday for everyone, and the approved leave

@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarOff, CalendarPlus, Edit2, Info, Plus, Trash2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CalendarDays, CalendarOff, Edit2, Info, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -17,6 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { HolidayListsManager } from "./holiday-lists-manager";
 
 /** Palette offered for a leave type's chip, matching the lead/order status colour convention. */
 const LEAVE_COLORS = [
@@ -30,6 +31,8 @@ const LEAVE_COLORS = [
   "#64748b",
 ];
 
+const STATUS_ITEMS = { Active: "Active", Inactive: "Inactive" };
+
 interface LeaveType {
   id: string;
   account_id: string;
@@ -39,21 +42,14 @@ interface LeaveType {
   created_at: string;
 }
 
-interface Holiday {
-  id: string;
-  name: string;
-  holiday_date: string;
-}
-
 export function LeaveTypesSettings() {
   const supabase = createClient();
   const { accountId, user } = useAuth();
 
+  const [tab, setTab] = useState<"types" | "holidays">("types");
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-  const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Leave type dialog
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -61,40 +57,22 @@ export function LeaveTypesSettings() {
   const [status, setStatus] = useState<"Active" | "Inactive">("Active");
   const [saving, setSaving] = useState(false);
 
-  // Holiday form
-  const [holidayYear, setHolidayYear] = useState(() => new Date().getFullYear());
-  const [holidayName, setHolidayName] = useState("");
-  const [holidayDate, setHolidayDate] = useState("");
-  const [savingHoliday, setSavingHoliday] = useState(false);
-
-  const fetchAll = useCallback(async () => {
+  const fetchTypes = useCallback(async () => {
     if (!accountId) return;
     setLoading(true);
-    const [types, days] = await Promise.all([
-      supabase
-        .from("leave_types")
-        .select("*")
-        .eq("account_id", accountId)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("holidays")
-        .select("id, name, holiday_date")
-        .eq("account_id", accountId)
-        .order("holiday_date", { ascending: true }),
-    ]);
-
-    if (types.error) toast.error("Failed to load leave types");
-    else setLeaveTypes((types.data ?? []) as LeaveType[]);
-
-    if (days.error) toast.error("Failed to load the holiday calendar");
-    else setHolidays((days.data ?? []) as Holiday[]);
-
+    const { data, error } = await supabase
+      .from("leave_types")
+      .select("*")
+      .eq("account_id", accountId)
+      .order("created_at", { ascending: false });
+    if (error) toast.error("Failed to load leave types");
+    else setLeaveTypes((data ?? []) as LeaveType[]);
     setLoading(false);
   }, [accountId, supabase]);
 
   useEffect(() => {
-    void fetchAll();
-  }, [fetchAll]);
+    void fetchTypes();
+  }, [fetchTypes]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -118,8 +96,8 @@ export function LeaveTypesSettings() {
     }
     setSaving(true);
 
-    // status defaults to Active in the database too — a new type is usable the moment it is saved,
-    // with no second step to remember.
+    // status defaults to Active in the database too — a new type is usable the moment it is
+    // saved, with no second step to remember.
     const payload = {
       account_id: accountId,
       name: name.trim(),
@@ -147,7 +125,7 @@ export function LeaveTypesSettings() {
     toast.success(editingId ? "Leave type updated" : "Leave type added");
     setIsDialogOpen(false);
     resetForm();
-    void fetchAll();
+    void fetchTypes();
   };
 
   const handleDelete = async (lt: LeaveType) => {
@@ -162,7 +140,7 @@ export function LeaveTypesSettings() {
       return;
     }
     toast.success("Leave type deleted");
-    void fetchAll();
+    void fetchTypes();
   };
 
   const toggleStatus = async (lt: LeaveType) => {
@@ -177,169 +155,147 @@ export function LeaveTypesSettings() {
         ? `${lt.name} hidden from new requests — existing leave is unaffected`
         : `${lt.name} is active again`,
     );
-    void fetchAll();
+    void fetchTypes();
   };
-
-  const handleAddHoliday = async () => {
-    if (!holidayName.trim() || !holidayDate) {
-      toast.error("A holiday needs both a name and a date");
-      return;
-    }
-    setSavingHoliday(true);
-    const { error } = await supabase.from("holidays").insert({
-      account_id: accountId,
-      name: holidayName.trim(),
-      holiday_date: holidayDate,
-      created_by: user?.id,
-    });
-    setSavingHoliday(false);
-    if (error) {
-      toast.error(
-        error.code === "23505"
-          ? "There is already a holiday on that date"
-          : "Could not add the holiday",
-      );
-      return;
-    }
-    setHolidayName("");
-    setHolidayDate("");
-    setHolidayYear(new Date(holidayDate).getFullYear());
-    toast.success("Holiday added");
-    void fetchAll();
-  };
-
-  const handleDeleteHoliday = async (h: Holiday) => {
-    const { error } = await supabase.from("holidays").delete().eq("id", h.id);
-    if (error) {
-      toast.error("Could not remove the holiday");
-      return;
-    }
-    toast.success("Holiday removed");
-    void fetchAll();
-  };
-
-  const years = useMemo(() => {
-    const set = new Set<number>([new Date().getFullYear(), new Date().getFullYear() + 1]);
-    holidays.forEach((h) => set.add(new Date(h.holiday_date).getFullYear()));
-    return Array.from(set).sort();
-  }, [holidays]);
-
-  const holidaysThisYear = useMemo(
-    () => holidays.filter((h) => new Date(h.holiday_date).getFullYear() === holidayYear),
-    [holidays, holidayYear],
-  );
-
-  if (loading) {
-    return <div className="text-sm text-muted-foreground">Loading leave settings...</div>;
-  }
 
   return (
     <div className="w-full space-y-6 animate-in fade-in-50 duration-200">
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-        {/* LEFT: LEAVE TYPES */}
-        <div className="xl:col-span-7 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-medium">Leave Types</h3>
-              <p className="text-sm text-muted-foreground">
-                The kinds of leave your employees can apply for. New types are active immediately.
-              </p>
-            </div>
-            <Dialog
-              open={isDialogOpen}
-              onOpenChange={(open) => {
-                setIsDialogOpen(open);
-                if (open) resetForm();
-              }}
-            >
-              <DialogTrigger render={<Button />}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Leave Type
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>{editingId ? "Edit Leave Type" : "Add Leave Type"}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Name</Label>
-                    <Input
-                      placeholder="e.g. Casual Leave, Medical Leave"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </div>
+      {/* Inline tab switcher, matching the order detail page's pattern. */}
+      <div className="flex items-center gap-1 border-b">
+        {(
+          [
+            { id: "types", label: "Leave Types", icon: CalendarOff },
+            { id: "holidays", label: "Holiday Lists", icon: CalendarDays },
+          ] as const
+        ).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              tab === id
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
 
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select value={status} onValueChange={(v) => setStatus(v as "Active" | "Inactive")}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Active">Active</SelectItem>
-                        <SelectItem value="Inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Inactive types disappear from new requests. Leave already applied for keeps
-                      working.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Colour</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {LEAVE_COLORS.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          aria-label={`Choose colour ${c}`}
-                          onClick={() => setColor(c)}
-                          className={`h-7 w-7 rounded-full border-2 transition-transform ${
-                            color === c ? "border-foreground scale-110" : "border-transparent"
-                          }`}
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSave} disabled={saving}>
-                      {saving ? "Saving..." : "Save Leave Type"}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <div className="rounded-md border bg-card overflow-hidden">
-            {leaveTypes.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground flex flex-col items-center">
-                <CalendarOff className="h-10 w-10 mb-2 opacity-50" />
-                <p>No leave types configured.</p>
-                <p className="text-xs mt-1">
-                  Add one — nobody can apply for leave until at least one type exists.
+      {tab === "holidays" ? (
+        <HolidayListsManager />
+      ) : loading ? (
+        <div className="text-sm text-muted-foreground">Loading leave types...</div>
+      ) : (
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+          <div className="xl:col-span-7 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-medium">Leave Types</h3>
+                <p className="text-sm text-muted-foreground">
+                  The kinds of leave your employees can apply for. New types are active immediately.
                 </p>
               </div>
-            ) : (
-              <div className="divide-y">
-                {leaveTypes.map((lt) => (
-                  <div
-                    key={lt.id}
-                    className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="h-3 w-3 rounded-full shrink-0"
-                        style={{ backgroundColor: lt.color ?? LEAVE_COLORS[0] }}
+              <Dialog
+                open={isDialogOpen}
+                onOpenChange={(open) => {
+                  setIsDialogOpen(open);
+                  if (open) resetForm();
+                }}
+              >
+                <DialogTrigger render={<Button />}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Leave Type
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>{editingId ? "Edit Leave Type" : "Add Leave Type"}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Name</Label>
+                      <Input
+                        placeholder="e.g. Casual Leave, Medical Leave"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
                       />
-                      <div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select
+                        value={status}
+                        items={STATUS_ITEMS}
+                        onValueChange={(v) => setStatus((v as "Active" | "Inactive") ?? "Active")}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Active">Active</SelectItem>
+                          <SelectItem value="Inactive">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Inactive types disappear from new requests. Leave already applied for keeps
+                        working.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Colour</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {LEAVE_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            aria-label={`Choose colour ${c}`}
+                            onClick={() => setColor(c)}
+                            className={`h-7 w-7 rounded-full border-2 transition-transform ${
+                              color === c ? "border-foreground scale-110" : "border-transparent"
+                            }`}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleSave} disabled={saving}>
+                        {saving ? "Saving..." : "Save Leave Type"}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="rounded-md border bg-card overflow-hidden">
+              {leaveTypes.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground flex flex-col items-center">
+                  <CalendarOff className="h-10 w-10 mb-2 opacity-50" />
+                  <p>No leave types configured.</p>
+                  <p className="text-xs mt-1">
+                    Add one — nobody can apply for leave until at least one type exists.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {leaveTypes.map((lt) => (
+                    <div
+                      key={lt.id}
+                      className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="h-3 w-3 rounded-full shrink-0"
+                          style={{ backgroundColor: lt.color ?? LEAVE_COLORS[0] }}
+                        />
                         <div className="flex items-center gap-2">
                           <h4 className="font-medium">{lt.name}</h4>
                           <button
@@ -355,153 +311,68 @@ export function LeaveTypesSettings() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(lt)}>
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(lt)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT: HOLIDAY CALENDAR + GUIDANCE */}
-        <div className="xl:col-span-5 space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="text-sm font-semibold">Holiday Calendar</CardTitle>
-                  <CardDescription className="text-xs">
-                    Company holidays are never counted as absence, and are skipped when someone
-                    takes leave across them.
-                  </CardDescription>
-                </div>
-                <Select
-                  value={String(holidayYear)}
-                  onValueChange={(v) => setHolidayYear(Number(v))}
-                >
-                  <SelectTrigger className="w-24 shrink-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {years.map((y) => (
-                      <SelectItem key={y} value={String(y)}>
-                        {y}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-                <Input
-                  className="sm:col-span-2"
-                  type="date"
-                  value={holidayDate}
-                  onChange={(e) => setHolidayDate(e.target.value)}
-                />
-                <Input
-                  className="sm:col-span-2"
-                  placeholder="Holiday name"
-                  value={holidayName}
-                  onChange={(e) => setHolidayName(e.target.value)}
-                />
-                <Button onClick={handleAddHoliday} disabled={savingHoliday} className="sm:col-span-1">
-                  <CalendarPlus className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {holidaysThisYear.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-4 text-center">
-                  No holidays added for {holidayYear}.
-                </p>
-              ) : (
-                <div className="divide-y rounded-md border max-h-72 overflow-y-auto">
-                  {holidaysThisYear.map((h) => (
-                    <div
-                      key={h.id}
-                      className="flex items-center justify-between px-3 py-2 hover:bg-muted/30 transition-colors"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{h.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(h.holiday_date).toLocaleDateString(undefined, {
-                            weekday: "short",
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </p>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(lt)}>
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(lt)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteHoliday(h)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
                     </div>
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">How leave works</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-xs text-muted-foreground">
-              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
-                <div className="flex items-center gap-2 mb-1">
-                  <CalendarOff className="size-3.5 text-foreground" />
-                  <p className="font-medium text-foreground">Approved leave changes attendance</p>
+          <div className="xl:col-span-5">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold">How leave works</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs text-muted-foreground">
+                <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CalendarOff className="size-3.5 text-foreground" />
+                    <p className="font-medium text-foreground">Approved leave changes attendance</p>
+                  </div>
+                  <p>
+                    A day with approved full-day leave reads <strong>On Leave</strong> instead of a
+                    red Absent. A half day reduces the hours expected, so the employee is not
+                    flagged for a late start or an early finish they were granted.
+                  </p>
                 </div>
-                <p>
-                  A day with approved full-day leave reads <strong>On Leave</strong> instead of a red
-                  Absent. A half day reduces the hours expected, so the employee is not flagged for
-                  a late start or an early finish they were granted.
-                </p>
-              </div>
-              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
-                <div className="flex items-center gap-2 mb-1">
-                  <Info className="size-3.5 text-foreground" />
-                  <p className="font-medium text-foreground">Working days live elsewhere</p>
+                <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CalendarDays className="size-3.5 text-foreground" />
+                    <p className="font-medium text-foreground">Weekly offs live on holiday lists</p>
+                  </div>
+                  <p>
+                    Each holiday list carries its own weekly offs and holidays, and is assigned to
+                    employees. Field staff and office staff can have different weeks.
+                  </p>
                 </div>
-                <p>
-                  Which days of the week your company works is set in{" "}
-                  <strong>Organisation Settings</strong>, alongside the shift timings. Weekly offs
-                  are never counted as leave.
-                </p>
-              </div>
-              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
-                <div className="flex items-center gap-2 mb-1">
-                  <Trash2 className="size-3.5 text-foreground" />
-                  <p className="font-medium text-foreground">Deactivate rather than delete</p>
+                <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Info className="size-3.5 text-foreground" />
+                    <p className="font-medium text-foreground">Deactivate rather than delete</p>
+                  </div>
+                  <p>
+                    A type that has been used cannot be deleted — that would take the leave history
+                    with it. Setting it to Inactive hides it from new requests and keeps the record.
+                  </p>
                 </div>
-                <p>
-                  A type that has been used cannot be deleted — that would take the leave history
-                  with it. Setting it to Inactive hides it from new requests and keeps the record.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -17,6 +17,13 @@
 import type { TrackingSettings } from "./tracking-window";
 
 /**
+ * Only the working week matters to these helpers — not shift times or intervals. Accepting the
+ * narrow shape lets a caller pass an employee's OWN working days (resolved from their assigned
+ * holiday list) rather than being forced to fabricate a whole TrackingSettings object.
+ */
+export type WorkingWeek = Pick<TrackingSettings, "working_days">;
+
+/**
  * Local `YYYY-MM-DD`.
  *
  * Deliberately NOT `toISOString()`: for anyone east of UTC that shifts a late-evening date into
@@ -57,7 +64,7 @@ export type DayKind = "working" | "weekly_off" | "holiday";
  */
 export function classifyDay(
   date: Date,
-  settings: TrackingSettings,
+  settings: WorkingWeek,
   holidayKeys: ReadonlySet<string>,
 ): DayKind {
   if (!settings.working_days.includes(date.getDay())) return "weekly_off";
@@ -69,7 +76,7 @@ export function classifyDay(
 export function eligibleLeaveDates(
   from: Date,
   to: Date,
-  settings: TrackingSettings,
+  settings: WorkingWeek,
   holidayKeys: ReadonlySet<string>,
 ): Date[] {
   return eachDay(from, to).filter((d) => classifyDay(d, settings, holidayKeys) === "working");
@@ -93,7 +100,7 @@ export interface MonthWorkingDays {
  */
 export function monthWorkingDays(
   month: Date,
-  settings: TrackingSettings,
+  settings: WorkingWeek,
   holidayKeys: ReadonlySet<string>,
   now: Date = new Date(),
 ): MonthWorkingDays {

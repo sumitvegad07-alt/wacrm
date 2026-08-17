@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/select";
 import type { LeaveWeightage } from "@/lib/location/attendance-status";
 import { LEAVE_DAY_VALUE } from "@/lib/location/attendance-status";
-import type { TrackingSettings } from "@/lib/location/tracking-window";
 import { classifyDay, eachDay, fromDateKey, toDateKey } from "@/lib/location/working-days";
 import {
   createLeaveRequest,
@@ -48,8 +47,13 @@ interface LeaveFormDialogProps {
   ownProfileId: string;
   /** True when the user may apply for others and backdate (admin or manage_leaves). */
   canManageOthers: boolean;
-  settings: TrackingSettings;
-  holidays: { name: string; holiday_date: string }[];
+  /**
+   * Each employee's own working days and holidays, resolved from the holiday list assigned to
+   * them. Keyed by profile id. The form reads the calendar of whoever is selected, so applying
+   * for a field rep and applying for office staff can legitimately produce different day counts
+   * over the same dates.
+   */
+  calendars: Map<string, { workingDays: number[]; holidays: Map<string, string> }>;
   onSaved: () => void;
 }
 
@@ -69,8 +73,7 @@ export function LeaveFormDialog({
   employees,
   ownProfileId,
   canManageOthers,
-  settings,
-  holidays,
+  calendars,
   onSaved,
 }: LeaveFormDialogProps) {
   const isEdit = Boolean(leave);
@@ -84,10 +87,16 @@ export function LeaveFormDialog({
   const [changeReason, setChangeReason] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const holidayMap = useMemo(
-    () => new Map(holidays.map((h) => [h.holiday_date, h.name])),
-    [holidays],
+  // The calendar of the employee the leave is FOR, not of whoever is filling the form in.
+  const calendar = useMemo(
+    () =>
+      calendars.get(employeeId) ?? {
+        workingDays: [1, 2, 3, 4, 5, 6],
+        holidays: new Map<string, string>(),
+      },
+    [calendars, employeeId],
   );
+  const holidayMap = calendar.holidays;
   const holidayKeys = useMemo(() => new Set(holidayMap.keys()), [holidayMap]);
 
   const activeTypes = useMemo(
@@ -164,7 +173,7 @@ export function LeaveFormDialog({
       setDayRows(
         eachDay(start, end).map((date) => {
           const key = toDateKey(date);
-          const kind = classifyDay(date, settings, holidayKeys);
+          const kind = classifyDay(date, { working_days: calendar.workingDays }, holidayKeys);
           return {
             key,
             date,
@@ -175,7 +184,7 @@ export function LeaveFormDialog({
         }),
       );
     },
-    [settings, holidayKeys, holidayMap, leave?.days],
+    [calendar.workingDays, holidayKeys, holidayMap, leave?.days],
   );
 
   useEffect(() => {
@@ -244,13 +253,13 @@ export function LeaveFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-[1400px] max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Edit ${leave?.leave_number}` : "Apply for Leave"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label>Employee</Label>
               <Select
@@ -336,10 +345,13 @@ export function LeaveFormDialog({
             </p>
           )}
 
+          {/* On a wide screen the day list sits beside the reason rather than under it, so a
+              two-week request does not push the reason box off the bottom of the dialog. */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
           {/* Per-day weightage. Weekly offs and holidays are shown but not bookable, so the
               employee can see exactly why a 5-day range only costs 3 days of leave. */}
           {dayRows.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-2 xl:col-span-2">
               <div className="flex items-center justify-between">
                 <Label>Days</Label>
                 <span className="text-sm text-muted-foreground">
@@ -347,7 +359,7 @@ export function LeaveFormDialog({
                   {totalDays === 1 ? "day" : "days"}
                 </span>
               </div>
-              <div className="rounded-md border divide-y max-h-72 overflow-y-auto">
+              <div className="rounded-md border divide-y max-h-[420px] overflow-y-auto">
                 {dayRows.map((row) => {
                   const off = row.kind !== "working";
                   return (
@@ -405,17 +417,18 @@ export function LeaveFormDialog({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label>
-              Reason <span className="text-destructive">*</span>
-            </Label>
-            <Textarea
-              rows={3}
-              placeholder="Why are you taking this leave?"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>
+                Reason <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                rows={8}
+                placeholder="Why are you taking this leave?"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </div>
 
           {needsChangeReason && (
             <div className="space-y-2">
@@ -432,8 +445,10 @@ export function LeaveFormDialog({
               </p>
             </div>
           )}
+          </div>
+          </div>
 
-          <div className="flex items-center justify-between gap-4 pt-2">
+          <div className="flex items-center justify-between gap-4 border-t pt-4">
             <p className="text-xs text-destructive">{validationError ?? ""}</p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>

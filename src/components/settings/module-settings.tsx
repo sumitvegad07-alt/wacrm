@@ -14,9 +14,7 @@ import {
   LEGACY_ENABLED_FOR_OLD_APKS,
   normalizeTrackingSettings,
   formatHHMM,
-  WEEKDAY_LABELS,
 } from "@/lib/location/tracking-window";
-import { describeWorkingDays } from "@/lib/location/working-days";
 
 interface HierarchyLevel {
   position: number;
@@ -169,21 +167,6 @@ export function ModuleSettingsPanel() {
   const [trackingEnd, setTrackingEnd] = useState(DEFAULT_TRACKING.end_time);
   const [trackingInterval, setTrackingInterval] = useState<number>(DEFAULT_TRACKING.interval_minutes);
   const [trackingGrace, setTrackingGrace] = useState<number>(DEFAULT_TRACKING.grace_minutes);
-  const [workingDays, setWorkingDays] = useState<number[]>(DEFAULT_TRACKING.working_days);
-
-  /**
-   * Toggle one weekday on or off. The last remaining day cannot be removed: a zero-day week would
-   * make every date a weekly off, silently wiping out every Absent and every leave day at once.
-   */
-  const toggleWorkingDay = useCallback((day: number) => {
-    setWorkingDays((prev) => {
-      if (prev.includes(day)) {
-        if (prev.length === 1) return prev;
-        return prev.filter((d) => d !== day);
-      }
-      return [...prev, day].sort((a, b) => a - b);
-    });
-  }, []);
 
   // Sync draft when moduleSettings change externally
   useEffect(() => {
@@ -212,7 +195,6 @@ export function ModuleSettingsPanel() {
         setTrackingEnd(ts.end_time);
         setTrackingInterval(ts.interval_minutes);
         setTrackingGrace(ts.grace_minutes);
-        setWorkingDays(ts.working_days);
         setLevels(
           Array.isArray(os.levels) && os.levels.length > 0
             ? os.levels.map((l: HierarchyLevel, i: number) => ({ ...l, color: l.color || LEVEL_COLORS[i % LEVEL_COLORS.length] }))
@@ -268,7 +250,12 @@ export function ModuleSettingsPanel() {
           end_time: trackingEnd,
           interval_minutes: trackingInterval,
           grace_minutes: trackingGrace,
-          working_days: workingDays,
+          // Preserved verbatim from what was loaded. Weekly offs moved to holiday lists, but
+          // this key is still the account-level fallback the attendance engine uses when an
+          // employee somehow has no list at all — writing a default here would quietly
+          // reintroduce a Mon–Fri assumption for that fallback.
+          working_days:
+            originalSettings?.tracking_settings?.working_days ?? DEFAULT_TRACKING.working_days,
         },
         order_settings: {
           ...originalSettings?.order_settings,
@@ -309,7 +296,7 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace, workingDays]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
@@ -322,7 +309,6 @@ export function ModuleSettingsPanel() {
     setTrackingEnd(ts.end_time);
     setTrackingInterval(ts.interval_minutes);
     setTrackingGrace(ts.grace_minutes);
-    setWorkingDays(ts.working_days);
     const osLevels = originalSettings.order_settings?.levels;
     setLevels(
       Array.isArray(osLevels) && osLevels.length > 0
@@ -656,41 +642,18 @@ export function ModuleSettingsPanel() {
               </div>
             </div>
 
-            {/* Working Days — replaces a Monday–Friday week that was hardcoded inside the
-                attendance page. For a six-day company that understated Total Days by roughly four
-                a month and overstated everyone's presence percentage. */}
+            {/* Working days used to be configured here. They now live on HOLIDAY LISTS
+                (Settings → Leave Settings → Holiday Lists), because field staff and office staff
+                routinely need different weekly offs — one company-wide week could not express
+                that. This card points at the new home rather than leaving a stale duplicate that
+                would silently disagree with the lists. */}
             <div>
               <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">Working Days</p>
+                <p className="text-sm font-medium text-foreground">Working Days & Holidays</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  The days your company works. A day outside this list is a weekly off: it is never
-                  counted as absence, never counted against attendance, and never consumed when
-                  someone takes leave across it.
-                </p>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 p-3">
-                {WEEKDAY_LABELS.map((label, dayNumber) => {
-                  const active = workingDays.includes(dayNumber);
-                  return (
-                    <button
-                      key={label}
-                      type="button"
-                      disabled={!canEditSettings}
-                      aria-pressed={active}
-                      onClick={() => toggleWorkingDay(dayNumber)}
-                      className={`h-9 rounded-md border px-3 text-sm transition-colors disabled:opacity-50 ${
-                        active
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-background text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {label.slice(0, 3)}
-                    </button>
-                  );
-                })}
-                <p className="w-full text-xs text-muted-foreground">
-                  Currently <strong>{describeWorkingDays(workingDays)}</strong>. Most field-sales
-                  companies work six days — if yours runs a five-day week, switch Saturday off here.
+                  Weekly offs and holidays are set per <strong>holiday list</strong> and assigned to
+                  employees, so field staff and office staff can have different weeks. Configure
+                  them in <strong>Settings → Leave Settings → Holiday Lists</strong>.
                 </p>
               </div>
             </div>

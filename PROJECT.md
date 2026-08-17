@@ -471,10 +471,12 @@ Spec: `docs/engineering/specifications/leave-management-v1.md`. Rollback:
 - `leave_types` — admin-configured, `status` Active/Inactive (defaults **Active** on insert),
   `color`. Unique on `(account_id, lower(name))` so "Casual Leave" and "casual leave" cannot
   coexist. `ON DELETE RESTRICT` from `leaves`, so a used type must be deactivated, not deleted.
-- `holidays` — `(account_id, holiday_date)` unique. **No recurring flag on purpose**: Diwali/Holi/
-  Eid move every year and a recurring rule would silently generate wrong dates.
+- `holidays` — **SUPERSEDED the same day by holiday lists (see the section above)**: a holiday now
+  belongs to a `holiday_list_id`, not to the account. **No recurring flag on purpose**: Diwali/
+  Holi/Eid move every year and a recurring rule would silently generate wrong dates.
 - `leaves` — the request header. `leave_number` `LV-YYYY-NNNNNN` via `account_sequences.leave_seq`
   + `trg_set_leave_number` (copied from the payment numbering — **never generate client-side**).
+  Format is `LV-000001`; the year was dropped by `20260817180000`.
   `reason` is `NOT NULL` with a non-blank CHECK: the mandatory-reason rule lives in the DB, not in
   three separate forms (the payment `require_*` lesson). `applied_by` distinguishes self-service
   from admin-on-behalf; `is_backdated` marks a past-date entry.
@@ -572,6 +574,51 @@ index); offline apply; a leave report in the generic report engine.
 
 **Correction to this document:** the updated-at trigger function in this repo is
 `update_updated_at_column()`, **not `set_updated_at()`** as stated elsewhere here.
+
+### Holiday Lists — weekly offs and holidays are PER EMPLOYEE (migration `20260817180000_holiday_lists`, applied to prod 2026-08-17)
+
+Supersedes the single account-wide holiday calendar and the single account-wide working week that
+`20260817170000_leave_management` shipped hours earlier. **Reason (founder):** a company's field
+staff and its office staff routinely have different weekly offs AND different holidays. One
+company-wide week could not express that.
+
+- **`holiday_lists`** — `name` (unique per account, case-insensitive), `weekly_offs INT[]`
+  (the days OFF, 0=Sun…6=Sat, default `{0}`), `is_default`. CHECK refuses a seven-day weekend
+  (it would make every date a weekly off and wipe out every absence and every leave day at once);
+  partial unique index enforces exactly one default per account.
+- **`holidays.holiday_list_id`** (NOT NULL, cascade) — a holiday belongs to a list, not an account.
+  The old `(account_id, holiday_date)` unique became `(holiday_list_id, holiday_date)`.
+- **`profiles.holiday_list_id`** (nullable) — NULL means "follow the account's default list", so a
+  new employee always has a calendar and nothing needs backfilling when a list is added.
+- **Resolution lives in SQL:** `employee_holiday_list(profile_id)` and
+  `employee_working_days(profile_id)` (0..6 minus the list's weekly offs).
+  `leave_eligible_dates` was DROPPED and recreated taking an **employee id**, not an account id —
+  same signature, so it was dropped deliberately rather than silently rebound. `write_leave_days`
+  passes the employee through. `account_working_days()` is gone.
+- **Verified in a rolled-back transaction (10/10):** an unassigned employee follows the default;
+  an assigned one gets their list's week; a colleague is unaffected; the SAME date range yields
+  different eligible days for two employees on different lists; a rep whose list works Sundays can
+  book a Sunday while their own Tuesday off is refused; seven-day weekend and two-defaults both
+  rejected by constraints.
+- **Web:** `holiday-lists-manager.tsx` — full-width list panel (add / clone-with-holidays /
+  rename / delete / make-default), weekday "Set Weekend" chooser, month calendar with
+  prev/next/today, click any date to name a holiday, and an assign-to-employees dialog.
+  Reached via Settings → Leave Settings → **Holiday Lists** tab.
+  `resolveEmployeeCalendars(accountId)` in `src/lib/leave/api.ts` returns every employee's
+  working days + holidays in a fixed number of queries — the attendance page needs a whole month
+  of employees and must never go one-query-per-person.
+- **`computeAttendanceDay` gained an optional `workingDays` input** that overrides
+  `settings.working_days`, so the engine stays pure while each employee is judged against their
+  own week.
+- **The Working Days control was REMOVED from Organisation Settings** (it had shipped hours
+  earlier) — two places setting the same thing would silently disagree with the lists. The card
+  now points at Holiday Lists. `accounts.settings.tracking_settings.working_days` is still read
+  and written back **verbatim** as the last-resort fallback; the settings save deliberately
+  preserves whatever was loaded rather than writing a default.
+- **Mobile:** `fetchWorkingDays(accountId, employeeId)` / `fetchHolidays(accountId, employeeId)`
+  resolve the rep's own list. Their AsyncStorage caches key on the **employee**, not the account —
+  on a shared handset two reps must not inherit each other's weekly offs.
+- **Leave numbers dropped the year** (founder decision): `LV-000001`, not `LV-2026-000001`.
 
 ### Reporting Hierarchy (migration 106, applied to prod 2026-07-31 — verified)
 
