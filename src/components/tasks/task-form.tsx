@@ -94,11 +94,13 @@ export function TaskForm({
   const [leadId, setLeadId] = useState("");
   const [expenseId, setExpenseId] = useState("");
   const [orderId, setOrderId] = useState("");
+  const [leaveId, setLeaveId] = useState("");
+  const [leaves, setLeaves] = useState<any[]>([]);
   const [dispatchId, setDispatchId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [paymentId, setPaymentId] = useState("");
 
-  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead"|"Expense"|"Order"|"Dispatch"|"Employee"|"Payment">("None");
+  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead"|"Expense"|"Order"|"Dispatch"|"Employee"|"Payment"|"Leave">("None");
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -155,6 +157,7 @@ export function TaskForm({
         setLeadId(task.lead_id || "");
         setExpenseId(task.expense_id || "");
         setOrderId(task.order_id || "");
+        setLeaveId(task.leave_id || "");
         setDispatchId(task.dispatch_id || "");
         setEmployeeId(task.employee_id || "");
         setPaymentId(task.payment_id || "");
@@ -167,6 +170,7 @@ export function TaskForm({
         else if (task.product_id) setLinkedModule("Product");
         else if (task.conversation_id) setLinkedModule("Conversation");
         else if (task.order_id) setLinkedModule("Order");
+        else if (task.leave_id) setLinkedModule("Leave");
         else if (task.dispatch_id) setLinkedModule("Dispatch");
         else if (task.employee_id) setLinkedModule("Employee");
         else setLinkedModule("None");
@@ -212,7 +216,7 @@ export function TaskForm({
     let cancelled = false;
     (async () => {
       await ensureDefaultSectionsAndFields(accountId, "task", user?.id, supabase);
-      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes, expRes, oRes, dispRes, payRes] = await Promise.all([
+      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes, expRes, oRes, dispRes, payRes, lvRes] = await Promise.all([
         supabase.from("profiles").select("*").order("full_name"),
         supabase.from("contacts").select("*").order("name"),
         supabase.from("deals").select("*").order("title"),
@@ -225,6 +229,7 @@ export function TaskForm({
         supabase.from("orders").select("id, order_number, contact:contacts(company, name)").order("created_at", { ascending: false }),
         supabase.from("order_dispatches").select("id, dispatch_number, order:orders(order_number)").order("created_at", { ascending: false }),
         supabase.from("payments").select("id, payment_number, amount, contact:contacts(name)").order("created_at", { ascending: false }),
+        supabase.from("leaves").select("id, leave_number, employee:profiles!leaves_employee_id_fkey(full_name)").order("created_at", { ascending: false }),
       ]);
       if (cancelled) return;
       setProfiles((pRes.data ?? []) as Profile[]);
@@ -238,6 +243,7 @@ export function TaskForm({
       setOrders((oRes.data ?? []) as any[]);
       setDispatches((dispRes.data ?? []) as any[]);
       setPayments((payRes.data ?? []) as any[]);
+      setLeaves((lvRes.data ?? []) as any[]);
       
       const fields = cfRes.data as CustomField[] ?? [];
       setCustomFields(fields);
@@ -303,6 +309,7 @@ export function TaskForm({
       expense_id: linkedModule === "Expense" ? expenseId : null,
       payment_id: linkedModule === "Payment" ? paymentId : null,
       order_id: linkedModule === "Order" ? orderId : null,
+      leave_id: linkedModule === "Leave" ? leaveId : null,
       dispatch_id: linkedModule === "Dispatch" ? dispatchId : null,
       employee_id: linkedModule === "Employee" ? employeeId : null,
     };
@@ -363,6 +370,7 @@ export function TaskForm({
       if (expenseId) logPromises.push(logModuleActivity(supabase, { moduleName: 'expense', recordId: expenseId, action: task ? 'updated' : 'created', message: msg }));
       if (paymentId) logPromises.push(logModuleActivity(supabase, { moduleName: 'payment', recordId: paymentId, action: task ? 'updated' : 'created', message: msg }));
       if (linkedModule === "Order" && orderId) logPromises.push(logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: task ? 'updated' : 'created', message: msg }));
+      if (linkedModule === "Leave" && leaveId) logPromises.push(logModuleActivity(supabase, { moduleName: 'leave', recordId: leaveId, action: task ? 'updated' : 'created', message: msg }));
       if (linkedModule === "Dispatch" && dispatchId) logPromises.push(logModuleActivity(supabase, { moduleName: 'dispatch', recordId: dispatchId, action: task ? 'updated' : 'created', message: msg }));
       await Promise.all(logPromises);
     }
@@ -524,6 +532,7 @@ export function TaskForm({
                     <option value="Expense">Expense</option>
                     <option value="Payment">Payment</option>
                     <option value="Order">Order</option>
+                    <option value="Leave">Leave</option>
                     <option value="Dispatch">Dispatch</option>
                     <option value="Employee">Employee/User</option>
                   </select>
@@ -612,6 +621,19 @@ export function TaskForm({
                         placeholder="Select Order..."
                         searchPlaceholder="Search orders..."
                         options={orders.map((o) => ({ value: o.id, label: `${o.order_number || 'Order'} - ${o.contact?.company || o.contact?.name || 'Unknown'}` }))}
+                        className="h-10 bg-background"
+                      />
+                    )}
+                    {linkedModule === "Leave" && (
+                      <SearchableSelect
+                        value={leaveId}
+                        onChange={setLeaveId}
+                        placeholder="Select Leave..."
+                        searchPlaceholder="Search leave..."
+                        options={leaves.map((l) => ({
+                          value: l.id,
+                          label: `${l.leave_number} - ${l.employee?.full_name || 'Unknown'}`,
+                        }))}
                         className="h-10 bg-background"
                       />
                     )}

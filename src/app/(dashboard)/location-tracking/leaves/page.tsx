@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { PageLayout, PageHeader, PageToolbar, StatusBadge } from "@/components/shared";
+import { PageLayout, PageToolbar, StatusBadge } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import type { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -19,11 +20,11 @@ import {
   type LeaveType,
 } from "@/lib/leave/api";
 import { LeaveFormDialog, type EmployeeOption } from "@/components/leaves/leave-form-dialog";
-import { LeaveDetailSheet } from "@/components/leaves/leave-detail-sheet";
 
 const STATUS_TABS = ["All", "Pending", "Approved", "Rejected", "Cancelled"] as const;
 
 export default function LeavesPage() {
+  const router = useRouter();
   const supabase = createClient();
   const { accountId, profile, accountRole, hasPermission } = useAuth();
 
@@ -40,8 +41,6 @@ export default function LeavesPage() {
   const [filterState, setFilterState] = useState<FilterState>({});
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Leave | null>(null);
-  const [selected, setSelected] = useState<Leave | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   const isAdmin = accountRole === "admin" || accountRole === "owner";
   const canManageOthers = isAdmin || hasPermission("manage_leaves");
@@ -209,11 +208,6 @@ export default function LeavesPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title="Leaves"
-        subtitle="Apply for leave, and approve or reject your team's requests."
-      />
-
       <PageToolbar
         filters={
           <div className="flex items-center gap-1">
@@ -252,10 +246,9 @@ export default function LeavesPage() {
         storageKey="wacrm_leaves_table_columns"
         isLoading={loading}
         rowKey={(l) => l.id}
-        onRowClick={(l) => {
-          setSelected(l);
-          setSheetOpen(true);
-        }}
+        // The record opens as a PAGE, following the order and lead modules — that is where the
+        // timeline and its tasks live. A dialog had nowhere to put them.
+        onRowClick={(l) => router.push(`/location-tracking/leaves/${l.id}`)}
       />
 
       <LeaveFormDialog
@@ -273,24 +266,6 @@ export default function LeavesPage() {
         }}
       />
 
-      <LeaveDetailSheet
-        leave={selected}
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        canDecide={selected ? canDecide(selected) : false}
-        canManage={canManageOthers}
-        isOwn={selected?.employee_id === profile?.id}
-        onEdit={(l) => {
-          setSheetOpen(false);
-          setEditing(l);
-          setFormOpen(true);
-        }}
-        onChanged={() => {
-          void load();
-          // Keep the open sheet in step with the row that just changed.
-          setSelected((prev) => (prev ? { ...prev } : prev));
-        }}
-      />
     </PageLayout>
   );
 }

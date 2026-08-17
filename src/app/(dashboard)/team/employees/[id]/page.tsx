@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
-  ArrowLeft, Edit2, Loader2, Save, Trash2, Smartphone, Lock, Unlock, CheckCircle2, XCircle, Camera, User, MapPin
+  ArrowLeft, Edit2, Loader2, Save, Trash2, Smartphone, Lock, Unlock, CheckCircle2, XCircle, Camera, User, MapPin, CalendarDays
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -79,6 +79,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const { user, accountId, isSuperadmin, accountRole, isModuleEnabled } = useAuth();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<EmployeeDevice[]>([]);
+  const [holidayLists, setHolidayLists] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,6 +102,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     department: "",
     employee_role_id: "",
     manager_id: "",
+    holiday_list_id: "",
     status: "active",
     avatar_url: "",
     password: "", // Only populated when Admin resets
@@ -131,6 +133,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         department: empData.department || "",
         employee_role_id: empData.employee_role_id || "",
         manager_id: empData.manager_id || "",
+        holiday_list_id: empData.holiday_list_id || "",
         status: empData.status || "active",
         avatar_url: empData.avatar_url || "",
         password: "",
@@ -149,6 +152,12 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         .eq("profile_id", employeeId)
         .order("last_login", { ascending: false, nullsFirst: false });
       if (devErr) console.error("[employee] failed to load devices:", devErr);
+
+      const { data: listData } = await supabase
+        .from("holiday_lists")
+        .select("id, name, is_default")
+        .order("name");
+      setHolidayLists(listData ?? []);
       setDevices((devData || []) as EmployeeDevice[]);
 
       if (accountId && user?.id) {
@@ -281,6 +290,33 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     } catch (err: any) {
       toast.error("Failed to update device status");
     }
+  };
+
+  const defaultHolidayList = holidayLists.find((l) => l.is_default);
+  const defaultHolidayListLabel = defaultHolidayList
+    ? `Company default (${defaultHolidayList.name})`
+    : "Company default";
+
+  /**
+   * Saves immediately rather than waiting for the page's Edit/Save cycle. The holiday list is a
+   * standalone assignment with no bearing on roles or access, and burying it behind Edit made it
+   * easy to change and then lose by navigating away.
+   */
+  const saveHolidayList = async (listId: string | null) => {
+    setForm((prev) => ({ ...prev, holiday_list_id: listId ?? "" }));
+    const { error } = await supabase
+      .from("profiles")
+      .update({ holiday_list_id: listId })
+      .eq("id", employeeId);
+    if (error) {
+      toast.error("Could not change the holiday list");
+      return;
+    }
+    toast.success(
+      listId
+        ? `Now following “${holidayLists.find((l) => l.id === listId)?.name}”`
+        : "Now following the company default list",
+    );
   };
 
   const renderCustomSystemField = (field: CustomField) => {
@@ -431,6 +467,43 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               renderCustomSystemField={renderCustomSystemField}
               isEditing={isEditing} // We'll need to patch CustomFieldsSectionRenderer for this prop if missing, but it handles inputs normally. Wait, CustomFieldsSectionRenderer always renders Inputs. I will need to patch it or just handle it.
             />
+          </Card>
+
+          <Card className="border-border shadow-sm overflow-hidden">
+            <div className="p-4 border-b bg-muted/20">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-primary" /> Holiday List
+              </h2>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Decides this employee&apos;s weekly offs and holidays. Leave taken across those days
+                is not counted, and the attendance page judges them against this calendar.
+              </p>
+              <Select
+                value={form.holiday_list_id || "__default__"}
+                items={Object.fromEntries([
+                  ["__default__", defaultHolidayListLabel],
+                  ...holidayLists.map((l) => [l.id, l.name] as [string, string]),
+                ])}
+                onValueChange={(v) => saveHolidayList(v === "__default__" ? null : (v ?? null))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {/* "Follow the default" is a real choice, not an empty one — picking it means
+                      the employee tracks whatever the company default becomes later. */}
+                  <SelectItem value="__default__">{defaultHolidayListLabel}</SelectItem>
+                  {holidayLists.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Lists are built in <strong>Settings → Leave Settings → Holiday Lists</strong>.
+              </p>
+            </div>
           </Card>
 
           <Card className="border-border shadow-sm overflow-hidden">

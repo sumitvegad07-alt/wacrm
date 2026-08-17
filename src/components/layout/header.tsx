@@ -37,6 +37,7 @@ const pageTitles: Record<string, string> = {
   "/pending-dispatch": "Pending Dispatch",
   "/location-tracking": "Location Tracking",
   "/location-tracking/visits": "Customer Visits",
+  "/location-tracking/leaves": "Leaves",
   "/field-staff": "Field Staff",
   "/follow-ups": "Follow-ups",
   "/whatsapp": "WhatsApp",

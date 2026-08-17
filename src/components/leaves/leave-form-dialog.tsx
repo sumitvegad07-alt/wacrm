@@ -253,13 +253,13 @@ export function LeaveFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="full">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Edit ${leave?.leave_number}` : "Apply for Leave"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Employee</Label>
               <Select
@@ -345,13 +345,10 @@ export function LeaveFormDialog({
             </p>
           )}
 
-          {/* On a wide screen the day list sits beside the reason rather than under it, so a
-              two-week request does not push the reason box off the bottom of the dialog. */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
           {/* Per-day weightage. Weekly offs and holidays are shown but not bookable, so the
               employee can see exactly why a 5-day range only costs 3 days of leave. */}
           {dayRows.length > 0 && (
-            <div className="space-y-2 xl:col-span-2">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Days</Label>
                 <span className="text-sm text-muted-foreground">
@@ -423,7 +420,7 @@ export function LeaveFormDialog({
                 Reason <span className="text-destructive">*</span>
               </Label>
               <Textarea
-                rows={8}
+                rows={3}
                 placeholder="Why are you taking this leave?"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -445,7 +442,6 @@ export function LeaveFormDialog({
               </p>
             </div>
           )}
-          </div>
           </div>
 
           <div className="flex items-center justify-between gap-4 border-t pt-4">

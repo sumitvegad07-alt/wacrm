@@ -731,6 +731,8 @@ export interface Task {
   expense?: any; // To avoid circular ref before it's fully defined, or just use any
   order_id?: string | null;
   dispatch_id?: string | null;
+  /** Links a task to a leave request (migration 20260817190000). */
+  leave_id?: string | null;
   employee_id?: string | null;
   employee?: Profile;
   payment_id?: string | null;

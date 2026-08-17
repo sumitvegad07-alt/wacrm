@@ -390,6 +390,19 @@ timelines), `products`, `quotations`, `expenses`, `geofences`, `tracking_session
 
 - **Full Screen Width for Forms & Panels (`w-full`)**: Do NOT use narrow wrappers (`max-w-2xl`, `max-w-xl`) or constrained centered containers on create, edit, view, or settings screens. All main screens and settings forms must use full screen width (`w-full` / `max-w-[95vw]`).
 - **Multi-Column Responsive Grids**: To prevent empty/wasted white space on the right-hand side of large desktop monitors, arrange form fields, settings toggles, and metadata panels in responsive multi-column grids (`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6` or `gap-8`).
+- **A page's TITLE comes from the route map in `src/components/layout/header.tsx`, not from
+  `<PageHeader>`.** `PageHeader` deliberately `return null`s when it has no `actions`, `badge`
+  or `breadcrumbs` — a title+subtitle alone renders nothing at all. A new page with no entry in
+  that map falls back to its parent prefix, which is why the Leaves page showed only "Location
+  Tracking". Add `"/module/sub": "Title"` there.
+- **`<DialogContent>` has a `size` prop that defaults to `"sm"` (`sm:max-w-sm`).** Because that
+  is a RESPONSIVE variant, tailwind-merge does not treat it as conflicting with a base
+  `max-w-[1400px]`, so hand-rolled width classes are silently ignored above 640px. Use
+  `size="full"` for a genuinely wide dialog, or the house form width `sm:max-w-3xl`
+  (`lead-form.tsx`, `contact-form.tsx`) — note the `sm:` prefix is what makes it win.
+- **Detail views are PAGES, not dialogs.** Order, Lead and now Leave all use
+  `<module>/[id]/page.tsx` with a header, a two-column body, and the shared `<Timeline>` on the
+  right. A dialog has nowhere to put tasks or history.
 - **Base UI `<Select>` renders the raw VALUE unless you pass `items`.** `Select.Value` does NOT
   derive a label from the `<SelectItem>` children. Give `Select.Root` an `items` map
   (`Record<value, label>`, e.g. `Object.fromEntries(rows.map(r => [r.id, r.name]))`) whenever the
