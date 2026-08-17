@@ -102,6 +102,28 @@ export function LeaveFormDialog({
 
   const todayKey = toDateKey(new Date());
 
+  /**
+   * Base UI's `Select.Value` renders the raw VALUE unless `Select.Root` is given an `items` map
+   * from value to label. Without these the employee picker shows a bare uuid and the weightage
+   * picker shows "quarter" instead of "Quarter Day" — which is exactly what shipped first.
+   * `expense-types-settings.tsx` sets the precedent for this prop.
+   */
+  const employeeItems = useMemo(
+    () =>
+      Object.fromEntries(
+        employees.map((e) => [e.id, e.full_name?.trim() || "Unnamed employee"]),
+      ) as Record<string, string>,
+    [employees],
+  );
+  const leaveTypeItems = useMemo(
+    () => Object.fromEntries(activeTypes.map((t) => [t.id, t.name])) as Record<string, string>,
+    [activeTypes],
+  );
+  const weightageItems = useMemo(
+    () => Object.fromEntries(WEIGHTAGE_OPTIONS.map((o) => [o.value, o.label])) as Record<string, string>,
+    [],
+  );
+
   // Reset the form whenever it opens, so a previous attempt never bleeds into the next one.
   useEffect(() => {
     if (!open) return;
@@ -233,6 +255,7 @@ export function LeaveFormDialog({
               <Label>Employee</Label>
               <Select
                 value={employeeId}
+                items={employeeItems}
                 onValueChange={(v) => setEmployeeId(v ?? "")}
                 disabled={!canManageOthers || isEdit}
               >
@@ -258,7 +281,7 @@ export function LeaveFormDialog({
               <Label>
                 Leave Type <span className="text-destructive">*</span>
               </Label>
-              <Select value={leaveTypeId} onValueChange={(v) => setLeaveTypeId(v ?? "")}>
+              <Select value={leaveTypeId} items={leaveTypeItems} onValueChange={(v) => setLeaveTypeId(v ?? "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a leave type" />
                 </SelectTrigger>
@@ -354,6 +377,7 @@ export function LeaveFormDialog({
                       ) : (
                         <Select
                           value={row.weightage}
+                          items={weightageItems}
                           onValueChange={(v) =>
                             setDayRows((prev) =>
                               prev.map((r) =>

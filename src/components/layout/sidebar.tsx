@@ -449,6 +449,7 @@ function getMenuStructure(
         ...(!moduleSettings || moduleSettings.expense === true
           ? [{ href: "/settings?tab=expense_types", label: "Expense Settings", icon: Wallet }]
           : []),
+        { href: "/settings?tab=leave_types", label: "Leave Settings", icon: CalendarOff },
         ...(!moduleSettings || moduleSettings.payment === true
           ? [{ href: "/settings?tab=payments", label: "Payment Settings", icon: Banknote }]
           : []),

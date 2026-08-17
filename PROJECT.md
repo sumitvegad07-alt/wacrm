@@ -390,6 +390,18 @@ timelines), `products`, `quotations`, `expenses`, `geofences`, `tracking_session
 
 - **Full Screen Width for Forms & Panels (`w-full`)**: Do NOT use narrow wrappers (`max-w-2xl`, `max-w-xl`) or constrained centered containers on create, edit, view, or settings screens. All main screens and settings forms must use full screen width (`w-full` / `max-w-[95vw]`).
 - **Multi-Column Responsive Grids**: To prevent empty/wasted white space on the right-hand side of large desktop monitors, arrange form fields, settings toggles, and metadata panels in responsive multi-column grids (`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6` or `gap-8`).
+- **Base UI `<Select>` renders the raw VALUE unless you pass `items`.** `Select.Value` does NOT
+  derive a label from the `<SelectItem>` children. Give `Select.Root` an `items` map
+  (`Record<value, label>`, e.g. `Object.fromEntries(rows.map(r => [r.id, r.name]))`) whenever the
+  value differs from what should be shown, or the trigger displays a bare uuid / enum key. Shipped
+  broken once on the leave form (employee picker showed a uuid, weightage showed "quarter").
+  `expense-types-settings.tsx` has the working precedent. Known remaining wart: the Expense
+  allowance-type select shows "REGULAR"/"TRAVELLING" for the same reason.
+- **Adding a Settings panel takes THREE registrations, not two.** `settings-sections.ts`
+  (SETTINGS_SECTIONS + SECTION_META) and the `panel` map in `settings/page.tsx` only make
+  `/settings?tab=<id>` *reachable*. Nothing navigates there: the Settings menu is a hardcoded list
+  inside `src/components/layout/sidebar.tsx`. Miss that third step and the panel exists but is
+  invisible — which is exactly what happened with Leave Settings.
 - **Base UI / Next.js Hydration & Button Nesting Rule**: When using `@base-ui/react` components such as `DialogTrigger`, use the `render={<Button />}` prop pattern instead of `asChild` wrapping a `<button>` or `<Button>` child. Using `asChild` with an inner button causes an HTML `<button> cannot be a descendant of <button>` validation error and React 19 hydration mismatch.
 
 ### Territory Master (migrations 101–105, applied to prod 2026-07-31 — verified)
