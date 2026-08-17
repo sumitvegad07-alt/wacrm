@@ -20,12 +20,18 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const supabase = createClient();
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
+    // Built here, not during render. This page has no useSearchParams, so unlike
+    // login/signup it IS statically prerendered at build time — and creating a
+    // Supabase client during that prerender fails the whole build if the
+    // NEXT_PUBLIC_SUPABASE_* vars are missing from the build environment.
+    // createClient() is a singleton, so this costs nothing.
+    const supabase = createClient();
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
