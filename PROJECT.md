@@ -3485,3 +3485,62 @@ when adding a module. Full sweep is clean: 31 dimensions, 32 measures, 36 filter
 Also: `AsyncSearchSelect` silently swallowed query errors, so the Expense Type
 picker showed "No results found." when it was really a 400 on a missing column.
 It now logs the failing table and columns.
+
+
+## Task Report + Report menu cleanup (18 Aug 2026)
+
+### Task Report — `/reports/tasks`
+
+Built on the generic engine (migration `20260818160000_task_report_module.sql`,
+applied to prod as `task_report_module_rpc` + `task_report_registry`). Engine
+detail in `docs/report-engine.md` §5j.
+
+Tabs: **Customer, Lead, Activity Type, Status, Area, Period, User.** Columns are
+`# task`, `# completed`, `# pending`, `# overdue`, `Completed %`.
+
+- `# completed + # pending + # cancelled = # task` exactly. **`# overdue` is
+  outside that sum** — it is a *subset* of pending (past due and still open), not
+  a fourth bucket. It stays a default column because it is what a manager acts on.
+- **Tasks are dated by due date, falling back to created_at.** 3 of 14 prod tasks
+  have no due date; dating strictly by `due_date` would silently drop them from
+  every period, so the report would under-report while looking healthy.
+- **Activity types come from account settings**, not a hardcoded list
+  (`accounts.settings.task_types`). This account uses "Payment follow up", which
+  is not among the shipped defaults, so a static list would have made its own
+  tasks unfilterable. New `ReportFilterDef.optionsFromSettings` does this.
+- Assumptions taken from the earlier offer, since no field list was given: the
+  report mirrors the Visit report's tab shape. **Notes are counted as tasks** —
+  the app treats `activity_type = 'Note'` as a logged comment and hides it from
+  task lists, but this report does not silently exclude anything. There are no
+  Note rows on prod today. Say if they should be excluded.
+- Every string column here is genuinely `text` — status, priority and
+  activity_type are NOT enums (checked, not assumed, after the expense bug).
+- `tasks` repeats and doubles the expenses FK trap: `assigned_user_id` points at
+  `profiles(id)` (the assignee) while `user_id` is the **auth uid** (the creator).
+
+Verified on prod: 14 tasks reconciling across the User, Activity Type and
+Customer tabs; the full execute-every-entry sweep passes 32/32.
+
+### Report menu now holds only real reports
+
+Four entries were removed from the **Report** group. None was a report — each was
+a second link to a module's own list page:
+
+| Removed label | Actual destination |
+| --- | --- |
+| Activity Report | `/follow-ups` — the follow-ups list |
+| Sales & Deals | `/pipelines` — the deals pipeline |
+| Expenses Report | `/expenses` — the expense list |
+| Location Reports | `/location-tracking/health` — Tracking Health |
+
+"Expenses Report" sat directly beside the real "Expense Reports", which nobody
+could be expected to tell apart.
+
+**No page was deleted and nothing was orphaned** — every one of those four is
+still reachable from its own section (`/follow-ups` and `/pipelines` have
+top-level entries, `/expenses` is "Expense", and `/location-tracking/health` is
+"Tracking Health" under Location Tracking). `/follow-ups` is also the post-login
+landing page and was never at risk.
+
+The Report group is now exactly the ten engine-backed reports: Order, Sales,
+Quotation, Payment, Lead, Deal, Visit, Ageing, Expense, Task.

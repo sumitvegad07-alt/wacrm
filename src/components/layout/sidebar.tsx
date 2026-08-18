@@ -374,10 +374,20 @@ function getMenuStructure(
         // Claims by approval status. Distinct from the "/expenses" entry below,
         // which is the expense LIST, not a report.
         { href: "/reports/expenses", label: "Expense Reports", icon: Coins, module: "expenses", configModule: "expense" as const },
-        { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
-        { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },
-        { href: "/expenses", label: "Expenses Report", icon: Coins, module: "expenses" },
-        { href: "/location-tracking/health", label: "Location Reports", icon: MapPin, module: "location_tracking" },
+        { href: "/reports/tasks", label: "Task Reports", icon: CheckSquare, module: "activities" },
+        // This group holds ONLY reports built on the generic report engine.
+        //
+        // Four entries were removed on 2026-08-18: "Activity Report"
+        // (/follow-ups), "Sales & Deals" (/pipelines), "Expenses Report"
+        // (/expenses) and "Location Reports" (/location-tracking/health). None
+        // was a report — each was a second link to a module's own list page, and
+        // "Expenses Report" sat next to the real "Expense Reports", which is the
+        // kind of pairing nobody can tell apart.
+        //
+        // Every one of those pages is still reachable from its own section:
+        // /follow-ups and /pipelines have top-level entries, /expenses is
+        // "Expense", and /location-tracking/health is "Tracking Health" under
+        // Location Tracking. Nothing was orphaned and no page was deleted.
       ],
     },
 

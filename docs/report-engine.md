@@ -51,6 +51,7 @@ Rather than duplicate 11 dimensions, 10 measures, 19 filters and 5 joins under `
 | `visit` | `site_visits` | `['visit']` |
 | `ageing` | `contacts` | `['ageing']` |
 | `ageing_product` | `products` | `['ageing_product']` |
+| `task` | `tasks` | `['task']` |
 
 A row registered under `sales` wins; otherwise the `order` row is used verbatim. Sales registers exactly **three** rows of its own — the `sales_date` join, the `date` dimension and the `date_range` filter — because a sale is dated by *dispatch completion* (the order's latest `order_dispatches.dispatched_at`, falling back to the order date when an order was closed without any dispatch). Every other dimension, measure, filter and join is inherited from `order` and cannot drift.
 
@@ -286,6 +287,50 @@ the drawer stores a bare string for `type: 'user'` — and is flagged, not chang
 at a column that does not exist rendered a bland "No results found." — which is
 exactly what a correctly-configured but empty table looks like. It now logs the
 failing table and column list to the console.
+
+## 5j. Tasks — subset counts, and options that live in settings
+
+The Task report's counts are registered so that
+
+    # completed + # pending + # cancelled = # task
+
+exactly. **`# overdue` is deliberately outside that sum** — it is a *subset* of
+pending (past due and still open), not a fourth bucket. It is still a default
+column, because it is the number a manager acts on. When a measure is a subset
+rather than a bucket, say so in the config header; the reconciliation is
+otherwise silently wrong to anyone who adds the columns up.
+
+**Dating**: tasks use `COALESCE(due_date, created_at)`. 3 of 14 prod tasks have
+no due date, and a strict `due_date` basis would drop them from every period —
+the report would under-report while looking perfectly healthy. Prefer a
+COALESCE'd date basis over a nullable one whenever the null case is real.
+
+### `optionsFromSettings` — filters whose options are per-account
+
+Task activity types are not a fixed list and not a table: they live in
+`accounts.settings.task_types`. Hardcoding the shipped defaults (Task, Call,
+Visit, Meeting, Follow up, Note) would have left this account's own
+"Payment follow up" unfilterable.
+
+`ReportFilterDef.optionsFromSettings` names a list in account settings; the
+filter drawer already loads `accounts.settings` for territory levels and product
+depth, so it builds the options from the same fetch. The hardcoded `options`
+remain as a fallback when the setting is absent. Use this for any list the
+account can edit that has no table behind it — a `lookup` filter needs a table
+and cannot express this.
+
+### FK traps, again
+
+`tasks` repeats the `expenses` pattern and doubles it — **both** user columns are
+on the one table, pointing at different keys:
+
+| Column | Points at | Meaning |
+| --- | --- | --- |
+| `assigned_user_id` | `profiles(id)` | the assignee |
+| `user_id` | auth uid | the creator |
+
+Confirmed by counting matches both ways before registering (10/10 and 14/14),
+which is now the standing habit for any profile join: **check, do not assume.**
 
 ## 6. Future Compatibility & Onboarding Modules
 To onboard a new module (e.g. `Visits`):

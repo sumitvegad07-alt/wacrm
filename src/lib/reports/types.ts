@@ -58,6 +58,13 @@ export interface ReportFilterDef {
    *  renders first; remaining sections follow the order they appear in `filters`. */
   section?: string;
   options?: { label: string; value: string }[];
+  /** For type 'select': build the options from a list held in the account's own
+   *  settings rather than hardcoding them. Task activity types are per-account
+   *  (`accounts.settings.task_types`) — this account uses "Payment follow up",
+   *  which is not in the shipped default list, so a static list would make its
+   *  own tasks unfilterable. Ignored if the setting is missing, in which case
+   *  `options` is used as the fallback. */
+  optionsFromSettings?: 'task_types';
   requiredModule?: keyof ModuleSettings | string;
   territoryLevel?: number;
   /** For type 'lookup': the table holding the account's configurable list

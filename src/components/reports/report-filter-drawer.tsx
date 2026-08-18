@@ -122,6 +122,8 @@ export function ReportFilterDrawer({
   const [customerHierarchyEnabled, setCustomerHierarchyEnabled] = useState(false);
   const [productLevelsCount, setProductLevelsCount] = useState<number | null>(null);
   const [territoryLevels, setTerritoryLevels] = useState<TerritoryLevel[] | null>(null);
+  // Account-configurable task activity types (accounts.settings.task_types).
+  const [taskTypes, setTaskTypes] = useState<string[] | null>(null);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsError, setSettingsError] = useState(false);
 
@@ -137,6 +139,7 @@ export function ReportFilterDrawer({
           // Level 1 Category is a mandatory hierarchy level by default
           setProductLevelsCount(s.product_settings?.levels_count ?? 1);
           setTerritoryLevels((s.territory_settings?.levels as TerritoryLevel[]) ?? null);
+          setTaskTypes(Array.isArray(s.task_types) ? (s.task_types as string[]) : null);
         }
         setSettingsLoaded(true);
       } catch (err) {
@@ -149,7 +152,16 @@ export function ReportFilterDrawer({
 
   // Generate dynamic config filters
   const dynamicConfigFilters = useMemo(() => {
-    let baseFilters = config.filters.filter(f => f.type !== 'territory');
+    let baseFilters = config.filters
+      .filter(f => f.type !== 'territory')
+      // Options that live in account settings rather than in code. Hardcoding
+      // task activity types would leave any account-added type unfilterable.
+      .map(f => {
+        if (f.optionsFromSettings === 'task_types' && taskTypes?.length) {
+          return { ...f, options: taskTypes.map(t => ({ label: t, value: t })) };
+        }
+        return f;
+      });
     
     // Add dynamic territory filters
     if (territoryLevels) {
@@ -164,7 +176,7 @@ export function ReportFilterDrawer({
       baseFilters = [...baseFilters, ...territoryFilters];
     }
     return baseFilters;
-  }, [config.filters, territoryLevels]);
+  }, [config.filters, territoryLevels, taskTypes]);
 
   const isFilterVisible = (filterDef: ReportFilterDef) => {
     // 1. Customer Hierarchy filters
