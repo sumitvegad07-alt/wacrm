@@ -17,6 +17,8 @@ import {
   ScrollText,
   Activity,
   ArchiveRestore,
+  Eye,
+  Waypoints,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -26,7 +28,9 @@ const NAV_ITEMS = [
   { href: "/admin/billing", label: "Billing & Plans", icon: CreditCard },
   { href: "/admin/users", label: "All Users", icon: Users },
   { href: "/admin/data", label: "Data Browser", icon: Database },
+  { href: "/admin/view-as", label: "View As", icon: Eye },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
+  { href: "/admin/sync", label: "Sync & Errors", icon: Waypoints },
   { href: "/admin/audit", label: "Audit Log", icon: ScrollText },
   { href: "/admin/recovery", label: "Recovery Center", icon: ArchiveRestore },
   { href: "/admin/settings", label: "Settings", icon: Settings },

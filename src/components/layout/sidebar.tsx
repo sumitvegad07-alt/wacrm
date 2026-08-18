@@ -172,7 +172,7 @@ interface NavItem {
   configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment";
 }
 
-type MenuNode =
+export type MenuNode =
   | ({
       type: "link";
     } & NavItem)
@@ -187,7 +187,12 @@ type MenuNode =
       type: "spacer";
     };
 
-function getMenuStructure(
+/**
+ * The navigation tree, exported so the superadmin View-As screen can render
+ * exactly what a given user would see rather than maintaining a second copy of
+ * this structure that silently drifts out of sync.
+ */
+export function getMenuStructure(
   moduleSettings: ModuleSettings | undefined,
   assignmentMode: AssignmentMode
 ): MenuNode[] {
