@@ -48,6 +48,9 @@ Rather than duplicate 11 dimensions, 10 measures, 19 filters and 5 joins under `
 | `lead` | `leads` | `['lead']` |
 | `deal` | `deals` | `['deal']` |
 | `expense` | `expenses` | `['expense']` |
+| `visit` | `site_visits` | `['visit']` |
+| `ageing` | `contacts` | `['ageing']` |
+| `ageing_product` | `products` | `['ageing_product']` |
 
 A row registered under `sales` wins; otherwise the `order` row is used verbatim. Sales registers exactly **three** rows of its own — the `sales_date` join, the `date` dimension and the `date_range` filter — because a sale is dated by *dispatch completion* (the order's latest `order_dispatches.dispatched_at`, falling back to the order date when an order was closed without any dispatch). Every other dimension, measure, filter and join is inherited from `order` and cannot drift.
 
@@ -98,6 +101,92 @@ A quotation belongs to a lead **or** a customer. Grouping on a nullable column w
 The Lead report's conversion ratio is computed in SQL per group, so each row is right. It is **not** additive, so the table footer renders a dash for any `percent` measure instead of a total — summing one source at 100% and four at 0% would read 100% when the true overall figure is 11%. The honest overall number is the KPI card, which issues its own grand-total query and therefore recomputes the ratio across the whole result set.
 
 Register any rate, ratio or average as `type: 'percent'` so it inherits this behaviour. Never register a ratio as a `number`.
+
+## 5f. Absence reports — when the base table is not the transaction (Ageing)
+
+Every module above aggregates rows that **exist**. The **Ageing** report asks the
+opposite question: which customers, areas or products received *no* orders in a
+window. A row qualifies precisely because the order it would have aggregated is
+missing, so orders cannot be the base table.
+
+Two consequences, both of which invert normal engine assumptions:
+
+**The base table is the master being listed** — `contacts` for Customer/Area,
+`products` for Product/Category/Sub-Category.
+
+**The period does not filter the base.** `date_range` registers as a `NOT EXISTS`
+instead:
+
+```sql
+NOT EXISTS (SELECT 1 FROM orders o
+             WHERE o.contact_id = base.id
+               AND o.date BETWEEN start AND end)
+```
+
+So *widening* the period **shrinks** the list — the opposite of every other
+report. Say so in any UI copy; it is the single most confusable thing here.
+
+### Per-tab modules (`TabConfig.moduleOverride`)
+
+A tab normally only changes the dimension, because every tab of a report reads
+one base table. Ageing needs two — `contacts` cannot enumerate products. So its
+product tabs carry `moduleOverride: 'ageing_product'` and `<ReportViewer />`
+executes that module for the active tab, including for the KPI cards
+(`TabConfig.kpis` overrides `ReportDefinition.kpis` where the two base tables
+count different things: `# customer` vs `# product`).
+
+The **saved default view stays keyed on `config.moduleName`** — there is one
+saved view per report, not one per tab.
+
+`TabConfig.availableMeasures` is mandatory here rather than optional: without it,
+Manage Column on a product tab would offer `# customer`, which `ageing_product`
+does not register and the engine would silently drop.
+
+Reach for this only when tabs genuinely need different base tables. "Same table,
+narrower window" is still module aliasing (§5b).
+
+### Ratios are not the only non-additive measure
+
+`days_since_last_order` is a number, not a percent, but a column of ages does not
+add up either. Measures declare `additive: false` and the table footer dashes
+them exactly as it does for `percent` (§5e). Register any per-row age, rank or
+average this way.
+
+### Known sharp edges
+
+- `contacts` is the whole customer master with no active/archived flag, so a
+  dormancy list includes records that were never really customers.
+- `products.active` is filterable (`Product Status`) but **off by default**, so
+  discontinued products appear until the filter is set.
+- Areas are free text on `contacts` and are not case-normalised — prod currently
+  has both `Kalawad road` and `Kalawad Road` as separate rows. Blank vs missing
+  is handled (both collapse to `-`); differing case is not, because folding it
+  would mangle acronyms.
+
+## 5g. Feedback pivot (Visits)
+
+The Visit report applies §5c's status-pivot to visit feedback: one column per
+feedback type on every tab, rather than a Feedback grouping. The five buckets —
+Excellent / Good / Average / Poor / **No Feedback** — are mutually exclusive and
+sum exactly to `# visit`.
+
+The list is **hardcoded in the mobile app** (`app/visit/[id].tsx`,
+`FEEDBACK_OPTIONS`), not account-configurable, which is why five fixed measures
+are registered rather than a lookup. If that list ever becomes configurable,
+these measures are what has to change with it.
+
+A **productive visit** is one that produced an order, read from
+`orders.site_visit_id` rather than inferred (founder decision, 2026-08-18). It is
+deliberately absent from the Lead tab: orders are raised against customers, so a
+column of zeroes there would read as failure rather than as not-applicable.
+
+`# customer visit` + `# lead visit` = `# visit` — these split *visits* by who was
+visited. `# unique customer` / `# unique lead` answer the distinct-people
+question and are available via Manage Column.
+
+Verified on prod 2026-08-18: 58 visits reconcile exactly across the Customer,
+Lead, Area, Period and User tabs; 15 productive visits match the 15 orders
+carrying a `site_visit_id`; 54 Good + 4 Excellent match the raw column.
 
 ## 6. Future Compatibility & Onboarding Modules
 To onboard a new module (e.g. `Visits`):

@@ -141,6 +141,23 @@ export function ReportViewer({ config }: ReportViewerProps) {
     topN: 10
   });
 
+  /** The registry module the ACTIVE TAB queries. Almost always the report's own,
+   *  but Ageing's product tabs read a different base table (see
+   *  TabConfig.moduleOverride), so the engine has to be told which. The saved
+   *  default view deliberately keeps using config.moduleName — there is one saved
+   *  view per report, not one per tab. */
+  const activeModule = useMemo(() => {
+    const tab = config.tabConfigs?.find((t) => t.key === activeTab);
+    return tab?.moduleOverride ?? config.moduleName;
+  }, [config.tabConfigs, config.moduleName, activeTab]);
+
+  /** KPI cards follow the active tab's module, since a tab on another base table
+   *  measures different things (# customer vs # product). */
+  const activeKpis = useMemo(() => {
+    const tab = config.tabConfigs?.find((t) => t.key === activeTab);
+    return tab?.kpis ?? config.kpis;
+  }, [config.tabConfigs, config.kpis, activeTab]);
+
   const [data, setData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -245,7 +262,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
       setLoading(true);
       const offset = (page - 1) * LIMIT;
       const result = await executeReport(
-        config.moduleName,
+        activeModule,
         reportState.dimensions,
         reportState.measures,
         reportState.filters,
@@ -269,8 +286,8 @@ export function ReportViewer({ config }: ReportViewerProps) {
       setLoading(false);
     }
   }, [
-    config.moduleName, 
-    reportState.dimensions, 
+    activeModule,
+    reportState.dimensions,
     reportState.measures, 
     reportState.filters, 
     reportState.sortColumn, 
@@ -286,7 +303,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
   const handleExport = async (format: 'csv' | 'xlsx') => {
     try {
       const exportData = await executeReport(
-        config.moduleName,
+        activeModule,
         reportState.dimensions,
         reportState.measures,
         reportState.filters,
@@ -526,7 +543,13 @@ export function ReportViewer({ config }: ReportViewerProps) {
       />
 
       {hydrated && (
-        <ReportKpiCards config={config} filters={reportState.filters} defaultCurrency={defaultCurrency} />
+        <ReportKpiCards
+          config={config}
+          moduleName={activeModule}
+          kpis={activeKpis}
+          filters={reportState.filters}
+          defaultCurrency={defaultCurrency}
+        />
       )}
 
       {/* Tab Navigation + View Toggles */}

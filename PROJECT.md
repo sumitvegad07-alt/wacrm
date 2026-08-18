@@ -3364,3 +3364,59 @@ Saved reports can be shared via 'private', 'team', or 'organization' modes. The 
 - **Known limit, documented not hidden**: with `approval_required` OFF a payment is born Approved
   on insert and never crosses the approval transition, so the database cannot verify its proof. In
   that configuration the capture-time client rule is the only attachment guard.
+
+
+## Visit & Ageing Reports (Added 18 Aug 2026)
+
+Two more reports on the generic engine (migration
+`20260818090000_visit_and_ageing_report_modules.sql`, applied to prod as
+`visit_and_ageing_report_modules_rpc` + `_registry`). Engine-level detail lives in
+`docs/report-engine.md` §5f–§5g; the product rules are here.
+
+### Visit Report — `/reports/visits`
+
+Tabs: **Customer, Lead, Area, Period, User**. Base table `site_visits`, dated by
+check-in.
+
+- **Feedback is a pivot, not a grouping.** Every tab carries one column per
+  feedback type — Excellent / Good / Average / Poor / **No Feedback** — and the
+  five sum exactly to `# visit`. The type list is hardcoded in the mobile app
+  (`app/visit/[id].tsx`, `FEEDBACK_OPTIONS`), not account-configurable; making it
+  configurable means changing these five registered measures too.
+- **Productive visit = a visit that produced an order**, read from
+  `orders.site_visit_id` rather than inferred (founder decision, 18 Aug 2026).
+  Deliberately **absent from the Lead tab** — orders are raised against
+  customers, so a column of zeroes there would read as failure rather than as
+  not-applicable.
+- `# customer visit` + `# lead visit` = `# visit`; they split *visits* by who was
+  visited. `# unique customer` / `# unique lead` answer the distinct-people
+  question and sit in Manage Column.
+- Visits are polymorphic (`target_type` / `target_id`), so Customer and Lead tabs
+  INNER JOIN their own entity while geography LEFT JOINs both and COALESCEs.
+
+### Ageing Report — `/reports/ageing`
+
+Tabs: **Customer, Area, Product**, plus **Product Category / Sub-Category** when
+the account's product hierarchy is deep enough. Lists who and what stopped
+ordering.
+
+- **"Period" means "had NO order in this window."** Widening the period *shrinks*
+  the list — the inverse of every other report. This is the single most
+  confusable thing in the module.
+- Beyond the names, each row carries **Last Order Date**, **Days Since Last
+  Order** and **# lifetime order**, from an unbounded lookback: how long someone
+  has been dormant is a lifetime question even when the window is one month.
+  Days Since is non-additive, so the table footer dashes it instead of summing
+  ages.
+- The Customer/Area tabs read `contacts` and the Product tabs read `products` —
+  two base tables, so two registry modules under one report, via the new
+  `TabConfig.moduleOverride`.
+
+**Known sharp edges, not hidden:** `contacts` is the whole customer master with no
+active/archived flag, so dormancy lists include records that were never really
+customers; `Product Status` is filterable but **off by default**, so discontinued
+products appear until it is set; and `contacts.area` is free text that is not
+case-folded, so `Kalawad road` and `Kalawad Road` currently list as two areas.
+
+**Not built:** the Task Report, which was scoped in the same request and is on
+hold pending its field list.

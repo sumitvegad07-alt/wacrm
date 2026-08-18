@@ -37,11 +37,12 @@ export function ReportTable({ data, config, reportState, defaultCurrency, onSort
 
     const measureCols = reportState.measures.map(mKey => {
       const def = config.measures.find(m => m.key === mKey);
-      return { 
-        key: mKey, 
-        label: def?.label || mKey, 
-        type: 'measure', 
-        format: def?.type || 'number' 
+      return {
+        key: mKey,
+        label: def?.label || mKey,
+        type: 'measure',
+        format: def?.type || 'number',
+        additive: def?.additive !== false,
       };
     });
 
@@ -102,6 +103,12 @@ export function ReportTable({ data, config, reportState, defaultCurrency, onSort
     // set is the KPI card, which is its own grand-total query.
     if (col.format === 'percent') {
       return <span className="font-bold text-muted-foreground" title="Percentages cannot be summed — see the KPI card above for the overall figure">—</span>;
+    }
+
+    // Same reasoning for measures explicitly marked non-additive: Ageing's "Days
+    // Since Last Order" is an age per row, and a column of ages does not add up.
+    if (col.additive === false) {
+      return <span className="font-bold text-muted-foreground" title="This measure is a per-row figure and cannot be summed">—</span>;
     }
 
     const totalVal = columnTotals[col.key as string] || 0;

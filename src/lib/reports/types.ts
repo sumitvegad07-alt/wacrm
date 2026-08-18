@@ -41,6 +41,11 @@ export interface ReportMeasure {
   key: string;
   label: string;
   type: 'currency' | 'number' | 'percent';
+  /** Set false for a number that must not be summed in the table footer — e.g.
+   *  Ageing's "Days Since Last Order", where adding one customer's 40 days to
+   *  another's 90 produces 130, which means nothing. `percent` measures get this
+   *  behaviour automatically (§5e); this is for the non-percent cases. */
+  additive?: boolean;
   requiredModule?: keyof ModuleSettings | string;
 }
 
@@ -83,6 +88,17 @@ export interface TabConfig {
    *  Omit to offer every measure (the default for all other reports). */
   availableMeasures?: string[];
   requiresProductSettings?: 'category' | 'subcategory'; // Show only if product category/subcategory enabled
+  /** Execute this tab against a different registry module than the report's own.
+   *  Tabs normally only change the dimension, because every tab of a report reads
+   *  the same base table. Ageing breaks that: it lists master records that have
+   *  NO orders, so its Customer/Area tabs read `contacts` while its Product tabs
+   *  read `products` — two base tables, therefore two modules, one report.
+   *  The saved default view stays keyed on the report's own moduleName. */
+  moduleOverride?: string;
+  /** KPI cards for this tab, when the tab's module measures something different
+   *  from the report default (Ageing counts customers on one tab and products on
+   *  another). Falls back to ReportDefinition.kpis. */
+  kpis?: string[];
 }
 
 export interface ReportDefinition {

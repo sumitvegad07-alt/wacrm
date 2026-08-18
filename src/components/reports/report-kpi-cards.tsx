@@ -9,26 +9,31 @@ import { Loader2 } from "lucide-react";
 
 interface ReportKpiCardsProps {
   config: ReportDefinition;
+  /** Registry module to total against — the ACTIVE TAB's, which is not always the
+   *  report's own (see TabConfig.moduleOverride). */
+  moduleName: string;
+  /** Measure keys to card, resolved for the active tab. */
+  kpis: string[];
   filters: Record<string, any>;
   defaultCurrency: string;
 }
 
-export function ReportKpiCards({ config, filters, defaultCurrency }: ReportKpiCardsProps) {
+export function ReportKpiCards({ config, moduleName, kpis, filters, defaultCurrency }: ReportKpiCardsProps) {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true); // start as loading to avoid ₹0 flash
 
   useEffect(() => {
     async function fetchKpis() {
-      if (!config.kpis || config.kpis.length === 0) return;
+      if (!kpis || kpis.length === 0) return;
       
       try {
         setLoading(true);
         // Call executeReport with NO dimensions to get the grand total of all measures
         // No limit/offset because it's a single aggregation row
         const result = await executeReport(
-          config.moduleName,
+          moduleName,
           [], // Empty dimensions = Grand Total
-          config.kpis, // Only fetch configured KPIs
+          kpis, // Only fetch configured KPIs
           filters
         );
         
@@ -46,13 +51,13 @@ export function ReportKpiCards({ config, filters, defaultCurrency }: ReportKpiCa
     }
     
     fetchKpis();
-  }, [config, filters]);
+  }, [moduleName, kpis, filters]);
 
-  if (!config.kpis || config.kpis.length === 0) return null;
+  if (!kpis || kpis.length === 0) return null;
 
   return (
     <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
-      {config.kpis.map((kpiKey) => {
+      {kpis.map((kpiKey) => {
         const measureDef = config.measures.find((m) => m.key === kpiKey);
         if (!measureDef) return null;
         
