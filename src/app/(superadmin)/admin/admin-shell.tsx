@@ -19,6 +19,7 @@ import {
   ArchiveRestore,
   Eye,
   Waypoints,
+  Mail,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
   { href: "/admin/sync", label: "Sync & Errors", icon: Waypoints },
   { href: "/admin/audit", label: "Audit Log", icon: ScrollText },
+  { href: "/admin/digest", label: "Ops Digest", icon: Mail },
   { href: "/admin/recovery", label: "Recovery Center", icon: ArchiveRestore },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
