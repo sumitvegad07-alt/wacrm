@@ -1,114 +1,235 @@
 "use client";
 
-import { useState } from "react";
-import { Megaphone, Info } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Megaphone, Loader2, Trash2, Globe, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+
+interface Announcement {
+  id: string;
+  account_id: string | null;
+  title: string;
+  content: string;
+  expiry_date: string | null;
+  created_at: string;
+}
+
+interface AccountOption {
+  id: string;
+  name: string;
+}
 
 export default function AnnouncementsPage() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [expiry, setExpiry] = useState("");
   const [target, setTarget] = useState("all");
+  const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [existing, setExisting] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/announcements");
+      const payload = await res.json();
+      if (res.ok) setExisting(payload.announcements);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch(
+        "/api/admin/db/rows?table=accounts&pageSize=200&sort=name&dir=asc",
+      );
+      if (!res.ok) return;
+      const payload = await res.json();
+      setAccounts((payload.rows || []).map((r: any) => ({ id: r.id, name: r.name })));
+    })();
+  }, []);
+
+  const publish = async () => {
+    if (!title.trim() || !message.trim()) {
+      toast.error("Title and message are both required");
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await fetch("/api/admin/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          content: message,
+          expiry_date: expiry || null,
+          account_id: target === "all" ? null : target,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok || payload.error) throw new Error(payload.error || "Failed to publish");
+
+      toast.success(
+        target === "all" ? "Published to all tenants" : "Published to tenant",
+      );
+      setTitle("");
+      setMessage("");
+      setExpiry("");
+      load();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm("Delete this announcement?")) return;
+    const res = await fetch(`/api/admin/announcements?id=${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Deleted");
+      load();
+    } else {
+      toast.error("Failed to delete");
+    }
+  };
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="max-w-3xl space-y-8">
       <div>
         <h1 className="text-2xl font-bold">Announcements</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Broadcast notices to all or specific tenant accounts.
+          Broadcast notices to all tenants, or to one.
         </p>
       </div>
 
-      {/* Coming Soon Notice */}
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-sm text-amber-800 dark:text-amber-400">
-        <Info className="h-4 w-4 mt-0.5 shrink-0" />
-        <div>
-          <p className="font-medium mb-1">Database migration required</p>
-          <p className="text-amber-700 dark:text-amber-500">
-            This feature needs an <code className="font-mono text-xs">announcements</code> table
-            in Supabase. The form below is a preview — run the migration first to enable sending.
-          </p>
-        </div>
-      </div>
-
-      {/* Compose Form (preview) */}
+      {/* Compose */}
       <div className="bg-card border border-border rounded-xl p-6 space-y-5">
         <div className="flex items-center gap-2 mb-1">
           <Megaphone className="h-5 w-5 text-primary" />
-          <h2 className="text-base font-semibold">Compose Announcement</h2>
+          <h2 className="text-base font-semibold">Compose</h2>
         </div>
 
         <div className="space-y-2">
-          <Label>Title</Label>
+          <Label htmlFor="ann-title">Title</Label>
           <Input
+            id="ann-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Scheduled maintenance on July 10"
+            placeholder="Scheduled maintenance on Sunday"
           />
         </div>
 
         <div className="space-y-2">
-          <Label>Message</Label>
+          <Label htmlFor="ann-message">Message</Label>
           <textarea
+            id="ann-message"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={4}
-            placeholder="Write your announcement here…"
-            className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground resize-none"
+            placeholder="What tenants need to know…"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>Target Audience</Label>
-          <select
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring text-foreground"
-          >
-            <option value="all">All Companies</option>
-            <option value="Free">Free Plan Only</option>
-            <option value="Pro">Pro Plan Only</option>
-            <option value="Enterprise">Enterprise Plan Only</option>
-          </select>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="ann-target">Audience</Label>
+            <select
+              id="ann-target"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            >
+              <option value="all">All tenants</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ann-expiry">Expires (optional)</Label>
+            <Input
+              id="ann-expiry"
+              type="date"
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+            />
+          </div>
         </div>
 
-        <Button disabled className="gap-2 opacity-60 cursor-not-allowed">
-          <Megaphone className="h-4 w-4" />
-          Send Announcement (migration required)
+        <Button onClick={publish} disabled={sending}>
+          {sending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          Publish
         </Button>
       </div>
 
-      {/* Required Migration */}
-      <div className="bg-card border border-border rounded-xl p-6">
-        <h2 className="text-base font-semibold mb-3">Required Migration SQL</h2>
-        <pre className="bg-muted rounded-lg p-4 text-xs text-foreground overflow-x-auto whitespace-pre-wrap">
-{`-- Run this in your Supabase SQL editor
-CREATE TABLE IF NOT EXISTS public.announcements (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL,
-  message TEXT NOT NULL,
-  target_plan TEXT, -- NULL = all plans
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  created_by UUID REFERENCES auth.users(id)
-);
+      {/* Published */}
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">Platform announcements</h2>
 
-CREATE TABLE IF NOT EXISTS public.announcement_dismissals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  announcement_id UUID REFERENCES announcements(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  dismissed_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(announcement_id, user_id)
-);
-
--- RLS
-ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Superadmins can manage" ON announcements
-  USING (is_superadmin())
-  WITH CHECK (is_superadmin());
-CREATE POLICY "Authenticated users can read" ON announcements
-  FOR SELECT USING (auth.role() = 'authenticated');`}
-        </pre>
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : existing.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing published yet.
+          </p>
+        ) : (
+          existing.map((a) => {
+            const expired =
+              a.expiry_date !== null && new Date(a.expiry_date) < new Date();
+            return (
+              <div
+                key={a.id}
+                className="bg-card border border-border rounded-xl p-4 flex items-start gap-3"
+              >
+                {a.account_id === null ? (
+                  <Globe className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                ) : (
+                  <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-sm">{a.title}</p>
+                    {expired && (
+                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        Expired
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
+                    {a.content}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {new Date(a.created_at).toLocaleString()}
+                    {a.expiry_date &&
+                      ` · expires ${new Date(a.expiry_date).toLocaleDateString()}`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => remove(a.id)}
+                  className="text-muted-foreground hover:text-red-500 shrink-0"
+                  aria-label="Delete announcement"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ import {
   Megaphone,
   UserCircle2,
   Database,
+  ScrollText,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/admin/users", label: "All Users", icon: Users },
   { href: "/admin/data", label: "Data Browser", icon: Database },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
+  { href: "/admin/audit", label: "Audit Log", icon: ScrollText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
