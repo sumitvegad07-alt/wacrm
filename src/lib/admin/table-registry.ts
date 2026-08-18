@@ -89,9 +89,14 @@ export function sortTables(tables: string[]): string[] {
 /**
  * Columns never sent to the browser, in any table.
  *
- * `plain_password` on `profiles` stores credentials in clear text. The browser
- * is not the place to fix that, but it is emphatically not going to put them
- * on screen — or into the audit log — on the way past.
+ * Matched by name across every table, so a credential-shaped column added
+ * anywhere in future is redacted from the day it appears rather than the day
+ * someone remembers this list exists.
+ *
+ * `plain_password` is kept here even though the column was dropped on
+ * 2026-08-18: it cost nothing, and the name is exactly the kind that gets
+ * reintroduced by a migration about something else — which is how it arrived
+ * the first time.
  */
 export const REDACTED_COLUMNS = new Set([
   "plain_password",

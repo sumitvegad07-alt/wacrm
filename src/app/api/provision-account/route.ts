@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { SEED_COUNTRIES, SEED_INDIA_STATES, SEED_INDIA_DISTRICTS } from "@/lib/territories/seed-data.generated";
+import { ForbiddenError, getCurrentAccount, toErrorResponse } from "@/lib/auth/account";
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +10,20 @@ export async function POST(req: Request) {
 
     if (!account_id || !industry) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // This route runs with the service-role key, so it must not be reachable
+    // unauthenticated. The `is_provisioned = false` claim below bounds the blast
+    // radius to one call per account, but "bounded" is not "authorised": an
+    // anonymous caller could still burn a new tenant's provisioning slot and
+    // seed it with an industry of their choosing.
+    //
+    // No role requirement beyond membership: this fires from the dashboard
+    // shell on first load for whoever gets there first, which is normally the
+    // owner but need not be.
+    const ctx = await getCurrentAccount();
+    if (ctx.accountId !== account_id) {
+      throw new ForbiddenError("Cannot provision another account");
     }
 
     // Use admin client to bypass RLS for provisioning
@@ -171,6 +186,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Account provisioned successfully" });
   } catch (error: any) {
     console.error("Provisioning Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return toErrorResponse(error);
   }
 }
