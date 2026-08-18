@@ -64,10 +64,29 @@ export function ReportTable({ data, config, reportState, defaultCurrency, onSort
   }, [data, visibleColumns]);
   
   if (!data.length) {
+    // Name the period in the empty state. Every report opens on "This Month",
+    // and a module whose records all sit in an earlier month then renders a
+    // blank table that looks broken rather than out-of-range — which is exactly
+    // how it was read. Showing the dates makes the cause obvious.
+    const range = reportState.filters?.date_range as
+      | { start_date?: string; end_date?: string }
+      | undefined;
+    const activeFilters = Object.keys(reportState.filters ?? {}).filter(k => k !== 'date_range');
+
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-        <p className="text-lg">No records found for selected filters.</p>
-        <p className="text-sm">Try changing filters or removing constraints.</p>
+      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-1">
+        <p className="text-lg">No records found.</p>
+        {range?.start_date && range?.end_date && (
+          <p className="text-sm">
+            Period: <span className="font-medium text-foreground">{range.start_date}</span> to{' '}
+            <span className="font-medium text-foreground">{range.end_date}</span>
+          </p>
+        )}
+        <p className="text-sm">
+          {activeFilters.length > 0
+            ? `Widen the period, or clear the ${activeFilters.length} other active filter${activeFilters.length > 1 ? 's' : ''}.`
+            : 'Try a wider period — there may be records outside these dates.'}
+        </p>
       </div>
     );
   }

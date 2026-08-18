@@ -3544,3 +3544,40 @@ landing page and was never at risk.
 
 The Report group is now exactly the ten engine-backed reports: Order, Sales,
 Quotation, Payment, Lead, Deal, Visit, Ageing, Expense, Task.
+
+### Task report follow-ups (18 Aug 2026)
+
+Founder reported "no report shows data, everything shows zero". **Investigated and
+found no bug.** Reproduced the exact frontend path — impersonating the owner's
+auth uid under RLS — and every module returned correct data: Order, Payment,
+Visit and Expense all show August figures.
+
+The zeros were the **default period**. Every report opens on "This Month"
+(August 2026), and three modules have no August records at all:
+
+| Module | Records in August | Total |
+| --- | --- | --- |
+| Task | **0** | 14 (all dated 30 Jun – 27 Jul) |
+| Lead | **0** | 9 |
+| Deal | **0** | 3 |
+| Order / Payment / Visit / Expense | 12 / 6 / 19 / 3 | — |
+
+Fixed the real problem, which was that an out-of-range report is
+indistinguishable from a broken one: the empty state now **names the active
+period** and says whether other filters are set, instead of the bare "No records
+found for selected filters".
+
+Also in this pass:
+
+- **Task status reduced to Done / Undone** (founder decision). The table still
+  stores five statuses; the report exposes two, and "All" is leaving the Status
+  filter unset. Done = `Completed`, Undone = everything else including Cancelled
+  and null, so `# done + # undone = # task` exactly. `# cancelled` and
+  `# pending` are gone — they were slices of Undone presented as peers of it.
+- **Lead filter added** to the Task report. A task belongs to a lead *or* a
+  customer, and only Customer was filterable, which left the Lead tab
+  unfilterable.
+- **"Payment follow up" in the Activity Type filter**: verified the account
+  setting does contain it and the drawer does read `accounts.settings.task_types`
+  — this was the deploy not having landed when it was tested, the same timing
+  issue as the Expense Type picker earlier.

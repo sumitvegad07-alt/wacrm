@@ -15,12 +15,17 @@
 -- every period, so the report would under-report while looking perfectly
 -- healthy. "When was it meant to happen, else when was it raised."
 --
--- ── Counts ───────────────────────────────────────────────────────────────────
--- Statuses are Pending | In Progress | Waiting | Completed | Cancelled
--- (src/components/tasks/task-form.tsx STATUSES) and the counts are registered so
---   # completed + # pending + # cancelled = # task
--- exactly. `# overdue` is deliberately NOT part of that sum: it is a SUBSET of
--- pending (past due and still open), so adding it in would double-count.
+-- ── Counts / status ──────────────────────────────────────────────────────────
+-- The tasks table stores five statuses (Pending | In Progress | Waiting |
+-- Completed | Cancelled, per src/components/tasks/task-form.tsx STATUSES) but
+-- the REPORT exposes only two, by founder decision 2026-08-18:
+--   Done   = status = 'Completed'
+--   Undone = everything else, INCLUDING Cancelled and NULL
+-- "All" is simply leaving the Status filter unset. So
+--   # done + # undone = # task
+-- exactly, with no third bucket to leak into. `# overdue` is deliberately NOT
+-- part of that sum: it is a SUBSET of undone (past due and still open), so
+-- adding it in would double-count.
 --
 -- ── Types ────────────────────────────────────────────────────────────────────
 -- Every string column here is genuinely `text` (status, priority, activity_type
@@ -89,7 +94,8 @@ INSERT INTO report_registry_dimensions (module_name, key, label, sql_select, req
 ('task', 'country',       'Country',       'COALESCE(NULLIF(c.country, ''''), NULLIF(l.country, ''''), ''India'')', '["contacts","leads_all"]'),
 ('task', 'date',          'Period',        'TO_CHAR(COALESCE(base.due_date, base.created_at::date), ''FMMonth YYYY'')', '[]'),
 ('task', 'activity_type', 'Activity Type', 'COALESCE(NULLIF(base.activity_type, ''''), ''Task'')', '[]'),
-('task', 'status',        'Status',        'COALESCE(NULLIF(base.status, ''''), ''Pending'')', '[]'),
+-- Two states, not five — see the header.
+('task', 'status',        'Status',        'CASE WHEN base.status = ''Completed'' THEN ''Done'' ELSE ''Undone'' END', '[]'),
 ('task', 'priority',      'Priority',      'COALESCE(NULLIF(base.priority, ''''), ''Medium'')', '[]')
 ON CONFLICT (module_name, key) DO UPDATE
   SET label = EXCLUDED.label, sql_select = EXCLUDED.sql_select, required_joins = EXCLUDED.required_joins;
@@ -97,16 +103,16 @@ ON CONFLICT (module_name, key) DO UPDATE
 -- ── Measures ─────────────────────────────────────────────────────────────────
 INSERT INTO report_registry_measures (module_name, key, label, sql_select, type, required_joins) VALUES
 ('task', 'task_count',      '# task',      'COUNT(DISTINCT base.id)', 'number', '[]'),
-('task', 'completed_count', '# completed', 'COUNT(DISTINCT base.id) FILTER (WHERE base.status = ''Completed'')', 'number', '[]'),
--- Open work: anything not finished and not abandoned.
-('task', 'pending_count',   '# pending',
- 'COUNT(DISTINCT base.id) FILTER (WHERE base.status NOT IN (''Completed'', ''Cancelled''))', 'number', '[]'),
-('task', 'cancelled_count', '# cancelled', 'COUNT(DISTINCT base.id) FILTER (WHERE base.status = ''Cancelled'')', 'number', '[]'),
--- A SUBSET of pending, not a fourth bucket — past due and still open.
+('task', 'done_count',   '# done',   'COUNT(DISTINCT base.id) FILTER (WHERE base.status = ''Completed'')', 'number', '[]'),
+-- COALESCE so a null status counts as undone rather than vanishing from both
+-- columns and quietly breaking the reconciliation.
+('task', 'undone_count', '# undone',
+ 'COUNT(DISTINCT base.id) FILTER (WHERE COALESCE(base.status, '''') <> ''Completed'')', 'number', '[]'),
+-- A SUBSET of undone, not a third bucket — past due and still open.
 ('task', 'overdue_count',   '# overdue',
  'COUNT(DISTINCT base.id) FILTER (WHERE base.due_date IS NOT NULL AND base.due_date < CURRENT_DATE AND base.status NOT IN (''Completed'', ''Cancelled''))', 'number', '[]'),
 -- Computed per group, never summed (§5e).
-('task', 'completion_ratio', 'Completed %',
+('task', 'completion_ratio', 'Done %',
  'ROUND(100.0 * COUNT(DISTINCT base.id) FILTER (WHERE base.status = ''Completed'') / NULLIF(COUNT(DISTINCT base.id), 0), 1)', 'percent', '[]')
 ON CONFLICT (module_name, key) DO UPDATE
   SET label = EXCLUDED.label, sql_select = EXCLUDED.sql_select, type = EXCLUDED.type, required_joins = EXCLUDED.required_joins;
@@ -115,7 +121,9 @@ ON CONFLICT (module_name, key) DO UPDATE
 INSERT INTO report_registry_filters (module_name, key, label, sql_where, required_joins) VALUES
 ('task', 'date_range', 'Period',
  'COALESCE(base.due_date, base.created_at::date) >= ($2::jsonb->''date_range''->>''start_date'')::date AND COALESCE(base.due_date, base.created_at::date) <= ($2::jsonb->''date_range''->>''end_date'')::date', '[]'),
-('task', 'status',        'Status',        'base.status = ($2::jsonb->>''status'')', '[]'),
+-- Compares against the same CASE the dimension uses, so filtering and grouping
+-- can never disagree about what "Done" means.
+('task', 'status',        'Status',        '(CASE WHEN base.status = ''Completed'' THEN ''Done'' ELSE ''Undone'' END) = ($2::jsonb->>''status'')', '[]'),
 ('task', 'priority',      'Priority',      'base.priority = ($2::jsonb->>''priority'')', '[]'),
 ('task', 'activity_type', 'Activity Type', 'base.activity_type = ($2::jsonb->>''activity_type'')', '[]'),
 ('task', 'overdue', 'Overdue',

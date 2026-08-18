@@ -7,10 +7,16 @@ import type { ReportDefinition } from './types';
  * the two splits that only tasks have: Activity Type and Status.
  *
  * The counts are registered so that
- *   # completed + # pending + # cancelled = # task
- * exactly. `# overdue` is deliberately NOT part of that sum — it is a SUBSET of
- * pending (past its due date and still open), so adding it in would double-count.
- * It is a default column anyway, because it is the number a manager acts on.
+ *   # done + # undone = # task
+ * exactly. STATUS IS TWO STATES, NOT FIVE (founder decision, 2026-08-18): the
+ * tasks table still stores Pending / In Progress / Waiting / Completed /
+ * Cancelled, but for reporting the only question is whether it got done. Done =
+ * Completed; Undone = everything else, Cancelled and null included. "All" is
+ * simply leaving the Status filter unset.
+ *
+ * `# overdue` is deliberately NOT part of that sum — it is a SUBSET of undone
+ * (past its due date and still open), so adding it in would double-count. It is
+ * a default column anyway, because it is the number a manager acts on.
  *
  * TASKS ARE DATED BY DUE DATE, falling back to created_at. 3 of 14 prod tasks
  * have no due date, and dating strictly by due_date would silently drop them
@@ -29,8 +35,8 @@ import type { ReportDefinition } from './types';
 /** The completion picture — identical on every tab. */
 const COMPLETION_COLUMNS = [
   'task_count',
-  'completed_count',
-  'pending_count',
+  'done_count',
+  'undone_count',
   'overdue_count',
   'completion_ratio',
 ] as const;
@@ -56,17 +62,16 @@ export const taskReportConfig: ReportDefinition = {
 
   measures: [
     { key: 'task_count', label: '# task', type: 'number' },
-    { key: 'completed_count', label: '# completed', type: 'number' },
-    { key: 'pending_count', label: '# pending', type: 'number' },
-    // A subset of pending, not a fourth bucket — see the file header.
+    { key: 'done_count', label: '# done', type: 'number' },
+    { key: 'undone_count', label: '# undone', type: 'number' },
+    // A subset of undone, not a third bucket — see the file header.
     { key: 'overdue_count', label: '# overdue', type: 'number' },
-    { key: 'cancelled_count', label: '# cancelled', type: 'number' },
     // Computed per group in SQL, never summed — the footer dashes it and the KPI
     // card recomputes it across the whole result set (§5e).
-    { key: 'completion_ratio', label: 'Completed %', type: 'percent' },
+    { key: 'completion_ratio', label: 'Done %', type: 'percent' },
   ],
 
-  kpis: ['task_count', 'completed_count', 'overdue_count', 'completion_ratio'],
+  kpis: ['task_count', 'done_count', 'overdue_count', 'completion_ratio'],
 
   filters: [
     { key: 'date_range', label: 'Period', type: 'date_range', section: 'PERIOD' },
@@ -75,12 +80,11 @@ export const taskReportConfig: ReportDefinition = {
       label: 'Status',
       type: 'select',
       section: 'TASK',
+      // Two states, not five. "All" is simply leaving the filter unset, which
+      // the drawer already offers as "Select Status".
       options: [
-        { label: 'Pending', value: 'Pending' },
-        { label: 'In Progress', value: 'In Progress' },
-        { label: 'Waiting', value: 'Waiting' },
-        { label: 'Completed', value: 'Completed' },
-        { label: 'Cancelled', value: 'Cancelled' },
+        { label: 'Done', value: 'Done' },
+        { label: 'Undone', value: 'Undone' },
       ],
     },
     {
@@ -122,6 +126,7 @@ export const taskReportConfig: ReportDefinition = {
       ],
     },
     { key: 'customer', label: 'Customer', type: 'customer', section: 'CUSTOMER' },
+    { key: 'lead', label: 'Lead', type: 'lead', section: 'CUSTOMER' },
     { key: 'country', label: 'Country', type: 'territory', section: 'AREA', territoryLevel: 1 },
     { key: 'state', label: 'State', type: 'territory', section: 'AREA', territoryLevel: 2 },
     { key: 'city', label: 'City', type: 'territory', section: 'AREA', territoryLevel: 3 },
