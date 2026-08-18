@@ -50,7 +50,7 @@ export const expenseReportConfig: ReportDefinition = {
   requiredModule: 'expense',
 
   dimensions: [
-    { key: 'user', label: 'Employee', category: 'user' },
+    { key: 'user', label: 'User', category: 'user' },
     { key: 'approver', label: 'Approved By', category: 'user' },
     { key: 'expense_type', label: 'Expense Type', category: 'customer' },
     { key: 'allowance_type', label: 'Allowance Type', category: 'customer' },
@@ -127,7 +127,7 @@ export const expenseReportConfig: ReportDefinition = {
   tabConfigs: [
     {
       key: 'user',
-      label: 'Employee',
+      label: 'User',
       dimension: 'user',
       defaultMeasures: [...STATUS_COLUMNS],
     },

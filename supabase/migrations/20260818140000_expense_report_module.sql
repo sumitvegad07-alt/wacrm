@@ -53,9 +53,9 @@ ON CONFLICT (module_name, join_key) DO UPDATE SET sql_join = EXCLUDED.sql_join;
 
 -- ── Dimensions ───────────────────────────────────────────────────────────────
 INSERT INTO report_registry_dimensions (module_name, key, label, sql_select, required_joins) VALUES
-('expense', 'user',           'Employee',       'COALESCE(u.full_name, u.email, ''Unassigned'')', '["employee"]'),
+('expense', 'user',           'User',           'COALESCE(u.full_name, u.email, ''Unassigned'')', '["employee"]'),
 ('expense', 'expense_type',   'Expense Type',   'COALESCE(et.expense_name, ''Unknown'')', '["expense_type"]'),
-('expense', 'allowance_type', 'Allowance Type', 'COALESCE(NULLIF(et.allowance_type, ''''), ''-'')', '["expense_type"]'),
+('expense', 'allowance_type', 'Allowance Type', 'COALESCE(NULLIF(et.allowance_type::text, ''''), ''-'')', '["expense_type"]'),
 ('expense', 'date',           'Period',         'TO_CHAR(base.expense_date, ''FMMonth YYYY'')', '[]'),
 ('expense', 'status',         'Status',         'base.status::text', '[]'),
 ('expense', 'approver',       'Approved By',    'COALESCE(ap.full_name, ap.email, ''Not approved'')', '["approver"]'),
@@ -99,12 +99,15 @@ INSERT INTO report_registry_filters (module_name, key, label, sql_where, require
 -- then returns nothing instead of raising invalid_text_representation.
 ('expense', 'status', 'Status', 'base.status::text = ($2::jsonb->>''status'')', '[]'),
 ('expense', 'expense_type', 'Expense Type', 'base.expense_type_id = ($2::jsonb->>''expense_type'')::uuid', '[]'),
-('expense', 'allowance_type', 'Allowance Type', 'et.allowance_type = ($2::jsonb->>''allowance_type'')', '["expense_type"]'),
+('expense', 'allowance_type', 'Allowance Type', 'et.allowance_type::text = ($2::jsonb->>''allowance_type'')', '["expense_type"]'),
 -- employee_id points at profiles.id, but the picker may hand back either key.
-('expense', 'user', 'Employee',
- 'base.employee_id IN (SELECT id FROM profiles WHERE id = ($2::jsonb->''user''->>''user_id'')::uuid OR user_id = ($2::jsonb->''user''->>''user_id'')::uuid OR id = ($2::jsonb->>''user'')::uuid OR user_id = ($2::jsonb->>''user'')::uuid)', '[]'),
+-- Compared as TEXT, not cast to uuid: the payload is a bare string today but an
+-- object in other modules' conventions, and ($2->>'user')::uuid raises 22P02 on
+-- the object form rather than simply not matching.
+('expense', 'user', 'User',
+ 'base.employee_id IN (SELECT p.id FROM profiles p WHERE p.user_id::text = COALESCE($2::jsonb->''user''->>''user_id'', $2::jsonb->>''user'') OR p.id::text = COALESCE($2::jsonb->''user''->>''user_id'', $2::jsonb->>''user''))', '[]'),
 ('expense', 'approver', 'Approved By',
- 'base.approved_by IN (SELECT user_id FROM profiles WHERE id = ($2::jsonb->''approver''->>''user_id'')::uuid OR user_id = ($2::jsonb->''approver''->>''user_id'')::uuid OR id = ($2::jsonb->>''approver'')::uuid OR user_id = ($2::jsonb->>''approver'')::uuid)', '[]')
+ 'base.approved_by IN (SELECT p.user_id FROM profiles p WHERE p.user_id::text = COALESCE($2::jsonb->''approver''->>''user_id'', $2::jsonb->>''approver'') OR p.id::text = COALESCE($2::jsonb->''approver''->>''user_id'', $2::jsonb->>''approver''))', '[]')
 ON CONFLICT (module_name, key) DO UPDATE
   SET label = EXCLUDED.label, sql_where = EXCLUDED.sql_where, required_joins = EXCLUDED.required_joins;
 

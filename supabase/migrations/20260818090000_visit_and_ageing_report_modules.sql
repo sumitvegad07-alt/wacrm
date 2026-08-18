@@ -312,7 +312,9 @@ INSERT INTO report_registry_filters (module_name, key, label, sql_where, require
 ('visit', 'lead', 'Lead',
  'base.target_type = ''Lead'' AND base.target_id = ($2::jsonb->>''lead'')::uuid', '[]'),
 ('visit', 'user', 'User',
- 'base.user_id IN (SELECT user_id FROM profiles WHERE user_id = ($2::jsonb->''user''->>''user_id'')::uuid OR id = ($2::jsonb->''user''->>''user_id'')::uuid OR user_id = ($2::jsonb->>''user'')::uuid OR id = ($2::jsonb->>''user'')::uuid)', '[]')
+ -- Compared as TEXT, never cast to uuid: ($2->>'user')::uuid raises 22P02 on
+ -- the object payload shape rather than simply failing to match.
+ 'base.user_id IN (SELECT p.user_id FROM profiles p WHERE p.user_id::text = COALESCE($2::jsonb->''user''->>''user_id'', $2::jsonb->>''user'') OR p.id::text = COALESCE($2::jsonb->''user''->>''user_id'', $2::jsonb->>''user''))', '[]')
 ON CONFLICT (module_name, key) DO UPDATE
   SET label = EXCLUDED.label, sql_where = EXCLUDED.sql_where, required_joins = EXCLUDED.required_joins;
 
@@ -342,7 +344,7 @@ INSERT INTO report_registry_dimensions (module_name, key, label, sql_select, req
 ('ageing', 'state',    'State',    'COALESCE(NULLIF(base.state, ''''), ''-'')', '[]'),
 ('ageing', 'country',  'Country',  'COALESCE(NULLIF(base.country, ''''), ''India'')', '[]'),
 ('ageing', 'user',     'User',     'COALESCE(u.full_name, u.email, ''Unassigned'')', '["users"]'),
-('ageing', 'customer_type', 'Customer Type', 'COALESCE(base.hierarchy_level, ''-'')', '[]'),
+('ageing', 'customer_type', 'Customer Type', 'COALESCE(base.hierarchy_level::text, ''-'')', '[]'),
 -- A row-level attribute of the customer, not an aggregate — carried as an extra
 -- dimension on the Customer tab where there is exactly one row per customer.
 ('ageing', 'last_order_date', 'Last Order Date',
@@ -368,11 +370,14 @@ INSERT INTO report_registry_filters (module_name, key, label, sql_where, require
 -- dates go inside the NOT EXISTS rather than constraining the base table.
 ('ageing', 'date_range', 'Period',
  'NOT EXISTS (SELECT 1 FROM orders o WHERE o.contact_id = base.id AND o.date >= ($2::jsonb->''date_range''->>''start_date'')::date AND o.date <= ($2::jsonb->''date_range''->>''end_date'')::date)', '[]'),
-('ageing', 'customer_type', 'Customer Type', 'base.hierarchy_level = ($2::jsonb->>''customer_type'')', '[]'),
+-- hierarchy_level is an INTEGER; compare as text so the '-' fallback works.
+('ageing', 'customer_type', 'Customer Type', 'base.hierarchy_level::text = ($2::jsonb->>''customer_type'')', '[]'),
 ('ageing', 'customer', 'Customer',
  'base.id = ($2::jsonb->''customer''->>''contact_id'')::uuid', '[]'),
 ('ageing', 'user', 'User',
- 'base.user_id IN (SELECT user_id FROM profiles WHERE user_id = ($2::jsonb->''user''->>''user_id'')::uuid OR id = ($2::jsonb->''user''->>''user_id'')::uuid OR user_id = ($2::jsonb->>''user'')::uuid OR id = ($2::jsonb->>''user'')::uuid)', '[]')
+ -- Compared as TEXT, never cast to uuid: ($2->>'user')::uuid raises 22P02 on
+ -- the object payload shape rather than simply failing to match.
+ 'base.user_id IN (SELECT p.user_id FROM profiles p WHERE p.user_id::text = COALESCE($2::jsonb->''user''->>''user_id'', $2::jsonb->>''user'') OR p.id::text = COALESCE($2::jsonb->''user''->>''user_id'', $2::jsonb->>''user''))', '[]')
 ON CONFLICT (module_name, key) DO UPDATE
   SET sql_where = EXCLUDED.sql_where, required_joins = EXCLUDED.required_joins;
 

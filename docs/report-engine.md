@@ -240,8 +240,52 @@ error — the LEFT JOIN just never matches.
 pointing it at a missing column renders a list of blanks rather than failing.
 
 Verified on prod 2026-08-18: 9 expenses, ₹4,260, 572 km, reconciling identically
-across the Employee, Expense Type and Status tabs
+across the User, Expense Type and Status tabs
 (3,560 Pending + 600 Approved + 100 Rejected = 4,260).
+
+## 5i. Registered SQL is untyped text — audit it by executing it
+
+The registry stores SQL as **strings**. Nothing typechecks them: a dimension that
+compares an enum to text, or COALESCEs an integer with `'-'`, is accepted at
+registration and only fails when a user clicks that tab. Worse, the failure is
+invisible — `execute_report` raises, `<ReportViewer />` catches, and the user sees
+the ordinary empty state **"No records found for selected filters"**. It looks
+like missing data, not a broken report.
+
+Three real instances, all shipped and all found this way:
+
+| Column | Actual type | Registered as | Error |
+| --- | --- | --- | --- |
+| `expense_types.allowance_type` | enum | `NULLIF(col, '')` | 22P02 invalid enum input `""` |
+| `expense_types.allowance_type` | enum | `col = ($2->>'…')` | 42883 no operator `enum = text` |
+| `contacts.hierarchy_level` | integer | `COALESCE(col, '-')` | 22P02 invalid integer `"-"` |
+
+**Rule: cast the COLUMN to `::text`, never the literal to the column's type.**
+`col::text = $x` yields no match on an unknown value; `$x::enum` raises and takes
+the whole report down.
+
+The same applies to uuid payloads: `($2->>'user')::uuid` raises if the stored
+filter value is the object form `{"user_id": …}`. Compare as text and `COALESCE`
+the shapes instead, so a wrong shape matches nothing rather than erroring.
+
+**When adding or editing a module, execute every registered entry once.** Loop
+the registry, call `execute_report` per dimension, per measure, and per filter
+with each payload shape the drawer can emit, and catch exceptions. This caught
+all three bugs above in one pass — including one in a report that had already
+shipped and looked fine. Current state: 31 dimensions, 32 measures and 36
+filters across `visit` / `ageing` / `ageing_product` / `expense`, all executing
+clean.
+
+Note the same fragile `::uuid` cast still exists on the `user` filters of
+`order` / `sales` / `lead` / `deal` / `quotation` / `payment`. It is latent —
+the drawer stores a bare string for `type: 'user'` — and is flagged, not changed.
+
+### Lookup pickers fail silently too
+
+`AsyncSearchSelect` swallowed query errors (`if (!error && data)`), so pointing it
+at a column that does not exist rendered a bland "No results found." — which is
+exactly what a correctly-configured but empty table looks like. It now logs the
+failing table and column list to the console.
 
 ## 6. Future Compatibility & Onboarding Modules
 To onboard a new module (e.g. `Visits`):

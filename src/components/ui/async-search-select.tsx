@@ -66,7 +66,18 @@ export function AsyncSearchSelect({
       }
 
       const { data, error } = await query;
-      
+
+      // A bad table/column here (e.g. selecting `name` from a table whose label
+      // column is `expense_name`) returns an error and an empty list, which the
+      // UI renders as a bland "No results found." — indistinguishable from a
+      // genuinely empty table. Log it so the next one is diagnosable.
+      if (error) {
+        console.error(
+          `AsyncSearchSelect: query failed on "${tableName}" (select "${valueColumn}, ${displayColumn}")`,
+          error
+        );
+      }
+
       if (!error && data) {
         setOptions(
           data.map((item: Record<string, any>) => ({

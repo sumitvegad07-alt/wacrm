@@ -55,6 +55,15 @@ describe('Expense report', () => {
     expect(filterKeys).toContain('area');
   });
 
+  it('labels the claimant "User", matching every other report', () => {
+    const tab = expenseReportConfig.tabConfigs?.find((t) => t.key === 'user');
+    expect(tab?.label).toBe('User');
+    expect(expenseReportConfig.dimensions.find((d) => d.key === 'user')?.label).toBe('User');
+    // The approver is a different person and keeps its own label.
+    expect(expenseReportConfig.tabConfigs?.find((t) => t.key === 'approver')?.label)
+      .toBe('Approved By');
+  });
+
   it('registers the approval ratio as a percent so it is never summed', () => {
     const ratio = expenseReportConfig.measures.find((m) => m.key === 'approval_ratio');
     expect(ratio?.type).toBe('percent');

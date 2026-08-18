@@ -3431,7 +3431,7 @@ hold pending its field list.
 report-engine migration, but **nothing was ever registered against it** — the
 module was an empty shell until now.
 
-Tabs: **Employee, Expense Type, Allowance Type, Period, Status, Approved By.**
+Tabs: **User, Expense Type, Allowance Type, Period, Status, Approved By.**
 
 - **Same status pivot as Payments.** Every tab carries Pending / Approved /
   Rejected / Total, so a row reads "of this much claimed by X, this much is
@@ -3459,3 +3459,29 @@ single "Unassigned" row. They light up the moment those HR fields are filled.
 **Nav note:** the Report group now has both "Expense Reports" (this report) and
 the pre-existing "Expenses Report" (`/expenses`, which is the expense *list*, not
 a report). Worth renaming the latter — flagged, not changed.
+
+
+### Post-ship fixes (18 Aug 2026)
+
+Three registered-SQL type bugs, all found by executing every registry entry
+rather than by reading it. The registry stores SQL as **untyped strings**, so
+none of these failed at registration — and when they fail at runtime the RPC
+raises, the viewer catches, and the user sees the ordinary **"No records found
+for selected filters"**. A broken report is indistinguishable from an empty one.
+
+- `expense_types.allowance_type` is an **enum**, registered as text. Broke both
+  the Allowance Type filter *and* the whole Allowance Type tab.
+- `contacts.hierarchy_level` is an **integer**, registered as text. Broke the
+  Ageing report's Customer Type grouping — shipped a day earlier and unnoticed.
+- The `user` filters cast the payload straight to uuid, which raises on the
+  object payload shape instead of simply not matching. Hardened on the four new
+  modules; the same pattern is still latent on order/sales/lead/deal/quotation/
+  payment and is flagged, not changed.
+
+Rule now documented in `docs/report-engine.md` §5i: **cast the COLUMN to `::text`,
+never the literal to the column's type**, and execute every registry entry once
+when adding a module. Full sweep is clean: 31 dimensions, 32 measures, 36 filters.
+
+Also: `AsyncSearchSelect` silently swallowed query errors, so the Expense Type
+picker showed "No results found." when it was really a 400 on a missing column.
+It now logs the failing table and columns.
