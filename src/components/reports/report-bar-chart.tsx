@@ -16,6 +16,8 @@ interface ReportBarChartProps {
   config: ReportDefinition;
   reportState: ReportConfig;
   defaultCurrency: string;
+  /** Measure to plot. Chosen by the user; falls back to the first selected. */
+  measureKey?: string;
 }
 
 
@@ -23,14 +25,18 @@ interface ReportBarChartProps {
 // Ensure distinct colors
 const COLORS = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be123c'];
 
-export function ReportBarChart({ data, config, reportState, defaultCurrency }: ReportBarChartProps) {
+export function ReportBarChart({ data, config, reportState, defaultCurrency, measureKey }: ReportBarChartProps) {
   const chartData = useMemo(() => {
     let processData = [...data];
     if (reportState.topN && reportState.topN !== 'all') {
-      // Sort by first measure and take top N
-      const firstMeasure = reportState.measures[0];
-      if (firstMeasure) {
-        processData = processData.sort((a, b) => Number(b[firstMeasure] || 0) - Number(a[firstMeasure] || 0)).slice(0, reportState.topN as number);
+      // Rank by the user's chosen chart measure so "top 10" means top 10 by the
+      // column they care about, falling back to the first selected one.
+      const rankBy =
+        measureKey && reportState.measures.includes(measureKey)
+          ? measureKey
+          : reportState.measures[0];
+      if (rankBy) {
+        processData = processData.sort((a, b) => Number(b[rankBy] || 0) - Number(a[rankBy] || 0)).slice(0, reportState.topN as number);
       }
     }
 
@@ -46,7 +52,7 @@ export function ReportBarChart({ data, config, reportState, defaultCurrency }: R
       });
       return newRow;
     });
-  }, [data, reportState.dimensions, reportState.measures, reportState.topN]);
+  }, [data, reportState.dimensions, reportState.measures, reportState.topN, measureKey]);
 
   if (!data.length || reportState.measures.length === 0) {
     return (

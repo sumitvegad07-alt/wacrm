@@ -14,18 +14,27 @@ interface ReportDonutChartProps {
   config: ReportDefinition;
   reportState: ReportConfig;
   defaultCurrency: string;
+  /** Measure to plot. Chosen by the user; falls back to the first selected. */
+  measureKey?: string;
 }
 
 const COLORS = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be123c', '#0f766e', '#a21caf', '#1d4ed8'];
 
-export function ReportDonutChart({ data, config, reportState, defaultCurrency }: ReportDonutChartProps) {
+export function ReportDonutChart({ data, config, reportState, defaultCurrency, measureKey }: ReportDonutChartProps) {
+  // A chart plots exactly one measure. Use the one the user picked, falling back
+  // to the first selected column when nothing is chosen yet — and again if the
+  // pick is stale, since switching tabs changes the measure list. Resolved once
+  // so the plotted data and the "Showing:" label can never disagree.
+  const plottedKey =
+    measureKey && reportState.measures.includes(measureKey)
+      ? measureKey
+      : reportState.measures[0];
+
   const chartData = useMemo(() => {
-    // We only use the FIRST selected measure for the donut chart
-    const measureKey = reportState.measures[0];
-    if (!measureKey) return [];
+    if (!plottedKey) return [];
 
     // Sort data descending
-    let processData = [...data].sort((a, b) => Number(b[measureKey] || 0) - Number(a[measureKey] || 0));
+    let processData = [...data].sort((a, b) => Number(b[plottedKey] || 0) - Number(a[plottedKey] || 0));
 
     const topN = reportState.topN && reportState.topN !== 'all' ? (reportState.topN as number) : 10;
     
@@ -34,22 +43,22 @@ export function ReportDonutChart({ data, config, reportState, defaultCurrency }:
     if (processData.length > topN) {
       finalData = processData.slice(0, topN).map(row => {
         const labelParts = reportState.dimensions.map(dKey => String(row[dKey] || 'Unknown'));
-        return { name: labelParts.length > 0 ? labelParts.join(' - ') : 'Total', value: Number(row[measureKey]) || 0 };
+        return { name: labelParts.length > 0 ? labelParts.join(' - ') : 'Total', value: Number(row[plottedKey]) || 0 };
       });
       
-      const othersValue = processData.slice(topN).reduce((sum, row) => sum + (Number(row[measureKey]) || 0), 0);
+      const othersValue = processData.slice(topN).reduce((sum, row) => sum + (Number(row[plottedKey]) || 0), 0);
       if (othersValue > 0) {
         finalData.push({ name: 'Others', value: othersValue });
       }
     } else {
       finalData = processData.map(row => {
         const labelParts = reportState.dimensions.map(dKey => String(row[dKey] || 'Unknown'));
-        return { name: labelParts.length > 0 ? labelParts.join(' - ') : 'Total', value: Number(row[measureKey]) || 0 };
+        return { name: labelParts.length > 0 ? labelParts.join(' - ') : 'Total', value: Number(row[plottedKey]) || 0 };
       });
     }
 
     return finalData;
-  }, [data, reportState.dimensions, reportState.measures, reportState.topN]);
+  }, [data, reportState.dimensions, reportState.topN, plottedKey]);
 
   if (!data.length || reportState.measures.length === 0) {
     return (
@@ -59,7 +68,7 @@ export function ReportDonutChart({ data, config, reportState, defaultCurrency }:
     );
   }
 
-  const activeMeasure = config.measures.find(m => m.key === reportState.measures[0]);
+  const activeMeasure = config.measures.find(m => m.key === plottedKey);
 
   const formatTooltipValue = (value: any) => {
     const valNum = Number(value);

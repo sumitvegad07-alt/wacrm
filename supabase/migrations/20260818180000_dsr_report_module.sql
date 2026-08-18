@@ -207,7 +207,6 @@ INSERT INTO report_registry_filters (module_name, key, label, sql_where, require
 -- inside every measure instead. Registered rather than omitted so that its
 -- absence from the WHERE clause is documented rather than mysterious.
 ('dsr', 'date_range', 'Period', 'TRUE', '[]'),
-('dsr', 'employee_status', 'Employee Status', 'base.status = ($2::jsonb->>''employee_status'')', '[]'),
 ('dsr', 'role', 'User Role', 'COALESCE(er.name, base.account_role::text) = ($2::jsonb->>''role'')', '["employee_role"]'),
 -- Compared as TEXT, never cast to uuid (§5i).
 ('dsr', 'user', 'User',

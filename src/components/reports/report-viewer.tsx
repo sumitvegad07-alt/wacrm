@@ -439,6 +439,14 @@ export function ReportViewer({ config }: ReportViewerProps) {
   // Get the period label for display
   const periodLabel = PERIOD_PRESETS.find(p => p.value === reportState.period)?.label ?? 'This Month';
 
+  /** Measure the charts plot. Falls back to the first selected column, and again
+   *  whenever a stored pick is no longer on screen — switching tabs replaces the
+   *  measure list, so a pick made on one tab is often meaningless on the next. */
+  const chartMeasureKey =
+    reportState.chartMeasure && reportState.measures.includes(reportState.chartMeasure)
+      ? reportState.chartMeasure
+      : reportState.measures[0];
+
   // Count active non-date filters
   const activeFilterCount = Object.keys(reportState.filters).filter(k => k !== 'date_range').length;
 
@@ -590,7 +598,10 @@ export function ReportViewer({ config }: ReportViewerProps) {
             >
               <SelectTrigger className="h-8 min-w-[135px] text-xs bg-background gap-1.5 font-semibold">
                 <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <SelectValue placeholder="Select Period" />
+                {/* base-ui's Select.Value renders the raw VALUE unless given
+                    children, so this trigger read "this_month" rather than
+                    "This Month" on every report. */}
+                <SelectValue placeholder="Select Period">{periodLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent align="start" className="w-48">
                 {PERIOD_PRESETS.map((preset) => (
@@ -600,6 +611,39 @@ export function ReportViewer({ config }: ReportViewerProps) {
                 ))}
               </SelectContent>
             </Select>
+
+            {/* A donut plots exactly ONE measure, and that used to be whichever
+                column happened to be first — "Assigned Customers" on the DSR.
+                Let the user say which. */}
+            {reportState.view === 'donut' && (
+              <>
+                <div className="h-4 w-px bg-border hidden sm:block mx-1" />
+                <Select
+                  value={chartMeasureKey}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    setReportState(s => ({ ...s, chartMeasure: val }));
+                  }}
+                >
+                  <SelectTrigger className="h-8 min-w-[150px] text-xs bg-background gap-1.5 font-semibold">
+                    <PieChart className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue placeholder="Chart measure">
+                      {config.measures.find(m => m.key === chartMeasureKey)?.label ?? 'Chart measure'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent align="start" className="w-56">
+                    {reportState.measures.map((mKey) => {
+                      const def = config.measures.find(m => m.key === mKey);
+                      return (
+                        <SelectItem key={mKey} value={mKey} className="text-xs">
+                          {def?.label ?? mKey}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
 
             <div className="h-4 w-px bg-border hidden sm:block mx-1" />
 
@@ -777,10 +821,10 @@ export function ReportViewer({ config }: ReportViewerProps) {
             </>
           )}
           {reportState.view === 'bar' && (
-            <ReportBarChart data={data} config={config} reportState={reportState} defaultCurrency={defaultCurrency} />
+            <ReportBarChart data={data} config={config} reportState={reportState} defaultCurrency={defaultCurrency} measureKey={chartMeasureKey} />
           )}
           {reportState.view === 'donut' && (
-            <ReportDonutChart data={data} config={config} reportState={reportState} defaultCurrency={defaultCurrency} />
+            <ReportDonutChart data={data} config={config} reportState={reportState} defaultCurrency={defaultCurrency} measureKey={chartMeasureKey} />
           )}
         </div>
       </Card>

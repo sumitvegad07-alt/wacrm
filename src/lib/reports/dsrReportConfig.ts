@@ -118,16 +118,6 @@ export const dsrReportConfig: ReportDefinition = {
     // Applies inside every measure, not to the base — see the header.
     { key: 'date_range', label: 'Period', type: 'date_range', section: 'PERIOD' },
     { key: 'user', label: 'User', type: 'user', section: 'USER' },
-    {
-      key: 'employee_status',
-      label: 'Employee Status',
-      type: 'select',
-      section: 'USER',
-      options: [
-        { label: 'Active', value: 'active' },
-        { label: 'Inactive', value: 'inactive' },
-      ],
-    },
     // Set membership, never a grouping: an employee covers many areas (§5h).
     { key: 'country', label: 'Country', type: 'territory', section: 'AREA', territoryLevel: 1 },
     { key: 'state', label: 'State', type: 'territory', section: 'AREA', territoryLevel: 2 },

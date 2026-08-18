@@ -25,6 +25,11 @@ export interface ReportConfig {
   sortColumn?: string;
   sortDirection?: 'asc' | 'desc';
   topN?: number | 'all';
+  /** Which measure the bar/donut chart plots. A chart can only ever show one,
+   *  and it used to be hardcoded to the first selected column — fine on a report
+   *  with four columns, useless on the DSR, whose first column is
+   *  "Assigned Customers". Falls back to the first measure when unset. */
+  chartMeasure?: string;
 }
 
 export interface ReportDimension {

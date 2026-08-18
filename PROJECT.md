@@ -3647,3 +3647,22 @@ productive 11/4, orders 22/4, order amount 115,301.15/14,790, quantity 668/70,
 days present 14/5, assigned 27/1, new leads 7/0, quotation amount 109,962.94/0,
 payment collected and expense claimed all matching exactly for the two active
 users. Registry sweep 39/39 clean. Unverified on screen.
+
+### DSR follow-ups (18 Aug 2026)
+
+- **Period dropdown showed the raw value** — "this_month" instead of "This Month",
+  on *every* report. `@base-ui` renders `Select.Value` as the value unless given
+  children; the trigger now renders the resolved label. Pre-existing, surfaced by
+  a DSR screenshot.
+- **Chart measure is now selectable.** A donut can only ever plot one measure and
+  it was hardcoded to the first selected column — "Assigned Customers" on the DSR,
+  which is a meaningless thing to chart. A picker appears in donut view
+  (`ReportConfig.chartMeasure`); the bar chart uses the same pick to rank its
+  top-N. Both fall back to the first measure, including when a stored pick is no
+  longer on screen after a tab switch.
+- **Employee Status filter removed** from the DSR at the founder's request —
+  every prod profile is `active`, so it filtered on one meaningful value. Deleted
+  from the registry as well as the config so the two cannot drift.
+- **Distance was not a bug.** All six sessions carrying both odometer readings are
+  dated **July 2026** (822 km, all sumit vegad), so July returns 822 and August
+  correctly returns 0. Verified via the RPC for both windows.

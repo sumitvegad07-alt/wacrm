@@ -48,6 +48,12 @@ describe('DSR report', () => {
       .forEach((k) => expect(keys, `missing ${k}`).toContain(k));
   });
 
+  it('has no Employee Status filter', () => {
+    // Dropped at the founder's request — every prod profile is 'active', so it
+    // was a filter with one meaningful value.
+    expect(dsrReportConfig.filters.map((f) => f.key)).not.toContain('employee_status');
+  });
+
   it('never offers Area as a grouping, only as a filter', () => {
     // employee_area_assignments is many-to-many — same rule as the Expense
     // report (§5h). Grouping would multiply every amount.
