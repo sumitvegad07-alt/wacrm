@@ -52,6 +52,7 @@ Rather than duplicate 11 dimensions, 10 measures, 19 filters and 5 joins under `
 | `ageing` | `contacts` | `['ageing']` |
 | `ageing_product` | `products` | `['ageing_product']` |
 | `task` | `tasks` | `['task']` |
+| `dsr` | `profiles` | `['dsr']` |
 
 A row registered under `sales` wins; otherwise the `order` row is used verbatim. Sales registers exactly **three** rows of its own — the `sales_date` join, the `date` dimension and the `date_range` filter — because a sale is dated by *dispatch completion* (the order's latest `order_dispatches.dispatched_at`, falling back to the order date when an order was closed without any dispatch). Every other dimension, measure, filter and join is inherited from `order` and cannot drift.
 
@@ -331,6 +332,70 @@ on the one table, pointing at different keys:
 
 Confirmed by counting matches both ways before registering (10/10 and 14/14),
 which is now the standing habit for any profile join: **check, do not assume.**
+
+## 5k. Cross-module roll-ups — measures as subqueries, not joins (DSR)
+
+Every module above reads ONE base table. The **DSR** (Daily Sales Report) reads
+nine: one row per employee, with columns drawn from visits, attendance, leave,
+orders, payments, expenses, leads, quotations and deals.
+
+Joining those onto `profiles` is not an option. Fan-out (§5) is bad enough with
+one 1-to-N relation; here it would be **eight simultaneously**. A rep with 10
+orders and 5 visits produces 50 rows, and every total is multiplied by the
+cardinality of every other module. Twin measures (§5d) cannot help — they fix one
+fan-out by offering a correctly-scoped alternative, and there is no correct
+alternative when eight relations multiply each other.
+
+**So the DSR joins nothing.** Every measure is a correlated scalar subquery:
+
+```sql
+SUM((SELECT COALESCE(SUM(o.total_amount), 0)
+       FROM orders o
+      WHERE o.account_id = base.account_id
+        AND o.user_id    = base.user_id
+        AND o.date BETWEEN <window>))
+```
+
+evaluated once per employee row. Nothing is joined, so nothing can fan out, and
+grouping by User or by Role is equally correct because `profiles` never
+duplicates. The outer `SUM` is what makes coarser grouping work: at User level it
+is a no-op over one row, at Role level it adds the members up.
+
+### The date window moves into the measures
+
+`profiles` has no date, so `date_range` cannot filter the base. It is registered
+as a deliberate **no-op (`TRUE`)** and each measure applies the window itself,
+`COALESCE`d to `±infinity` so a missing range means "all time" rather than
+silently returning zeros. Registering the no-op rather than omitting the filter
+keeps its absence from the WHERE clause documented instead of mysterious.
+
+### `ReportDefinition.defaultPeriod`
+
+The DSR opens on **today**, not `this_month`. A *daily* report that opened on a
+month would answer a different question than its name. Every other report keeps
+the `this_month` default.
+
+### Definitions that are choices, not facts
+
+Cross-module reports invite quiet disagreements with the single-module reports
+they draw from. Two deliberate ones, both documented in the config header:
+
+- **Payment Collected excludes Cancelled** (= Approved + Pending + Rejected),
+  because a cancelled payment is a voided entry that was never collected. The
+  **Payment report's Total includes it**, because that report reconciles every
+  row ever written. Different questions, different answers — and the DSR shows
+  Cancelled in its own column so the money is never simply missing. This was a
+  real bug caught by reconciliation: one cancelled ₹15,900 payment was inflating
+  Collected to ₹26,400 against ₹10,500 approved.
+- **Assigned Customers is a CURRENT count**, not date-bound; Missed = Assigned −
+  Visited, floored at zero.
+
+### Verify a roll-up by reconciling against its sources
+
+A cross-module report is only trustworthy if each column equals what its own
+module reports. After building, run the DSR beside a direct query per source and
+compare column by column — every figure matched on the first pass except the
+payment bug above, which only reconciliation could have surfaced.
 
 ## 6. Future Compatibility & Onboarding Modules
 To onboard a new module (e.g. `Visits`):

@@ -26,6 +26,7 @@ import {
   X,
   Zap,
   CheckSquare,
+  ClipboardList,
   Building2,
   Plus,
   Package,
@@ -375,6 +376,8 @@ function getMenuStructure(
         // which is the expense LIST, not a report.
         { href: "/reports/expenses", label: "Expense Reports", icon: Coins, module: "expenses", configModule: "expense" as const },
         { href: "/reports/tasks", label: "Task Reports", icon: CheckSquare, module: "activities" },
+        // One line per rep across every module. Opens on Today, not This Month.
+        { href: "/reports/dsr", label: "DSR", icon: ClipboardList, module: "location_tracking" },
         // This group holds ONLY reports built on the generic report engine.
         //
         // Four entries were removed on 2026-08-18: "Activity Report"

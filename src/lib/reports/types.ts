@@ -128,4 +128,9 @@ export interface ReportDefinition {
    *  the pipeline order, but most accounts have far more customer records, so
    *  opening there would show an empty table on a perfectly healthy report. */
   defaultTab?: string;
+  /** Period the report opens on. Defaults to 'this_month', which is right for
+   *  every cumulative report but wrong for the DSR — a *daily* report that
+   *  opened on a month would answer a different question than its name. Must be
+   *  one of PERIOD_PRESETS' values. */
+  defaultPeriod?: string;
 }

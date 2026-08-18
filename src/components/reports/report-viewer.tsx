@@ -93,9 +93,14 @@ export function ReportViewer({ config }: ReportViewerProps) {
     ?? 'customer';
   const [activeTab, setActiveTab] = useState<string>(initialTabKey);
 
-  // Compute initial date range for "this_month"
+  // The period the report opens on. 'this_month' suits every cumulative report;
+  // the DSR overrides it to 'today', because a *daily* report opening on a month
+  // answers a different question than its name.
+  const initialPeriod = config.defaultPeriod ?? 'this_month';
+
+  // Compute initial date range for the report's opening period
   const computeInitialDateFilter = useCallback(() => {
-    const range = getDatesForPeriod('this_month');
+    const range = getDatesForPeriod(initialPeriod);
     if (range?.from && range?.to) {
       return {
         start_date: toReportDate(range.from),
@@ -103,7 +108,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
       };
     }
     return undefined;
-  }, []);
+  }, [initialPeriod]);
 
   const initialDateRange = useMemo(() => computeInitialDateFilter(), [computeInitialDateFilter]);
 
@@ -135,7 +140,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
     measures: getDefaultMeasures(initialTabKey),
     filters: initialDateRange ? { date_range: initialDateRange } : {},
     view: 'table',
-    period: 'this_month',
+    period: initialPeriod,
     sortColumn: undefined,
     sortDirection: 'asc',
     topN: 10
@@ -231,7 +236,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
       let newFilters = { ...s.filters };
 
       // If switching to time (month-on-month) tab and period is single-month 'this_month', expand to last_180_days
-      if (tabKey === 'time' && s.period === 'this_month') {
+      if (tabKey === 'time' && s.period === initialPeriod) {
         newPeriod = 'last_180_days';
         const range = getDatesForPeriod('last_180_days');
         if (range?.from && range?.to) {

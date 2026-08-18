@@ -3581,3 +3581,69 @@ Also in this pass:
   setting does contain it and the drawer does read `accounts.settings.task_types`
   — this was the deploy not having landed when it was tested, the same timing
   issue as the Expense Type picker earlier.
+
+
+## DSR — Daily Sales Report (Added 18 Aug 2026)
+
+`/reports/dsr`, migration `20260818180000_dsr_report_module.sql` (applied to prod
+as `dsr_report_module_rpc` + `dsr_report_registry` +
+`dsr_payment_collected_excludes_cancelled`). Engine detail in
+`docs/report-engine.md` §5k.
+
+**The suite's only cross-module report.** One row per employee, each column drawn
+from a different module, so a manager reads one line and knows what a rep did
+that day. Tabs: **User** and **User Role**.
+
+Columns, in the order specified: Assigned / Visited / Missed Customers, Days
+Present, Leave Days, Total Visits, Productive Visits, Distance (km), New
+Customers, Order Amount, Order Quantity, Payment Collected, New Leads, Lead
+Visits, Quotation Amount, Approved Quotation Amount, New Deals, Deal Amount —
+plus the full status splits for **payments** (Approved / Pending / Rejected /
+Cancelled) and **expenses** (Approved / Pending / Rejected), and Orders count.
+
+**It opens on Today**, not This Month — the first report to override the default
+period, because a daily report that opened on a month would answer a different
+question than its name.
+
+### How it avoids multiplying every number by every other module
+
+Joining nine modules onto `profiles` would fan out eight ways at once. So the DSR
+**joins nothing**: every measure is a correlated scalar subquery that carries its
+own date window. Nothing joined means nothing can fan out, and because `profiles`
+never duplicates, grouping by User or Role is equally correct.
+
+### Definitions that are choices, not facts
+
+- **Payment Collected = Approved + Pending + Rejected, EXCLUDING Cancelled.** A
+  cancelled payment is a voided entry and was never collected. This deliberately
+  **differs from the Payment report's Total**, which includes Cancelled because it
+  reconciles every row ever written. Cancelled has its own DSR column so the
+  money stays visible. *This was a real bug found by reconciliation* — one
+  cancelled ₹15,900 payment was inflating Collected to ₹26,400 against ₹10,500
+  approved.
+- **Assigned Customers is a CURRENT count** (customers owned now), not date-bound.
+  Missed = Assigned − Visited, floored at zero.
+- **Distance is odometer-based**, not GPS — it is what travel allowance is paid on
+  — and counts only sessions where **both** readings were captured. On prod today
+  that is **6 of 31 sessions**, so this column under-reports until reps capture
+  both odometer photos. A GPS/haversine alternative was rejected: the engine
+  anticipates 1M+ pings and a per-employee distance computation would not survive.
+- **Quotations** use latest-version-only; "Approved" counts status Approved **or**
+  Accepted.
+
+### Source notes
+
+There is no `attendance` table — punch in/out is `tracking_sessions`, which also
+carries the odometer readings. Days Present = distinct punch-in dates. Leave Days
+sums `leave_days.day_value` (0.5 for half days) excluding Cancelled.
+
+Key discipline, verified by counting matches both ways before writing anything:
+contacts / tracking_sessions / site_visits / orders / payments / leads /
+quotations / deals key off the **auth uid**; `leave_days` and `expenses` key off
+**profiles.id**.
+
+**Verified on prod** column-by-column against each source module: visits 46/12,
+productive 11/4, orders 22/4, order amount 115,301.15/14,790, quantity 668/70,
+days present 14/5, assigned 27/1, new leads 7/0, quotation amount 109,962.94/0,
+payment collected and expense claimed all matching exactly for the two active
+users. Registry sweep 39/39 clean. Unverified on screen.
