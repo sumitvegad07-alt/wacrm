@@ -13,9 +13,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2, ToggleLeft } from "lucide-react";
+import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2, ToggleLeft, History } from "lucide-react";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/admin/billing";
 import Link from "next/link";
+
+const TIMELINE_DOT: Record<string, string> = {
+  account: "bg-primary",
+  admin: "bg-amber-500",
+  user: "bg-sky-500",
+  orders: "bg-emerald-500",
+  payments: "bg-emerald-600",
+  announcement: "bg-violet-500",
+};
 
 interface Member {
   id: string;
@@ -46,6 +55,16 @@ export default function CompanyDetailPage() {
   const [userCount, setUserCount] = useState<number | "">("");
   const [notes, setNotes] = useState("");
   const [modules, setModules] = useState<Record<string, boolean>>({});
+  const [timeline, setTimeline] = useState<
+    { occurred_at: string; category: string; summary: string }[]
+  >([]);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch(`/api/admin/accounts/${id}/timeline`);
+      if (res.ok) setTimeline((await res.json()).events || []);
+    })();
+  }, [id]);
 
   useEffect(() => {
     async function load() {
@@ -338,6 +357,40 @@ export default function CompanyDetailPage() {
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Activity timeline */}
+      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <History className="h-5 w-5 text-primary" />
+          <h2 className="text-base font-semibold">Activity timeline</h2>
+          <span className="text-xs text-muted-foreground">
+            Assembled from existing records, so it is complete back to signup
+          </span>
+        </div>
+
+        {timeline.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No recorded activity.</p>
+        ) : (
+          <ol className="relative border-l border-border ml-2 space-y-3">
+            {timeline.map((e, i) => (
+              <li key={i} className="ml-4">
+                <span
+                  className={`absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full ${TIMELINE_DOT[e.category] ?? "bg-muted-foreground"}`}
+                />
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-sm">{e.summary}</span>
+                  <span className="text-xs text-muted-foreground ml-auto whitespace-nowrap">
+                    {new Date(e.occurred_at).toLocaleString()}
+                  </span>
+                </div>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {e.category}
+                </span>
+              </li>
+            ))}
+          </ol>
         )}
       </div>
 

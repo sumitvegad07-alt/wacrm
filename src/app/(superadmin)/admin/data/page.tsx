@@ -9,7 +9,29 @@ import {
   Loader2,
   ShieldAlert,
   X,
+  Download,
+  Bookmark,
+  BookmarkPlus,
+  Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
+
+const EXPORT_REASONS = [
+  { value: "customer_support", label: "Customer support" },
+  { value: "migration", label: "Migration" },
+  { value: "data_verification", label: "Data verification" },
+  { value: "billing_audit", label: "Billing audit" },
+];
+
+interface SavedView {
+  id: string;
+  name: string;
+  table_name: string;
+  filters: Filter[];
+  sort: string | null;
+  dir: string | null;
+  account_id: string | null;
+}
 
 interface TableInfo {
   name: string;
@@ -73,6 +95,11 @@ export default function DataBrowserPage() {
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [views, setViews] = useState<SavedView[]>([]);
+  const [showExport, setShowExport] = useState(false);
+  const [exportReason, setExportReason] = useState("customer_support");
+  const [exportNote, setExportNote] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -103,6 +130,86 @@ export default function DataBrowserPage() {
       );
     })();
   }, []);
+
+  const loadViews = useCallback(async () => {
+    const res = await fetch("/api/admin/db/views");
+    if (res.ok) setViews((await res.json()).views || []);
+  }, []);
+
+  useEffect(() => {
+    loadViews();
+  }, [loadViews]);
+
+  const applyView = (v: SavedView) => {
+    setSelected(v.table_name);
+    setFilters(v.filters || []);
+    setSort(v.sort);
+    setDir((v.dir as "asc" | "desc") || "desc");
+    setAccountId(v.account_id || "");
+    setPage(1);
+  };
+
+  const saveView = async () => {
+    const name = prompt("Name this view:");
+    if (!name?.trim() || !selected) return;
+    const res = await fetch("/api/admin/db/views", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, table: selected, filters, sort, dir, accountId }),
+    });
+    if (res.ok) {
+      toast.success("View saved");
+      loadViews();
+    } else {
+      toast.error("Could not save view");
+    }
+  };
+
+  const deleteView = async (id: string) => {
+    const res = await fetch(`/api/admin/db/views?id=${id}`, { method: "DELETE" });
+    if (res.ok) loadViews();
+  };
+
+  const runExport = async () => {
+    if (!selected) return;
+    setExporting(true);
+    try {
+      const res = await fetch("/api/admin/db/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          table: selected,
+          filters,
+          sort,
+          dir,
+          accountId: accountId || null,
+          reason: exportReason,
+          note: exportNote,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || "Export failed");
+      }
+      // The response is the CSV itself; hand it to the browser as a download.
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${selected}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setShowExport(false);
+      setExportNote("");
+      toast.success("Export downloaded and recorded in the audit log");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const loadRows = useCallback(async () => {
     if (!selected) return;
@@ -236,6 +343,35 @@ export default function DataBrowserPage() {
           </div>
         </div>
 
+        {views.length > 0 && (
+          <div className="p-2 border-b border-border">
+            <p className="flex items-center gap-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Bookmark className="h-3 w-3" />
+              Saved views
+            </p>
+            <div className="mt-1 space-y-0.5">
+              {views.map((v) => (
+                <div key={v.id} className="group flex items-center gap-1">
+                  <button
+                    onClick={() => applyView(v)}
+                    className="flex-1 min-w-0 text-left px-2 py-1.5 rounded-md text-sm text-muted-foreground hover:bg-muted hover:text-foreground truncate"
+                    title={`${v.table_name}${v.filters?.length ? ` · ${v.filters.length} filter(s)` : ""}`}
+                  >
+                    {v.name}
+                  </button>
+                  <button
+                    onClick={() => deleteView(v.id)}
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 px-1"
+                    aria-label={`Delete view ${v.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-2">
           {tablesLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -268,6 +404,24 @@ export default function DataBrowserPage() {
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
                   Read only
                 </span>
+
+                <button
+                  onClick={saveView}
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+                  title="Save this table, filters and sort as a view"
+                >
+                  <BookmarkPlus className="h-3.5 w-3.5" />
+                  Save view
+                </button>
+
+                <button
+                  onClick={() => setShowExport(true)}
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+                  title="Export the current filter as CSV"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export CSV
+                </button>
 
                 {selectedTable?.hasAccountId && (
                   <select
@@ -447,6 +601,71 @@ export default function DataBrowserPage() {
           </>
         )}
       </section>
+
+      {/* Export requires a reason. An export is the one read that leaves the
+          system permanently, so the audit entry needs to say why it happened,
+          not just that it did. */}
+      {showExport && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full space-y-4">
+            <div className="flex items-center gap-2">
+              <Download className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">Export {selected} as CSV</h2>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Exporting {total.toLocaleString()} row(s) matching the current
+              filter{accountId ? " for the selected tenant" : " across all tenants"}.
+              This is recorded in the audit log with your name and the reason
+              below.
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium block">Reason</label>
+              <select
+                value={exportReason}
+                onChange={(e) => setExportReason(e.target.value)}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              >
+                {EXPORT_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium block">
+                Note <span className="text-muted-foreground">(optional)</span>
+              </label>
+              <input
+                value={exportNote}
+                onChange={(e) => setExportNote(e.target.value)}
+                placeholder="Ticket number, customer name…"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 justify-end">
+              <button
+                onClick={() => setShowExport(false)}
+                className="px-3 py-2 text-sm rounded-md hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runExport}
+                disabled={exporting}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              >
+                {exporting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Export
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
