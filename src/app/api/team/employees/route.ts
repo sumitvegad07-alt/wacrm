@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { ForbiddenError, requireRole, toErrorResponse } from "@/lib/auth/account";
+
+// Columns that decide what a profile is allowed to do. They are never accepted
+// from the request body: this route runs with the service-role key, which
+// ignores RLS and column grants, so anything echoed straight into the update
+// would be a privilege-escalation path.
+const PRIVILEGE_COLUMNS = ["is_superadmin", "account_id", "user_id", "id"] as const;
+
+function stripPrivilegeColumns(updates: Record<string, unknown>) {
+  const clean = { ...updates };
+  for (const col of PRIVILEGE_COLUMNS) delete clean[col];
+  return clean;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,6 +31,16 @@ export async function POST(req: NextRequest) {
 
     if (!email || !password || !full_name || !account_id) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // The caller must be an admin of the account they are creating a user in.
+    // Without this, an unauthenticated request could mint a login in any tenant.
+    const ctx = await requireRole("admin");
+    if (ctx.accountId !== account_id) {
+      throw new ForbiddenError("Cannot create an employee in another account");
+    }
+    if (account_role === "owner") {
+      throw new ForbiddenError("Ownership cannot be assigned through this route");
     }
 
     // Creating a login account needs the service-role key (admin API). If it's not
@@ -112,17 +135,23 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("Employee creation exception:", error);
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return toErrorResponse(error);
   }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, updates } = await req.json();
+    const { id, updates: rawUpdates } = await req.json();
+    let updates: Record<string, any> = rawUpdates;
 
     if (!id || !updates) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    // The caller must be an admin of the same account as the target profile.
+    // Previously this route applied any `updates` to any `id` with no auth at
+    // all, so a bare request could set is_superadmin or reset any password.
+    const ctx = await requireRole("admin");
 
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
       return NextResponse.json(
@@ -135,6 +164,21 @@ export async function PATCH(req: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
+
+    const { data: target } = await supabaseAdmin
+      .from("profiles")
+      .select("account_id, account_role")
+      .eq("id", id)
+      .single();
+
+    if (!target || target.account_id !== ctx.accountId) {
+      throw new ForbiddenError("Cannot modify a profile in another account");
+    }
+    if (updates.account_role === "owner" && target.account_role !== "owner") {
+      throw new ForbiddenError("Ownership cannot be assigned through this route");
+    }
+
+    updates = stripPrivilegeColumns(updates);
 
     // If password is being updated, we need to update the Auth user
     if (updates.password) {
@@ -181,6 +225,6 @@ export async function PATCH(req: NextRequest) {
 
   } catch (error: any) {
     console.error("Employee update exception:", error);
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return toErrorResponse(error);
   }
 }

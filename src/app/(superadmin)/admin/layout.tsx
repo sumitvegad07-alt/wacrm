@@ -1,137 +1,32 @@
-"use client";
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import SuperAdminShell from "./admin-shell";
 
-import { useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import Link from "next/link";
-import {
-  Settings,
-  LogOut,
-  Users,
-  LayoutDashboard,
-  Building2,
-  CreditCard,
-  Megaphone,
-  UserCircle2,
-} from "lucide-react";
+// Server-side gate. The previous version was a client component whose only
+// protection was a useEffect redirect, which meant every signed-in user could
+// load /admin and receive the whole superadmin bundle before being bounced.
+// Deciding here keeps non-superadmins from ever reaching the shell.
+export default async function SuperAdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const supabase = await createClient();
 
-const NAV_ITEMS = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/companies", label: "Companies", icon: Building2 },
-  { href: "/admin/billing", label: "Billing & Plans", icon: CreditCard },
-  { href: "/admin/users", label: "All Users", icon: Users },
-  { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
-];
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-function SuperAdminShellInner({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading, profileLoading, isSuperadmin, signOut } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
+  if (!user) notFound();
 
-  useEffect(() => {
-    if (!loading && !profileLoading) {
-      if (!user) {
-        router.replace("/login?redirect=/admin");
-      } else if (!isSuperadmin) {
-        router.replace("/dashboard");
-      }
-    }
-  }, [user, loading, profileLoading, isSuperadmin, router]);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_superadmin")
+    .eq("user_id", user.id)
+    .single();
 
-  if (loading || profileLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center space-y-2">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground">Verifying Super Admin Access…</p>
-        </div>
-      </div>
-    );
-  }
+  // 404 rather than a redirect: a non-superadmin should not learn the route exists.
+  if (!profile?.is_superadmin) notFound();
 
-  if (!user || !isSuperadmin) {
-    return null;
-  }
-
-  return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Super Admin Sidebar */}
-      <div className="w-60 border-r border-border bg-card flex flex-col shrink-0">
-        {/* Header */}
-        <div className="p-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
-              <LayoutDashboard className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-foreground leading-tight">Super Admin</p>
-              <p className="text-xs text-muted-foreground leading-tight">WACRM Platform</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive =
-              href === "/admin"
-                ? pathname === "/admin"
-                : pathname?.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-                  isActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* User Footer */}
-        <div className="p-3 border-t border-border space-y-1">
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold uppercase">
-              {(profile?.full_name || user?.email || "S")[0]}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-foreground truncate">
-                {profile?.full_name || "Superadmin"}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {user?.email}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={signOut}
-            className="flex items-center gap-3 px-3 py-2 w-full text-left rounded-md hover:bg-red-500/10 text-red-500 text-sm transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-6">
-        {children}
-      </main>
-    </div>
-  );
-}
-
-export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <SuperAdminShellInner>{children}</SuperAdminShellInner>
-    </AuthProvider>
-  );
+  return <SuperAdminShell>{children}</SuperAdminShell>;
 }

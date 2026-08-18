@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Search, UserCircle2, ExternalLink, ShieldCheck, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -22,16 +21,15 @@ export default function GlobalUsersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const supabase = createClient();
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from("profiles")
-        .select(
-          "id, full_name, email, account_role, is_superadmin, account_id, accounts(name)"
-        )
-        .order("email");
+      // Goes through the service-role route: `profiles_select` is
+      // account-scoped, so querying from the browser only ever returned the
+      // superadmin's own company.
+      const res = await fetch("/api/admin/users");
+      const payload = await res.json();
+      const data = res.ok ? payload.users : [];
 
       const rows: UserRow[] = (data || []).map((p: any) => ({
         id: p.id,
@@ -67,10 +65,15 @@ export default function GlobalUsersPage() {
   const toggleSuperadmin = async (userId: string, currentStatus: boolean) => {
     setUpdatingId(userId);
     const nextStatus = !currentStatus;
-    const { error } = await supabase
-      .from("profiles")
-      .update({ is_superadmin: nextStatus })
-      .eq("id", userId);
+    // `is_superadmin` is not writable by `authenticated` any more, so this
+    // has to go through the guarded service-role route.
+    const res = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: userId, is_superadmin: nextStatus }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    const error = res.ok && !payload.error ? null : { message: payload.error || "Request failed" };
 
     if (!error) {
       setUsers((prev) =>

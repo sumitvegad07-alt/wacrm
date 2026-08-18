@@ -137,19 +137,33 @@ export default function EmployeesPage() {
     const derivedAccountRole =
       selectedEmployee.account_role === "owner" ? "owner" : selRole?.permissions?.all === true ? "admin" : "agent";
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        employee_code: editForm.employee_code,
-        mobile: editForm.mobile,
-        department: editForm.department,
-        employee_role_id: editForm.employee_role_id,
-        account_role: derivedAccountRole,
-        status: editForm.status,
-        web_access: editForm.web_access,
-        mobile_access: editForm.mobile_access,
-      })
-      .eq("id", selectedEmployee.id);
+    // Editing another user's profile has to go through the service-role route:
+    // `profiles_update` only permits a user to write their own row, so the
+    // direct client update this used to do silently affected zero rows.
+    let error: { message: string } | null = null;
+    try {
+      const res = await fetch("/api/team/employees", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedEmployee.id,
+          updates: {
+            employee_code: editForm.employee_code,
+            mobile: editForm.mobile,
+            department: editForm.department,
+            employee_role_id: editForm.employee_role_id,
+            account_role: derivedAccountRole,
+            status: editForm.status,
+            web_access: editForm.web_access,
+            mobile_access: editForm.mobile_access,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) error = { message: data.error || "Failed to update employee" };
+    } catch (e: any) {
+      error = { message: e?.message || "Failed to update employee" };
+    }
 
     setSaving(false);
     if (error) {
