@@ -133,6 +133,11 @@ export interface ReportDefinition {
    *  the pipeline order, but most accounts have far more customer records, so
    *  opening there would show an empty table on a perfectly healthy report. */
   defaultTab?: string;
+  /** Measure the bar/donut chart plots when the user has not picked one. The
+   *  fallback is the first selected column, which is only a sensible guess on a
+   *  short report — the DSR's first column is "Assigned Customers", a snapshot
+   *  nobody wants as a pie. */
+  defaultChartMeasure?: string;
   /** Period the report opens on. Defaults to 'this_month', which is right for
    *  every cumulative report but wrong for the DSR — a *daily* report that
    *  opened on a month would answer a different question than its name. Must be

@@ -48,6 +48,24 @@ describe('DSR report', () => {
       .forEach((k) => expect(keys, `missing ${k}`).toContain(k));
   });
 
+  it('charts a measure worth charting, not the first column', () => {
+    // The fallback is measures[0] = "Assigned Customers (Current)", a snapshot
+    // identical every day and meaningless as a pie.
+    expect(dsrReportConfig.defaultChartMeasure).toBe('order_amount');
+    const userTab = dsrReportConfig.tabConfigs?.find((t) => t.key === 'user');
+    expect(userTab?.defaultMeasures).toContain(dsrReportConfig.defaultChartMeasure!);
+  });
+
+  it('labels the period-independent and derived columns honestly', () => {
+    // Assigned is a snapshot with no assignment history behind it, so it reads
+    // the same for Today as for last year; saying so in the header is the only
+    // place a reader sees it. "Missed" was renamed because over one day it
+    // counts customers simply not reached, not failures against a plan.
+    const byKey = new Map(dsrReportConfig.measures.map((m) => [m.key, m.label]));
+    expect(byKey.get('assigned_customers')).toMatch(/current/i);
+    expect(byKey.get('missed_customers')).toBe('Not Visited');
+  });
+
   it('has no Employee Status filter', () => {
     // Dropped at the founder's request — every prod profile is 'active', so it
     // was a filter with one meaningful value.

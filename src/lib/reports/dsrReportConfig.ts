@@ -25,9 +25,16 @@ import type { ReportDefinition } from './types';
  *
  * Two figures that are deliberately NOT date-bound or NOT what you might assume:
  *
- * - **Assigned Customers** is a CURRENT count — how many customers this person
- *   owns right now, not how many were assigned during the window. Missed =
- *   Assigned − Visited, floored at zero.
+ * - **Assigned Customers (Current)** is a SNAPSHOT — how many customers this
+ *   person owns right now. It is period-INDEPENDENT: there is no assignment
+ *   history in the schema, so it reads the same whether you pick Today or last
+ *   year. The label carries the caveat because a reader filtering to Today would
+ *   otherwise conclude the filter was broken.
+ * - **Not Visited** = Assigned − Visited, floored at zero. Renamed from "Missed"
+ *   because over a single day it counts customers you simply did not get to,
+ *   which is not the same as missing a planned call. A true "missed" needs route
+ *   plan data (route_execution_stops); this account has none and the Route
+ *   module ships off, so that is the upgrade path rather than something to fake.
  * - **Payment Collected = Approved + Pending + Rejected, EXCLUDING Cancelled.**
  *   A cancelled payment is a voided entry and was never collected. This is
  *   deliberately different from the Payment report's Total, which does include
@@ -66,6 +73,9 @@ export const dsrReportConfig: ReportDefinition = {
   label: 'DSR (Daily Sales Report)',
   // A daily report must open on a day.
   defaultPeriod: 'today',
+  // The donut plots one measure. Left to the default it would chart
+  // "Assigned Customers", a snapshot that is identical every day.
+  defaultChartMeasure: 'order_amount',
 
   dimensions: [
     { key: 'user', label: 'User', category: 'user' },
@@ -76,9 +86,14 @@ export const dsrReportConfig: ReportDefinition = {
 
   measures: [
     // Coverage
-    { key: 'assigned_customers', label: 'Assigned Customers', type: 'number' },
+    // A SNAPSHOT — customers owned right now. There is no assignment history in
+    // the schema, so this cannot be period-bound; the label says so because a
+    // reader filtering to Today would otherwise think the filter was ignored.
+    { key: 'assigned_customers', label: 'Assigned Customers (Current)', type: 'number' },
     { key: 'visited_customers', label: 'Visited Customers', type: 'number' },
-    { key: 'missed_customers', label: 'Missed Customers', type: 'number' },
+    // Assigned - Visited. Named for what it counts: over a single day this is
+    // "customers you did not visit today", not a list of failures.
+    { key: 'missed_customers', label: 'Not Visited', type: 'number' },
     // Attendance
     { key: 'days_present', label: 'Days Present', type: 'number' },
     { key: 'leave_days', label: 'Leave Days', type: 'number' },

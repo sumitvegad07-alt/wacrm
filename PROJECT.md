@@ -3666,3 +3666,23 @@ users. Registry sweep 39/39 clean. Unverified on screen.
 - **Distance was not a bug.** All six sessions carrying both odometer readings are
   dated **July 2026** (822 km, all sumit vegad), so July returns 822 and August
   correctly returns 0. Verified via the RPC for both windows.
+
+### DSR follow-ups, round 2 (18 Aug 2026)
+
+- **Donut defaulted to "Assigned Customers".** The picker shipped and works, but
+  its fallback was `measures[0]`, which on the DSR is a snapshot identical every
+  day. Adds `ReportDefinition.defaultChartMeasure`; the DSR charts **Order
+  Amount** unless the user picks otherwise.
+- **"Today shows random data" was not random.** Verified against prod: today has
+  1 punch-in, 0 visits, 0 orders — so Days Present 1 and every other zero were
+  correct. What looked wrong was **Assigned Customers 27 / Missed 27 appearing
+  regardless of period**. Assigned is a SNAPSHOT (customers owned now); there is
+  no assignment history in the schema, so it *cannot* be period-bound. It is now
+  labelled **"Assigned Customers (Current)"** so the caveat is where the reader
+  actually looks.
+- **"Missed Customers" renamed to "Not Visited"**, same arithmetic (Assigned −
+  Visited, floored at zero). Over a single day "missed" read as 27 failures when
+  it only meant "not reached today". A true missed-call figure needs route plan
+  data (`route_execution_stops.status`); this account has **zero** route
+  executions and the Route module ships off, so that is the upgrade path the day
+  routes are enabled — not something to fake now.

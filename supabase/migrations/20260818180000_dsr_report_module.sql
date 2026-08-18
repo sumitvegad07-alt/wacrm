@@ -113,14 +113,21 @@ ON CONFLICT (module_name, key) DO UPDATE
 -- The window is COALESCEd to +/-infinity so "no range" means all time.
 INSERT INTO report_registry_measures (module_name, key, label, sql_select, type, required_joins) VALUES
 
--- Coverage. Assigned is a CURRENT figure, deliberately not date-bound.
-('dsr', 'assigned_customers', 'Assigned Customers',
+-- Coverage. Assigned is a SNAPSHOT, deliberately not date-bound — there is no
+-- assignment history in the schema — so it reads the same for Today as for last
+-- year. The label carries that caveat, because a reader filtering to Today would
+-- otherwise conclude the period filter was broken.
+('dsr', 'assigned_customers', 'Assigned Customers (Current)',
  'SUM((SELECT COUNT(*) FROM contacts c WHERE c.account_id = base.account_id AND c.user_id = base.user_id))', 'number', '[]'),
 ('dsr', 'visited_customers', 'Visited Customers',
  'SUM((SELECT COUNT(DISTINCT COALESCE(v.target_id, v.contact_id)) FROM site_visits v WHERE v.account_id = base.account_id AND v.user_id = base.user_id AND COALESCE(v.target_type, ''Customer'') <> ''Lead'' AND v.check_in_at::date >= COALESCE(($2::jsonb->''date_range''->>''start_date'')::date, ''-infinity''::date) AND v.check_in_at::date <= COALESCE(($2::jsonb->''date_range''->>''end_date'')::date, ''infinity''::date)))', 'number', '[]'),
--- Floored at zero: visiting a customer who is not assigned to you must not
--- produce a negative "missed".
-('dsr', 'missed_customers', 'Missed Customers',
+-- Assigned - Visited, floored at zero so visiting a customer who is not assigned
+-- to you cannot produce a negative. Labelled "Not Visited" rather than "Missed":
+-- over a single day it counts customers you did not get to, which is not the
+-- same as missing a planned call. A true "missed" needs route plan data
+-- (route_execution_stops.status) — none exists here and the Route module ships
+-- off, so that is the upgrade path rather than something to fake.
+('dsr', 'missed_customers', 'Not Visited',
  'SUM(GREATEST((SELECT COUNT(*) FROM contacts c WHERE c.account_id = base.account_id AND c.user_id = base.user_id) - (SELECT COUNT(DISTINCT COALESCE(v.target_id, v.contact_id)) FROM site_visits v WHERE v.account_id = base.account_id AND v.user_id = base.user_id AND COALESCE(v.target_type, ''Customer'') <> ''Lead'' AND v.check_in_at::date >= COALESCE(($2::jsonb->''date_range''->>''start_date'')::date, ''-infinity''::date) AND v.check_in_at::date <= COALESCE(($2::jsonb->''date_range''->>''end_date'')::date, ''infinity''::date)), 0))', 'number', '[]'),
 
 -- Attendance. There is no `attendance` table — tracking_sessions is punch in/out.

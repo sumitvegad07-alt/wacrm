@@ -442,10 +442,13 @@ export function ReportViewer({ config }: ReportViewerProps) {
   /** Measure the charts plot. Falls back to the first selected column, and again
    *  whenever a stored pick is no longer on screen — switching tabs replaces the
    *  measure list, so a pick made on one tab is often meaningless on the next. */
-  const chartMeasureKey =
-    reportState.chartMeasure && reportState.measures.includes(reportState.chartMeasure)
-      ? reportState.chartMeasure
-      : reportState.measures[0];
+  const chartMeasureKey = (() => {
+    const picked = reportState.chartMeasure;
+    if (picked && reportState.measures.includes(picked)) return picked;
+    const preferred = config.defaultChartMeasure;
+    if (preferred && reportState.measures.includes(preferred)) return preferred;
+    return reportState.measures[0];
+  })();
 
   // Count active non-date filters
   const activeFilterCount = Object.keys(reportState.filters).filter(k => k !== 'date_range').length;
