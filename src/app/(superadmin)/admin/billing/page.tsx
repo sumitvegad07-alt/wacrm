@@ -64,6 +64,7 @@ interface AccountBilling {
   subscription_plan: string;
   subscription_status: string;
   subscription_expires_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   user_count: number;
   addons: string[];
@@ -80,7 +81,7 @@ export default function BillingPage() {
       const { data } = await supabase
         .from("accounts")
         .select(
-          "id, name, subscription_plan, subscription_status, subscription_expires_at, created_at, user_count, addons"
+          "id, name, subscription_plan, subscription_status, subscription_expires_at, created_at, user_count, addons, deleted_at"
         )
         .order("subscription_plan");
       setAccounts(data || []);
@@ -89,12 +90,19 @@ export default function BillingPage() {
     load();
   }, []);
 
+  // Soft-deleted tenants are excluded from every commercial metric: they are
+  // not customers, and counting them inflates MRR and the active-tenant count
+  // with revenue that has already been cancelled. They stay visible in the
+  // Recovery Center and are reported separately below.
+  const liveAccounts = accounts.filter((a) => !a.deleted_at);
+  const deletedCount = accounts.length - liveAccounts.length;
+
   const byPlan = (plan: string) =>
-    accounts.filter((a) => a.subscription_plan === plan);
+    liveAccounts.filter((a) => a.subscription_plan === plan);
 
   const calculateMRR = () => {
     let mrr = 0;
-    accounts.forEach(a => {
+    liveAccounts.forEach(a => {
       if (a.subscription_plan === 'Basic') mrr += 100 * Math.max(a.user_count || 3, 3);
       if (a.subscription_plan === 'Pro') mrr += 200 * Math.max(a.user_count || 3, 3);
       if (a.subscription_plan === 'Enterprise') mrr += 350 * Math.max(a.user_count || 3, 3);
@@ -134,6 +142,22 @@ export default function BillingPage() {
         <p className="text-sm text-muted-foreground mt-1">
           Revenue overview and per-account subscription management.
         </p>
+      </div>
+
+      {/* Tenant counts, split so the commercial numbers are unambiguous */}
+      <div className="flex items-center gap-4 flex-wrap text-sm">
+        <span>
+          <strong className="tabular-nums">{liveAccounts.length}</strong>{" "}
+          <span className="text-muted-foreground">active tenants</span>
+        </span>
+        {deletedCount > 0 && (
+          <span>
+            <strong className="tabular-nums text-amber-600">{deletedCount}</strong>{" "}
+            <span className="text-muted-foreground">
+              deleted (recoverable, excluded from MRR)
+            </span>
+          </span>
+        )}
       </div>
 
       {/* MRR Summary */}
@@ -263,9 +287,17 @@ export default function BillingPage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {accounts.map((a) => (
-                  <tr key={a.id} className="hover:bg-muted/50">
+                  <tr
+                    key={a.id}
+                    className={`hover:bg-muted/50 ${a.deleted_at ? "opacity-60" : ""}`}
+                  >
                     <td className="px-4 py-3 font-medium text-foreground">
                       {a.name}
+                      {a.deleted_at && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600">
+                          Deleted
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {a.subscription_plan}

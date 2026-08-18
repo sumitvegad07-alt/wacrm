@@ -16,6 +16,7 @@ import {
   Database,
   ScrollText,
   Activity,
+  ArchiveRestore,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: "/admin/data", label: "Data Browser", icon: Database },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
   { href: "/admin/audit", label: "Audit Log", icon: ScrollText },
+  { href: "/admin/recovery", label: "Recovery Center", icon: ArchiveRestore },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

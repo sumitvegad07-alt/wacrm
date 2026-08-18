@@ -123,13 +123,26 @@ export default function CompanyDetailPage() {
   const handleDelete = async () => {
     if (deleteConfirm !== company?.name) return;
     setDeleting(true);
-    // Delete profiles first, then account
-    await supabase.from("profiles").delete().eq("account_id", id);
-    const { error } = await supabase.from("accounts").delete().eq("id", id);
-    if (!error) {
-      router.push("/admin/companies");
-    } else {
-      alert("Error deleting: " + error.message);
+
+    // Soft delete, not a row delete. Every foreign key referencing `accounts`
+    // is ON DELETE CASCADE, so the old code here would have destroyed the
+    // tenant across 80 tables with no undo — it only ever appeared safe because
+    // it silently affected zero rows (no DELETE policy existed).
+    //
+    // The tenant becomes invisible to its own users immediately, because
+    // is_account_member() now excludes deleted accounts. Permanent destruction
+    // lives in the Recovery Center, behind a 90-day window.
+    try {
+      const res = await fetch(`/api/admin/accounts/${id}/lifecycle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete" }),
+      });
+      const payload = await res.json();
+      if (!res.ok || payload.error) throw new Error(payload.error || "Delete failed");
+      router.push("/admin/recovery");
+    } catch (e: any) {
+      alert("Error deleting: " + e.message);
       setDeleting(false);
     }
   };
@@ -342,8 +355,8 @@ export default function CompanyDetailPage() {
                 Delete this company
               </p>
               <p className="text-xs text-muted-foreground">
-                Permanently removes the account and all its members. This cannot
-                be undone.
+                Hides the account from its users immediately. Fully recoverable
+                for 90 days from the Recovery Center; nothing is destroyed now.
               </p>
             </div>
             <Button
