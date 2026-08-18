@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2 } from "lucide-react";
+import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2, ToggleLeft } from "lucide-react";
+import { MODULE_KEYS, type ModuleKey } from "@/lib/admin/billing";
 import Link from "next/link";
 
 interface Member {
@@ -44,6 +45,7 @@ export default function CompanyDetailPage() {
   const [expiresAt, setExpiresAt] = useState("");
   const [userCount, setUserCount] = useState<number | "">("");
   const [notes, setNotes] = useState("");
+  const [modules, setModules] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     async function load() {
@@ -58,6 +60,7 @@ export default function CompanyDetailPage() {
 
       if (companyRes.data) {
         const c = companyRes.data;
+        setModules((c.module_settings as Record<string, boolean>) ?? {});
         setCompany(c);
         setStatus(c.subscription_status || "active");
         setPlan(c.subscription_plan || "Free");
@@ -79,35 +82,42 @@ export default function CompanyDetailPage() {
     e.preventDefault();
     setSaving(true);
     setSaveMsg(null);
-    // `.select()` is not cosmetic here. Under row-level security an UPDATE that
-    // matches no rows succeeds with NO error and simply changes nothing — so
-    // without asking for the affected rows back, this screen cheerfully
-    // reported "Saved successfully!" while every subscription stayed exactly as
-    // it was. That is precisely how a batch of expiry extensions silently did
-    // nothing. Trust the returned rows, never the absence of an error.
-    const { data, error } = await supabase
-      .from("accounts")
-      .update({
-        subscription_status: status,
-        subscription_plan: plan,
-        subscription_expires_at: expiresAt || null,
-        user_count: userCount === "" ? null : Number(userCount),
-      })
-      .eq("id", id)
-      .select("id");
 
-    if (error) {
-      setSaveMsg(`Error: ${error.message}`);
-    } else if (!data || data.length === 0) {
-      setSaveMsg(
-        "Nothing was saved — this account could not be updated. You need a superadmin account to change another company's subscription.",
-      );
-    } else {
-      setSaveMsg("Saved successfully!");
+    // Goes through /api/admin/accounts/[id] rather than updating `accounts`
+    // directly. That route validates the change (a seat count below the
+    // tenant's real user total would silently lock them out of managing their
+    // own team), applies module toggles, and records before/after in the audit
+    // log. It also removes the silent-no-op failure mode this screen used to
+    // have: an RLS-blocked UPDATE succeeded with no error and changed nothing,
+    // while the page reported "Saved successfully!".
+    try {
+      const res = await fetch(`/api/admin/accounts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status,
+          plan,
+          expiresAt: expiresAt || null,
+          userCount: userCount === "" ? undefined : Number(userCount),
+          modules,
+        }),
+      });
+      const payload = await res.json();
+
+      if (!res.ok || payload.error) {
+        setSaveMsg(`Error: ${payload.error || "Save failed"}`);
+      } else if (Object.keys(payload.changed || {}).length === 0) {
+        setSaveMsg("No changes to save.");
+      } else {
+        setSaveMsg("Saved successfully!");
+      }
+      setTimeout(() => setSaveMsg(null), res.ok && !payload.error ? 3000 : 10000);
+    } catch (e: any) {
+      setSaveMsg(`Error: ${e.message}`);
+      setTimeout(() => setSaveMsg(null), 10000);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    // A failure needs long enough to actually read; a success can go quickly.
-    setTimeout(() => setSaveMsg(null), error || !data?.length ? 10000 : 3000);
   };
 
   const handleDelete = async () => {
@@ -233,6 +243,40 @@ export default function CompanyDetailPage() {
           <p className="text-xs text-muted-foreground">
             Maximum number of staff members this account can have. Leave blank for no limit.
           </p>
+        </div>
+
+        {/* Module flags */}
+        <div className="space-y-3 pt-2 border-t border-border">
+          <div className="flex items-center gap-2">
+            <ToggleLeft className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">Modules</h3>
+            <span className="text-xs text-muted-foreground">
+              Unset modules default to enabled
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {MODULE_KEYS.map((key: ModuleKey) => {
+              const enabled = modules[key] ?? true;
+              return (
+                <label
+                  key={key}
+                  className="flex items-center gap-2 text-sm cursor-pointer rounded-md px-2 py-1.5 hover:bg-muted"
+                >
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={(e) =>
+                      setModules((m) => ({ ...m, [key]: e.target.checked }))
+                    }
+                    className="accent-primary"
+                  />
+                  <span className={enabled ? "" : "text-muted-foreground line-through"}>
+                    {key.replace(/_/g, " ")}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">

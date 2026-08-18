@@ -15,10 +15,12 @@ import {
   UserCircle2,
   Database,
   ScrollText,
+  Activity,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/health", label: "Tenant Health", icon: Activity },
   { href: "/admin/companies", label: "Companies", icon: Building2 },
   { href: "/admin/billing", label: "Billing & Plans", icon: CreditCard },
   { href: "/admin/users", label: "All Users", icon: Users },
