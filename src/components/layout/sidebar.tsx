@@ -371,6 +371,9 @@ function getMenuStructure(
         { href: "/reports/visits", label: "Visit Reports", icon: MapPin, module: "location_tracking" },
         // Dormancy: customers/products with NO orders in the chosen window.
         { href: "/reports/ageing", label: "Ageing Reports", icon: Clock, module: "orders" },
+        // Claims by approval status. Distinct from the "/expenses" entry below,
+        // which is the expense LIST, not a report.
+        { href: "/reports/expenses", label: "Expense Reports", icon: Coins, module: "expenses", configModule: "expense" as const },
         { href: "/follow-ups", label: "Activity Report", icon: FileText, module: "activities" },
         { href: "/pipelines", label: "Sales & Deals", icon: GitBranch, module: "deals" },
         { href: "/expenses", label: "Expenses Report", icon: Coins, module: "expenses" },

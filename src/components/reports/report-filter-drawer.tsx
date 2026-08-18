@@ -448,7 +448,7 @@ export function ReportFilterDrawer({
                         // options added in settings appear without a code change.
                         <AsyncSearchSelect
                           tableName={filterDef.lookupTable ?? ''}
-                          displayColumn="name"
+                          displayColumn={filterDef.lookupDisplayColumn ?? 'name'}
                           valueColumn={filterDef.lookupValueColumn ?? 'name'}
                           value={localFilters[filterDef.key] || ""}
                           onChange={(val) => {

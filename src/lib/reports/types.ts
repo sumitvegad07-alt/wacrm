@@ -65,6 +65,11 @@ export interface ReportFilterDef {
    *  Values are looked up live rather than hardcoded, so options the account adds
    *  in settings appear without a code change. */
   lookupTable?: string;
+  /** For type 'lookup': the column holding the human-readable label. Defaults to
+   *  'name', which is what most of these tables use — but not all: expense types
+   *  store their label in `expense_name`, and pointing the picker at a column
+   *  that does not exist renders a list of blanks rather than an error. */
+  lookupDisplayColumn?: string;
   /** For type 'lookup': the column stored in the filter payload. Defaults to
    *  'name' because most of these columns store the label as free text; use 'id'
    *  where the record stores a foreign key (e.g. a deal's pipeline). */

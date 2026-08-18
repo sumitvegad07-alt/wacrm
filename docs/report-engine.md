@@ -188,6 +188,61 @@ Verified on prod 2026-08-18: 58 visits reconcile exactly across the Customer,
 Lead, Area, Period and User tabs; 15 productive visits match the 15 orders
 carrying a `site_visit_id`; 54 Good + 4 Excellent match the raw column.
 
+## 5h. A dimension needs a 1:1 path, or it must stay a filter (Expenses)
+
+The Expense report reuses §5c's status pivot verbatim — Pending / Approved /
+Rejected / Total on every tab, with Approved reading `approved_amount` (what was
+sanctioned, often less than claimed) falling back to `amount`, exactly as
+payments read `verified_amount`. `Claimed` is registered alongside, so
+`Claimed − Total` is what approvers trimmed.
+
+The new lesson here is about **what may become a dimension at all.**
+
+An expense has no geography: no customer, no site, no territory column. The only
+route to one is `employee_area_assignments`, which is **many-to-many** — one
+employee on prod covers six areas. Joining it to group by area would multiply
+that employee's every amount by six, and no weighting fixes it, because there is
+no true answer to "which of six areas does this hotel bill belong to".
+
+So Area is registered as a **filter only**, as set membership:
+
+```sql
+EXISTS (SELECT 1 FROM employee_area_assignments eaa
+         WHERE eaa.employee_id = base.employee_id
+           AND eaa.territory_id IN (…recursive descendants…))
+```
+
+`EXISTS` tests membership without duplicating the base row, so filtering is exact
+where grouping would be fiction. **The general rule: a relation reachable only
+through a many-to-many is a legitimate filter and an illegitimate dimension.**
+Twin measures (§5d) fix fan-out where a *true* per-item figure exists; they
+cannot help where the split itself is undefined.
+
+Department / Branch / Designation are 1:1 with the employee and so *are*
+registered as dimensions — but not as tabs, because all three columns are empty
+for every profile on prod today and each would render a single "Unassigned" row.
+
+### Two FK traps on `expenses`
+
+- `expenses.employee_id` → `profiles(**id**)`, while every other module joins
+  profiles on `user_id`.
+- `expenses.approved_by` has **no FK at all** and stores the **auth uid**, so the
+  approver joins on `user_id`.
+
+Two columns on one table pointing at different keys, hence two separate
+registered joins. Getting either wrong yields a silently empty column, not an
+error — the LEFT JOIN just never matches.
+
+### Lookup filters on non-standard label columns
+
+`ReportFilterDef.lookupDisplayColumn` was added here: the picker defaulted to a
+`name` column, but `expense_types` stores its label in `expense_name`, and
+pointing it at a missing column renders a list of blanks rather than failing.
+
+Verified on prod 2026-08-18: 9 expenses, ₹4,260, 572 km, reconciling identically
+across the Employee, Expense Type and Status tabs
+(3,560 Pending + 600 Approved + 100 Rejected = 4,260).
+
 ## 6. Future Compatibility & Onboarding Modules
 To onboard a new module (e.g. `Visits`):
 1. Create a migration that inserts the required dimensions, measures, filters, and joins into the registry tables with `module_name = 'visit'`.

@@ -3420,3 +3420,42 @@ case-folded, so `Kalawad road` and `Kalawad Road` currently list as two areas.
 
 **Not built:** the Task Report, which was scoped in the same request and is on
 hold pending its field list.
+
+
+## Expense Report (Added 18 Aug 2026)
+
+`/reports/expenses`, on the generic report engine (migration
+`20260818140000_expense_report_module.sql`, applied to prod as
+`expense_report_registry`). Engine-level detail is in `docs/report-engine.md`
+§5h. The engine had resolved `expense` to the `expenses` table since the original
+report-engine migration, but **nothing was ever registered against it** — the
+module was an empty shell until now.
+
+Tabs: **Employee, Expense Type, Allowance Type, Period, Status, Approved By.**
+
+- **Same status pivot as Payments.** Every tab carries Pending / Approved /
+  Rejected / Total, so a row reads "of this much claimed by X, this much is
+  approved". `Total = Pending + Approved + Rejected` always reconciles.
+- **Approved means sanctioned, not claimed.** It reads `approved_amount` (falling
+  back to `amount`), mirroring how Payments treat `verified_amount`. `Claimed` is
+  available in Manage Column, so **Claimed − Total is exactly what approvers
+  trimmed**.
+- Travel (km) and Approved % are available per group; Approved % is a ratio, so
+  the footer dashes it and the KPI card recomputes it across the whole set.
+
+**There is deliberately no Area tab.** An expense has no geography of its own —
+no customer, no site, no territory column. The only route to one is
+`employee_area_assignments`, which is many-to-many: one employee on prod already
+covers **six** areas, so grouping by area would multiply that employee's every
+amount by six, and there is no honest way to split one hotel bill across six
+areas. Area is therefore a **filter** ("claims by employees who cover this
+area"), implemented as `EXISTS` so it cannot fan out. If area-wise expense
+totals are wanted for real, expenses need their own area stamped at claim time.
+
+**Department / Branch / Designation** are registered as dimensions but are not
+tabs: all three profile columns are empty on prod today, so each would render a
+single "Unassigned" row. They light up the moment those HR fields are filled.
+
+**Nav note:** the Report group now has both "Expense Reports" (this report) and
+the pre-existing "Expenses Report" (`/expenses`, which is the expense *list*, not
+a report). Worth renaming the latter — flagged, not changed.
