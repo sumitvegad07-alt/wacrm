@@ -22,7 +22,7 @@ export interface TimelineEvent {
 }
 
 interface TimelineProps {
-  moduleName: 'contact' | 'deal' | 'quotation' | 'product' | 'lead' | 'expense' | 'order' | 'dispatch' | 'user' | 'payment' | 'leave';
+  moduleName: 'contact' | 'deal' | 'quotation' | 'product' | 'scheme' | 'lead' | 'expense' | 'order' | 'dispatch' | 'user' | 'payment' | 'leave';
   recordId: string;
   tasks: any[];
   notes?: any[];
@@ -401,6 +401,8 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
         defaultEmployeeId={moduleName === 'user' ? recordId : undefined}
         defaultPaymentId={moduleName === 'payment' ? recordId : undefined}
         defaultLeaveId={moduleName === 'leave' ? recordId : undefined}
+        defaultProductId={moduleName === 'product' ? recordId : undefined}
+        defaultSchemeId={moduleName === 'scheme' ? recordId : undefined}
         onSaved={() => {
           setTaskFormOpen(false);
           onRefresh();

@@ -180,7 +180,7 @@ export function SchemeManager() {
                   <TableRow
                     key={s.id}
                     className="cursor-pointer"
-                    onClick={() => canEditSettings && router.push(`/schemes/${s.id}/edit`)}
+                    onClick={() => router.push(`/schemes/${s.id}`)}
                   >
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{SCHEME_TYPE_LABELS[s.scheme_type]}</TableCell>

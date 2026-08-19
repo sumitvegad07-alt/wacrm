@@ -10,6 +10,7 @@
 // price.
 
 import { createClient } from '@/lib/supabase/client';
+import { logModuleActivity } from '@/lib/activities';
 import type {
   CustomerOption,
   ProductOption,
@@ -185,6 +186,7 @@ export async function createScheme(accountId: string, form: SchemeFormValues): P
     await supabase.from('schemes').delete().eq('id', schemeId);
     throw childErr;
   }
+  await logModuleActivity(supabase, { moduleName: 'scheme', recordId: schemeId, action: 'created', message: `Scheme "${form.name.trim()}" created` });
   return schemeId;
 }
 
@@ -199,12 +201,14 @@ export async function updateScheme(accountId: string, schemeId: string, form: Sc
     supabase.from('scheme_customers').delete().eq('scheme_id', schemeId),
   ]);
   await writeChildren(schemeId, form);
+  await logModuleActivity(supabase, { moduleName: 'scheme', recordId: schemeId, action: 'updated', message: `Scheme "${form.name.trim()}" updated` });
 }
 
 export async function setSchemeActive(schemeId: string, active: boolean): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from('schemes').update({ active }).eq('id', schemeId);
   if (error) throw error;
+  await logModuleActivity(supabase, { moduleName: 'scheme', recordId: schemeId, action: active ? 'activated' : 'deactivated', message: active ? 'Scheme activated' : 'Scheme deactivated' });
 }
 
 export async function deleteScheme(schemeId: string): Promise<void> {

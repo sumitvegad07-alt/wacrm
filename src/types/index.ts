@@ -717,6 +717,7 @@ export interface Task {
   contact_id?: string | null;
   deal_id?: string | null;
   product_id?: string | null;
+  scheme_id?: string | null;
   conversation_id?: string | null;
   quotation_id?: string | null;
   lead_id?: string | null;

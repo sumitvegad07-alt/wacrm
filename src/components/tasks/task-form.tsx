@@ -44,6 +44,7 @@ interface TaskFormProps {
   defaultContactId?: string;
   defaultDealId?: string;
   defaultProductId?: string;
+  defaultSchemeId?: string;
   defaultConversationId?: string;
   defaultQuotationId?: string;
   defaultLeadId?: string;
@@ -68,6 +69,7 @@ const LINKED_MODULE_LABELS: Record<string, string> = {
   Deal: "Deal",
   Quotation: "Quotation",
   Product: "Product",
+  Scheme: "Scheme",
   Conversation: "Conversation",
   Expense: "Expense",
   Payment: "Payment",
@@ -85,6 +87,7 @@ export function TaskForm({
   defaultContactId,
   defaultDealId,
   defaultProductId,
+  defaultSchemeId,
   defaultConversationId,
   defaultQuotationId,
   defaultLeadId,
@@ -121,7 +124,10 @@ export function TaskForm({
   const [employeeId, setEmployeeId] = useState("");
   const [paymentId, setPaymentId] = useState("");
 
-  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Conversation"|"Quotation"|"Lead"|"Expense"|"Order"|"Dispatch"|"Employee"|"Payment"|"Leave">("None");
+  const [schemeId, setSchemeId] = useState("");
+  const [schemes, setSchemes] = useState<any[]>([]);
+
+  const [linkedModule, setLinkedModule] = useState<"None"|"Contact"|"Deal"|"Product"|"Scheme"|"Conversation"|"Quotation"|"Lead"|"Expense"|"Order"|"Dispatch"|"Employee"|"Payment"|"Leave">("None");
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -173,6 +179,7 @@ export function TaskForm({
         setContactId(task.contact_id || "");
         setDealId(task.deal_id || "");
         setProductId(task.product_id || "");
+        setSchemeId(task.scheme_id || "");
         setConversationId(task.conversation_id || "");
         setQuotationId(task.quotation_id || "");
         setLeadId(task.lead_id || "");
@@ -189,6 +196,7 @@ export function TaskForm({
         else if (task.deal_id) setLinkedModule("Deal");
         else if (task.quotation_id) setLinkedModule("Quotation");
         else if (task.product_id) setLinkedModule("Product");
+        else if (task.scheme_id) setLinkedModule("Scheme");
         else if (task.conversation_id) setLinkedModule("Conversation");
         else if (task.order_id) setLinkedModule("Order");
         else if (task.leave_id) setLinkedModule("Leave");
@@ -206,6 +214,7 @@ export function TaskForm({
         setContactId(defaultContactId || "");
         setDealId(defaultDealId || "");
         setProductId(defaultProductId || "");
+        setSchemeId(defaultSchemeId || "");
         setConversationId(defaultConversationId || "");
         setQuotationId(defaultQuotationId || "");
         setLeadId(defaultLeadId || "");
@@ -223,6 +232,7 @@ export function TaskForm({
         else if (defaultDealId) setLinkedModule("Deal");
         else if (defaultQuotationId) setLinkedModule("Quotation");
         else if (defaultProductId) setLinkedModule("Product");
+        else if (defaultSchemeId) setLinkedModule("Scheme");
         else if (defaultConversationId) setLinkedModule("Conversation");
         else if (defaultOrderId) setLinkedModule("Order");
         else if (defaultLeaveId) setLinkedModule("Leave");
@@ -231,7 +241,7 @@ export function TaskForm({
         else setLinkedModule("None");
       }
     }
-  }, [open, task, defaultContactId, defaultDealId, defaultProductId, defaultConversationId, defaultQuotationId, defaultLeadId, defaultExpenseId, defaultPaymentId, defaultOrderId, defaultDispatchId, defaultEmployeeId, defaultLeaveId, profile?.id]);
+  }, [open, task, defaultContactId, defaultDealId, defaultProductId, defaultSchemeId, defaultConversationId, defaultQuotationId, defaultLeadId, defaultExpenseId, defaultPaymentId, defaultOrderId, defaultDispatchId, defaultEmployeeId, defaultLeaveId, profile?.id]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
@@ -239,7 +249,7 @@ export function TaskForm({
     let cancelled = false;
     (async () => {
       await ensureDefaultSectionsAndFields(accountId, "task", user?.id, supabase);
-      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes, expRes, oRes, dispRes, payRes, lvRes] = await Promise.all([
+      const [pRes, cRes, dRes, prodRes, convRes, cfRes, qRes, lRes, expRes, oRes, dispRes, payRes, lvRes, schRes] = await Promise.all([
         supabase.from("profiles").select("*").order("full_name"),
         supabase.from("contacts").select("*").order("name"),
         supabase.from("deals").select("*").order("title"),
@@ -253,6 +263,7 @@ export function TaskForm({
         supabase.from("order_dispatches").select("id, dispatch_number, order:orders(order_number)").order("created_at", { ascending: false }),
         supabase.from("payments").select("id, payment_number, amount, contact:contacts(name)").order("created_at", { ascending: false }),
         supabase.from("leaves").select("id, leave_number, employee:profiles!leaves_employee_id_fkey(full_name)").order("created_at", { ascending: false }),
+        supabase.from("schemes").select("id, name").order("name"),
       ]);
       if (cancelled) return;
       setProfiles((pRes.data ?? []) as Profile[]);
@@ -267,6 +278,7 @@ export function TaskForm({
       setDispatches((dispRes.data ?? []) as any[]);
       setPayments((payRes.data ?? []) as any[]);
       setLeaves((lvRes.data ?? []) as any[]);
+      setSchemes((schRes.data ?? []) as any[]);
       
       const fields = cfRes.data as CustomField[] ?? [];
       setCustomFields(fields);
@@ -326,6 +338,7 @@ export function TaskForm({
       contact_id: linkedModule === "Contact" ? contactId : null,
       deal_id: linkedModule === "Deal" ? dealId : null,
       product_id: linkedModule === "Product" ? productId : null,
+      scheme_id: linkedModule === "Scheme" ? schemeId : null,
       conversation_id: linkedModule === "Conversation" ? conversationId : null,
       quotation_id: linkedModule === "Quotation" ? quotationId : null,
       lead_id: linkedModule === "Lead" ? leadId : null,
@@ -613,6 +626,15 @@ export function TaskForm({
                         onChange={setProductId}
                         placeholder="Select Product..."
                         options={products.map((p) => ({ value: p.id, label: p.name }))}
+                        className="h-10 bg-background"
+                      />
+                    )}
+                    {linkedModule === "Scheme" && (
+                      <SearchableSelect
+                        value={schemeId}
+                        onChange={setSchemeId}
+                        placeholder="Select Scheme..."
+                        options={schemes.map((s) => ({ value: s.id, label: s.name }))}
                         className="h-10 bg-background"
                       />
                     )}
