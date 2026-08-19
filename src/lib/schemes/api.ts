@@ -72,6 +72,25 @@ export async function getSchemes(accountId: string): Promise<SchemeWithDetails[]
   }));
 }
 
+/** One scheme, hydrated with its children — for the edit page. */
+export async function getScheme(accountId: string, schemeId: string): Promise<SchemeWithDetails | null> {
+  const supabase = createClient();
+  const [{ data: scheme, error: sErr }, { data: slabs }, { data: prods }, { data: custs }] = await Promise.all([
+    supabase.from('schemes').select(SCHEME_COLS).eq('account_id', accountId).eq('id', schemeId).maybeSingle(),
+    supabase.from('scheme_slabs').select(SLAB_COLS).eq('scheme_id', schemeId),
+    supabase.from('scheme_products').select('product_id').eq('scheme_id', schemeId),
+    supabase.from('scheme_customers').select('contact_id').eq('scheme_id', schemeId),
+  ]);
+  if (sErr) throw sErr;
+  if (!scheme) return null;
+  return {
+    ...(scheme as SchemeRow),
+    slabs: (slabs ?? []) as SchemeSlabRow[],
+    productIds: (prods ?? []).map((r: any) => r.product_id),
+    customerIds: (custs ?? []).map((r: any) => r.contact_id),
+  };
+}
+
 /** Products for the scope picker. */
 export async function getProductOptions(accountId: string): Promise<ProductOption[]> {
   const supabase = createClient();

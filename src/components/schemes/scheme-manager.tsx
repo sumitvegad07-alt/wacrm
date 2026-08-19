@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, Tag, Power, PowerOff } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Tag, Power, PowerOff, MoreHorizontal } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,26 +22,12 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal } from "lucide-react";
 import { PageLayout, PageHeader, PageToolbar, EmptyState, StatusBadge, ConfirmDialog } from "@/components/shared";
-import { SchemeFormDialog } from "@/components/schemes/scheme-form-dialog";
+import { deleteScheme, getSchemes, setSchemeActive } from "@/lib/schemes/api";
 import {
-  createScheme,
-  deleteScheme,
-  getCustomerOptions,
-  getProductOptions,
-  getSchemes,
-  setSchemeActive,
-  updateScheme,
-} from "@/lib/schemes/api";
-import {
-  REWARD_TYPE_LABELS,
   SCHEME_TYPE_LABELS,
   schemeStatus,
   usesValueBounds,
-  type CustomerOption,
-  type ProductOption,
-  type SchemeFormValues,
   type SchemeSlabRow,
   type SchemeStatus,
   type SchemeWithDetails,
@@ -48,7 +35,7 @@ import {
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-/** One-line summary of a scheme's slabs, for the table. */
+/** One-line summary of a scheme's bands, for the table. */
 function summariseSlabs(scheme: SchemeWithDetails): string {
   const useValue = usesValueBounds(scheme.scheme_type);
   const band = (s: SchemeSlabRow) => {
@@ -77,17 +64,13 @@ const STATUS_LABEL: Record<SchemeStatus, string> = {
 };
 
 export function SchemeManager() {
+  const router = useRouter();
   const { account, canEditSettings } = useAuth();
   const accountId = account?.id ?? null;
 
   const [schemes, setSchemes] = useState<SchemeWithDetails[]>([]);
-  const [products, setProducts] = useState<ProductOption[]>([]);
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editScheme, setEditScheme] = useState<SchemeWithDetails | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SchemeWithDetails | null>(null);
 
@@ -95,14 +78,7 @@ export function SchemeManager() {
     if (!accountId) return;
     setLoading(true);
     try {
-      const [s, p, c] = await Promise.all([
-        getSchemes(accountId),
-        getProductOptions(accountId),
-        getCustomerOptions(accountId),
-      ]);
-      setSchemes(s);
-      setProducts(p);
-      setCustomers(c);
+      setSchemes(await getSchemes(accountId));
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to load schemes.");
     } finally {
@@ -112,11 +88,6 @@ export function SchemeManager() {
 
   useEffect(() => { load(); }, [load]);
 
-  const productName = useMemo(() => {
-    const m = new Map(products.map((p) => [p.id, p.name]));
-    return (id: string) => m.get(id) ?? "product";
-  }, [products]);
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return schemes;
@@ -124,36 +95,6 @@ export function SchemeManager() {
   }, [schemes, search]);
 
   const today = todayISO();
-
-  function openCreate() {
-    setEditScheme(undefined);
-    setDialogOpen(true);
-  }
-  function openEdit(scheme: SchemeWithDetails) {
-    setEditScheme(scheme);
-    setDialogOpen(true);
-  }
-
-  async function handleSubmit(values: SchemeFormValues) {
-    if (!accountId) return;
-    setBusy(true);
-    try {
-      if (editScheme) {
-        await updateScheme(accountId, editScheme.id, values);
-        toast.success("Scheme updated.");
-      } else {
-        await createScheme(accountId, values);
-        toast.success("Scheme created.");
-      }
-      setDialogOpen(false);
-      setEditScheme(undefined);
-      await load();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Save failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function toggleActive(scheme: SchemeWithDetails) {
     try {
@@ -187,7 +128,7 @@ export function SchemeManager() {
         subtitle="Promotions the salesman is offered at order entry — quantity slabs, free goods and order-value discounts."
         actions={
           canEditSettings ? (
-            <Button onClick={openCreate}>
+            <Button onClick={() => router.push("/schemes/new")}>
               <Plus className="h-4 w-4 mr-1" /> New scheme
             </Button>
           ) : null
@@ -224,7 +165,7 @@ export function SchemeManager() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Slabs</TableHead>
+                <TableHead>Bands</TableHead>
                 <TableHead>Applies to</TableHead>
                 <TableHead>Window</TableHead>
                 <TableHead className="text-right">Priority</TableHead>
@@ -236,7 +177,11 @@ export function SchemeManager() {
               {filtered.map((s) => {
                 const status = schemeStatus(s, today);
                 return (
-                  <TableRow key={s.id}>
+                  <TableRow
+                    key={s.id}
+                    className="cursor-pointer"
+                    onClick={() => canEditSettings && router.push(`/schemes/${s.id}/edit`)}
+                  >
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{SCHEME_TYPE_LABELS[s.scheme_type]}</TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[260px] truncate" title={summariseSlabs(s)}>
@@ -257,14 +202,14 @@ export function SchemeManager() {
                     <TableCell>
                       <StatusBadge status={status === "live" ? "active" : status} label={STATUS_LABEL[status]} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       {canEditSettings && (
                         <DropdownMenu>
                           <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEdit(s)}>
+                            <DropdownMenuItem onClick={() => router.push(`/schemes/${s.id}/edit`)}>
                               <Pencil className="h-4 w-4 mr-2" /> Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => toggleActive(s)}>
@@ -287,22 +232,11 @@ export function SchemeManager() {
         </div>
       )}
 
-      <SchemeFormDialog
-        open={dialogOpen}
-        onClose={() => { setDialogOpen(false); setEditScheme(undefined); }}
-        mode={editScheme ? "edit" : "create"}
-        editScheme={editScheme}
-        products={products}
-        customers={customers}
-        busy={busy}
-        onSubmit={handleSubmit}
-      />
-
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         title="Delete scheme"
-        description={`Delete "${deleteTarget?.name}"? Its slabs and targeting are removed too. Orders that already recorded this scheme keep their prices.`}
+        description={`Delete "${deleteTarget?.name}"? Its bands and targeting are removed too. Orders that already recorded this scheme keep their prices.`}
         variant="danger"
         loading={busy}
         onConfirm={confirmDelete}
