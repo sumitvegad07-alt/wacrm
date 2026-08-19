@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { monthlyRevenue } from "@/lib/admin/billing";
+import { PLAN_LABEL, PLAN_PRICE, type PlanId } from "@/lib/plans/catalog";
 import {
   CreditCard,
   Building2,
@@ -11,9 +12,10 @@ import {
   Users,
 } from "lucide-react";
 
+// Display metadata for the current OZZO plans. Price and label come from the
+// shared catalog so they never drift from what the app enforces.
 interface PlanTier {
-  name: string;
-  price: number; // monthly INR, 0 = free
+  id: PlanId;
   features: string[];
   color: string;
   bgColor: string;
@@ -21,42 +23,34 @@ interface PlanTier {
 
 const PLANS: PlanTier[] = [
   {
-    name: "Basic",
-    price: 100,
-    features: [
-      "Min 3 Users",
-      "Core CRM (Contacts, Pipelines, Tasks)",
-      "Quotations & Products",
-      "Custom Fields & Tags",
-    ],
-    color: "text-slate-700 dark:text-slate-300",
-    bgColor: "bg-muted/50 border-border",
+    id: "CRM",
+    features: ["Leads, Deals & Activities", "WhatsApp CRM + AI", "Quotations", "Customers, Products, Tasks"],
+    color: "text-violet-600 dark:text-violet-400",
+    bgColor: "bg-card border-border",
   },
   {
-    name: "Pro",
-    price: 200,
-    features: [
-      "Min 3 Users",
-      "WhatsApp Integration (Shared Inbox)",
-      "Message & Industry Templates",
-      "Basic Automations",
-      "Broadcasts",
-    ],
+    id: "WFA",
+    features: ["GPS & Live Location", "Attendance & Visits", "Expense, Beat & Territory", "Device Health"],
+    color: "text-cyan-600 dark:text-cyan-400",
+    bgColor: "bg-card border-border",
+  },
+  {
+    id: "CRM_WFA",
+    features: ["Everything in CRM", "Everything in Workforce"],
     color: "text-blue-600 dark:text-blue-400",
     bgColor: "bg-blue-500/10 border-blue-500/20",
   },
   {
-    name: "Enterprise",
-    price: 350,
-    features: [
-      "Min 3 Users",
-      "Full AI Assistant",
-      "AI Knowledge Base",
-      "Advanced Flows (Builder)",
-      "VIP Support",
-    ],
-    color: "text-violet-600 dark:text-violet-400",
-    bgColor: "bg-violet-500/10 border-violet-500/20",
+    id: "SFA",
+    features: ["Everything in Workforce", "Orders & Payments", "Financials & Distribution", "Sales Analytics"],
+    color: "text-emerald-600 dark:text-emerald-400",
+    bgColor: "bg-card border-border",
+  },
+  {
+    id: "CRM_SFA",
+    features: ["Everything in CRM", "Everything in SFA", "The complete platform"],
+    color: "text-foreground",
+    bgColor: "bg-card border-border",
   },
 ];
 
@@ -102,23 +96,20 @@ export default function BillingPage() {
   const byPlan = (plan: string) =>
     liveAccounts.filter((a) => a.subscription_plan === plan);
 
-  const calculateMRR = () => {
-    let mrr = 0;
-    liveAccounts.forEach(a => {
-      const seats = Math.max(a.user_count || 3, 3);
-      // New line-based plans (CRM / WFA / CRM+WFA / SFA / CRM+SFA) are priced by
-      // the shared catalog; monthlyRevenue returns 0 for legacy plans, which the
-      // fallbacks below still count so revenue is not lost during the migration.
-      mrr += monthlyRevenue(a.subscription_plan, a.user_count);
-      if (a.subscription_plan === 'Basic') mrr += 100 * seats;
-      if (a.subscription_plan === 'Pro') mrr += 200 * seats;
-      if (a.subscription_plan === 'Enterprise') mrr += 350 * seats;
-      if (a.addons?.includes('field_tracking')) mrr += 200 * seats;
-    });
-    return mrr;
-  };
+  // Priced entirely by the shared catalog (CRM / WFA / CRM+WFA / SFA / CRM+SFA).
+  // Any legacy value prices at 0 — the only one left is the super-admin's own
+  // account, which is not a paying customer.
+  const mrrEstimate = liveAccounts.reduce(
+    (mrr, a) => mrr + monthlyRevenue(a.subscription_plan, a.user_count),
+    0,
+  );
 
-  const mrrEstimate = calculateMRR();
+  const payingTenants = liveAccounts.filter((a) =>
+    PLANS.some((p) => p.id === a.subscription_plan),
+  ).length;
+  const trialingTenants = liveAccounts.filter(
+    (a) => a.subscription_status === "trialing",
+  ).length;
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
@@ -185,25 +176,25 @@ export default function BillingPage() {
         <div className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-3 mb-2">
             <CreditCard className="h-5 w-5 text-blue-500" />
-            <p className="text-sm text-muted-foreground">Paid Accounts</p>
+            <p className="text-sm text-muted-foreground">Paying Tenants</p>
           </div>
           <p className="text-2xl font-bold text-foreground">
-            {byPlan("Pro").length + byPlan("Enterprise").length}
+            {payingTenants}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Pro + Enterprise
+            On a CRM / WFA / SFA plan
           </p>
         </div>
         <div className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-3 mb-2">
             <Building2 className="h-5 w-5 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Basic Accounts</p>
+            <p className="text-sm text-muted-foreground">On Trial</p>
           </div>
           <p className="text-2xl font-bold text-foreground">
-            {byPlan("Basic").length}
+            {trialingTenants}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Conversion targets
+            Status = trialing
           </p>
         </div>
       </div>
@@ -233,32 +224,30 @@ export default function BillingPage() {
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {PLANS.map((plan) => (
             <div
-              key={plan.name}
+              key={plan.id}
               className={`border border-border rounded-xl p-5 ${plan.bgColor}`}
             >
               <div className="flex items-center justify-between mb-3">
                 <h3 className={`text-lg font-bold ${plan.color}`}>
-                  {plan.name}
+                  {PLAN_LABEL[plan.id]}
                 </h3>
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-semibold text-foreground">
-                    {byPlan(plan.name).length}
+                    {byPlan(plan.id).length}
                   </span>
                 </div>
               </div>
               <p className="text-xl font-bold text-foreground mb-3">
-                {plan.price === 0
-                  ? "Free"
-                  : `₹${(billingCycle === 'quarterly' 
-                          ? Math.round(plan.price * 1.3) 
-                          : billingCycle === 'half-yearly' 
-                            ? Math.round(plan.price * 1.2) 
-                            : plan.price
-                        ).toLocaleString("en-IN")}/user/mo`}
+                ₹{(billingCycle === 'quarterly'
+                      ? Math.round(PLAN_PRICE[plan.id] * 1.3)
+                      : billingCycle === 'half-yearly'
+                        ? Math.round(PLAN_PRICE[plan.id] * 1.2)
+                        : PLAN_PRICE[plan.id]
+                    ).toLocaleString("en-IN")}/user/mo
               </p>
               <ul className="space-y-1">
                 {plan.features.map((f) => (

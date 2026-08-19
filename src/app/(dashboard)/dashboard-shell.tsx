@@ -168,6 +168,16 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Days left in a trial, computed from the real expiry date. Trials are just a
+  // normal plan with subscription_expires_at set, so there is no "Pro trial" —
+  // the banner is plan-agnostic.
+  const trialEndsAt = account?.subscription_expires_at
+    ? new Date(account.subscription_expires_at)
+    : null;
+  const trialDaysLeft = trialEndsAt
+    ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86_400_000))
+    : null;
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Reports this tab's online/away presence once we know a user is
@@ -181,11 +191,17 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           {account?.subscription_status === 'trialing' && (
             <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-2">
               <div>
-                <span className="font-bold text-destructive">Your Pro trial ends in 3 days.</span>
-                <span className="ml-0 sm:ml-2 mt-1 sm:mt-0 block sm:inline">Upgrade now to avoid losing your AI Auto-Replies, Shared Team Inbox, and active Automations.</span>
+                <span className="font-bold text-destructive">
+                  {trialDaysLeft === null
+                    ? "Your trial is active."
+                    : trialDaysLeft === 0
+                      ? "Your trial ends today."
+                      : `Your trial ends in ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"}.`}
+                </span>
+                <span className="ml-0 sm:ml-2 mt-1 sm:mt-0 block sm:inline">Contact us to move to a paid plan and keep your features.</span>
               </div>
               <Button size="sm" variant="destructive" className="shrink-0" onClick={() => router.push('/settings?tab=overview')}>
-                Keep My Features
+                View my plan
               </Button>
             </div>
           )}
