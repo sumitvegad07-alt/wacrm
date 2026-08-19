@@ -13,11 +13,12 @@
 
 export type ProductLine = "crm" | "wfa" | "sfa";
 
-/** The five sellable plans plus Trial (full access for the trial window). */
-export type PlanId = "Trial" | "CRM" | "WFA" | "CRM_WFA" | "SFA" | "CRM_SFA";
+// The five sellable plans. There is no separate "Trial" plan: a paid trial is
+// just a real plan (e.g. SFA) with a subscription_expires_at set to the trial
+// end date. New signups default to CRM.
+export type PlanId = "CRM" | "WFA" | "CRM_WFA" | "SFA" | "CRM_SFA";
 
 export const PLAN_IDS: readonly PlanId[] = [
-  "Trial",
   "CRM",
   "WFA",
   "CRM_WFA",
@@ -27,7 +28,6 @@ export const PLAN_IDS: readonly PlanId[] = [
 
 /** Human label as shown in super-admin and on invoices. */
 export const PLAN_LABEL: Record<PlanId, string> = {
-  Trial: "Trial",
   CRM: "CRM",
   WFA: "WFA",
   CRM_WFA: "CRM + WFA",
@@ -35,9 +35,8 @@ export const PLAN_LABEL: Record<PlanId, string> = {
   CRM_SFA: "CRM + SFA",
 };
 
-/** Per-user monthly price in INR (annual base). Trial is free. */
+/** Per-user monthly price in INR (annual base). */
 export const PLAN_PRICE: Record<PlanId, number> = {
-  Trial: 0,
   CRM: 100,
   WFA: 150,
   CRM_WFA: 200,
@@ -47,10 +46,9 @@ export const PLAN_PRICE: Record<PlanId, number> = {
 
 /**
  * Which product lines each plan turns on. SFA includes WFA, so the SFA plan
- * has wfa:true. Trial grants everything for evaluation.
+ * has wfa:true.
  */
 export const PLAN_LINES: Record<PlanId, Record<ProductLine, boolean>> = {
-  Trial: { crm: true, wfa: true, sfa: true },
   CRM: { crm: true, wfa: false, sfa: false },
   WFA: { crm: false, wfa: true, sfa: false },
   CRM_WFA: { crm: true, wfa: true, sfa: false },

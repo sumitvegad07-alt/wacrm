@@ -21,9 +21,7 @@ describe("plan catalog — line mapping", () => {
   });
   it("CRM+SFA grants everything", () => {
     expect(planLines("CRM_SFA")).toEqual({ crm: true, wfa: true, sfa: true });
-  });
-  it("Trial grants everything", () => {
-    expect(planHasLine("Trial", "sfa")).toBe(true);
+    expect(planHasLine("CRM_SFA", "sfa")).toBe(true);
   });
 });
 
