@@ -43,7 +43,6 @@ import {
   type SchemeType,
 } from "@/lib/schemes/types";
 
-/** Plain-language explainer for each scheme type — shown live under the picker. */
 const SCHEME_TYPE_HELP: Record<SchemeType, string> = {
   quantity_slab:
     "Buy more of a product, earn a better deal on it. You set quantity bands (e.g. 10–19, 20+) and a reward for each band. The reward can be a % discount, a ₹ amount off each unit, or a fixed special price.",
@@ -53,11 +52,15 @@ const SCHEME_TYPE_HELP: Record<SchemeType, string> = {
     "Reward the whole order once it crosses a rupee value (e.g. over ₹50,000). The reward is a % discount or a flat ₹ amount off the order.",
 };
 
-/** Which reward each type can give, in words — shown next to the Reward picker. */
 const REWARD_HELP: Record<SchemeType, string> = {
   quantity_slab: "% discount, ₹ off each unit, or a special per-unit price.",
   free_goods: "Free goods only — pick the free product and quantity in each band below.",
   value_slab: "% discount or a flat ₹ amount off the order.",
+};
+
+const SLAB_MODE_LABELS: Record<"step_up" | "repeat", string> = {
+  step_up: "Best band reached (tiered)",
+  repeat: "Repeats per set",
 };
 
 const SLAB_MODE_HELP: Record<"step_up" | "repeat", string> = {
@@ -65,6 +68,11 @@ const SLAB_MODE_HELP: Record<"step_up" | "repeat", string> = {
     "Best band reached — the customer gets the single highest band their quantity qualifies for. Example: 10–19 → 1 free, 20+ → 3 free. Buying 25 gives 3 free (the 20+ band), not 4.",
   repeat:
     "Repeats per set — the reward repeats for every complete set. Example: “every 10 → 1 free”. Buying 25 gives 2 free (two full sets of 10; the leftover 5 earns nothing).",
+};
+
+const TARGET_LABELS: Record<"all" | "specific_customers", string> = {
+  all: "All customers",
+  specific_customers: "Specific customers",
 };
 
 interface SlabDraft {
@@ -76,11 +84,11 @@ interface SlabDraft {
 }
 
 interface Props {
-  /** Full-page mode (a dedicated route) vs. an inline dialog. */
   asPage?: boolean;
-  /** Set to edit an existing scheme; omit to create. */
+  /** Edit an existing scheme. */
   schemeId?: string;
-  /** Dialog mode only. */
+  /** Prefill from an existing scheme but save as a NEW one (Duplicate). */
+  cloneFromId?: string;
   open?: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -96,10 +104,11 @@ function toNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onSaved }: Props) {
+export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true, onClose, onSaved }: Props) {
   const { account } = useAuth();
   const accountId = account?.id ?? null;
   const isEdit = !!schemeId;
+  const sourceId = schemeId ?? cloneFromId ?? null;
 
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductOption[]>([]);
@@ -121,7 +130,6 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Load options (and the scheme, when editing).
   const load = useCallback(async () => {
     if (!accountId) return;
     setLoading(true);
@@ -129,15 +137,15 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
       const [p, c] = await Promise.all([getProductOptions(accountId), getCustomerOptions(accountId)]);
       setProducts(p);
       setCustomers(c);
-      if (schemeId) {
-        const s = await getScheme(accountId, schemeId);
+      if (sourceId) {
+        const s = await getScheme(accountId, sourceId);
         if (!s) {
           toast.error("Scheme not found.");
           onClose();
           return;
         }
         const useValue = usesValueBounds(s.scheme_type);
-        setName(s.name);
+        setName(cloneFromId ? `${s.name} (copy)` : s.name);
         setSchemeType(s.scheme_type);
         setSlabMode(s.slab_mode);
         setRewardType(s.scheme_type === "free_goods" ? "free_goods" : (s.slabs[0]?.reward_type ?? rewardTypesFor(s.scheme_type)[0]));
@@ -145,10 +153,10 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
         setProductIds(s.productIds);
         setCustomerIds(s.customerIds);
         setPriority(String(s.priority));
-        setStartsOn(s.starts_on);
-        setEndsOn(s.ends_on ?? "");
+        setStartsOn(cloneFromId ? todayISO() : s.starts_on);
+        setEndsOn(cloneFromId ? "" : (s.ends_on ?? ""));
         setMaxFree(s.max_free_units_per_order != null ? String(s.max_free_units_per_order) : "");
-        setActive(s.active);
+        setActive(cloneFromId ? true : s.active);
         setSlabs(
           (s.slabs.length ? s.slabs : [null]).map((slab): SlabDraft => {
             if (!slab) return emptySlab();
@@ -167,11 +175,10 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
     } finally {
       setLoading(false);
     }
-  }, [accountId, schemeId, onClose]);
+  }, [accountId, sourceId, cloneFromId, onClose]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Keep reward type valid when the scheme type changes.
   useEffect(() => {
     const allowed = rewardTypesFor(schemeType);
     setRewardType((rt) => (allowed.includes(rt) ? rt : allowed[0]));
@@ -183,6 +190,7 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
 
   const productOptions = useMemo(() => products.map((p) => ({ label: `${p.name} (₹${p.price})`, value: p.id })), [products]);
   const customerOptions = useMemo(() => customers.map((c) => ({ label: c.label, value: c.id })), [customers]);
+  const productItems = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p.name])) as Record<string, string>, [products]);
 
   const setSlab = (i: number, patch: Partial<SlabDraft>) =>
     setSlabs((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
@@ -263,7 +271,7 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
         toast.success("Scheme updated.");
       } else {
         await createScheme(accountId, values);
-        toast.success("Scheme created.");
+        toast.success(cloneFromId ? "Scheme duplicated." : "Scheme created.");
       }
       onSaved();
     } catch (e: any) {
@@ -273,23 +281,35 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
     }
   }
 
-  // ── the form body, shared by page and dialog ──────────────────────────────
   const body = loading ? (
     <div className="flex items-center justify-center py-20 text-muted-foreground">
       <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
     </div>
   ) : (
     <div className="space-y-6">
+      {/* 1. Name */}
       <div className="space-y-1.5">
         <Label>Scheme name</Label>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Diwali — Buy 10 get 1" />
       </div>
 
-      {/* Type + its explainer */}
+      {/* 2-3. Dates */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label>Start date</Label>
+          <Input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>End date (optional)</Label>
+          <Input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
+        </div>
+      </div>
+
+      {/* 4. Type */}
       <div className="space-y-1.5">
         <Label>Scheme type</Label>
-        <Select value={schemeType} onValueChange={(v) => setSchemeType(v as SchemeType)}>
-          <SelectTrigger className="max-w-md"><SelectValue /></SelectTrigger>
+        <Select value={schemeType} items={SCHEME_TYPE_LABELS} onValueChange={(v) => setSchemeType(v as SchemeType)}>
+          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
           <SelectContent>
             {(Object.keys(SCHEME_TYPE_LABELS) as SchemeType[]).map((t) => (
               <SelectItem key={t} value={t}>{SCHEME_TYPE_LABELS[t]}</SelectItem>
@@ -301,12 +321,12 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
         </p>
       </div>
 
-      {/* Reward + its explainer */}
+      {/* 5-6. Reward + how bands apply */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label>Reward</Label>
-          <Select value={rewardType} onValueChange={(v) => setRewardType(v as SchemeRewardType)} disabled={schemeType === "free_goods"}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+          <Select value={rewardType} items={REWARD_TYPE_LABELS} onValueChange={(v) => setRewardType(v as SchemeRewardType)} disabled={schemeType === "free_goods"}>
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {rewardTypesFor(schemeType).map((rt) => (
                 <SelectItem key={rt} value={rt}>{REWARD_TYPE_LABELS[rt]}</SelectItem>
@@ -319,11 +339,11 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
         {!useValue && (
           <div className="space-y-1.5">
             <Label>How bands apply</Label>
-            <Select value={slabMode} onValueChange={(v) => setSlabMode(v as "step_up" | "repeat")}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select value={slabMode} items={SLAB_MODE_LABELS} onValueChange={(v) => setSlabMode(v as "step_up" | "repeat")}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="step_up">Best band reached (tiered)</SelectItem>
-                <SelectItem value="repeat">Repeats per set</SelectItem>
+                <SelectItem value="step_up">{SLAB_MODE_LABELS.step_up}</SelectItem>
+                <SelectItem value="repeat">{SLAB_MODE_LABELS.repeat}</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">{SLAB_MODE_HELP[slabMode]}</p>
@@ -331,106 +351,59 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
         )}
       </div>
 
+      {/* 7. Max free units */}
       {isFreeGoods && !useValue && (
-        <div className="space-y-1.5 max-w-xs">
+        <div className="space-y-1.5">
           <Label>Max free units per order</Label>
           <Input type="number" value={maxFree} onChange={(e) => setMaxFree(e.target.value)} placeholder="Blank = no cap" />
           <p className="text-xs text-muted-foreground">A ceiling on total free units this scheme can give on one order.</p>
         </div>
       )}
 
-      {/* Products */}
-      <div className="space-y-1.5">
-        <Label>
-          {schemeType === "value_slab" ? "Products counted toward the order value (leave empty = whole order)" : "Products this scheme applies to"}
-        </Label>
-        <MultiSelect options={productOptions} selectedValues={productIds} onChange={setProductIds} placeholder="Select products…" />
-      </div>
-
-      {/* Targeting */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Who it applies to</Label>
-          <Select value={targetType} onValueChange={(v) => setTargetType(v as "all" | "specific_customers")}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All customers</SelectItem>
-              <SelectItem value="specific_customers">Specific customers</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Priority</Label>
-          <Input type="number" value={priority} onChange={(e) => setPriority(e.target.value)} />
-          <p className="text-xs text-muted-foreground">When two schemes match the same line, the higher number wins.</p>
-        </div>
-      </div>
-
-      {targetType === "specific_customers" && (
-        <div className="space-y-1.5">
-          <Label>Customers</Label>
-          <MultiSelect options={customerOptions} selectedValues={customerIds} onChange={setCustomerIds} placeholder="Select customers…" />
-        </div>
-      )}
-
-      {/* Dates */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
-        <div className="space-y-1.5">
-          <Label>Starts on</Label>
-          <Input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Ends on (optional)</Label>
-          <Input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
-        </div>
-      </div>
-
-      {/* Bands / slabs */}
+      {/* 8. Bands */}
       <div className="space-y-3 border-t border-border pt-5">
         <div className="flex items-center justify-between">
           <div>
             <Label>{useValue ? "Order-value bands" : "Quantity bands"}</Label>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {useValue
-                ? "Each band is an order-value range and the discount it earns."
-                : "Each band is a quantity range and the reward it earns."}
+              {useValue ? "Each band is an order-value range and the discount it earns." : "Each band is a quantity range and the reward it earns."}
             </p>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={() => setSlabs((p) => [...p, emptySlab()])}>
-            <Plus className="h-4 w-4 mr-1" /> Add band
+            <Plus className="h-4 w-4 mr-1" /> Add new band
           </Button>
         </div>
 
         <div className="space-y-2">
           {slabs.map((s, i) => (
             <div key={i} className="rounded-md border border-border p-3">
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="flex-1 min-w-[110px] space-y-1">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex-1 min-w-[120px] space-y-1">
                   <Label className="text-xs">Min {boundLabel}</Label>
                   <Input type="number" value={s.lo} onChange={(e) => setSlab(i, { lo: e.target.value })} />
                 </div>
-                <div className="flex-1 min-w-[110px] space-y-1">
+                <div className="flex-1 min-w-[120px] space-y-1">
                   <Label className="text-xs">Max {boundLabel} (blank = ∞)</Label>
                   <Input type="number" value={s.hi} onChange={(e) => setSlab(i, { hi: e.target.value })} />
                 </div>
                 {isFreeGoods ? (
                   <>
-                    <div className="flex-1 min-w-[150px] space-y-1">
+                    <div className="flex-1 min-w-[180px] space-y-1">
                       <Label className="text-xs">Free product</Label>
-                      <Select value={s.freeProductId ?? ""} onValueChange={(v) => setSlab(i, { freeProductId: v })}>
-                        <SelectTrigger><SelectValue placeholder="Choose…" /></SelectTrigger>
+                      <Select value={s.freeProductId ?? ""} items={productItems} onValueChange={(v) => setSlab(i, { freeProductId: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Choose…" /></SelectTrigger>
                         <SelectContent>
                           {products.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="w-24 space-y-1">
+                    <div className="w-28 space-y-1">
                       <Label className="text-xs">Free qty</Label>
                       <Input type="number" value={s.freeQty} onChange={(e) => setSlab(i, { freeQty: e.target.value })} />
                     </div>
                   </>
                 ) : (
-                  <div className="flex-1 min-w-[130px] space-y-1">
+                  <div className="flex-1 min-w-[150px] space-y-1">
                     <Label className="text-xs">
                       {rewardType === "discount_percent" ? "% off" : rewardType === "special_price" ? "Special price ₹" : "₹ off / unit"}
                     </Label>
@@ -453,25 +426,68 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
         </div>
       </div>
 
-      {/* Active */}
-      <div className="flex items-center justify-between border-t border-border pt-5">
-        <div>
-          <Label>Active</Label>
-          <p className="text-xs text-muted-foreground">Off = never suggested, even within its dates.</p>
-        </div>
-        <Switch checked={active} onCheckedChange={setActive} />
+      {/* 9. Products */}
+      <div className="space-y-1.5 border-t border-border pt-5">
+        <Label>
+          {schemeType === "value_slab" ? "Products counted toward the order value (leave empty = whole order)" : "Products this scheme applies to"}
+        </Label>
+        <MultiSelect options={productOptions} selectedValues={productIds} onChange={setProductIds} placeholder="Select products…" searchable />
       </div>
+
+      {/* 10. Customer selection */}
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label>Who it applies to</Label>
+          <Select value={targetType} items={TARGET_LABELS} onValueChange={(v) => setTargetType(v as "all" | "specific_customers")}>
+            <SelectTrigger className="w-full sm:max-w-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{TARGET_LABELS.all}</SelectItem>
+              <SelectItem value="specific_customers">{TARGET_LABELS.specific_customers}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {targetType === "specific_customers" && (
+          <div className="space-y-1.5">
+            <Label>Customers</Label>
+            <MultiSelect options={customerOptions} selectedValues={customerIds} onChange={setCustomerIds} placeholder="Select customers…" searchable />
+          </div>
+        )}
+      </div>
+
+      {/* 11. Priority */}
+      <div className="space-y-1.5 border-t border-border pt-5">
+        <Label>Priority (tie-breaker)</Label>
+        <Input type="number" value={priority} onChange={(e) => setPriority(e.target.value)} className="sm:max-w-xs" />
+        <p className="text-xs text-muted-foreground">
+          Only matters when <strong>two schemes could apply to the same product at once</strong>. The higher number wins;
+          the other is ignored. If your schemes never overlap, leave this at 0.
+        </p>
+      </div>
+
+      {/* Active (edit only — new schemes start active) */}
+      {isEdit && (
+        <div className="flex items-center justify-between border-t border-border pt-5">
+          <div>
+            <Label>Active</Label>
+            <p className="text-xs text-muted-foreground">Off = never suggested, even within its dates. Turn back on any time.</p>
+          </div>
+          <Switch checked={active} onCheckedChange={setActive} />
+        </div>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
+
+  const title = isEdit ? "Edit scheme" : cloneFromId ? "Duplicate scheme" : "New scheme";
+  const saveLabel = isEdit ? "Save changes" : cloneFromId ? "Create copy" : "Create scheme";
 
   const footer = (
     <div className="flex items-center justify-end gap-2">
       <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
       <Button onClick={handleSave} disabled={saving || loading}>
         {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-        {isEdit ? "Save changes" : "Create scheme"}
+        {saveLabel}
       </Button>
     </div>
   );
@@ -490,7 +506,7 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <Tag className="w-6 h-6 text-primary" />
-              {isEdit ? "Edit scheme" : "New scheme"}
+              {title}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               Promotions are <strong>suggested</strong> to the salesman at order entry — they confirm what applies.
@@ -509,7 +525,7 @@ export function SchemeForm({ asPage = false, schemeId, open = true, onClose, onS
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit scheme" : "New scheme"}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             Promotions are suggested to the salesman at order entry — they confirm what applies.
           </DialogDescription>

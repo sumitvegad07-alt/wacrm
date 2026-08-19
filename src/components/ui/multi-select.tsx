@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, ChevronsUpDown, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -15,6 +15,8 @@ interface MultiSelectProps {
   placeholder?: string;
   emptyMessage?: string;
   disabled?: boolean;
+  /** Show a search box at the top of the dropdown to filter options. */
+  searchable?: boolean;
 }
 
 export function MultiSelect({
@@ -24,8 +26,16 @@ export function MultiSelect({
   placeholder = "Select options...",
   emptyMessage = "No options found.",
   disabled = false,
+  searchable = false,
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const visibleOptions = useMemo(() => {
+    if (!searchable || !query.trim()) return options;
+    const q = query.trim().toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query, searchable]);
 
   const toggleOption = (value: string) => {
     if (selectedValues.includes(value)) {
@@ -76,12 +86,24 @@ export function MultiSelect({
           </div>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
         </PopoverTrigger>
-        <PopoverContent className="w-[320px] p-0" align="start">
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[320px] p-0" align="start">
+          {searchable && (
+            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search…"
+                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+          )}
           <ScrollArea className="max-h-[250px] overflow-y-auto p-2 space-y-1">
-            {options.length === 0 ? (
+            {visibleOptions.length === 0 ? (
               <p className="text-sm text-muted-foreground p-2 text-center">{emptyMessage}</p>
             ) : (
-              options.map((option) => {
+              visibleOptions.map((option) => {
                 const isSelected = selectedValues.includes(option.value);
                 return (
                   <div

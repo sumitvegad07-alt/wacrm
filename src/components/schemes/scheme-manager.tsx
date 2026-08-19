@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, Tag, Power, PowerOff, MoreHorizontal } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Tag, Power, PowerOff, MoreHorizontal, Copy } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -211,6 +211,9 @@ export function SchemeManager() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => router.push(`/schemes/${s.id}/edit`)}>
                               <Pencil className="h-4 w-4 mr-2" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push(`/schemes/new?from=${s.id}`)}>
+                              <Copy className="h-4 w-4 mr-2" /> Duplicate
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => toggleActive(s)}>
                               {s.active ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
