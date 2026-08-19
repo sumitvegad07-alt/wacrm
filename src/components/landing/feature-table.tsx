@@ -1,103 +1,139 @@
 "use client";
 
-import { Check, Minus, Info } from "lucide-react";
+import { Check, Minus } from "lucide-react";
 import { Fragment } from "react";
 
-const features = [
+// Columns, in order: CRM, WFA, CRM+WFA, SFA, CRM+SFA.
+const PLANS = [
+  { label: "CRM", price: 100, highlight: false },
+  { label: "WFA", price: 150, highlight: false },
+  { label: "CRM + WFA", price: 200, highlight: true },
+  { label: "SFA", price: 350, highlight: false },
+  { label: "CRM + SFA", price: 450, highlight: false },
+];
+
+type Row = { name: string; soon?: boolean; on: [boolean, boolean, boolean, boolean, boolean] };
+
+const SECTIONS: { category: string; items: Row[] }[] = [
   {
-    category: "Core CRM (Business OS)",
+    category: "Included in every plan",
     items: [
-      { name: "Users", basic: "Min 3 Users", pro: "Min 3 Users", ent: "Min 3 Users" },
-      { name: "Contacts", basic: "Unlimited", pro: "Unlimited", ent: "Unlimited" },
-      { name: "Custom Fields & Tags", basic: true, pro: true, ent: true },
-      { name: "Deal Pipelines", basic: true, pro: true, ent: true },
-      { name: "Products & Quotations", basic: true, pro: true, ent: true },
-      { name: "Task Management", basic: true, pro: true, ent: true },
-    ]
+      { name: "Customer Management", on: [true, true, true, true, true] },
+      { name: "Product Management", on: [true, true, true, true, true] },
+      { name: "Task Management", on: [true, true, true, true, true] },
+      { name: "Attendance", on: [true, true, true, true, true] },
+      { name: "Leave", on: [true, true, true, true, true] },
+      { name: "Holiday", on: [true, true, true, true, true] },
+      { name: "Announcements", on: [true, true, true, true, true] },
+    ],
   },
   {
-    category: "WhatsApp Capabilities",
+    category: "CRM",
     items: [
-      { name: "Official Meta API Integration", basic: false, pro: true, ent: true },
-      { name: "Shared Team Inbox", basic: false, pro: true, ent: true },
-      { name: "Message Templates", basic: false, pro: true, ent: true },
-      { name: "Industry-ready Templates", basic: false, pro: true, ent: true },
-      { name: "Broadcasts & Campaigns", basic: false, pro: "Fair-use limits", ent: "Fair-use limits" },
-    ]
+      { name: "Lead Management", on: [true, false, true, false, true] },
+      { name: "Deal Pipeline", on: [true, false, true, false, true] },
+      { name: "WhatsApp CRM", on: [true, false, true, false, true] },
+      { name: "Quotation", on: [true, false, true, false, true] },
+    ],
   },
   {
-    category: "Workflow & AI",
+    category: "Workforce (WFA)",
     items: [
-      { name: "Basic Automations", basic: false, pro: true, ent: true },
-      { name: "Agentic AI Assistant", basic: false, pro: false, ent: true },
-      { name: "AI Knowledge Base Training", basic: false, pro: false, ent: true },
-      { name: "Advanced Flows (Drag-and-Drop)", basic: false, pro: false, ent: true },
-    ]
+      { name: "GPS Tracking", on: [false, true, true, true, true] },
+      { name: "Live Location", on: [false, true, true, true, true] },
+      { name: "Route Playback", soon: true, on: [false, true, true, true, true] },
+      { name: "Visit Management", on: [false, true, true, true, true] },
+      { name: "Expense Management", on: [false, true, true, true, true] },
+      { name: "Beat Planning", on: [false, true, true, true, true] },
+      { name: "Territory Management", on: [false, true, true, true, true] },
+      { name: "User Hierarchy", soon: true, on: [false, true, true, true, true] },
+      { name: "Device Health", on: [false, true, true, true, true] },
+    ],
   },
   {
-    category: "Support & Add-ons",
+    category: "Sales & Distribution (SFA)",
     items: [
-      { name: "Priority Support", basic: "Standard", pro: "Standard", ent: "VIP Dedicated" },
-      { name: "Onboarding Assistance", basic: false, pro: false, ent: true },
-      { name: "Field Force Location Tracking", basic: "₹200/user add-on", pro: "₹200/user add-on", ent: "₹200/user add-on" },
-    ]
-  }
+      { name: "Order Management", on: [false, false, false, true, true] },
+      { name: "Payment Collection", on: [false, false, false, true, true] },
+      { name: "Outstanding Management", on: [false, false, false, true, true] },
+      { name: "Customer Financials", on: [false, false, false, true, true] },
+      { name: "Dealer Management", on: [false, false, false, true, true] },
+      { name: "Distributor Management", on: [false, false, false, true, true] },
+      { name: "Price Floor Control", on: [false, false, false, true, true] },
+      { name: "Sales Analytics", on: [false, false, false, true, true] },
+    ],
+  },
 ];
 
 export function FeatureTable() {
-  const renderValue = (value: boolean | string) => {
-    if (typeof value === 'boolean') {
-      return value 
-        ? <Check className="h-5 w-5 text-green-500 mx-auto" /> 
-        : <Minus className="h-5 w-5 text-muted-foreground/30 mx-auto" />;
-    }
-    return <span className="text-sm font-medium text-foreground">{value}</span>;
-  };
-
   return (
     <section className="py-24 bg-muted/20">
-      <div className="max-w-5xl mx-auto px-6">
-        <div className="text-center mb-16">
+      <div className="max-w-6xl mx-auto px-6">
+        <div className="text-center mb-14">
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground mb-4">
-            Compare all features
+            Compare every plan
           </h2>
           <p className="text-lg text-muted-foreground">
-            A detailed breakdown of everything included in our plans.
+            Exactly what&apos;s included, line by line. Prices are per user, per month.
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
+        <div className="overflow-x-auto rounded-2xl border border-border">
+          <table className="w-full text-left border-collapse min-w-[820px] bg-card">
             <thead>
               <tr>
-                <th className="w-2/5 p-4 border-b border-border text-lg font-bold text-foreground">Features</th>
-                <th className="w-1/5 p-4 border-b border-border text-center text-lg font-bold text-slate-500">Basic</th>
-                <th className="w-1/5 p-4 border-b border-border text-center text-lg font-bold text-blue-500">Pro</th>
-                <th className="w-1/5 p-4 border-b border-border text-center text-lg font-bold text-violet-500">Enterprise</th>
+                <th className="p-4 text-sm font-bold text-foreground sticky left-0 bg-card">Feature</th>
+                {PLANS.map((p) => (
+                  <th
+                    key={p.label}
+                    className={`p-4 text-center ${p.highlight ? "bg-primary/5" : ""}`}
+                  >
+                    <div className="text-sm font-bold text-foreground">{p.label}</div>
+                    <div className="text-xs text-muted-foreground font-medium">₹{p.price}/mo</div>
+                    {p.highlight && (
+                      <div className="mt-1 inline-block rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                        Popular
+                      </div>
+                    )}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {features.map((section, idx) => (
+              {SECTIONS.map((section, idx) => (
                 <Fragment key={idx}>
                   <tr>
-                    <td colSpan={4} className="p-4 bg-muted/40 font-semibold text-foreground border-b border-border">
+                    <td
+                      colSpan={6}
+                      className="px-4 py-2.5 bg-muted/50 text-xs font-bold uppercase tracking-wider text-muted-foreground border-y border-border"
+                    >
                       {section.category}
                     </td>
                   </tr>
                   {section.items.map((item, i) => (
-                    <tr key={i} className="hover:bg-muted/10 transition-colors">
-                      <td className="p-4 border-b border-border text-sm text-muted-foreground flex items-center gap-2">
-                        {item.name}
+                    <tr key={i} className="border-b border-border/60 hover:bg-muted/20 transition-colors">
+                      <td className="p-4 text-sm text-foreground sticky left-0 bg-card">
+                        <span className="flex items-center gap-2">
+                          {item.name}
+                          {item.soon && (
+                            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-500">
+                              Soon
+                            </span>
+                          )}
+                        </span>
                       </td>
-                      <td className="p-4 border-b border-border text-center">
-                        {renderValue(item.basic)}
-                      </td>
-                      <td className="p-4 border-b border-border text-center bg-blue-500/5">
-                        {renderValue(item.pro)}
-                      </td>
-                      <td className="p-4 border-b border-border text-center bg-violet-500/5">
-                        {renderValue(item.ent)}
-                      </td>
+                      {item.on.map((v, ci) => (
+                        <td
+                          key={ci}
+                          className={`p-4 text-center ${PLANS[ci].highlight ? "bg-primary/5" : ""}`}
+                        >
+                          {v ? (
+                            <Check className="h-5 w-5 text-emerald-500 mx-auto" />
+                          ) : (
+                            <Minus className="h-5 w-5 text-muted-foreground/30 mx-auto" />
+                          )}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </Fragment>
@@ -105,6 +141,11 @@ export function FeatureTable() {
             </tbody>
           </table>
         </div>
+
+        <p className="text-center text-xs text-muted-foreground mt-6">
+          Items marked <span className="font-semibold text-amber-500">Soon</span> are on the near-term roadmap.
+          Billing cycles: annual is the base rate, half-yearly +20%, quarterly +30%.
+        </p>
       </div>
     </section>
   );

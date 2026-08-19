@@ -151,7 +151,7 @@ export function IndustryUseCases() {
             Built for your industry
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Discover how companies across different sectors use our BOS to drive growth, automate operations, and delight customers.
+            Discover how companies across different sectors use OZZO to drive growth, automate operations, and delight customers.
           </p>
         </div>
 
@@ -198,7 +198,7 @@ export function IndustryUseCases() {
                   </div>
                   
                   <div className="bg-background/40 backdrop-blur-md p-6 rounded-2xl border border-white/5 shadow-sm">
-                    <h4 className="text-sm font-bold uppercase tracking-wider text-green-400 mb-2">The WACRM Solution</h4>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-green-400 mb-2">The OZZO Solution</h4>
                     <p className="text-foreground/90 font-medium leading-relaxed">{activeIndustry.solution}</p>
                   </div>
 

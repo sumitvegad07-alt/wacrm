@@ -12,11 +12,11 @@ export function LandingFooter() {
                 <MessageSquare className="h-4 w-4" />
               </div>
               <span className="text-xl font-bold tracking-tight text-foreground">
-                WACRM <span className="text-primary">BOS</span>
+                OZZO
               </span>
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs mb-6">
-              The ultimate Business Operating System powered by WhatsApp and Agentic AI.
+              CRM, workforce and field-sales automation in one platform — powered by WhatsApp and AI.
             </p>
             <div className="flex items-center gap-4">
               <a href="#" className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium">Twitter</a>
@@ -46,7 +46,7 @@ export function LandingFooter() {
         
         <div className="border-t border-border pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} WACRM BOS. All rights reserved.
+            © {new Date().getFullYear()} OZZO. All rights reserved.
           </p>
         </div>
       </div>

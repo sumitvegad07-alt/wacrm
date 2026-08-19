@@ -66,7 +66,7 @@ export function FullFunnelSection() {
             The Ultimate WhatsApp Funnel
           </h2>
           <p className="text-lg text-muted-foreground">
-            WACRM is the only platform that handles the <strong className="text-foreground">entire customer lifecycle</strong>—from a cold lead to a raving, repeat customer—without ever leaving WhatsApp.
+            OZZO handles the <strong className="text-foreground">entire customer lifecycle</strong>—from a cold lead to a raving, repeat customer—without ever leaving WhatsApp.
           </p>
         </div>
 
