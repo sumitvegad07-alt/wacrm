@@ -17,6 +17,7 @@ describe('calculateOrderPricing (advisory mirror)', () => {
         FIXTURE_PRODUCTS,
         fixture.context,
         fixture.orderDiscount ?? null,
+        fixture.orderSchemes ?? null,
       );
 
       expect(result.sub_total).toBeCloseTo(fixture.expect.sub_total, 2);
@@ -35,6 +36,13 @@ describe('calculateOrderPricing (advisory mirror)', () => {
       if (fixture.expect.rate_incl_unit_prices) {
         fixture.expect.rate_incl_unit_prices.forEach((expected, i) => {
           expect(result.lines[i].rate_incl_unit).toBeCloseTo(expected, 2);
+        });
+      }
+
+      // is_scheme_goods is only asserted by the scheme cases.
+      if (fixture.expect.is_scheme_goods) {
+        fixture.expect.is_scheme_goods.forEach((expected, i) => {
+          expect(result.lines[i].is_scheme_goods).toBe(expected);
         });
       }
     });

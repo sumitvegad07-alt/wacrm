@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -391,21 +392,20 @@ export function PricingSchemesSettings() {
             )}
           </div>
 
-          {/* ---------------- Schemes (not built yet) ---------------- */}
-          <div className="space-y-2 pt-6 border-t border-border opacity-60">
+          {/* ---------------- Schemes ---------------- */}
+          <div className="space-y-2 pt-6 border-t border-border">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold">Schemes</h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Quantity slabs, free goods and value slabs.
+                  Quantity slabs, free goods and order-value discounts. Suggested to the
+                  salesman at order entry; they confirm what applies.
                 </p>
               </div>
-              <Switch checked={false} disabled />
+              <Link href="/schemes" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                <Tag className="h-4 w-4 mr-1" /> Manage schemes
+              </Link>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Not built yet — the database is ready but there is no scheme configuration or
-              calculation behind this switch, so it stays off rather than pretending to work.
-            </p>
           </div>
         </div>
       </div>

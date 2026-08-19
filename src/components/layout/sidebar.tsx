@@ -272,6 +272,14 @@ export function getMenuStructure(
       module: "orders",
       configModule: "quotation" as const,
     },
+    {
+      type: "link",
+      href: "/schemes",
+      label: "Scheme",
+      icon: Percent,
+      module: "orders",
+      line: "sfa",
+    },
 
     { type: "spacer" },
 

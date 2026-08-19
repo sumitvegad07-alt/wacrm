@@ -1,8 +1,12 @@
 import type {
+  ConfirmedOrderScheme,
   OrderDiscountInput,
   PricingContext,
   PricingLineInput,
   PricingProduct,
+  SchemeDefinition,
+  SchemeDetectionLine,
+  SchemeRewardType,
 } from './types';
 
 /**
@@ -59,6 +63,8 @@ export interface PricingFixture {
   lines: PricingLineInput[];
   context: PricingContext;
   orderDiscount?: OrderDiscountInput | null;
+  /** Confirmed value-slab (whole-order) schemes, Phase 4. */
+  orderSchemes?: ConfirmedOrderScheme[] | null;
   expect: {
     sub_total: number;
     tax_total: number;
@@ -73,6 +79,8 @@ export interface PricingFixture {
      * the inclusive/exclusive display cases assert it.
      */
     rate_incl_unit_prices?: number[];
+    /** Per-line is_scheme_goods flag, in line order. Optional — scheme cases only. */
+    is_scheme_goods?: boolean[];
   };
 }
 
@@ -477,6 +485,455 @@ export const PRICING_FIXTURES: PricingFixture[] = [
       valid: true,
       effective_unit_prices: [33.33],
       rate_incl_unit_prices: [33.33],
+    },
+  },
+
+  // ── Schemes (Phase 4, engine_version 3) ───────────────────────────────────
+  // The engine receives CONFIRMED scheme effects as inputs (schemeDiscountAmount,
+  // isSchemeGoods lines, orderSchemes). These cases pin the arithmetic; the
+  // reward RESOLUTION is proven separately in the detection fixtures below.
+  {
+    name: 'quantity_slab money reward as a line scheme discount',
+    proves: 'a confirmed scheme discount reduces the line before tax, like any discount',
+    lines: [
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000002', // 18% tax, floor 80
+        quantity: 10,
+        schemeId: '5c000000-0000-4000-8000-000000000001',
+        schemeDiscountAmount: 100, // ₹100 off the ₹1000 line (a 10% slab)
+      },
+    ],
+    context: CTX_PLAIN,
+    expect: {
+      sub_total: 900,
+      tax_total: 162, // 900 × 18%
+      total_amount: 1062,
+      discount_total: 100,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [90],
+    },
+  },
+  {
+    name: 'free-goods line is ₹0 and adds nothing to the order',
+    proves: 'an is_scheme_goods line contributes zero and is exempt from tax and floor',
+    lines: [
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000002', quantity: 10 }, // paid 1000 +18%
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000002', // floor 80 — must NOT trip on the ₹0 line
+        quantity: 1,
+        schemeId: '5c000000-0000-4000-8000-000000000002',
+        isSchemeGoods: true,
+      },
+    ],
+    context: CTX_PLAIN,
+    expect: {
+      sub_total: 1000,
+      tax_total: 180,
+      total_amount: 1180,
+      discount_total: 0,
+      classification: 'direct',
+      valid: true, // ₹0 free line does not breach the ₹80 floor
+      effective_unit_prices: [100, 0],
+      is_scheme_goods: [false, true],
+    },
+  },
+  {
+    name: 'scheme discount and salesman discount are jointly capped',
+    proves: 'scheme + salesman discount together can never take a line below zero',
+    lines: [
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000001', // no tax, no floor
+        quantity: 10, // gross 1000
+        schemeId: '5c000000-0000-4000-8000-000000000003',
+        schemeDiscountAmount: 100, // scheme takes 100 first
+        discountType: 'percent',
+        discountValue: 95, // salesman would take 950, capped at 900 (gross − scheme)
+      },
+    ],
+    context: { ...CTX_PLAIN, enforcePriceFloor: false },
+    expect: {
+      sub_total: 0,
+      tax_total: 0,
+      total_amount: 0,
+      discount_total: 1000, // 100 scheme + 900 salesman
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [0],
+    },
+  },
+  {
+    name: 'value_slab whole-order scheme spread pro-rata',
+    proves: 'a confirmed value-slab discount splits across its scoped lines and taxes correctly',
+    lines: [
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000001', quantity: 10 }, // 1000, 0% tax
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000002', quantity: 10 }, // 1000, 18% tax
+    ],
+    context: CTX_PLAIN,
+    orderSchemes: [
+      {
+        schemeId: '5c000000-0000-4000-8000-000000000010',
+        discountAmount: 60, // 3% of the 2000 basket
+        positions: [1, 2],
+      },
+    ],
+    expect: {
+      // 60 split 30/30 → each line 970 in its basis. taxed line: 970 × 18% = 174.6
+      sub_total: 1940,
+      tax_total: 174.6,
+      total_amount: 2114.6,
+      discount_total: 60,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [97, 97],
+    },
+  },
+  {
+    name: 'value_slab scoped to one line only',
+    proves: 'a value-slab discount lands only on the positions it is scoped to',
+    lines: [
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000001', quantity: 10 }, // 1000, position 1 — NOT in scope
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000001', quantity: 10 }, // 1000, position 2 — in scope
+    ],
+    context: CTX_PLAIN,
+    orderSchemes: [
+      {
+        schemeId: '5c000000-0000-4000-8000-000000000011',
+        discountAmount: 50,
+        positions: [2],
+      },
+    ],
+    expect: {
+      // only line 2 is reduced: 1000 → 950
+      sub_total: 1950,
+      tax_total: 0,
+      total_amount: 1950,
+      discount_total: 50,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [100, 95],
+    },
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCHEME DETECTION FIXTURES — the contract for detectEligibleSchemes() and the
+// SQL detect_eligible_schemes function. Same discipline: run against both sides,
+// they must agree. Catalogue prices come from FIXTURE_PRODUCTS above (Plain
+// Widget ...0001 = ₹100, Taxed Widget ...0002 = ₹100). Scheme ids are fixed
+// literals so both engines resolve the same definitions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const P1 = 'aaaaaaaa-0000-4000-8000-000000000001'; // Plain Widget, ₹100
+const P2 = 'aaaaaaaa-0000-4000-8000-000000000002'; // Taxed Widget, ₹100
+const TODAY = '2026-08-19';
+
+/** quantity_slab, step_up: 10–19 → 5%, 20+ → 10%, on Plain Widget. */
+const SCHEME_QS_PERCENT: SchemeDefinition = {
+  id: 'de000000-0000-4000-8000-000000000001',
+  name: 'Volume 5/10',
+  schemeType: 'quantity_slab',
+  slabMode: 'step_up',
+  targetType: 'all',
+  maxFreeUnitsPerOrder: null,
+  priority: 0,
+  startsOn: '2026-08-01',
+  endsOn: null,
+  active: true,
+  productIds: [P1],
+  customerIds: [],
+  slabs: [
+    {
+      id: 'de000000-0000-4000-8000-0000000000a1',
+      minQty: 10, maxQty: 19, minValue: null, maxValue: null,
+      rewardType: 'discount_percent', rewardValue: 5, freeProductId: null, freeQty: null,
+    },
+    {
+      id: 'de000000-0000-4000-8000-0000000000a2',
+      minQty: 20, maxQty: null, minValue: null, maxValue: null,
+      rewardType: 'discount_percent', rewardValue: 10, freeProductId: null, freeQty: null,
+    },
+  ],
+};
+
+/** Higher-priority per-unit amount scheme on the same product, to prove tie-break. */
+const SCHEME_QS_PRIORITY: SchemeDefinition = {
+  id: 'de000000-0000-4000-8000-000000000002',
+  name: 'Flat 5/unit (priority)',
+  schemeType: 'quantity_slab',
+  slabMode: 'step_up',
+  targetType: 'all',
+  maxFreeUnitsPerOrder: null,
+  priority: 5,
+  startsOn: '2026-08-01',
+  endsOn: null,
+  active: true,
+  productIds: [P1],
+  customerIds: [],
+  slabs: [
+    {
+      id: 'de000000-0000-4000-8000-0000000000b1',
+      minQty: 10, maxQty: null, minValue: null, maxValue: null,
+      rewardType: 'discount_amount', rewardValue: 5, freeProductId: null, freeQty: null,
+    },
+  ],
+};
+
+/** free_goods, step_up: buy 10–19 of Taxed Widget → 1 Plain Widget free; 20+ → 3 free. */
+const SCHEME_FG_STEP: SchemeDefinition = {
+  id: 'de000000-0000-4000-8000-000000000003',
+  name: 'Buy 10 get 1',
+  schemeType: 'free_goods',
+  slabMode: 'step_up',
+  targetType: 'all',
+  maxFreeUnitsPerOrder: null,
+  priority: 0,
+  startsOn: '2026-08-01',
+  endsOn: null,
+  active: true,
+  productIds: [P2],
+  customerIds: [],
+  slabs: [
+    {
+      id: 'de000000-0000-4000-8000-0000000000c1',
+      minQty: 10, maxQty: 19, minValue: null, maxValue: null,
+      rewardType: 'free_goods', rewardValue: null, freeProductId: P1, freeQty: 1,
+    },
+    {
+      id: 'de000000-0000-4000-8000-0000000000c2',
+      minQty: 20, maxQty: null, minValue: null, maxValue: null,
+      rewardType: 'free_goods', rewardValue: null, freeProductId: P1, freeQty: 3,
+    },
+  ],
+};
+
+/** free_goods, repeat: every 10 Plain Widgets → 1 free, capped at 5 per order. */
+const SCHEME_FG_REPEAT: SchemeDefinition = {
+  id: 'de000000-0000-4000-8000-000000000004',
+  name: 'Every 10 → 1 free (cap 5)',
+  schemeType: 'free_goods',
+  slabMode: 'repeat',
+  targetType: 'all',
+  maxFreeUnitsPerOrder: 5,
+  priority: 0,
+  startsOn: '2026-08-01',
+  endsOn: null,
+  active: true,
+  productIds: [P1],
+  customerIds: [],
+  slabs: [
+    {
+      id: 'de000000-0000-4000-8000-0000000000d1',
+      minQty: 10, maxQty: null, minValue: null, maxValue: null,
+      rewardType: 'free_goods', rewardValue: null, freeProductId: P1, freeQty: 1,
+    },
+  ],
+};
+
+/** value_slab: whole basket over ₹50,000 → 3% off. */
+const SCHEME_VALUE: SchemeDefinition = {
+  id: 'de000000-0000-4000-8000-000000000005',
+  name: 'Big Basket 3%',
+  schemeType: 'value_slab',
+  slabMode: 'step_up',
+  targetType: 'all',
+  maxFreeUnitsPerOrder: null,
+  priority: 0,
+  startsOn: '2026-08-01',
+  endsOn: null,
+  active: true,
+  productIds: [],
+  customerIds: [],
+  slabs: [
+    {
+      id: 'de000000-0000-4000-8000-0000000000e1',
+      minQty: null, maxQty: null, minValue: 50000, maxValue: null,
+      rewardType: 'discount_percent', rewardValue: 3, freeProductId: null, freeQty: null,
+    },
+  ],
+};
+
+/** Expired copy of the volume scheme, to prove the date window is honoured. */
+const SCHEME_EXPIRED: SchemeDefinition = {
+  ...SCHEME_QS_PERCENT,
+  id: 'de000000-0000-4000-8000-000000000006',
+  name: 'Expired volume',
+  endsOn: '2026-08-01',
+};
+
+/** Customer-targeted scheme, to prove targeting. */
+const SCHEME_TARGETED: SchemeDefinition = {
+  ...SCHEME_QS_PERCENT,
+  id: 'de000000-0000-4000-8000-000000000007',
+  name: 'VIP only',
+  targetType: 'specific_customers',
+  customerIds: ['c0ffee00-0000-4000-8000-000000000001'],
+};
+
+export interface SchemeDetectionFixture {
+  name: string;
+  proves: string;
+  lines: SchemeDetectionLine[];
+  schemes: SchemeDefinition[];
+  contactId: string | null;
+  asOf: string;
+  expect: {
+    lineSchemes: Array<{
+      position: number;
+      schemeId: string;
+      rewardType: SchemeRewardType;
+      schemeDiscountAmount: number;
+      freeQty: number;
+      defaultSelected: boolean;
+    }>;
+    orderSchemes: Array<{
+      schemeId: string;
+      discountAmount: number;
+      appliesToPositions: number[];
+    }>;
+  };
+}
+
+export const SCHEME_DETECTION_FIXTURES: SchemeDetectionFixture[] = [
+  {
+    name: 'step_up picks the highest slab the quantity reaches',
+    proves: '25 units lands in the 20+ slab (10%), not the 10–19 slab (5%)',
+    lines: [{ productId: P1, quantity: 25 }],
+    schemes: [SCHEME_QS_PERCENT],
+    contactId: null,
+    asOf: TODAY,
+    expect: {
+      lineSchemes: [
+        {
+          position: 1,
+          schemeId: SCHEME_QS_PERCENT.id,
+          rewardType: 'discount_percent',
+          schemeDiscountAmount: 250, // 25 × 100 × 10%
+          freeQty: 0,
+          defaultSelected: true,
+        },
+      ],
+      orderSchemes: [],
+    },
+  },
+  {
+    name: 'free_goods step_up earns the slab free quantity, opt-in',
+    proves: 'buying 12 earns 1 free (10–19 slab) and defaults to unselected',
+    lines: [{ productId: P2, quantity: 12 }],
+    schemes: [SCHEME_FG_STEP],
+    contactId: null,
+    asOf: TODAY,
+    expect: {
+      lineSchemes: [
+        {
+          position: 1,
+          schemeId: SCHEME_FG_STEP.id,
+          rewardType: 'free_goods',
+          schemeDiscountAmount: 0,
+          freeQty: 1,
+          defaultSelected: false,
+        },
+      ],
+      orderSchemes: [],
+    },
+  },
+  {
+    name: 'free_goods repeat scales by complete sets and honours the cap',
+    proves: '65 units = 6 sets → 6 free, capped to 5 by max_free_units_per_order',
+    lines: [{ productId: P1, quantity: 65 }],
+    schemes: [SCHEME_FG_REPEAT],
+    contactId: null,
+    asOf: TODAY,
+    expect: {
+      lineSchemes: [
+        {
+          position: 1,
+          schemeId: SCHEME_FG_REPEAT.id,
+          rewardType: 'free_goods',
+          schemeDiscountAmount: 0,
+          freeQty: 5,
+          defaultSelected: false,
+        },
+      ],
+      orderSchemes: [],
+    },
+  },
+  {
+    name: 'best single scheme per line is decided by priority',
+    proves: 'the higher-priority flat scheme wins even though the percent scheme gives more',
+    lines: [{ productId: P1, quantity: 20 }],
+    schemes: [SCHEME_QS_PERCENT, SCHEME_QS_PRIORITY],
+    contactId: null,
+    asOf: TODAY,
+    expect: {
+      lineSchemes: [
+        {
+          position: 1,
+          schemeId: SCHEME_QS_PRIORITY.id, // priority 5 beats priority 0
+          rewardType: 'discount_amount',
+          schemeDiscountAmount: 100, // ₹5 × 20 (vs the 10% = ₹200 it loses to on priority)
+          freeQty: 0,
+          defaultSelected: true,
+        },
+      ],
+      orderSchemes: [],
+    },
+  },
+  {
+    name: 'value_slab qualifies on the basket subtotal',
+    proves: 'a ₹60,000 basket clears the ₹50,000 slab and earns 3% off',
+    lines: [{ productId: P1, quantity: 600 }],
+    schemes: [SCHEME_VALUE],
+    contactId: null,
+    asOf: TODAY,
+    expect: {
+      lineSchemes: [],
+      orderSchemes: [
+        {
+          schemeId: SCHEME_VALUE.id,
+          discountAmount: 1800, // 3% of 60,000
+          appliesToPositions: [1],
+        },
+      ],
+    },
+  },
+  {
+    name: 'an expired scheme is never offered',
+    proves: 'the active date window is honoured even when quantities match',
+    lines: [{ productId: P1, quantity: 25 }],
+    schemes: [SCHEME_EXPIRED],
+    contactId: null,
+    asOf: TODAY,
+    expect: { lineSchemes: [], orderSchemes: [] },
+  },
+  {
+    name: 'customer targeting excludes non-targeted customers',
+    proves: "a specific_customers scheme is invisible to a customer who isn't listed",
+    lines: [{ productId: P1, quantity: 25 }],
+    schemes: [SCHEME_TARGETED],
+    contactId: 'deadbeef-0000-4000-8000-000000000099',
+    asOf: TODAY,
+    expect: { lineSchemes: [], orderSchemes: [] },
+  },
+  {
+    name: 'customer targeting includes the targeted customer',
+    proves: 'the same scheme applies to the listed customer',
+    lines: [{ productId: P1, quantity: 25 }],
+    schemes: [SCHEME_TARGETED],
+    contactId: 'c0ffee00-0000-4000-8000-000000000001',
+    asOf: TODAY,
+    expect: {
+      lineSchemes: [
+        {
+          position: 1,
+          schemeId: SCHEME_TARGETED.id,
+          rewardType: 'discount_percent',
+          schemeDiscountAmount: 250,
+          freeQty: 0,
+          defaultSelected: true,
+        },
+      ],
+      orderSchemes: [],
     },
   },
 ];

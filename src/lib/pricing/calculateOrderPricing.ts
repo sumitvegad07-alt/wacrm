@@ -1,4 +1,5 @@
 import type {
+  ConfirmedOrderScheme,
   FloorViolation,
   OrderDiscountInput,
   PricingContext,
@@ -37,11 +38,23 @@ import type {
  *   catalogue -> price list [Phase 3] -> scheme [Phase 4]
  *     -> salesman discount -> pro-rata order discount -> price floor
  *
+ * SCHEMES (Phase 4, engine_version 3). This function does NOT resolve slabs.
+ * It receives, per line, the CONFIRMED scheme effects a salesman accepted:
+ *   • schemeDiscountAmount — rupees off a line from a quantity_slab reward;
+ *   • isSchemeGoods — this line is a free reward, priced to ₹0 and floor-exempt;
+ *   • orderSchemes (value_slab) — a whole-order discount spread pro-rata across
+ *     its scoped positions, exactly like the manual order discount.
+ * All slab/reward logic lives in detectEligibleSchemes() (and its SQL twin).
+ * The scheme discount and the salesman discount combine off the line's gross
+ * and are JOINTLY capped so a line can never go negative. When no scheme inputs
+ * are present this function is byte-identical to engine_version 2 — every
+ * pre-Phase-4 fixture still passes unchanged.
+ *
  * TAX BASIS is per line (migration 083). Passes 1 (discounts) and the pro-rata
  * order-discount allocation happen in the line's NATIVE basis — pre-tax for an
  * exclusive line, tax-inclusive for an inclusive one — so no branching is
  * needed there. Only the final net/tax split differs by basis (see pass 2).
- * engine_version is 2.
+ * engine_version is 3.
  */
 
 /**
@@ -60,7 +73,7 @@ function round(value: number, dp: number): number {
   return Math.round(corrected) / factor;
 }
 
-const round2 = (n: number) => round(n, 2);
+export const round2 = (n: number) => round(n, 2);
 const round4 = (n: number) => round(n, 4);
 
 /** Mirrors the SQL classification branch exactly. */
@@ -79,11 +92,12 @@ export function calculateOrderPricing(
   products: Map<string, PricingProduct> | Record<string, PricingProduct>,
   ctx: PricingContext,
   orderDiscount?: OrderDiscountInput | null,
+  orderSchemes?: ConfirmedOrderScheme[] | null,
 ): PricingResult {
   const lookup = (id: string): PricingProduct | undefined =>
     products instanceof Map ? products.get(id) : products[id];
 
-  // ---- pass 1: resolve, apply the line-level salesman discount ----
+  // ---- pass 1: resolve, apply scheme + salesman line discounts ----
   const scratch = (lines ?? []).map((line, index) => {
     const product = lookup(line.productId);
     const quantity = Math.max(Number(line.quantity) || 0, 0);
@@ -97,10 +111,35 @@ export function calculateOrderPricing(
     // Per-line tax basis, defaulting to exclusive exactly like the SQL's
     // COALESCE(q.tax_mode, 'exclusive').
     const taxMode: 'inclusive' | 'exclusive' = line.taxMode === 'inclusive' ? 'inclusive' : 'exclusive';
+    const schemeId = line.schemeId ?? null;
+    const isSchemeGoods = line.isSchemeGoods === true;
+
+    // A free-goods reward line is priced to ₹0: it contributes nothing to any
+    // total and takes no discount. The catalogue price is kept only so the UI /
+    // PDF can show "₹100 — FREE".
+    if (isSchemeGoods) {
+      return {
+        position: index + 1,
+        product,
+        quantity,
+        taxMode,
+        cataloguePrice,
+        priceListPrice,
+        discountType: null as 'percent' | 'amount' | null,
+        discountValue: 0,
+        discountAmount: 0,
+        schemeDiscountAmount: 0,
+        schemeId,
+        isSchemeGoods: true,
+        gross: 0,
+        afterItem: 0,
+      };
+    }
 
     const gross = round2(priceListPrice * quantity);
-    // Phase 4 applies schemes here.
-    const schemeDiscountAmount = 0;
+    // Scheme comes before the salesman discount in the sequence. Its rupee
+    // effect is already resolved by detection; here we only apply and cap it.
+    const schemeDiscountAmount = Math.min(round2(Number(line.schemeDiscountAmount) || 0), gross);
 
     let discountAmount = 0;
     // 'amount' is PER UNIT (× quantity) — a field discount is spoken per unit
@@ -108,8 +147,9 @@ export function calculateOrderPricing(
     // discount (below) stays one amount across the order.
     if (discountType === 'percent') discountAmount = round2((gross * discountValue) / 100);
     else if (discountType === 'amount') discountAmount = round2(discountValue * quantity);
-    // A discount can never exceed the line it is discounting.
-    discountAmount = Math.min(discountAmount, gross);
+    // The salesman discount can never take the line below what the scheme has
+    // already left — scheme + salesman jointly cannot exceed the line.
+    discountAmount = Math.min(discountAmount, gross - schemeDiscountAmount);
 
     return {
       position: index + 1,
@@ -122,8 +162,10 @@ export function calculateOrderPricing(
       discountValue,
       discountAmount,
       schemeDiscountAmount,
+      schemeId,
+      isSchemeGoods: false,
       gross,
-      afterItem: gross - discountAmount - schemeDiscountAmount,
+      afterItem: gross - schemeDiscountAmount - discountAmount,
     };
   });
 
@@ -137,13 +179,37 @@ export function calculateOrderPricing(
     orderDiscountTotal = Math.min(round2(Number(orderDiscount.value) || 0), baseSum);
   }
 
+  // ---- value_slab (whole-order scheme) discounts ----
+  // Each confirmed value slab is a rupee discount spread pro-rata across ONLY
+  // its scoped positions, just like the manual order discount is spread across
+  // all lines. Capped at the qualifying subtotal so it can never invert a line.
+  const orderSchemeAlloc = (orderSchemes ?? []).map((os) => {
+    const positions = new Set(os.positions ?? []);
+    const denom = scratch
+      .filter((s) => positions.has(s.position))
+      .reduce((sum, s) => sum + s.afterItem, 0);
+    const amount = Math.min(round2(Number(os.discountAmount) || 0), Math.max(denom, 0));
+    return { positions, denom, amount };
+  });
+  const orderSchemeTotal = orderSchemeAlloc.reduce((sum, a) => sum + a.amount, 0);
+
   // ---- pass 2: allocate pro-rata, tax, floor check ----
   const floorViolations: FloorViolation[] = [];
 
   const resultLines: PricingLineResult[] = scratch.map((s) => {
     // Allocated per line rather than held at the header so each line's tax
     // reduces correctly — invoice discounts must apply at line level.
-    const share = baseSum > 0 ? round2((orderDiscountTotal * s.afterItem) / baseSum) : 0;
+    const manualShare = baseSum > 0 ? round2((orderDiscountTotal * s.afterItem) / baseSum) : 0;
+    // This line's slice of every value slab whose scope includes it.
+    const schemeShare = orderSchemeAlloc.reduce(
+      (sum, a) =>
+        a.positions.has(s.position) && a.denom > 0
+          ? sum + round2((a.amount * s.afterItem) / a.denom)
+          : sum,
+      0,
+    );
+    // Combined order-level share, never more than the line has left.
+    const share = Math.min(manualShare + schemeShare, s.afterItem);
     // The line amount, in its NATIVE basis, after both discounts. This is what
     // the floor check and effective unit price work from — for an inclusive
     // line that is the tax-inclusive amount, matching the SQL (which divides
@@ -172,7 +238,9 @@ export function calculateOrderPricing(
 
     const effectiveUnit = s.quantity > 0 ? round4(nativeAfter / s.quantity) : 0;
     const minPrice = s.product?.minPrice ?? null;
-    const floorBreached = minPrice !== null && effectiveUnit < minPrice;
+    // A free-goods reward line is priced to ₹0 by design and is exempt from the
+    // floor — a giveaway is never a floor breach.
+    const floorBreached = !s.isSchemeGoods && minPrice !== null && effectiveUnit < minPrice;
 
     if (floorBreached && minPrice !== null) {
       floorViolations.push({
@@ -202,7 +270,8 @@ export function calculateOrderPricing(
       tax_rate: taxRate,
       tax_amount: taxAmount,
       total: net + taxAmount,
-      is_scheme_goods: false,
+      is_scheme_goods: s.isSchemeGoods,
+      scheme_id: s.schemeId,
       min_price: minPrice,
       effective_unit_price: effectiveUnit,
       floor_breached: floorBreached,
@@ -213,18 +282,21 @@ export function calculateOrderPricing(
   const taxTotal = resultLines.reduce((sum, l) => sum + l.tax_amount, 0);
   const total = resultLines.reduce((sum, l) => sum + l.total, 0);
   const itemDiscountTotal = scratch.reduce((sum, s) => sum + s.discountAmount, 0);
+  // Scheme line discounts count toward the discount total; free-goods lines are
+  // ₹0 and add nothing. Value-slab discounts sit at the order level.
+  const schemeLineDiscountTotal = scratch.reduce((sum, s) => sum + s.schemeDiscountAmount, 0);
 
   return {
     lines: resultLines,
     sub_total: subTotal,
-    discount_total: itemDiscountTotal + orderDiscountTotal,
-    order_discount: orderDiscountTotal,
+    discount_total: itemDiscountTotal + schemeLineDiscountTotal + orderDiscountTotal + orderSchemeTotal,
+    order_discount: orderDiscountTotal + orderSchemeTotal,
     tax_total: taxTotal,
     total_amount: total,
     classification: classify(ctx),
     floor_violations: floorViolations,
     enforce_floor: ctx.enforcePriceFloor,
     valid: !(ctx.enforcePriceFloor && floorViolations.length > 0),
-    engine_version: 2,
+    engine_version: 3,
   };
 }
