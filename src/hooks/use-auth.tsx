@@ -20,6 +20,7 @@ import {
   type AccountRole,
 } from "@/lib/auth/roles";
 import { type RolePermissions, hasPermission, getDataScope } from "@/lib/auth/rbac";
+import { planLines, clampModuleSettings } from "@/lib/plans/catalog";
 
 interface Profile {
   id: string;
@@ -177,6 +178,15 @@ interface AuthContextValue {
   hasBroadcasts: boolean;
   hasAdvancedAI: boolean;
   hasLocationTracking: boolean;
+  /**
+   * Product-line entitlements derived from the account's subscription_plan
+   * (see @/lib/plans/catalog). CRM unlocks Leads/Deals/WhatsApp/Quotation;
+   * WFA unlocks field tracking, visits, expense, beat, territory; SFA unlocks
+   * orders, payments, financials, distribution. Legacy plans read all-true.
+   */
+  hasCRM: boolean;
+  hasWFA: boolean;
+  hasSFA: boolean;
 
   /** Admin-configurable module toggles. All true while loading. */
   moduleSettings: ModuleSettings;
@@ -292,7 +302,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .eq("id", data.account_id)
               .maybeSingle();
             if (!modErr && modData) {
-              setModuleSettings(normalizeModuleSettings((modData as any).module_settings));
+              // Clamp to the plan so a stale off-plan `true` (e.g. left in the
+              // JSONB after a downgrade) can never light a module up client-side.
+              setModuleSettings(
+                clampModuleSettings(
+                  account.subscription_plan,
+                  normalizeModuleSettings((modData as any).module_settings),
+                ) as ModuleSettings,
+              );
             }
             setModuleSettingsLoaded(true);
           }
@@ -453,8 +470,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // dependencies downstream.
   const derived = useMemo(() => {
     const role = profile?.account_role ?? null;
-    const plan = account?.subscription_plan ?? 'Basic';
-    const hasLocationTracking = plan === 'Pro' || plan === 'Enterprise' || plan === 'Premium'; 
+    // Product-line entitlements come from the plan catalog now, not from the
+    // old Basic/Pro/Enterprise tiers. WhatsApp + AI ride the CRM line; field
+    // tracking rides the WFA line. Legacy plan values resolve to full access.
+    const lines = planLines(account?.subscription_plan);
 
     return {
       accountRole: role,
@@ -467,11 +486,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canEditSettings: role ? canEditSettingsFor(role) : false,
       canSendMessages: role ? canSendMessagesFor(role) : false,
       isSuperadmin: profile?.is_superadmin ?? false,
-      hasWhatsApp: plan === 'Pro' || plan === 'Enterprise',
-      hasAutomations: plan === 'Pro' || plan === 'Enterprise',
-      hasBroadcasts: plan === 'Pro' || plan === 'Enterprise',
-      hasAdvancedAI: plan === 'Enterprise',
-      hasLocationTracking,
+      hasWhatsApp: lines.crm,
+      hasAutomations: lines.crm,
+      hasBroadcasts: lines.crm,
+      hasAdvancedAI: lines.crm,
+      hasLocationTracking: lines.wfa,
+      hasCRM: lines.crm,
+      hasWFA: lines.wfa,
+      hasSFA: lines.sfa,
       permissions: profile?.employee_role?.permissions ?? null,
     };
   }, [profile, account?.subscription_plan]);
@@ -544,6 +566,9 @@ export function useAuth(): AuthContextValue {
       hasBroadcasts: false,
       hasAdvancedAI: false,
       hasLocationTracking: false,
+      hasCRM: false,
+      hasWFA: false,
+      hasSFA: false,
       moduleSettings: { ...DEFAULT_MODULE_SETTINGS },
       moduleSettingsLoaded: false,
       isModuleEnabled: () => true,

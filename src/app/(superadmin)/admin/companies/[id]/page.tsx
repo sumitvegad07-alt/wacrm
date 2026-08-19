@@ -15,6 +15,13 @@ import {
 } from "@/components/ui/select";
 import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2, ToggleLeft, History } from "lucide-react";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/admin/billing";
+import {
+  PLAN_IDS,
+  PLAN_LABEL,
+  allowedModules,
+  defaultModuleSettings,
+  isNewPlan,
+} from "@/lib/plans/catalog";
 import Link from "next/link";
 
 const TIMELINE_DOT: Record<string, string> = {
@@ -222,14 +229,31 @@ export default function CompanyDetailPage() {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Plan</Label>
-            <Select value={plan} onValueChange={(v) => setPlan(v || "")}>
+            <Select
+              value={plan}
+              onValueChange={(v) => {
+                const next = v || "";
+                setPlan(next);
+                // Re-seed the module grid to the plan's defaults so the toggles
+                // immediately reflect what the plan includes. The server clamps
+                // to the plan on save regardless, but this keeps the UI honest.
+                if (isNewPlan(next)) setModules(defaultModuleSettings(next));
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Free">Free</SelectItem>
-                <SelectItem value="Pro">Pro</SelectItem>
-                <SelectItem value="Enterprise">Enterprise</SelectItem>
+                {/* A tenant still on a legacy plan keeps its value selectable so
+                    the dropdown shows it until a new plan is picked. */}
+                {plan && !isNewPlan(plan) && (
+                  <SelectItem value={plan}>{plan} (legacy)</SelectItem>
+                )}
+                {PLAN_IDS.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {PLAN_LABEL[p]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -283,20 +307,30 @@ export default function CompanyDetailPage() {
             <ToggleLeft className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold">Modules</h3>
             <span className="text-xs text-muted-foreground">
-              Unset modules default to enabled
+              Modules outside the selected plan are locked off
             </span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {MODULE_KEYS.map((key: ModuleKey) => {
-              const enabled = modules[key] ?? true;
+              // A module the plan does not include is force-locked: the checkbox
+              // is disabled and reads as off. `allowedModules` returns the full
+              // set for legacy plans, so those tenants keep every toggle.
+              const inPlan = allowedModules(plan).has(key);
+              const enabled = inPlan && (modules[key] ?? true);
               return (
                 <label
                   key={key}
-                  className="flex items-center gap-2 text-sm cursor-pointer rounded-md px-2 py-1.5 hover:bg-muted"
+                  title={inPlan ? undefined : "Not included in this plan"}
+                  className={`flex items-center gap-2 text-sm rounded-md px-2 py-1.5 ${
+                    inPlan
+                      ? "cursor-pointer hover:bg-muted"
+                      : "opacity-50 cursor-not-allowed"
+                  }`}
                 >
                   <input
                     type="checkbox"
                     checked={enabled}
+                    disabled={!inPlan}
                     onChange={(e) =>
                       setModules((m) => ({ ...m, [key]: e.target.checked }))
                     }

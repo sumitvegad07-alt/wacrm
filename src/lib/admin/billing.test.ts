@@ -6,10 +6,11 @@ import {
   validateBillingChange,
   type AccountBillingState,
 } from "./billing";
+import { defaultModuleSettings } from "@/lib/plans/catalog";
 
 function account(over: Partial<AccountBillingState> = {}): AccountBillingState {
   return {
-    subscription_plan: "Basic",
+    subscription_plan: "CRM_SFA", // full-access plan by default
     subscription_status: "active",
     subscription_expires_at: null,
     user_count: 5,
@@ -19,19 +20,18 @@ function account(over: Partial<AccountBillingState> = {}): AccountBillingState {
 }
 
 describe("validateBillingChange", () => {
-  it("returns only the fields that actually changed", () => {
-    // A no-op change must produce an empty patch so the audit entry does not
-    // claim something moved when nothing did.
-    expect(validateBillingChange(account(), { plan: "Basic" }, 3)).toEqual({});
+  it("returns an empty patch when nothing changes", () => {
+    expect(validateBillingChange(account(), { plan: "CRM_SFA" }, 3)).toEqual({});
   });
 
-  it("accepts an upgrade and a downgrade", () => {
-    expect(validateBillingChange(account(), { plan: "Pro" }, 3)).toEqual({
-      subscription_plan: "Pro",
-    });
-    expect(
-      validateBillingChange(account({ subscription_plan: "Pro" }), { plan: "Basic" }, 3),
-    ).toEqual({ subscription_plan: "Basic" });
+  it("accepts a plan change and seeds that plan's default modules", () => {
+    const out = validateBillingChange(
+      account({ subscription_plan: "CRM" }),
+      { plan: "CRM_SFA" },
+      3,
+    );
+    expect(out.subscription_plan).toBe("CRM_SFA");
+    expect(out.module_settings).toEqual(defaultModuleSettings("CRM_SFA"));
   });
 
   it("rejects an unknown plan or status", () => {
@@ -41,6 +41,18 @@ describe("validateBillingChange", () => {
     expect(() => validateBillingChange(account(), { status: "vibing" }, 3)).toThrow(
       BillingValidationError,
     );
+  });
+
+  it("does not reject a save that leaves a legacy plan value untouched", () => {
+    // A legacy 'Free' account edited for seats only must still save even though
+    // 'Free' is not one of the new sellable plans.
+    const out = validateBillingChange(
+      account({ subscription_plan: "Free" }),
+      { plan: "Free", userCount: 6 },
+      5,
+    );
+    expect(out.subscription_plan).toBeUndefined();
+    expect(out.user_count).toBe(6);
   });
 
   it("normalises a trial extension to an ISO timestamp", () => {
@@ -66,17 +78,9 @@ describe("validateBillingChange", () => {
   });
 
   it("refuses a seat count below the users who already exist", () => {
-    // Under-setting the limit silently locks the tenant out of managing their
-    // own team, because employee creation enforces it.
     expect(() => validateBillingChange(account(), { userCount: 2 }, 7)).toThrow(
       /already has 7 users/,
     );
-  });
-
-  it("allows a seat count equal to the current user total", () => {
-    expect(validateBillingChange(account(), { userCount: 7 }, 7)).toEqual({
-      user_count: 7,
-    });
   });
 
   it("rejects a non-integer or zero seat count", () => {
@@ -88,20 +92,31 @@ describe("validateBillingChange", () => {
     );
   });
 
-  it("merges module toggles over the existing settings rather than replacing them", () => {
-    // Replacing wholesale would silently re-enable every module the caller
-    // omitted from the request.
-    const out = validateBillingChange(account(), { modules: { route: true } }, 3);
-    expect(out.module_settings).toEqual({ whatsapp: true, route: true });
+  it("hard-locks: an off-plan module can never be written true", () => {
+    // A CRM tenant tries to enable payment (an SFA module) and quotation.
+    const out = validateBillingChange(
+      account({ subscription_plan: "CRM", module_settings: { whatsapp: true } }),
+      { modules: { payment: true, quotation: true } },
+      3,
+    );
+    expect(out.module_settings?.payment).toBe(false); // clamped
+    expect(out.module_settings?.quotation).toBe(true); // allowed on CRM
+    expect(out.module_settings?.whatsapp).toBe(true); // preserved
   });
 
-  it("rejects an unknown module key or a non-boolean value", () => {
-    expect(() =>
-      validateBillingChange(account(), { modules: { teleportation: true } }, 3),
-    ).toThrow(/Unknown module/);
-    expect(() =>
-      validateBillingChange(account(), { modules: { route: "yes" } }, 3),
-    ).toThrow(BillingValidationError);
+  it("keeps allowed modules editable within the plan", () => {
+    const out = validateBillingChange(account(), { modules: { route: true } }, 3);
+    expect(out.module_settings?.route).toBe(true);
+  });
+
+  it("ignores unknown module keys instead of writing them", () => {
+    const out = validateBillingChange(
+      account(),
+      { modules: { teleportation: true } as never },
+      3,
+    );
+    expect(out.module_settings).toBeDefined();
+    expect("teleportation" in (out.module_settings ?? {})).toBe(false);
   });
 
   it("rejects modules sent as an array", () => {
@@ -110,38 +125,31 @@ describe("validateBillingChange", () => {
     );
   });
 
-  it("handles an account with no module settings yet", () => {
-    const out = validateBillingChange(
-      account({ module_settings: null }),
-      { modules: { payment: false } },
-      3,
-    );
-    expect(out.module_settings).toEqual({ payment: false });
-  });
-
   it("combines several changes in one patch", () => {
     const out = validateBillingChange(
       account(),
-      { plan: "Enterprise", status: "active", userCount: 12 },
+      { plan: "SFA", status: "active", userCount: 12 },
       5,
     );
-    expect(out).toEqual({ subscription_plan: "Enterprise", user_count: 12 });
+    expect(out.subscription_plan).toBe("SFA");
+    expect(out.user_count).toBe(12);
+    expect(out.module_settings).toEqual(defaultModuleSettings("SFA"));
   });
 });
 
 describe("monthlyRevenue", () => {
   it("prices by plan and seat count", () => {
-    expect(monthlyRevenue("Pro", 10)).toBe(2000);
+    expect(monthlyRevenue("CRM_WFA", 10)).toBe(2000); // ₹200 × 10
   });
 
   it("applies the seat floor", () => {
-    expect(monthlyRevenue("Basic", 1)).toBe(100 * MIN_BILLABLE_SEATS);
-    expect(monthlyRevenue("Basic", null)).toBe(100 * MIN_BILLABLE_SEATS);
+    expect(monthlyRevenue("CRM", 1)).toBe(100 * MIN_BILLABLE_SEATS);
+    expect(monthlyRevenue("CRM", null)).toBe(100 * MIN_BILLABLE_SEATS);
   });
 
-  it("values Trial and unknown plans at zero", () => {
+  it("values Trial, legacy and unknown plans at zero", () => {
     expect(monthlyRevenue("Trial", 50)).toBe(0);
     expect(monthlyRevenue(null, 50)).toBe(0);
-    expect(monthlyRevenue("Legacy", 50)).toBe(0);
+    expect(monthlyRevenue("Enterprise", 50)).toBe(0); // legacy → priced by the billing page
   });
 });

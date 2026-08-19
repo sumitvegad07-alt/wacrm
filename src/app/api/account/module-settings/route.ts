@@ -21,6 +21,7 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from "@/lib/rate-limit";
+import { clampModuleSettings } from "@/lib/plans/catalog";
 
 // The canonical set of configurable module keys.
 // Adding a new key here is the only code change needed to support
@@ -74,7 +75,7 @@ export async function GET() {
     const ctx = await getCurrentAccount();
     const { data, error } = await ctx.supabase
       .from("accounts")
-      .select("module_settings")
+      .select("module_settings, subscription_plan")
       .eq("id", ctx.accountId)
       .maybeSingle();
 
@@ -86,8 +87,13 @@ export async function GET() {
       );
     }
 
+    // Clamp to the plan so an off-plan module never reads as enabled, even if a
+    // stale `true` is sitting in the JSONB from before a downgrade.
     return NextResponse.json({
-      module_settings: normalizeSettings(data?.module_settings),
+      module_settings: clampModuleSettings(
+        data?.subscription_plan,
+        normalizeSettings(data?.module_settings)
+      ),
     });
   } catch (err) {
     return toErrorResponse(err);
@@ -129,7 +135,7 @@ export async function PATCH(request: Request) {
     // keys not included in this request.
     const { data: existing, error: fetchErr } = await ctx.supabase
       .from("accounts")
-      .select("module_settings")
+      .select("module_settings, subscription_plan")
       .eq("id", ctx.accountId)
       .maybeSingle();
 
@@ -141,10 +147,14 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const merged = {
+    // Hard-lock to the plan: a tenant admin may toggle modules their plan
+    // includes, but any module outside the plan is forced false regardless of
+    // what was requested. The plan ceiling is set from the superadmin billing
+    // screen; here we only enforce it.
+    const merged = clampModuleSettings(existing?.subscription_plan, {
       ...normalizeSettings(existing?.module_settings),
       ...updates,
-    };
+    });
 
     const { data, error } = await ctx.supabase
       .from("accounts")

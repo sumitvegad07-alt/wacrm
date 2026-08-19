@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
+import { allowedModules } from "@/lib/plans/catalog";
 import { CheckCircle2, Layers, GripVertical, Trash2, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -143,7 +144,14 @@ function KoopsOptionToggle<T extends string>({
 // ── Main Component ────────────────────────────────────────────
 export function ModuleSettingsPanel() {
   const supabase = createClient();
-  const { accountId, moduleSettings, canEditSettings, refreshModuleSettings } = useAuth();
+  const { accountId, account, moduleSettings, canEditSettings, refreshModuleSettings } = useAuth();
+
+  // Modules the account's plan includes. Legacy plans return the full set, so
+  // those tenants keep every toggle. A module outside the plan is locked: the
+  // control is disabled and the server clamps it off on save regardless.
+  const planModules = allowedModules(account?.subscription_plan);
+  const moduleLocked = (key: keyof ModuleSettings) =>
+    !canEditSettings || !planModules.has(key as never);
 
   const [draft, setDraft] = useState<ModuleSettings>({ ...moduleSettings });
   const [saving, setSaving] = useState(false);
@@ -395,6 +403,10 @@ export function ModuleSettingsPanel() {
           <h3 className="text-base font-semibold text-foreground">
             Modules / System config
           </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Greyed-out modules aren&apos;t part of your current plan. Contact us to
+            upgrade and unlock them.
+          </p>
         </div>
 
         {/* 4-column Koops grid with only real WACRM modules */}
@@ -407,7 +419,7 @@ export function ModuleSettingsPanel() {
             <KoopsRadioToggle
               enabled={draft.whatsapp}
               onChange={(val) => handleModuleToggle("whatsapp", val)}
-              disabled={!canEditSettings}
+              disabled={moduleLocked("whatsapp")}
             />
           </div>
 
@@ -419,7 +431,7 @@ export function ModuleSettingsPanel() {
             <KoopsRadioToggle
               enabled={draft.quotation}
               onChange={(val) => handleModuleToggle("quotation", val)}
-              disabled={!canEditSettings}
+              disabled={moduleLocked("quotation")}
             />
           </div>
 
@@ -431,7 +443,7 @@ export function ModuleSettingsPanel() {
             <KoopsRadioToggle
               enabled={draft.expense}
               onChange={(val) => handleModuleToggle("expense", val)}
-              disabled={!canEditSettings}
+              disabled={moduleLocked("expense")}
             />
           </div>
 
@@ -443,7 +455,7 @@ export function ModuleSettingsPanel() {
             <KoopsRadioToggle
               enabled={draft.payment}
               onChange={(val) => handleModuleToggle("payment", val)}
-              disabled={!canEditSettings}
+              disabled={moduleLocked("payment")}
             />
           </div>
 
@@ -455,7 +467,7 @@ export function ModuleSettingsPanel() {
             <KoopsRadioToggle
               enabled={draft.dispatch}
               onChange={(val) => handleModuleToggle("dispatch", val)}
-              disabled={!canEditSettings}
+              disabled={moduleLocked("dispatch")}
             />
           </div>
 
@@ -469,7 +481,7 @@ export function ModuleSettingsPanel() {
               onChange={(val) =>
                 handleModuleToggle("pending_dispatch", val)
               }
-              disabled={!canEditSettings}
+              disabled={moduleLocked("pending_dispatch")}
             />
           </div>
 
@@ -481,7 +493,7 @@ export function ModuleSettingsPanel() {
             <KoopsRadioToggle
               enabled={draft.territory}
               onChange={(val) => handleModuleToggle("territory", val)}
-              disabled={!canEditSettings}
+              disabled={moduleLocked("territory")}
             />
           </div>
 
@@ -495,7 +507,7 @@ export function ModuleSettingsPanel() {
               onChange={(val) =>
                 handleModuleToggle("reporting_hierarchy", val)
               }
-              disabled={!canEditSettings}
+              disabled={moduleLocked("reporting_hierarchy")}
             />
           </div>
 
@@ -507,7 +519,7 @@ export function ModuleSettingsPanel() {
             <KoopsRadioToggle
               enabled={draft.route}
               onChange={(val) => handleModuleToggle("route", val)}
-              disabled={!canEditSettings}
+              disabled={moduleLocked("route")}
             />
           </div>
         </div>

@@ -21,7 +21,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasWhatsApp,
     hasAutomations,
     hasBroadcasts,
-    hasLocationTracking,
+    hasCRM,
+    hasWFA,
+    hasSFA,
     isModuleEnabled,
     moduleSettingsLoaded,
     signOut,
@@ -48,16 +50,37 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     // unreachable by direct URL, bookmark or refresh while the sidebar link worked.
     if (loading || !user || !pathname || !moduleSettingsLoaded) return;
 
+    // User Attendance and Leaves live under /location-tracking but are base
+    // features on every plan — never block them on the WFA line.
+    const isBaseLocationPage =
+      pathname.startsWith("/location-tracking/attendance") ||
+      pathname.startsWith("/location-tracking/leaves");
+
     const isRestricted =
+      // Module-toggle gated (the plan clamps these off when out of plan)
       (pathname.startsWith("/automations") && !hasAutomations) ||
       (pathname.startsWith("/broadcasts") && !hasBroadcasts) ||
-      (pathname.startsWith("/locations") && !hasLocationTracking) ||
       (pathname.startsWith("/whatsapp") && (!hasWhatsApp || !isModuleEnabled("whatsapp"))) ||
       (pathname.startsWith("/quotations") && !isModuleEnabled("quotation")) ||
       (pathname.startsWith("/expenses") && !isModuleEnabled("expense")) ||
       (pathname.startsWith("/payments") && !isModuleEnabled("payment")) ||
       (pathname.startsWith("/dispatch") && !isModuleEnabled("dispatch")) ||
-      (pathname.startsWith("/routes") && !isModuleEnabled("route"));
+      (pathname.startsWith("/routes") && !isModuleEnabled("route")) ||
+      // Product-line gated (Leads/Deals → CRM, Orders → SFA, tracking → WFA).
+      // These have no module toggle, so the plan line is the ceiling.
+      (pathname.startsWith("/leads") && !hasCRM) ||
+      (pathname.startsWith("/pipelines") && !hasCRM) ||
+      (pathname.startsWith("/deals") && !hasCRM) ||
+      (pathname.startsWith("/orders") && !hasSFA) ||
+      (pathname.startsWith("/pending-dispatch") && !hasSFA) ||
+      (pathname.startsWith("/location-tracking") && !hasWFA && !isBaseLocationPage) ||
+      (pathname.startsWith("/reports/leads") && !hasCRM) ||
+      (pathname.startsWith("/reports/deals") && !hasCRM) ||
+      (pathname.startsWith("/reports/orders") && !hasSFA) ||
+      (pathname.startsWith("/reports/sales") && !hasSFA) ||
+      (pathname.startsWith("/reports/ageing") && !hasSFA) ||
+      (pathname.startsWith("/reports/visits") && !hasWFA) ||
+      (pathname.startsWith("/reports/dsr") && !hasWFA);
 
     if (isRestricted) {
       router.replace("/dashboard");
@@ -68,8 +91,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     pathname,
     hasAutomations,
     hasBroadcasts,
-    hasLocationTracking,
     hasWhatsApp,
+    hasCRM,
+    hasWFA,
+    hasSFA,
     isModuleEnabled,
     moduleSettingsLoaded,
     router,

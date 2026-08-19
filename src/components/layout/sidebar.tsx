@@ -103,6 +103,7 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 import type { AccountRole } from "@/lib/auth/roles";
+import type { ProductLine } from "@/lib/plans/catalog";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -170,6 +171,12 @@ interface NavItem {
    * the admin has enabled the corresponding module in Module Settings.
    */
   configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment";
+  /**
+   * Product-line entitlement. When set, this item is only shown if the account's
+   * plan includes that line (CRM / WFA / SFA). Used for features that aren't
+   * gated by an admin module toggle — Leads, Deals, Orders and per-line reports.
+   */
+  line?: ProductLine;
 }
 
 export type MenuNode =
@@ -182,6 +189,7 @@ export type MenuNode =
       icon: React.ComponentType<{ className?: string }>;
       items: NavItem[];
       configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment";
+      line?: ProductLine;
     }
   | {
       type: "spacer";
@@ -224,6 +232,7 @@ export function getMenuStructure(
       label: "WhatsApp",
       icon: WhatsAppIcon,
       configModule: "whatsapp" as const,
+      line: "crm" as const,
       items: [
         { href: "/inbox", label: "Inbox", icon: MessageSquare, module: "whatsapp" },
         { href: "/whatsapp/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "whatsapp" },
@@ -297,6 +306,7 @@ export function getMenuStructure(
       label: "Order",
       icon: ShoppingCart,
       module: "orders",
+      line: "sfa",
     },
     {
       type: "link",
@@ -324,6 +334,7 @@ export function getMenuStructure(
       label: "Lead",
       icon: UserPlus,
       module: "leads",
+      line: "crm",
     },
     {
       type: "link",
@@ -331,6 +342,7 @@ export function getMenuStructure(
       label: "Deal",
       icon: GitBranch,
       module: "deals",
+      line: "crm",
     },
 
     { type: "spacer" },
@@ -366,23 +378,23 @@ export function getMenuStructure(
       label: "Report",
       icon: LineChart,
       items: [
-        { href: "/reports/orders", label: "Order Reports", icon: ShoppingCart, module: "orders" },
+        { href: "/reports/orders", label: "Order Reports", icon: ShoppingCart, module: "orders", line: "sfa" },
         // Sales = the same report over fully-dispatched (Closed) orders only.
-        { href: "/reports/sales", label: "Sales Reports", icon: TrendingUp, module: "orders" },
+        { href: "/reports/sales", label: "Sales Reports", icon: TrendingUp, module: "orders", line: "sfa" },
         // Gated like the Quotation module itself (see the Quotation nav entry above).
-        { href: "/reports/quotations", label: "Quotation Reports", icon: FileText, module: "orders", configModule: "quotation" as const },
-        { href: "/reports/payments", label: "Payment Reports", icon: Banknote, module: "payment_reports", configModule: "payment" as const },
-        { href: "/reports/leads", label: "Lead Reports", icon: UserPlus, module: "leads" },
-        { href: "/reports/deals", label: "Deal Reports", icon: GitBranch, module: "deals" },
-        { href: "/reports/visits", label: "Visit Reports", icon: MapPin, module: "location_tracking" },
+        { href: "/reports/quotations", label: "Quotation Reports", icon: FileText, module: "orders", configModule: "quotation" as const, line: "crm" },
+        { href: "/reports/payments", label: "Payment Reports", icon: Banknote, module: "payment_reports", configModule: "payment" as const, line: "sfa" },
+        { href: "/reports/leads", label: "Lead Reports", icon: UserPlus, module: "leads", line: "crm" },
+        { href: "/reports/deals", label: "Deal Reports", icon: GitBranch, module: "deals", line: "crm" },
+        { href: "/reports/visits", label: "Visit Reports", icon: MapPin, module: "location_tracking", line: "wfa" },
         // Dormancy: customers/products with NO orders in the chosen window.
-        { href: "/reports/ageing", label: "Ageing Reports", icon: Clock, module: "orders" },
+        { href: "/reports/ageing", label: "Ageing Reports", icon: Clock, module: "orders", line: "sfa" },
         // Claims by approval status. Distinct from the "/expenses" entry below,
         // which is the expense LIST, not a report.
-        { href: "/reports/expenses", label: "Expense Reports", icon: Coins, module: "expenses", configModule: "expense" as const },
+        { href: "/reports/expenses", label: "Expense Reports", icon: Coins, module: "expenses", configModule: "expense" as const, line: "wfa" },
         { href: "/reports/tasks", label: "Task Reports", icon: CheckSquare, module: "activities" },
         // One line per rep across every module. Opens on Today, not This Month.
-        { href: "/reports/dsr", label: "DSR", icon: ClipboardList, module: "location_tracking" },
+        { href: "/reports/dsr", label: "DSR", icon: ClipboardList, module: "location_tracking", line: "wfa" },
         // This group holds ONLY reports built on the generic report engine.
         //
         // Four entries were removed on 2026-08-18: "Activity Report"
@@ -506,6 +518,9 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     hasAutomations,
     hasBroadcasts,
     hasLocationTracking,
+    hasCRM,
+    hasWFA,
+    hasSFA,
     hasPermission,
     isModuleEnabled,
     moduleSettings,
@@ -544,12 +559,25 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
+  const lineEnabled = (line: ProductLine) =>
+    line === "crm" ? hasCRM : line === "wfa" ? hasWFA : hasSFA;
+
   const canViewItem = (item: NavItem): boolean => {
     if (item.module && !hasPermission(`view_${item.module}`)) return false;
     if (item.href === "/broadcasts" && !hasBroadcasts) return false;
     if (item.href === "/automations" && !hasAutomations) return false;
     if (item.href === "/flows" && !hasAutomations) return false;
-    if (item.href.startsWith("/location-tracking") && !hasLocationTracking) return false;
+    // Location Tracking rides the WFA line — EXCEPT User Attendance and Leaves,
+    // which are base features on every plan (they just live under this menu
+    // group). Keep those two visible even when WFA is off.
+    if (item.href.startsWith("/location-tracking") && !hasLocationTracking) {
+      const alwaysOn =
+        item.href === "/location-tracking/attendance" ||
+        item.href === "/location-tracking/leaves";
+      if (!alwaysOn) return false;
+    }
+    // Product-line entitlement (Leads/Deals → CRM, Orders → SFA, per-line reports).
+    if (item.line && !lineEnabled(item.line)) return false;
     // Admin-configurable module toggle check
     if (item.configModule && !isModuleEnabled(item.configModule)) return false;
     return true;
@@ -561,7 +589,8 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
       if (node.type === "link") {
         return canViewItem(node) ? node : null;
       }
-      // For group nodes, check the group-level configModule first
+      // For group nodes, check the group-level line + configModule first
+      if (node.line && !lineEnabled(node.line)) return null;
       if (node.configModule && !isModuleEnabled(node.configModule)) return null;
       const items = node.items.filter(canViewItem);
       return items.length > 0 ? { ...node, items } : null;

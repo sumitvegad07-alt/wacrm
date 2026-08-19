@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { monthlyRevenue } from "@/lib/admin/billing";
 import {
   CreditCard,
   Building2,
@@ -103,10 +105,15 @@ export default function BillingPage() {
   const calculateMRR = () => {
     let mrr = 0;
     liveAccounts.forEach(a => {
-      if (a.subscription_plan === 'Basic') mrr += 100 * Math.max(a.user_count || 3, 3);
-      if (a.subscription_plan === 'Pro') mrr += 200 * Math.max(a.user_count || 3, 3);
-      if (a.subscription_plan === 'Enterprise') mrr += 350 * Math.max(a.user_count || 3, 3);
-      if (a.addons?.includes('field_tracking')) mrr += 200 * Math.max(a.user_count || 3, 3);
+      const seats = Math.max(a.user_count || 3, 3);
+      // New line-based plans (CRM / WFA / CRM+WFA / SFA / CRM+SFA) are priced by
+      // the shared catalog; monthlyRevenue returns 0 for legacy plans, which the
+      // fallbacks below still count so revenue is not lost during the migration.
+      mrr += monthlyRevenue(a.subscription_plan, a.user_count);
+      if (a.subscription_plan === 'Basic') mrr += 100 * seats;
+      if (a.subscription_plan === 'Pro') mrr += 200 * seats;
+      if (a.subscription_plan === 'Enterprise') mrr += 350 * seats;
+      if (a.addons?.includes('field_tracking')) mrr += 200 * seats;
     });
     return mrr;
   };
@@ -140,7 +147,8 @@ export default function BillingPage() {
       <div>
         <h1 className="text-2xl font-bold">Billing & Plans</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Revenue overview and per-account subscription management.
+          Revenue overview. To assign or change a tenant&apos;s plan (CRM / WFA /
+          SFA) and modules, use <strong>Set plan</strong> on any row below.
         </p>
       </div>
 
@@ -283,6 +291,7 @@ export default function BillingPage() {
                   <th className="px-4 py-3 font-medium text-foreground">Status</th>
                   <th className="px-4 py-3 font-medium text-foreground">Expires</th>
                   <th className="px-4 py-3 font-medium text-foreground">Joined</th>
+                  <th className="px-4 py-3 font-medium text-foreground text-right">Plan &amp; Billing</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -314,6 +323,14 @@ export default function BillingPage() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">
                       {new Date(a.created_at).toLocaleDateString("en-IN")}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        href={`/admin/companies/${a.id}`}
+                        className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
+                      >
+                        Set plan
+                      </Link>
                     </td>
                   </tr>
                 ))}
