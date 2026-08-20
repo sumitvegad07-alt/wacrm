@@ -583,10 +583,13 @@ BEGIN
     0::numeric
   FROM jsonb_array_elements(COALESCE(p_order_schemes, '[]'::jsonb)) AS os;
 
+  -- WHERE true is required: production blocks UPDATE without a WHERE clause
+  -- (safeupdate guard) for the authenticated role, even on a temp table.
   UPDATE _order_scheme_alloc a
   SET denom = COALESCE((
     SELECT SUM(sc.after_item) FROM _pricing_scratch sc WHERE sc.position = ANY(a.positions)
-  ), 0);
+  ), 0)
+  WHERE true;
 
   UPDATE _order_scheme_alloc a
   SET amount = LEAST(
@@ -595,7 +598,8 @@ BEGIN
       FROM jsonb_array_elements(COALESCE(p_order_schemes, '[]'::jsonb)) AS os
       WHERE (os ->> 'scheme_id')::uuid = a.scheme_id
       LIMIT 1), 0), 0),
-    GREATEST(a.denom, 0));
+    GREATEST(a.denom, 0))
+  WHERE true;
 
   SELECT COALESCE(SUM(amount), 0) INTO v_order_scheme_total FROM _order_scheme_alloc;
 
