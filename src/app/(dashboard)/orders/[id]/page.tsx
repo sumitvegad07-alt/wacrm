@@ -64,6 +64,9 @@ interface OrderItem {
   quantity: number;
   price: number;
   total: number;
+  is_scheme_goods?: boolean;
+  scheme_id?: string | null;
+  schemes?: { name: string } | null;
 }
 interface DispatchItem { id: string; order_item_id: string | null; product_name: string; unit: string | null; quantity: number; }
 interface Dispatch {
@@ -113,7 +116,7 @@ export default function OrderDetailPage() {
     setOrder(o);
 
     const [{ data: itemData }, { data: cvData }, { data: dispatchData }, { data: activityData }, { data: taskData }, ownerRes] = await Promise.all([
-      supabase.from('order_items').select('*').eq('order_id', id).order('position'),
+      supabase.from('order_items').select('*, schemes(name)').eq('order_id', id).order('position'),
       supabase.from('order_custom_values').select('value, custom_fields(field_name)').eq('order_id', id),
       supabase.from('order_dispatches').select('*, dispatch_items(*)').eq('order_id', id).order('created_at', { ascending: false }),
       // NOTE: module_activities.user_id FKs auth.users, not profiles, so it can't
@@ -324,7 +327,15 @@ export default function OrderDetailPage() {
                     <tbody>
                       {items.map((it) => (
                         <tr key={it.id} className="border-b border-border/50">
-                          <td className="py-2">{it.product_name}{it.unit ? <span className="text-muted-foreground"> / {it.unit}</span> : null}</td>
+                          <td className="py-2">
+                            {it.product_name}{it.unit ? <span className="text-muted-foreground"> / {it.unit}</span> : null}
+                            {it.is_scheme_goods && (
+                              <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary align-middle">FREE</span>
+                            )}
+                            {it.schemes?.name && (
+                              <span className="block text-xs text-muted-foreground">Scheme: {it.schemes.name}</span>
+                            )}
+                          </td>
                           <td className="py-2 text-right">{it.quantity}</td>
                           <td className="py-2 text-right">{formatCurrency(it.price, defaultCurrency)}</td>
                           <td className="py-2 text-right font-medium">{formatCurrency(it.total, defaultCurrency)}</td>

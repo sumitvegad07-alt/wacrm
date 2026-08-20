@@ -58,7 +58,7 @@ export default function OrderPrintView() {
       const { data: auth } = await supabase.auth.getUser();
 
       const [{ data: items }, { data: profile }, templateConfig, letterhead] = await Promise.all([
-        supabase.from('order_items').select('*').eq('order_id', id).order('position'),
+        supabase.from('order_items').select('*, schemes(name)').eq('order_id', id).order('position'),
         order.user_id
           ? supabase.from('profiles').select('full_name, email, phone').eq('user_id', order.user_id).maybeSingle()
           : Promise.resolve({ data: null }),
@@ -173,7 +173,8 @@ function buildOrderRenderData(
       itemCode: product?.sku ?? '',
       hsnCode: product?.hsn_code ?? '',
       category: product?.category ?? '',
-      item: item.product_name ?? '',
+      // Annotate scheme lines so the printed order shows why a line is free or discounted.
+      item: `${item.product_name ?? ''}${item.is_scheme_goods ? ' (FREE)' : ''}${item.schemes?.name ? ` — ${item.schemes.name}` : ''}`,
       unit: item.unit || 'PCS',
       quantity: String(item.quantity ?? ''),
       // Only worth printing when it differs from what was charged — a struck-through price
