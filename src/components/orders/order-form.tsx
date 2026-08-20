@@ -12,7 +12,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
-import { Loader2, Plus, Trash2, AlertTriangle, ArrowLeft, ShoppingCart } from 'lucide-react';
+import { Loader2, Plus, Trash2, AlertTriangle, ArrowLeft, ShoppingCart, Tag } from 'lucide-react';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -110,6 +110,38 @@ interface PricingResult {
   valid: boolean;
 }
 
+// Scheme detection — shape returned by the detect_eligible_schemes RPC (snake_case).
+interface LineSchemeSuggestion {
+  position: number;
+  product_id: string;
+  scheme_id: string;
+  scheme_name: string;
+  scheme_type: string;
+  reward_type: string;
+  reward_value: number;
+  scheme_discount_amount: number;
+  free_product_id: string | null;
+  free_product_name: string | null;
+  free_qty: number;
+  default_selected: boolean;
+  nudge: { units_to_next?: number; value_to_next?: number; next_reward_label: string } | null;
+}
+interface OrderSchemeSuggestion {
+  scheme_id: string;
+  scheme_name: string;
+  reward_type: string;
+  reward_value: number;
+  qualifying_subtotal: number;
+  discount_amount: number;
+  applies_to_positions: number[];
+  default_selected: boolean;
+  nudge: { value_to_next?: number; next_reward_label: string } | null;
+}
+interface SchemeDetection {
+  line_schemes: LineSchemeSuggestion[];
+  order_schemes: OrderSchemeSuggestion[];
+}
+
 type DiscountMode = 'off' | 'item' | 'order' | 'both';
 type DiscountValueType = 'percent' | 'amount' | 'both';
 
@@ -176,6 +208,12 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const [pricing, setPricing] = useState<PricingResult | null>(null);
   const [pricingBusy, setPricingBusy] = useState(false);
   const [pricingError, setPricingError] = useState<string | null>(null);
+  // Scheme suggestions (Phase 4). Detection runs on the salesman's product lines;
+  // accepted schemes are injected into the pricing payload below. `schemeOverrides`
+  // remembers the salesman's explicit accept/decline by a stable key so a schemes
+  // that stops qualifying simply drops out, and toggles survive re-detection.
+  const [schemeDetection, setSchemeDetection] = useState<SchemeDetection | null>(null);
+  const [schemeOverrides, setSchemeOverrides] = useState<Record<string, boolean>>({});
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
@@ -300,33 +338,80 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
     return () => { alive = false; };
   }, [open, accountId, supabase, prefillContactId, isEdit, orderId]);
 
-  // ---- inputs the pricing function needs ----
+  // ---- scheme detection (Phase 4): run on the salesman's product lines ----
+  // A compact signature so detection only re-runs when a product or quantity
+  // changes, not on every discount keystroke.
+  const detectionSignature = useMemo(
+    () => lines.filter((l) => l.product_id && Number(l.quantity) > 0).map((l) => `${l.product_id}:${Number(l.quantity) || 0}`).join('|'),
+    [lines],
+  );
+  const detectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!accountId || !contactId || !detectionSignature) { setSchemeDetection(null); return; }
+    const base = detectionSignature.split('|').map((s) => {
+      const [product_id, qty] = s.split(':');
+      return { product_id, quantity: Number(qty) || 0 };
+    });
+    if (detectRef.current) clearTimeout(detectRef.current);
+    detectRef.current = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('detect_eligible_schemes', {
+        p_account_id: accountId,
+        p_contact_id: contactId,
+        p_lines: base,
+        p_as_of: new Date().toISOString(),
+      });
+      if (error) { console.error('scheme detection failed', error); setSchemeDetection(null); return; }
+      setSchemeDetection(data as SchemeDetection);
+    }, 400);
+    return () => { if (detectRef.current) clearTimeout(detectRef.current); };
+  }, [accountId, contactId, detectionSignature, supabase]);
+
+  const isAccepted = useCallback(
+    (key: string, dflt: boolean) => (key in schemeOverrides ? schemeOverrides[key] : dflt),
+    [schemeOverrides],
+  );
+
+  // ---- inputs the pricing function needs, WITH confirmed schemes injected ----
   const pricingInputs = useMemo(() => {
-    const priced = lines
-      .filter((l) => l.product_id && Number(l.quantity) > 0)
-      .map((l) => ({
+    const productLines = lines.filter((l) => l.product_id && Number(l.quantity) > 0);
+    const priced = productLines.map((l, i) => {
+      const base: Record<string, unknown> = {
         product_id: l.product_id,
         quantity: Number(l.quantity) || 0,
         discount_type: itemDiscountAllowed && Number(l.discount_value) > 0 ? (forcedDiscountType ?? l.discount_type) : null,
         discount_value: itemDiscountAllowed ? (Number(l.discount_value) || 0) : 0,
-        // Existing edited lines carry their own stored basis; new lines (and
-        // re-attached products, which clear locked_price) use the account default.
         tax_mode: l.tax_mode ?? taxMode,
-        // Existing lines keep their agreed unit price. Omitted for new/re-attached
-        // lines so they price at the current catalogue rate.
         ...(l.locked_price != null ? { locked_price: l.locked_price } : {}),
-      }));
+      };
+      // A confirmed MONEY line-scheme for this position is attached to the line.
+      const ls = schemeDetection?.line_schemes.find((s) => s.position === i + 1 && s.reward_type !== 'free_goods');
+      if (ls && isAccepted(`line:${i + 1}:${ls.scheme_id}`, ls.default_selected)) {
+        base.scheme_id = ls.scheme_id;
+        base.scheme_discount_amount = ls.scheme_discount_amount;
+      }
+      return base;
+    });
+    // Confirmed FREE-GOODS schemes become their own ₹0 lines, appended AFTER the
+    // product lines so value-slab positions (1..N) still map to the product lines.
+    const freeLines = (schemeDetection?.line_schemes ?? [])
+      .filter((s) => s.reward_type === 'free_goods' && s.free_product_id && s.free_qty > 0
+        && isAccepted(`line:${s.position}:${s.scheme_id}`, s.default_selected))
+      .map((s) => ({ product_id: s.free_product_id as string, quantity: s.free_qty, is_scheme_goods: true, scheme_id: s.scheme_id }));
+    // Confirmed VALUE-SLAB schemes go to p_order_schemes.
+    const orderSchemes = (schemeDetection?.order_schemes ?? [])
+      .filter((s) => isAccepted(`order:${s.scheme_id}`, s.default_selected))
+      .map((s) => ({ scheme_id: s.scheme_id, discount_amount: s.discount_amount, positions: s.applies_to_positions }));
     const orderDiscount = orderDiscountAllowed && Number(orderDiscountValue) > 0
       ? { type: forcedDiscountType ?? orderDiscountType, value: Number(orderDiscountValue) }
       : null;
-    return { priced, orderDiscount };
-  }, [lines, itemDiscountAllowed, orderDiscountAllowed, orderDiscountType, orderDiscountValue, forcedDiscountType, taxMode]);
+    return { priced: [...priced, ...freeLines], orderDiscount, orderSchemes, productCount: productLines.length };
+  }, [lines, schemeDetection, isAccepted, itemDiscountAllowed, orderDiscountAllowed, orderDiscountType, orderDiscountValue, forcedDiscountType, taxMode]);
 
   // ---- debounced live pricing via the ONE authority ----
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!accountId) return;
-    if (pricingInputs.priced.length === 0) { setPricing(null); return; }
+    if (pricingInputs.productCount === 0) { setPricing(null); return; }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setPricingBusy(true);
     debounceRef.current = setTimeout(async () => {
@@ -336,6 +421,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
         p_lines: pricingInputs.priced,
         p_order_discount: pricingInputs.orderDiscount,
         p_as_of: new Date().toISOString(),
+        p_order_schemes: pricingInputs.orderSchemes,
       });
       setPricingBusy(false);
       if (error) {
@@ -404,7 +490,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   async function handleSave() {
     if (!accountId) return;
     if (!contactId) { toast.error('Select a customer'); return; }
-    if (pricingInputs.priced.length === 0) { toast.error('Add at least one product'); return; }
+    if (pricingInputs.productCount === 0) { toast.error('Add at least one product'); return; }
     // A detached (deleted-product) line that hasn't been re-attached would be
     // silently dropped by the product_id filter — stop and make the user resolve it.
     if (lines.some((l) => l.detached && !l.product_id)) {
@@ -468,6 +554,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
           p_order_discount: pricingInputs.orderDiscount,
           p_notes: notes.trim() || null,
           p_contact_id: contactId,
+          p_order_schemes: pricingInputs.orderSchemes,
         });
         if (error) throw error;
         if (orderId && Object.keys(customValues).length > 0) {
@@ -500,6 +587,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
           p_notes: notes.trim() || null,
           p_platform: 'web',
           p_app_version: null,
+          p_order_schemes: pricingInputs.orderSchemes,
         });
         if (error) throw error;
         if (newOrderId && Object.keys(customValues).length > 0) {
@@ -717,6 +805,74 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
                 <Plus className="size-4" /> Add product
               </Button>
             </div>
+
+            {/* Scheme suggestions (Phase 4) — suggest → confirm */}
+            {schemeDetection && (schemeDetection.line_schemes.length > 0 || schemeDetection.order_schemes.length > 0) && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Tag className="size-4 text-primary" /> Schemes for this customer
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Suggested — tick to apply. Nothing changes the order until you confirm. Free goods are added as ₹0 lines.
+                </p>
+                <div className="space-y-2">
+                  {schemeDetection.line_schemes.map((s) => {
+                    const key = `line:${s.position}:${s.scheme_id}`;
+                    const accepted = isAccepted(key, s.default_selected);
+                    const prodName = products.find((p) => p.id === s.product_id)?.name ?? 'this product';
+                    const label = s.reward_type === 'free_goods'
+                      ? `${s.free_qty} × ${s.free_product_name ?? 'free goods'} free`
+                      : s.reward_type === 'discount_percent' ? `${s.reward_value}% off`
+                      : s.reward_type === 'discount_amount' ? `${money(s.reward_value)}/unit off`
+                      : `special price ${money(s.reward_value)}`;
+                    return (
+                      <label key={key} className="flex items-start gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={accepted}
+                          onChange={() => setSchemeOverrides((prev) => ({ ...prev, [key]: !accepted }))}
+                          className="mt-0.5 size-4 accent-primary"
+                        />
+                        <span>
+                          <span className="font-medium">{s.scheme_name}</span>: {label}{' '}
+                          <span className="text-muted-foreground">on {prodName}</span>
+                          {s.reward_type !== 'free_goods' && s.scheme_discount_amount > 0 && (
+                            <span className="text-muted-foreground"> (−{money(s.scheme_discount_amount)})</span>
+                          )}
+                          {s.nudge && (
+                            <span className="block text-xs text-amber-600 dark:text-amber-500">
+                              {s.nudge.units_to_next ? `Add ${s.nudge.units_to_next} more → ${s.nudge.next_reward_label}` : s.nudge.next_reward_label}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {schemeDetection.order_schemes.map((s) => {
+                    const key = `order:${s.scheme_id}`;
+                    const accepted = isAccepted(key, s.default_selected);
+                    return (
+                      <label key={key} className="flex items-start gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={accepted}
+                          onChange={() => setSchemeOverrides((prev) => ({ ...prev, [key]: !accepted }))}
+                          className="mt-0.5 size-4 accent-primary"
+                        />
+                        <span>
+                          <span className="font-medium">{s.scheme_name}</span>: {money(s.discount_amount)} off the order
+                          {s.nudge && s.nudge.value_to_next != null && (
+                            <span className="block text-xs text-amber-600 dark:text-amber-500">
+                              {money(s.nudge.value_to_next)} more → {s.nudge.next_reward_label}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Whole-order discount */}
             {orderDiscountAllowed && (
