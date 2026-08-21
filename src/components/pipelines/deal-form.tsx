@@ -417,7 +417,9 @@ export function DealForm({
                   </div>
                 );
               }
-              return null;
+              // Other predefined fields (title, expected_close_date) fall
+              // through to the default input. null would hide them.
+              return undefined;
             }}
           />
 

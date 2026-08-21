@@ -235,7 +235,16 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
     }
   };
 
+  // A section that holds any predefined (system_key) field is locked: it cannot
+  // be deactivated, otherwise it would be a backdoor to hiding predefined fields.
+  const sectionHasPredefinedFields = (sectionId: string) =>
+    fields.some((f) => f.section_id === sectionId && !!f.system_key);
+
   const handleToggleSectionStatus = async (sec: CustomFieldSection) => {
+    if (sec.is_active !== false && sectionHasPredefinedFields(sec.id)) {
+      toast.error('This section contains predefined fields and cannot be deactivated');
+      return;
+    }
     if (sec.is_active !== false && sections.filter((s) => s.is_active !== false).length <= 1) {
       toast.error('You must keep at least one active section');
       return;
@@ -541,6 +550,7 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                 ) : (
                   sections.map((sec, idx) => {
                     const isSelected = sec.id === activeSectionId;
+                    const secLocked = sectionHasPredefinedFields(sec.id);
                     return (
                       <div
                         key={sec.id}
@@ -557,15 +567,20 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                           <Badge
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (secLocked) return;
                               handleToggleSectionStatus(sec);
                             }}
-                            className={`border-0 text-[10px] px-1.5 py-0 cursor-pointer select-none transition-opacity hover:opacity-80 shrink-0 ${
+                            className={`border-0 text-[10px] px-1.5 py-0 select-none transition-opacity shrink-0 ${
+                              secLocked ? 'cursor-default' : 'cursor-pointer hover:opacity-80'
+                            } ${
                               sec.is_active !== false
                                 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                                 : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
                             }`}
                             title={
-                              sec.is_active !== false
+                              secLocked
+                                ? 'Contains predefined fields — cannot be deactivated'
+                                : sec.is_active !== false
                                 ? 'Active Section (Click to make inactive)'
                                 : 'Inactive Section (Click to activate)'
                             }
@@ -792,6 +807,12 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
               <Button
                 type="button"
                 variant={editingSection.is_active !== false ? "outline" : "default"}
+                disabled={editingSection.is_active !== false && sectionHasPredefinedFields(editingSection.id)}
+                title={
+                  editingSection.is_active !== false && sectionHasPredefinedFields(editingSection.id)
+                    ? 'Contains predefined fields — cannot be deactivated'
+                    : undefined
+                }
                 onClick={() => {
                   handleToggleSectionStatus(editingSection);
                   setSectionModalOpen(false);

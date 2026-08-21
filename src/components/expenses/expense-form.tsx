@@ -363,7 +363,9 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
                       />
                     );
                   }
-                  return null;
+                  // Other predefined fields (expense_date) fall through to the
+                  // default input. null would hide them.
+                  return undefined;
                 }}
               />
             </div>

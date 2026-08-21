@@ -438,7 +438,10 @@ export function ProductForm({
                     </div>
                   );
                 }
-                return null;
+                // Every other predefined field (name, sku, price, …) falls
+                // through to the default input. Returning null here would HIDE
+                // the field — that is what made core fields disappear.
+                return undefined;
               }}
             />
 
