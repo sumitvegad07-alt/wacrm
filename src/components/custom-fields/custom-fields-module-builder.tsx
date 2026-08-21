@@ -350,6 +350,8 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
   };
 
   const handleToggleFieldStatus = async (fld: CustomField) => {
+    // Predefined fields are permanent — they cannot be activated/deactivated.
+    if (fld.system_key) return;
     const newStatus = !(fld.is_active !== false);
     setFields((prev) =>
       prev.map((f) => (f.id === fld.id ? { ...f, is_active: newStatus } : f))
@@ -453,10 +455,9 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
   const currentSectionFields = fields.filter(
     (f) => f.section_id === activeSectionId || (!f.section_id && activeSectionId === sections[0]?.id)
   );
-  const isProtectedRequired = 
-    moduleName === 'user' && 
-    editingField?.system_key && 
-    ['full_name', 'employee_role_id', 'email', 'password', 'repassword'].includes(editingField.system_key);
+  // Predefined (system) fields are locked across every module: their active
+  // status and required flag cannot be changed by the admin.
+  const isPredefinedField = !!editingField?.system_key;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -638,6 +639,7 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                 ) : (
                   currentSectionFields.map((fld, idx) => {
                     const isActive = fld.is_active !== false;
+                    const isPredefined = !!fld.system_key;
                     const isChoiceType = ['dropdown', 'radio', 'multi-select'].includes(
                       fld.field_type
                     );
@@ -724,14 +726,24 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                           <button
                             type="button"
                             onClick={() => handleToggleFieldStatus(fld)}
-                            className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-destructive transition-colors ml-0.5"
-                            title={isActive ? 'Deactivate Field (set inactive)' : 'Activate Field'}
+                            disabled={isPredefined}
+                            className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-destructive transition-colors ml-0.5 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-muted-foreground disabled:hover:bg-transparent"
+                            title={
+                              isPredefined
+                                ? 'Predefined field — cannot be deactivated'
+                                : isActive
+                                ? 'Deactivate Field (set inactive)'
+                                : 'Activate Field'
+                            }
                           >
                             <Trash2 className="size-3.5" />
                           </button>
                           <Badge
-                            onClick={() => handleToggleFieldStatus(fld)}
-                            className={`border-0 text-xs font-bold px-2.5 py-1 cursor-pointer select-none transition-all hover:opacity-85 shadow-sm ml-2 ${
+                            onClick={isPredefined ? undefined : () => handleToggleFieldStatus(fld)}
+                            title={isPredefined ? 'Predefined field — always active' : undefined}
+                            className={`border-0 text-xs font-bold px-2.5 py-1 select-none transition-all shadow-sm ml-2 ${
+                              isPredefined ? 'cursor-default' : 'cursor-pointer hover:opacity-85'
+                            } ${
                               isActive
                                 ? 'bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 font-bold tracking-wide'
                                 : 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 font-extrabold tracking-wide ring-2 ring-amber-400'
@@ -960,20 +972,20 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                 Validation & Data Table Settings
               </Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/30 p-3 rounded-lg border border-border/50">
-                <label className={`flex items-center gap-2 text-sm cursor-pointer select-none ${isProtectedRequired ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <label className={`flex items-center gap-2 text-sm cursor-pointer select-none ${isPredefinedField ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <input
                     type="checkbox"
-                    checked={fieldIsRequired || !!isProtectedRequired}
-                    disabled={!!isProtectedRequired}
+                    checked={fieldIsRequired}
+                    disabled={isPredefinedField}
                     onChange={(e) => {
-                      if (!isProtectedRequired) {
+                      if (!isPredefinedField) {
                         setFieldIsRequired(e.target.checked);
                       }
                     }}
-                    className={`size-4 accent-primary rounded ${isProtectedRequired ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                    className={`size-4 accent-primary rounded ${isPredefinedField ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   />
                   <span className="font-medium text-foreground">
-                    Required Field {isProtectedRequired && '(Compulsory)'}
+                    Required Field {isPredefinedField && '(Predefined — locked)'}
                   </span>
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
