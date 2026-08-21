@@ -76,6 +76,7 @@ describe("plan catalog — default module settings on apply", () => {
       route: false,
       payment: false,
       scheme: false,
+      stock: false,
     });
   });
   it("optional/Available-Soon modules default OFF even when their line is on", () => {
@@ -88,7 +89,7 @@ describe("plan catalog — default module settings on apply", () => {
   it("CRM+SFA defaults every module on except the default-off ones", () => {
     const all = defaultModuleSettings("CRM_SFA");
     for (const k of MODULE_KEYS) {
-      const expected = k !== "route" && k !== "reporting_hierarchy" && k !== "scheme";
+      const expected = k !== "route" && k !== "reporting_hierarchy" && k !== "scheme" && k !== "stock";
       expect(all[k]).toBe(expected);
     }
   });

@@ -49,6 +49,13 @@ const PERMISSION_GROUPS = [
     ]
   },
   {
+    category: "Stock / Inventory",
+    permissions: [
+      { id: PERMISSIONS.STOCK.VIEW, label: "View Stock (closing stock, ledger, report)" },
+      { id: PERMISSIONS.STOCK.MANAGE, label: "Manage Stock (set opening, Stock In / Out adjustments)" },
+    ]
+  },
+  {
     category: "Payments & Finance",
     permissions: [
       { id: PERMISSIONS.PAYMENTS.VIEW, label: "View Payments" },

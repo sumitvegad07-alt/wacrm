@@ -20,6 +20,7 @@ import { CustomField } from '@/types';
 import { cn } from '@/lib/utils';
 import { CustomerFinancialCard, type FinancialData } from '@/components/payments/customer-financial-card';
 import { formatCurrency } from '@/lib/currency';
+import { fetchClosingStock, exceedsAvailable } from '@/lib/stock/financials';
 
 /**
  * Web order creation. The ONE pricing authority is the SQL function
@@ -173,6 +174,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const supabase = createClient();
   const { user, accountId, defaultCurrency, hasPermission, isModuleEnabled } = useAuth();
   const paymentEnabled = isModuleEnabled('payment');
+  const stockEnabled = isModuleEnabled('stock');
   const isEdit = !!orderId;
 
   const money = useMemo(() => {
@@ -192,6 +194,10 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const [saving, setSaving] = useState(false);
   const [contacts, setContacts] = useState<{ id: string; label: string }[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
+  // Stock Management: closing stock per product + the per-account block setting.
+  // Advisory display always; hard block only when restrictStock is on.
+  const [closingMap, setClosingMap] = useState<Map<string, number>>(new Map());
+  const [restrictStock, setRestrictStock] = useState(false);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('off');
   const [discountValueType, setDiscountValueType] = useState<DiscountValueType>('both');
   const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive');
@@ -261,6 +267,12 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
         label: (c.company as string) || (c.name as string) || 'Unnamed',
       })));
       setProducts((productData ?? []) as ProductOption[]);
+      if (stockEnabled) {
+        setRestrictStock(acct?.settings?.stock_settings?.restrict_on_insufficient === true);
+        const prodIds = (productData ?? []).map((p: Record<string, unknown>) => p.id as string);
+        const map = await fetchClosingStock(supabase, accountId, prodIds);
+        if (alive) setClosingMap(map);
+      }
       setDiscountMode(((acct?.settings?.order_settings?.discount_mode as DiscountMode) ?? 'off'));
       setDiscountValueType(((acct?.settings?.order_settings?.discount_value_type as DiscountValueType) ?? 'both'));
       setTaxMode(((acct?.settings?.order_settings?.tax_mode as 'exclusive' | 'inclusive') ?? 'exclusive'));
@@ -504,6 +516,34 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       return;
     }
 
+    // Stock block (opt-in). Only for NEW orders: an edit re-checking against
+    // already-consumed stock would wrongly block a legitimate correction. Only
+    // stock-tracked products (present in closingMap) are checked — services and
+    // untracked items are skipped.
+    if (stockEnabled && restrictStock && !isEdit) {
+      const need = new Map<string, { name: string; qty: number }>();
+      for (const l of lines) {
+        if (!l.product_id) continue;
+        const q = parseFloat(l.quantity) || 0;
+        if (q <= 0) continue;
+        const prev = need.get(l.product_id);
+        need.set(l.product_id, {
+          name: products.find((p) => p.id === l.product_id)?.name ?? 'Product',
+          qty: (prev?.qty ?? 0) + q,
+        });
+      }
+      const short: string[] = [];
+      for (const [pid, info] of need) {
+        const closing = closingMap.get(pid);
+        if (closing === undefined) continue; // not stock-tracked
+        if (exceedsAvailable(closing, info.qty)) short.push(`${info.name} (need ${info.qty}, have ${closing})`);
+      }
+      if (short.length) {
+        toast.error(`Not enough stock: ${short.join('; ')}.`);
+        return;
+      }
+    }
+
     if (paymentEnabled && financialData) {
       // 1. Credit Days (Overdue) check
       if (financialData.isOverdue && creditDaysAction !== 'ignore') {
@@ -721,6 +761,17 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
                                 Was &ldquo;{line.detached_name || 'a deleted product'}&rdquo; (removed) — pick a replacement.
                               </p>
                             )}
+                            {stockEnabled && line.product_id && closingMap.has(line.product_id) && (() => {
+                              const closing = closingMap.get(line.product_id) ?? 0;
+                              const q = parseFloat(line.quantity) || 0;
+                              const over = q > 0 && exceedsAvailable(closing, q);
+                              return (
+                                <p className={`text-[11px] mt-1 ${closing <= 0 ? 'text-red-500' : over ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                                  In stock: {closing}
+                                  {over ? (restrictStock ? ' — exceeds available (blocked)' : ' — exceeds available') : ''}
+                                </p>
+                              );
+                            })()}
                           </td>
                           <td className="px-2 py-2 text-muted-foreground whitespace-nowrap">{unit || '—'}</td>
                           <td className="px-2 py-2">

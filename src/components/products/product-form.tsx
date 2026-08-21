@@ -39,8 +39,9 @@ export function ProductForm({
   onSaved,
 }: ProductFormProps) {
   const supabase = createClient();
-  const { accountId, user } = useAuth();
+  const { accountId, user, isModuleEnabled } = useAuth();
   const isEdit = !!product;
+  const stockEnabled = isModuleEnabled('stock');
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -49,7 +50,9 @@ export function ProductForm({
   const [image, setImage] = useState('');
   const [category, setCategory] = useState('');
   const [unit, setUnit] = useState('');
-  const [stock, setStock] = useState('');
+  // Stock Management: opening balance + per-product tracking flag (module-gated).
+  const [trackStock, setTrackStock] = useState(true);
+  const [openingStock, setOpeningStock] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,7 +92,8 @@ export function ProductForm({
       // Fallback for legacy text values if needed
       setCategory(product?.category ?? '');
       setUnit(product?.unit ?? '');
-      setStock(product?.stock?.toString() ?? '');
+      setTrackStock((product as { track_stock?: boolean })?.track_stock ?? true);
+      setOpeningStock((product as { opening_stock?: number | null })?.opening_stock?.toString() ?? '');
       setTaxSlabId((product as { tax_slab_id?: string | null })?.tax_slab_id ?? '');
       setMinPrice((product as { min_price?: number | null })?.min_price?.toString() ?? '');
       setHsnCode((product as { hsn_code?: string | null })?.hsn_code ?? '');
@@ -234,7 +238,14 @@ export function ProductForm({
         category_id: l3Id || l2Id || l1Id || null,
         unit: null,
         unit_id: unitId || null,
-        stock: stock !== '' ? parseFloat(stock) : null,
+        // Stock fields written only when the module is on, so accounts without it
+        // are never touched. Opening stock seeds the ledger via a DB trigger.
+        ...(stockEnabled
+          ? {
+              track_stock: trackStock,
+              opening_stock: openingStock !== '' && trackStock ? parseFloat(openingStock) : null,
+            }
+          : {}),
         // Empty string must become null, never '' — a uuid column rejects ''.
         tax_slab_id: taxSlabId || null,
         min_price: minPrice !== '' ? parseFloat(minPrice) : null,
@@ -458,18 +469,46 @@ export function ProductForm({
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Stock</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={stock}
-                    onChange={(e) => setStock(e.target.value)}
-                    placeholder="Leave blank if not tracked"
-                    className="border-border bg-muted text-foreground"
-                  />
+              {stockEnabled && (
+                <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="track_stock"
+                      checked={trackStock}
+                      onChange={(e) => setTrackStock(e.target.checked)}
+                      className="rounded border-border bg-muted accent-primary"
+                    />
+                    <Label htmlFor="track_stock" className="text-foreground font-normal">
+                      Maintain stock for this product
+                    </Label>
+                  </div>
+                  {trackStock ? (
+                    <div className="grid gap-2">
+                      <Label className="text-muted-foreground">Opening stock</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={openingStock}
+                        onChange={(e) => setOpeningStock(e.target.value)}
+                        placeholder="0"
+                        className="border-border bg-muted text-foreground max-w-xs"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        The starting balance. Closing stock is then calculated automatically from
+                        orders, dispatches and manual adjustments — set it once here.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      Stock is not tracked for this product (e.g. a service). It will never show a
+                      stock figure or block an order.
+                    </p>
+                  )}
                 </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label className="text-muted-foreground">Tax slab</Label>
                   <select

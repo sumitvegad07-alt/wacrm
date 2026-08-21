@@ -25,6 +25,12 @@ export const PERMISSIONS = {
     APPLY_ORDER_DISCOUNT: 'apply_order_discount',
   },
 
+  // Stock / Inventory
+  STOCK: {
+    VIEW: 'view_stock',
+    MANAGE: 'manage_stock', // set opening stock + create Stock In/Out adjustments; implies VIEW
+  },
+
   // Payments & Finance
   PAYMENTS: {
     VIEW: 'view_payments',

@@ -33,6 +33,7 @@ import {
   ShoppingCart,
   Truck,
   PackageCheck,
+  Boxes,
   FileText,
   MapPin,
   Bot,
@@ -170,7 +171,7 @@ interface NavItem {
    * Admin-configurable module key. When set, this item is only shown if
    * the admin has enabled the corresponding module in Module Settings.
    */
-  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment" | "scheme";
+  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment" | "scheme" | "stock";
   /**
    * Product-line entitlement. When set, this item is only shown if the account's
    * plan includes that line (CRM / WFA / SFA). Used for features that aren't
@@ -188,7 +189,7 @@ export type MenuNode =
       label: string;
       icon: React.ComponentType<{ className?: string }>;
       items: NavItem[];
-      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment" | "scheme";
+      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment" | "scheme" | "stock";
       line?: ProductLine;
     }
   | {
@@ -280,6 +281,16 @@ export function getMenuStructure(
       module: "orders",
       // Opt-in module: hidden until an admin enables it in Catalogue Settings.
       configModule: "scheme" as const,
+      line: "sfa",
+    },
+    {
+      type: "link",
+      href: "/stock",
+      label: "Stock",
+      icon: Boxes,
+      module: "products",
+      // Opt-in module: hidden until an admin enables it in Catalogue Settings.
+      configModule: "stock" as const,
       line: "sfa",
     },
 
@@ -405,7 +416,10 @@ export function getMenuStructure(
         { href: "/reports/tasks", label: "Task Reports", icon: CheckSquare, module: "activities" },
         // One line per rep across every module. Opens on Today, not This Month.
         { href: "/reports/dsr", label: "DSR", icon: ClipboardList, module: "location_tracking", line: "wfa" },
-        // This group holds ONLY reports built on the generic report engine.
+        // Stock is the one PURPOSE-BUILT report here (closing = a live ledger SUM,
+        // which the generic document-pivot engine can't express). Opt-in module.
+        { href: "/reports/stock", label: "Stock Reports", icon: Boxes, module: "products", configModule: "stock" as const, line: "sfa" },
+        // This group (aside from Stock, noted above) holds ONLY reports built on the generic report engine.
         //
         // Four entries were removed on 2026-08-18: "Activity Report"
         // (/follow-ups), "Sales & Deals" (/pipelines), "Expenses Report"

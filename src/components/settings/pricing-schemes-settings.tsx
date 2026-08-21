@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2, Boxes } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { allowedModules } from "@/lib/plans/catalog";
@@ -87,6 +87,35 @@ export function PricingSchemesSettings() {
     }
   }
 
+  // Stock Management — opt-in module, gated from here exactly like Scheme.
+  const planAllowsStock = allowedModules(account?.subscription_plan).has("stock");
+  const [stockEnabled, setStockEnabled] = useState(false);
+  const [stockSaving, setStockSaving] = useState(false);
+
+  useEffect(() => {
+    setStockEnabled(!!moduleSettings?.stock);
+  }, [moduleSettings?.stock]);
+
+  async function toggleStock(on: boolean) {
+    setStockSaving(true);
+    setStockEnabled(on); // optimistic
+    try {
+      const res = await fetch("/api/account/module-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stock: on }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      await refreshModuleSettings();
+      toast.success(on ? "Stock Management enabled" : "Stock Management disabled");
+    } catch {
+      setStockEnabled(!on); // revert
+      toast.error("Could not update Stock Management");
+    } finally {
+      setStockSaving(false);
+    }
+  }
+
   const [loading, setLoading] = useState(true);
   const [slabs, setSlabs] = useState<TaxSlab[]>([]);
   const [newName, setNewName] = useState("");
@@ -100,6 +129,12 @@ export function PricingSchemesSettings() {
   const [taxMode, setTaxMode] = useState<"exclusive" | "inclusive">("exclusive");
   const [enforceFloor, setEnforceFloor] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Stock behaviour (accounts.settings.stock_settings). Saved with the main
+  // Save button; the module on/off toggle above is immediate via the API.
+  type StockOutEvent = "order_created" | "order_closed" | "dispatch";
+  const [stockOutEvent, setStockOutEvent] = useState<StockOutEvent>("order_closed");
+  const [restrictInsufficient, setRestrictInsufficient] = useState(false);
   
   // Lifted from ProductCategoriesSettings
   const [levelsCount, setLevelsCount] = useState<1 | 2 | 3>(1);
@@ -128,6 +163,10 @@ export function PricingSchemesSettings() {
     setTaxMode((os.tax_mode as "exclusive" | "inclusive") ?? "exclusive");
     setEnforceFloor(os.enforce_price_floor !== false); // default on
 
+    const ss = acctRes.data?.settings?.stock_settings ?? {};
+    setStockOutEvent((ss.stock_out_event as StockOutEvent) ?? "order_closed");
+    setRestrictInsufficient(ss.restrict_on_insufficient === true);
+
     const ps = acctRes.data?.settings?.product_settings ?? {};
     setLevelsCount(ps.levels_count || 1);
     setLevel1Name(ps.level_1_name || "Category");
@@ -154,6 +193,11 @@ export function PricingSchemesSettings() {
         discount_mode: discountMode,
         tax_mode: taxMode,
         enforce_price_floor: enforceFloor,
+      },
+      stock_settings: {
+        ...(settings.stock_settings ?? {}),
+        stock_out_event: stockOutEvent,
+        restrict_on_insufficient: restrictInsufficient,
       },
       product_settings: {
         ...(settings.product_settings ?? {}),
@@ -452,6 +496,90 @@ export function PricingSchemesSettings() {
                 <Link href="/schemes" className={buttonVariants({ variant: "outline", size: "sm" })}>
                   <Tag className="h-4 w-4 mr-1" /> Manage schemes
                 </Link>
+              </div>
+            )}
+          </div>
+
+          {/* ---------------- Stock Management ---------------- */}
+          <div className="space-y-3 pt-6 border-t border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start gap-2">
+                <Boxes className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-semibold">Enable Stock Management</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Track closing stock per product, automatically — the way outstanding is
+                    calculated for customers. Turn this on to show <strong>Stock</strong> in the
+                    main menu, closing stock on the order form, and the Stock report; off keeps it
+                    hidden for everyone.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={stockEnabled}
+                disabled={!canEditSettings || !planAllowsStock || stockSaving}
+                onCheckedChange={toggleStock}
+              />
+            </div>
+
+            {!planAllowsStock && (
+              <p className="text-xs text-amber-600 dark:text-amber-500">
+                Your current plan doesn&apos;t include Stock Management. Contact us to upgrade.
+              </p>
+            )}
+
+            {stockEnabled && planAllowsStock && (
+              <div className="space-y-4 pl-6 border-l-2 border-primary/20">
+                {/* Stock-out event */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Reduce stock when</p>
+                  <p className="text-xs text-muted-foreground">
+                    Which event depletes a product&apos;s stock. Changing this affects future
+                    documents only — stock already moved keeps its original basis.
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {([
+                      { value: "order_created", label: "An order is created", help: "Stock commits the moment a salesman books an order (Cancelled/Rejected orders release it back)." },
+                      { value: "order_closed", label: "An order is Closed", help: "Mirrors how outstanding counts Closed orders. Recommended." },
+                      { value: "dispatch", label: "Goods are dispatched", help: "Stock drops only when goods physically leave (per dispatch). Most accurate to reality." },
+                    ] as const).map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        disabled={!canEditSettings || saving}
+                        onClick={() => { setStockOutEvent(m.value); setHasChanges(true); }}
+                        className={`text-left p-3 rounded-lg border transition-colors ${
+                          stockOutEvent === m.value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
+                        }`}
+                      >
+                        <p className="text-sm font-medium">{m.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{m.help}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Restrict on insufficient stock */}
+                <div className="flex items-center justify-between pt-2">
+                  <div>
+                    <p className="text-sm font-medium">Block orders that exceed stock</p>
+                    <p className="text-xs text-muted-foreground">
+                      When on, an order line whose quantity is more than the available closing
+                      stock cannot be saved. Off shows the stock but never blocks.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={restrictInsufficient}
+                    disabled={!canEditSettings || saving}
+                    onCheckedChange={(on) => { setRestrictInsufficient(on); setHasChanges(true); }}
+                  />
+                </div>
+
+                <div>
+                  <Link href="/stock" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    <Boxes className="h-4 w-4 mr-1" /> Manage stock
+                  </Link>
+                </div>
               </div>
             )}
           </div>

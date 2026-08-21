@@ -37,6 +37,7 @@ const CONFIGURABLE_MODULES = [
   "route",
   "payment",
   "scheme",
+  "stock",
 ] as const;
 
 type ModuleKey = (typeof CONFIGURABLE_MODULES)[number];
@@ -57,6 +58,8 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   payment: false,
   // Scheme Management ships OFF (opt-in from Catalogue Settings).
   scheme: false,
+  // Stock Management ships OFF (opt-in from Catalogue Settings).
+  stock: false,
 };
 
 function normalizeSettings(raw: unknown): ModuleSettings {

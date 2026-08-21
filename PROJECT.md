@@ -3328,6 +3328,66 @@ Saved reports can be shared via 'private', 'team', or 'organization' modes. The 
   silently drop it from every document. `payment` has 0 custom fields, so that section is hidden
   for it rather than shown empty.
 
+## Stock Management Module (Added 2026-08-21 — built by Claude Code)
+
+Spec: `docs/engineering/specifications/stock-management-v1.md`. Rollback:
+`supabase/migrations/ROLLBACK-stock-management.md`. Migrations `20260821120000_stock_management`
+(+ `stock_management_reason_check_fix`, `stock_positions_view`), applied to prod.
+
+**Closing stock is DERIVED, never stored — the payment-outstanding pattern.**
+`Closing = SUM(stock_ledger.quantity)` over signed rows. There is no running-total column; the
+number is always a live rollup, so it cannot drift and any figure is explainable row-by-row.
+
+**Opt-in, ships OFF.** `module_settings.stock` (added to `lib/plans/catalog.ts` MODULE_KEYS /
+MODULE_LINE `sfa` / DEFAULT_OFF, the module-settings route, and use-auth). Every DB trigger reads
+`stock_module_enabled(account)` and no-ops while off, so the migration cannot touch a single
+existing order/dispatch/product until a tenant enables it in **Catalogue Settings → Enable Stock
+Management**. Two admin settings live in `accounts.settings.stock_settings`:
+`stock_out_event` (`order_created` | `order_closed` | `dispatch`, default **order_closed**) and
+`restrict_on_insufficient` (bool, default false).
+
+**Tables / columns:**
+- `stock_ledger` (append-only, RLS select/insert = `is_account_member`; NO update/delete policy —
+  corrections are new rows). Signed `quantity`; `entry_type` opening|manual_in|manual_out|sale_out|
+  reversal; `posted_mode` stamps the stock_out_event a sale_out was posted under (enforces
+  future-only when the setting changes); `source_type/source_id/source_ref` link the order/dispatch.
+  ⚠️ The manual-reason CHECK needs an explicit `reason_code IS NOT NULL` — a bare `IN (list)` is
+  NULL for a null reason and a CHECK only rejects FALSE (fixed in the reason_check_fix migration).
+- `products.opening_stock` + `products.track_stock` (default true). Legacy `products.stock` is
+  dormant (0 rows) and **deprecated** — the product form stops writing it.
+- View `stock_positions` (`security_invoker`) — per-tracked-product opening/in/out/closing rollup;
+  feeds the order form (filter by product_id), stock screen and report. **Closing = live SUM.**
+
+**Reconcile engine (idempotent, immutable).** `stock_reconcile_order` / `stock_reconcile_dispatch`
+compute the target consumption under the current setting and post only the DELTA vs what's already
+net-posted for that document — a `sale_out` top-up or a `reversal` row, never editing existing rows.
+Triggers on `orders` (status), `order_items` (I/U/D, catches `update_order`'s replace), and
+`dispatch_items` (I/U/D, catches cascade-delete on dispatch cancel) call them. Cancel/reject/
+line-remove/dispatch-delete all auto-return stock. Verified end-to-end in a rolled-back prod
+transaction across all three modes (opening→consume→edit→cancel-reversal→manual→closed-mode→dispatch
+consume+return); zero rows persisted.
+
+**RPCs:** `stock_adjust(product, qty, 'in'|'out', reason, notes, ledger_id?)` — SECURITY INVOKER,
+checks `has_permission(uid, account, 'manage_stock')` → 42501, mandatory reason from the fixed list,
+idempotent on `ledger_id`. `stock_reverse_entry` posts an offsetting row (never a physical delete).
+Reason codes: Sales Return, Damage, Expiry, Theft/Loss, Stock Correction, Physical Count Adjustment,
+Transfer In, Transfer Out.
+
+**Permissions:** `view_stock`, `manage_stock` (registry + roles editor "Stock / Inventory" group).
+`manage_stock` implies view. Enforced server-side in `stock_adjust`, not UI-only.
+
+**Web surfaces:** Catalogue Settings toggle + settings; product form "Maintain stock" + "Opening
+stock" (module-gated); `/stock` screen (position table, adjust dialog, ledger sheet, low-stock
+filter — `src/components/stock/*`); order form shows closing stock per line (green/amber/red) and,
+when `restrict_on_insufficient` is on, blocks a NEW order line whose qty exceeds available (edit
+mode skips the block; non-tracked products skipped); `/reports/stock` (Closing position / Movement
+ledger / Low-out, CSV export). Client lib: `src/lib/stock/financials.ts` (`fetchClosingStock`,
+`fetchStockPositions`, `readStockSettings`, `exceedsAvailable` — the single derivation, mirroring
+`payments/financials.ts`). **Not yet screen-verified (needs a login session).**
+
+**Mobile:** closing stock on the mobile order form is a cached best-effort snapshot; the block is
+advisory offline (stale cache must not strand a sale), hard online. *(pending — see backlog)*
+
 ## Payment Collection Module (Added Aug 2026)
 - **Status (2026-08-14): repaired, in UAT — NOT production-proven.** As shipped on 2026-08-13 the
   module did not function: both web and mobile wrote to columns that do not exist, so no payment

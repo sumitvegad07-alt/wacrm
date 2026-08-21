@@ -79,6 +79,7 @@ export interface ModuleSettings {
   route: boolean;
   payment: boolean;
   scheme: boolean;
+  stock: boolean;
 }
 
 const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
@@ -96,6 +97,8 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   payment: false,
   // Scheme Management ships OFF: enabled per-account from Catalogue Settings.
   scheme: false,
+  // Stock Management ships OFF: enabled per-account from Catalogue Settings.
+  stock: false,
 };
 
 function normalizeModuleSettings(raw: unknown): ModuleSettings {
@@ -117,6 +120,8 @@ function normalizeModuleSettings(raw: unknown): ModuleSettings {
     payment: typeof src.payment === 'boolean' ? src.payment : false,
     // Scheme Management defaults OFF when absent.
     scheme: typeof src.scheme === 'boolean' ? src.scheme : false,
+    // Stock Management defaults OFF when absent.
+    stock: typeof src.stock === 'boolean' ? src.stock : false,
   };
 }
 
