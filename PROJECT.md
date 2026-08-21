@@ -3388,6 +3388,29 @@ ledger / Low-out, CSV export). Client lib: `src/lib/stock/financials.ts` (`fetch
 **Mobile:** closing stock on the mobile order form is a cached best-effort snapshot; the block is
 advisory offline (stale cache must not strand a sale), hard online. *(pending — see backlog)*
 
+**v1.1 (2026-08-21, feedback pass) — migration `20260821140000_stock_management_v1_1`:**
+- **Reason-coded voucher numbers** on manual movements: `stock_ledger.voucher_no`, assigned by
+  `stock_adjust` via `next_stock_voucher(account, prefix)` + `stock_voucher_sequences` (per-account,
+  per-prefix counter table — not columns). Prefixes via `stock_reason_prefix()`: Purchase→PU,
+  Sales Return→SR, Damage→DM, etc. Auto rows keep ORD-/DSP- in `source_ref`. Existing rows backfilled.
+- **Direction-aware reasons** (`STOCK_IN_REASONS` / `STOCK_OUT_REASONS` in `lib/stock/financials.ts`,
+  CHECK widened to 12): added **Purchase, Production, Opening Load, Purchase Return**. The Adjust
+  dialog shows only the reasons valid for the chosen direction.
+- **Manual adjustments log to `module_activities`** (`module_name='product'`, action `stock_in`/
+  `stock_out`) so they appear on the product timeline.
+- **Stock detail page** `/stock/[id]`: header + Overview/Movement-Ledger tabs on the left, the shared
+  `<Timeline moduleName="product">` (activity + tasks — `tasks.product_id` + TaskForm's Product
+  option already existed) on the right. Ledger shows voucher_no (manual) / linked ORD-/DSP- (auto).
+- **Stock list rebuilt on `<DataTable>`** (manage-columns, page-size, row-click → detail).
+- **CSV import** (`stock_bulk_adjust(jsonb)` RPC + `StockImportDialog`): paste SKU/name, qty,
+  direction, reason → bulk Stock In/Out with per-row error collection; defaults direction=in,
+  reason=Purchase. Permission-checked server-side.
+- **Known open (pre-existing, NOT stock):** intermittent "Product name is required" on product
+  create — the founder's product custom_fields are clean (1 active `name` field) and product create
+  worked during their Test Case 1, so it's intermittent, likely the fragile custom-fields load
+  timing; separately, OTHER accounts show **duplicate system custom_fields** accumulating (a
+  field-defaults bug worth a cleanup). Needs a live repro to pin.
+
 ## Payment Collection Module (Added Aug 2026)
 - **Status (2026-08-14): repaired, in UAT — NOT production-proven.** As shipped on 2026-08-13 the
   module did not function: both web and mobile wrote to columns that do not exist, so no payment

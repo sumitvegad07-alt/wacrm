@@ -19,6 +19,7 @@ interface LedgerRow {
   reason_code: string | null;
   source_type: string | null;
   source_ref: string | null;
+  voucher_no: string | null;
   created_at: string;
   products: { name: string; sku: string | null } | null;
 }
@@ -72,7 +73,7 @@ export default function StockReportPage() {
     setLoading(true);
     const { data } = await supabase
       .from('stock_ledger')
-      .select('id, quantity, entry_type, reason_code, source_type, source_ref, created_at, products(name, sku)')
+      .select('id, quantity, entry_type, reason_code, source_type, source_ref, voucher_no, created_at, products(name, sku)')
       .eq('account_id', accountId)
       .gte('created_at', `${from}T00:00:00`)
       .lte('created_at', `${to}T23:59:59`)
@@ -145,7 +146,7 @@ export default function StockReportPage() {
             size="sm"
             onClick={() =>
               downloadCsv('stock-ledger.csv', [
-                ['Date', 'Product', 'SKU', 'Type', 'Qty', 'Reason', 'Source'],
+                ['Date', 'Product', 'SKU', 'Type', 'Qty', 'Reason', 'Reference'],
                 ...ledger.map((r) => [
                   new Date(r.created_at).toLocaleDateString(),
                   r.products?.name ?? '',
@@ -153,7 +154,7 @@ export default function StockReportPage() {
                   TYPE_LABEL[r.entry_type] ?? r.entry_type,
                   toNumber(r.quantity),
                   r.reason_code ?? '',
-                  r.source_ref ?? '',
+                  r.voucher_no ?? r.source_ref ?? '',
                 ]),
               ])
             }
@@ -198,7 +199,10 @@ export default function StockReportPage() {
                   <td className={`px-4 py-2 text-right tabular-nums ${qty < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
                     {qty > 0 ? `+${qty}` : qty}
                   </td>
-                  <td className="px-4 py-2 text-muted-foreground">{r.source_ref || r.reason_code || '—'}</td>
+                  <td className="px-4 py-2 text-muted-foreground">
+                    {(r.voucher_no || r.source_ref) && <span className="font-mono text-xs mr-1.5">{r.voucher_no || r.source_ref}</span>}
+                    {r.reason_code || (r.voucher_no || r.source_ref ? '' : '—')}
+                  </td>
                 </tr>
               );
             })}

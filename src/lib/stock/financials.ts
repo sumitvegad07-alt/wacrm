@@ -19,19 +19,39 @@ export interface StockSettings {
   restrictOnInsufficient: boolean;
 }
 
-/** The fixed reason codes for a manual Stock In / Stock Out (also enforced by a DB CHECK). */
-export const STOCK_REASON_CODES = [
+// Reason codes are direction-aware — most only make sense one way. Two
+// (Stock Correction, Physical Count Adjustment) work either way. The DB CHECK
+// enforces the full union.
+export const STOCK_IN_REASONS = [
+  'Purchase',
   'Sales Return',
+  'Production',
+  'Opening Load',
+  'Transfer In',
+  'Stock Correction',
+  'Physical Count Adjustment',
+] as const;
+
+export const STOCK_OUT_REASONS = [
   'Damage',
   'Expiry',
   'Theft/Loss',
+  'Purchase Return',
+  'Transfer Out',
   'Stock Correction',
   'Physical Count Adjustment',
-  'Transfer In',
-  'Transfer Out',
 ] as const;
 
-export type StockReasonCode = (typeof STOCK_REASON_CODES)[number];
+/** Every valid manual reason (the DB CHECK list). */
+export const STOCK_REASON_CODES = Array.from(
+  new Set<string>([...STOCK_IN_REASONS, ...STOCK_OUT_REASONS])
+);
+
+export function stockReasonsFor(direction: 'in' | 'out'): readonly string[] {
+  return direction === 'in' ? STOCK_IN_REASONS : STOCK_OUT_REASONS;
+}
+
+export type StockReasonCode = (typeof STOCK_IN_REASONS)[number] | (typeof STOCK_OUT_REASONS)[number];
 
 export const STOCK_OUT_EVENT_LABEL: Record<StockOutEvent, string> = {
   order_created: 'when an order is created',
@@ -62,6 +82,7 @@ export interface StockLedgerEntry {
   sourceType: string | null;
   sourceId: string | null;
   sourceRef: string | null;
+  voucherNo: string | null;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;

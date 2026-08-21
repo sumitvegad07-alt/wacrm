@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { STOCK_REASON_CODES } from '@/lib/stock/financials';
+import { stockReasonsFor } from '@/lib/stock/financials';
 import { Loader2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
 interface StockAdjustDialogProps {
@@ -42,14 +42,25 @@ export function StockAdjustDialog({
   const supabase = createClient();
   const [direction, setDirection] = useState<'in' | 'out'>('in');
   const [quantity, setQuantity] = useState('');
-  const [reason, setReason] = useState<string>(STOCK_REASON_CODES[0]);
+  const [reason, setReason] = useState<string>(stockReasonsFor('in')[0]);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const reasons = stockReasonsFor(direction);
+
+  // Switching direction swaps the reason list; keep the current reason only if
+  // it's valid for the new direction (the two shared ones), else pick the first.
+  function changeDirection(dir: 'in' | 'out') {
+    setDirection(dir);
+    if (!stockReasonsFor(dir).includes(reason as never)) {
+      setReason(stockReasonsFor(dir)[0]);
+    }
+  }
 
   function reset() {
     setDirection('in');
     setQuantity('');
-    setReason(STOCK_REASON_CODES[0]);
+    setReason(stockReasonsFor('in')[0]);
     setNotes('');
   }
 
@@ -77,10 +88,10 @@ export function StockAdjustDialog({
       );
       return;
     }
-    const newClosing = (data as { closing_stock?: number } | null)?.closing_stock;
+    const res = data as { closing_stock?: number; voucher_no?: string } | null;
     toast.success(
-      `Stock ${direction === 'in' ? 'added' : 'removed'}${
-        newClosing !== undefined ? ` — closing now ${newClosing}` : ''
+      `${res?.voucher_no ? `${res.voucher_no} · ` : ''}Stock ${direction === 'in' ? 'added' : 'removed'}${
+        res?.closing_stock !== undefined ? ` — closing now ${res.closing_stock}` : ''
       }`
     );
     reset();
@@ -103,7 +114,7 @@ export function StockAdjustDialog({
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => setDirection('in')}
+              onClick={() => changeDirection('in')}
               className={`flex items-center justify-center gap-2 rounded-lg border p-3 text-sm font-medium transition-colors ${
                 direction === 'in' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/40'
               }`}
@@ -112,7 +123,7 @@ export function StockAdjustDialog({
             </button>
             <button
               type="button"
-              onClick={() => setDirection('out')}
+              onClick={() => changeDirection('out')}
               className={`flex items-center justify-center gap-2 rounded-lg border p-3 text-sm font-medium transition-colors ${
                 direction === 'out' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/40'
               }`}
@@ -142,7 +153,7 @@ export function StockAdjustDialog({
               onChange={(e) => setReason(e.target.value)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
-              {STOCK_REASON_CODES.map((r) => (
+              {reasons.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>

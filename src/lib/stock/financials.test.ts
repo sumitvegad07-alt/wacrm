@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readStockSettings, exceedsAvailable, toNumber, STOCK_REASON_CODES } from './financials';
+import { readStockSettings, exceedsAvailable, toNumber, STOCK_REASON_CODES, STOCK_IN_REASONS, STOCK_OUT_REASONS, stockReasonsFor } from './financials';
 
 describe('stock financials — pure helpers', () => {
   it('coerces NUMERIC strings from Postgres', () => {
@@ -31,9 +31,20 @@ describe('stock financials — pure helpers', () => {
     expect(exceedsAvailable(-2, 1)).toBe(true); // already negative stock
   });
 
-  it('reason codes match the DB CHECK list', () => {
-    expect(STOCK_REASON_CODES).toContain('Sales Return');
-    expect(STOCK_REASON_CODES).toContain('Physical Count Adjustment');
-    expect(STOCK_REASON_CODES).toHaveLength(8);
+  it('reason codes are direction-aware and match the DB CHECK list', () => {
+    // Purchase is stock-in only; Damage is stock-out only.
+    expect(STOCK_IN_REASONS).toContain('Purchase');
+    expect(STOCK_IN_REASONS).not.toContain('Damage');
+    expect(STOCK_OUT_REASONS).toContain('Damage');
+    expect(STOCK_OUT_REASONS).not.toContain('Purchase');
+    // The two bidirectional reasons appear on both.
+    for (const shared of ['Stock Correction', 'Physical Count Adjustment']) {
+      expect(STOCK_IN_REASONS).toContain(shared);
+      expect(STOCK_OUT_REASONS).toContain(shared);
+    }
+    // The union (DB CHECK list) is 12 distinct reasons.
+    expect(STOCK_REASON_CODES).toHaveLength(12);
+    expect(stockReasonsFor('in')).toBe(STOCK_IN_REASONS);
+    expect(stockReasonsFor('out')).toBe(STOCK_OUT_REASONS);
   });
 });
