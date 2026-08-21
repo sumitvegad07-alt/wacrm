@@ -170,7 +170,7 @@ interface NavItem {
    * Admin-configurable module key. When set, this item is only shown if
    * the admin has enabled the corresponding module in Module Settings.
    */
-  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment";
+  configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment" | "scheme";
   /**
    * Product-line entitlement. When set, this item is only shown if the account's
    * plan includes that line (CRM / WFA / SFA). Used for features that aren't
@@ -188,7 +188,7 @@ export type MenuNode =
       label: string;
       icon: React.ComponentType<{ className?: string }>;
       items: NavItem[];
-      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment";
+      configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment" | "scheme";
       line?: ProductLine;
     }
   | {
@@ -278,6 +278,8 @@ export function getMenuStructure(
       label: "Scheme",
       icon: Percent,
       module: "orders",
+      // Opt-in module: hidden until an admin enables it in Catalogue Settings.
+      configModule: "scheme" as const,
       line: "sfa",
     },
 

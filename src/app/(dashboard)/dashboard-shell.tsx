@@ -66,6 +66,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       (pathname.startsWith("/payments") && !isModuleEnabled("payment")) ||
       (pathname.startsWith("/dispatch") && !isModuleEnabled("dispatch")) ||
       (pathname.startsWith("/routes") && !isModuleEnabled("route")) ||
+      (pathname.startsWith("/schemes") && !isModuleEnabled("scheme")) ||
       // Product-line gated (Leads/Deals → CRM, Orders → SFA, tracking → WFA).
       // These have no module toggle, so the plan line is the ceiling.
       (pathname.startsWith("/leads") && !hasCRM) ||

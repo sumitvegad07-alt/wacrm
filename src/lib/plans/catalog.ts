@@ -66,7 +66,8 @@ export type ModuleKey =
   | "territory"
   | "reporting_hierarchy"
   | "route"
-  | "payment";
+  | "payment"
+  | "scheme";
 
 export const MODULE_KEYS: readonly ModuleKey[] = [
   "whatsapp",
@@ -78,6 +79,7 @@ export const MODULE_KEYS: readonly ModuleKey[] = [
   "reporting_hierarchy",
   "route",
   "payment",
+  "scheme",
 ] as const;
 
 /** Which product line owns each configurable module. */
@@ -94,6 +96,7 @@ export const MODULE_LINE: Record<ModuleKey, ProductLine> = {
   dispatch: "sfa",
   pending_dispatch: "sfa",
   payment: "sfa",
+  scheme: "sfa",
 };
 
 /**
@@ -104,6 +107,7 @@ export const MODULE_LINE: Record<ModuleKey, ProductLine> = {
 const DEFAULT_OFF: ReadonlySet<ModuleKey> = new Set([
   "route", // Beat Planning: optional, free-visit mode is the default
   "reporting_hierarchy", // User Hierarchy: Available Soon, ships off
+  "scheme", // Scheme Management: opt-in from Catalogue Settings, ships off
 ]);
 
 // ── Legacy plan names still present in the DB (pre-migration) ──

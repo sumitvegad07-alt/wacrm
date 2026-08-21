@@ -36,6 +36,7 @@ const CONFIGURABLE_MODULES = [
   "reporting_hierarchy",
   "route",
   "payment",
+  "scheme",
 ] as const;
 
 type ModuleKey = (typeof CONFIGURABLE_MODULES)[number];
@@ -54,6 +55,8 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   // Route Management ships OFF by default (route is optional).
   route: false,
   payment: false,
+  // Scheme Management ships OFF (opt-in from Catalogue Settings).
+  scheme: false,
 };
 
 function normalizeSettings(raw: unknown): ModuleSettings {

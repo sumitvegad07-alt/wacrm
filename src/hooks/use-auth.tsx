@@ -78,6 +78,7 @@ export interface ModuleSettings {
   reporting_hierarchy: boolean;
   route: boolean;
   payment: boolean;
+  scheme: boolean;
 }
 
 const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
@@ -93,6 +94,8 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   route: false,
   // Payment module defaults OFF
   payment: false,
+  // Scheme Management ships OFF: enabled per-account from Catalogue Settings.
+  scheme: false,
 };
 
 function normalizeModuleSettings(raw: unknown): ModuleSettings {
@@ -112,6 +115,8 @@ function normalizeModuleSettings(raw: unknown): ModuleSettings {
     // Route Management also defaults OFF when absent.
     route: typeof src.route === 'boolean' ? src.route : false,
     payment: typeof src.payment === 'boolean' ? src.payment : false,
+    // Scheme Management defaults OFF when absent.
+    scheme: typeof src.scheme === 'boolean' ? src.scheme : false,
   };
 }
 

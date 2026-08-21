@@ -75,6 +75,7 @@ describe("plan catalog — default module settings on apply", () => {
       reporting_hierarchy: false,
       route: false,
       payment: false,
+      scheme: false,
     });
   });
   it("optional/Available-Soon modules default OFF even when their line is on", () => {
@@ -84,10 +85,10 @@ describe("plan catalog — default module settings on apply", () => {
     expect(wfa.route).toBe(false); // Beat Planning optional
     expect(wfa.reporting_hierarchy).toBe(false); // User Hierarchy: Available Soon
   });
-  it("CRM+SFA defaults every module on except the two default-off", () => {
+  it("CRM+SFA defaults every module on except the default-off ones", () => {
     const all = defaultModuleSettings("CRM_SFA");
     for (const k of MODULE_KEYS) {
-      const expected = k !== "route" && k !== "reporting_hierarchy";
+      const expected = k !== "route" && k !== "reporting_hierarchy" && k !== "scheme";
       expect(all[k]).toBe(expected);
     }
   });

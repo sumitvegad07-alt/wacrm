@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { allowedModules } from "@/lib/plans/catalog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,7 +55,37 @@ const DISCOUNT_VALUE_TYPES: { value: DiscountValueType; label: string; help: str
 
 export function PricingSchemesSettings() {
   const supabase = createClient();
-  const { accountId, canEditSettings } = useAuth();
+  const { accountId, account, canEditSettings, moduleSettings, refreshModuleSettings } = useAuth();
+
+  // Scheme Management is an opt-in module gated from here. The main-menu link
+  // and the /schemes route both key off module_settings.scheme.
+  const planAllowsScheme = allowedModules(account?.subscription_plan).has("scheme");
+  const [schemeEnabled, setSchemeEnabled] = useState(false);
+  const [schemeSaving, setSchemeSaving] = useState(false);
+
+  useEffect(() => {
+    setSchemeEnabled(!!moduleSettings?.scheme);
+  }, [moduleSettings?.scheme]);
+
+  async function toggleScheme(on: boolean) {
+    setSchemeSaving(true);
+    setSchemeEnabled(on); // optimistic
+    try {
+      const res = await fetch("/api/account/module-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheme: on }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      await refreshModuleSettings();
+      toast.success(on ? "Scheme Management enabled" : "Scheme Management disabled");
+    } catch {
+      setSchemeEnabled(!on); // revert
+      toast.error("Could not update Scheme Management");
+    } finally {
+      setSchemeSaving(false);
+    }
+  }
 
   const [loading, setLoading] = useState(true);
   const [slabs, setSlabs] = useState<TaxSlab[]>([]);
@@ -392,20 +423,37 @@ export function PricingSchemesSettings() {
             )}
           </div>
 
-          {/* ---------------- Schemes ---------------- */}
-          <div className="space-y-2 pt-6 border-t border-border">
+          {/* ---------------- Scheme Management ---------------- */}
+          <div className="space-y-3 pt-6 border-t border-border">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold">Schemes</h3>
+                <h3 className="text-sm font-semibold">Scheme Management</h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Quantity slabs, free goods and order-value discounts. Suggested to the
-                  salesman at order entry; they confirm what applies.
+                  Quantity slabs, free goods and order-value discounts, suggested to the
+                  salesman at order entry. Turn this on to show <strong>Scheme</strong> in the
+                  main menu; off keeps it hidden for everyone.
                 </p>
               </div>
-              <Link href="/schemes" className={buttonVariants({ variant: "outline", size: "sm" })}>
-                <Tag className="h-4 w-4 mr-1" /> Manage schemes
-              </Link>
+              <Switch
+                checked={schemeEnabled}
+                disabled={!canEditSettings || !planAllowsScheme || schemeSaving}
+                onCheckedChange={toggleScheme}
+              />
             </div>
+
+            {!planAllowsScheme && (
+              <p className="text-xs text-amber-600 dark:text-amber-500">
+                Your current plan doesn&apos;t include Scheme Management. Contact us to upgrade.
+              </p>
+            )}
+
+            {schemeEnabled && planAllowsScheme && (
+              <div className="pl-6 border-l-2 border-primary/20">
+                <Link href="/schemes" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                  <Tag className="h-4 w-4 mr-1" /> Manage schemes
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>

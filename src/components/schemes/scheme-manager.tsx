@@ -65,7 +65,7 @@ const STATUS_LABEL: Record<SchemeStatus, string> = {
 
 export function SchemeManager() {
   const router = useRouter();
-  const { account, canEditSettings } = useAuth();
+  const { account, canEditSettings, isModuleEnabled } = useAuth();
   const accountId = account?.id ?? null;
 
   const [schemes, setSchemes] = useState<SchemeWithDetails[]>([]);
@@ -120,6 +120,11 @@ export function SchemeManager() {
       setBusy(false);
     }
   }
+
+  // Belt-and-suspenders: the dashboard shell already redirects when the module
+  // is off, but guard here too so the page never renders for a disabled module.
+  // Placed after all hooks to respect the Rules of Hooks.
+  if (!isModuleEnabled("scheme")) return null;
 
   return (
     <PageLayout>
