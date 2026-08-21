@@ -293,127 +293,14 @@ export async function ensureDefaultSectionsAndFields(
       }
     }
 
-    // Comprehensive automated cleanup across all modules for any accidentally seeded duplicate or legacy fields
-    if (moduleName === 'product') {
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'product')
-        .in('system_key', ['min_price', 'stock_quantity', 'status']);
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'product')
-        .in('field_name', ['Minimum Floor Price (₹)', 'Stock Quantity', 'Product Status', 'Minimum price', 'Stock', 'Status', 'Product status']);
-      await supabase
-        .from('custom_fields')
-        .update({ field_name: 'SKU' })
-        .eq('account_id', accountId)
-        .eq('module_name', 'product')
-        .eq('system_key', 'sku');
-      await supabase
-        .from('custom_fields')
-        .update({ field_name: 'Price' })
-        .eq('account_id', accountId)
-        .eq('module_name', 'product')
-        .eq('system_key', 'price');
-    }
-
-    if (moduleName === 'lead') {
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'lead')
-        .in('system_key', ['phone', 'pincode']);
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'lead')
-        .in('field_name', ['Phone Number', 'Pincode / ZIP', 'Pincode']);
-      await supabase
-        .from('custom_fields')
-        .update({ field_name: 'Business / Lead Name' })
-        .eq('account_id', accountId)
-        .eq('module_name', 'lead')
-        .eq('system_key', 'name');
-
-      await supabase
-        .from('custom_fields')
-        .update({ field_options: {} })
-        .eq('account_id', accountId)
-        .eq('module_name', 'lead')
-        .in('system_key', ['source', 'status', 'industry']);
-
-      const { data: leadFields } = await supabase
-        .from('custom_fields')
-        .select('id, field_name, system_key')
-        .eq('account_id', accountId)
-        .eq('module_name', 'lead');
-
-      if (leadFields) {
-        for (const lf of leadFields) {
-          const nameLower = (lf.field_name || '').toLowerCase();
-          if (!lf.system_key || lf.system_key === 'source' || lf.system_key === 'status' || lf.system_key === 'industry') {
-            if (nameLower === 'lead source' || nameLower === 'source' || lf.system_key === 'source') {
-              await supabase.from('custom_fields').update({ system_key: 'source', field_options: {} }).eq('id', lf.id);
-            } else if (nameLower === 'lead status' || nameLower === 'status' || lf.system_key === 'status') {
-              await supabase.from('custom_fields').update({ system_key: 'status', field_options: {} }).eq('id', lf.id);
-            } else if (nameLower === 'industry' || nameLower === 'lead industry' || lf.system_key === 'industry') {
-              await supabase.from('custom_fields').update({ system_key: 'industry', field_options: {} }).eq('id', lf.id);
-            }
-          }
-        }
-      }
-    }
-
-    if (moduleName === 'order') {
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'order')
-        .in('system_key', ['status', 'valid_until', 'payment_terms', 'order_date']);
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'order')
-        .in('field_name', ['Order Status', 'Valid Until', 'Payment Terms']);
-    }
-
-    if (moduleName === 'dispatch') {
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'dispatch')
-        .in('system_key', ['carrier', 'transporter_name', 'status', 'lr_number']);
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'dispatch')
-        .in('field_name', ['Carrier / Courier', 'Transporter Name', 'Dispatch Status', 'LR / Tracking Number']);
-    }
-
-    if (moduleName === 'quotation') {
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'quotation')
-        .in('system_key', ['terms_conditions']);
-      await supabase
-        .from('custom_fields')
-        .delete()
-        .eq('account_id', accountId)
-        .eq('module_name', 'quotation')
-        .in('field_name', ['Terms & Conditions']);
-    }
+    // NOTE: A per-load "cleanup" block used to live here that DELETEd fields by
+    // field_name (e.g. 'Status', 'Stock', 'Pincode') on every builder/form open.
+    // Because it matched on name, it silently wiped admin-created custom fields
+    // that shared a legacy name, and it deleted product `min_price` that the
+    // form still needs. It was one-time migration logic that never should have
+    // run on every load. Removed 2026-08-21. Seeding above is insert-if-missing
+    // and never mutates or deletes existing fields. Any genuine one-off data
+    // normalization must be a versioned SQL migration, not a per-load mutation.
   } catch (err) {
     console.error('Failed in ensureDefaultSectionsAndFields:', err);
   }
