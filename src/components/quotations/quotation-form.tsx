@@ -8,7 +8,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Save, FileText, ArrowLeft } from 'lucide-react';
+import { Loader2, Save, FileText } from 'lucide-react';
+import { FormPageShell } from '@/components/shared';
 import { ProductDetailsTable, type PartialQuotationItem } from './product-details-table';
 import { TermsEditor } from './terms-editor';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -542,31 +543,15 @@ export function QuotationForm({
 
   if (asPage) {
     return (
-      <div className="p-8 w-full max-w-none space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
-            >
-              <ArrowLeft className="h-4 w-4 text-foreground" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <FileText className="w-6 h-6 text-primary" />
-                {quotationId ? 'Edit Quotation' : 'Create New Quotation'}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {quotationId ? 'Update the quotation details below.' : 'Create a new quotation for a customer or lead.'}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          {formContent}
-        </div>
-      </div>
+      <FormPageShell
+        icon={FileText}
+        title={quotationId ? 'Edit Quotation' : 'Create New Quotation'}
+        subtitle={quotationId ? 'Update the quotation details below.' : 'Create a new quotation for a customer or lead.'}
+        onBack={() => onOpenChange(false)}
+        width="none"
+      >
+        {formContent}
+      </FormPageShell>
     );
   }
 

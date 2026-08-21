@@ -37,10 +37,10 @@ import {
   MessageSquare,
   DollarSign,
   Loader2,
-  ArrowLeft,
   Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FormPageShell } from "@/components/shared";
 import { TaskListEmbedded } from "@/components/tasks/task-list-embedded";
 import { logModuleActivity } from "@/lib/activities";
 
@@ -610,31 +610,14 @@ export function DealForm({
 
   if (asPage) {
     return (
-      <div className="p-8 w-full max-w-none space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
-            >
-              <ArrowLeft className="h-4 w-4 text-foreground" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <Briefcase className="w-6 h-6 text-primary" />
-                {deal ? "Edit Deal" : "Create New Deal"}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {deal ? "Update the deal details below." : "Create a new deal to track in your sales pipeline."}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          {formContent}
-        </div>
-      </div>
+      <FormPageShell
+        icon={Briefcase}
+        title={deal ? "Edit Deal" : "Create New Deal"}
+        subtitle={deal ? "Update the deal details below." : "Create a new deal to track in your sales pipeline."}
+        onBack={() => onOpenChange(false)}
+      >
+        {formContent}
+      </FormPageShell>
     );
   }
 

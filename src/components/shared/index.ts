@@ -16,3 +16,4 @@ export * from "./empty-state";
 export * from "./loading-state";
 export * from "./confirm-dialog";
 export * from "./bulk-action-bar";
+export * from "./form-page-shell";

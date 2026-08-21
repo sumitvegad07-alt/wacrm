@@ -19,7 +19,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Upload, X, ArrowLeft, Package } from 'lucide-react';
+import { Trash2, Upload, X, Package } from 'lucide-react';
+import { FormPageShell } from '@/components/shared';
 import { logModuleActivity } from '@/lib/activities';
 
 interface ProductFormProps {
@@ -617,31 +618,14 @@ export function ProductForm({
 
   if (asPage) {
     return (
-      <div className="p-8 w-full max-w-none space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
-            >
-              <ArrowLeft className="h-4 w-4 text-foreground" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <Package className="w-6 h-6 text-primary" />
-                {isEdit ? 'Edit Product' : 'Add New Product'}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {isEdit ? 'Update the product details below.' : 'Create a new product in your catalog.'}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          {formContent}
-        </div>
-      </div>
+      <FormPageShell
+        icon={Package}
+        title={isEdit ? 'Edit Product' : 'Add New Product'}
+        subtitle={isEdit ? 'Update the product details below.' : 'Create a new product in your catalog.'}
+        onBack={() => onOpenChange(false)}
+      >
+        {formContent}
+      </FormPageShell>
     );
   }
 

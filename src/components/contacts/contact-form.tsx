@@ -34,7 +34,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertTriangle, ArrowLeft, Users } from 'lucide-react';
+import { Loader2, AlertTriangle, Users } from 'lucide-react';
+import { FormPageShell } from '@/components/shared';
 
 interface ContactFormProps {
   open: boolean;
@@ -655,31 +656,14 @@ export function ContactForm({
 
   if (asPage) {
     return (
-      <div className="p-8 w-full max-w-none space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
-            >
-              <ArrowLeft className="h-4 w-4 text-foreground" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <Users className="w-6 h-6 text-primary" />
-                {isEdit ? 'Edit Customer' : 'Add New Customer'}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {isEdit ? 'Update the contact details below.' : 'Capture a new customer and fill in their details.'}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          {formContent}
-        </div>
-      </div>
+      <FormPageShell
+        icon={Users}
+        title={isEdit ? 'Edit Customer' : 'Add New Customer'}
+        subtitle={isEdit ? 'Update the contact details below.' : 'Capture a new customer and fill in their details.'}
+        onBack={() => onOpenChange(false)}
+      >
+        {formContent}
+      </FormPageShell>
     );
   }
 

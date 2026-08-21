@@ -17,7 +17,8 @@ import { TerritoryPicker } from "@/components/territories/territory-picker";
 import { getTerritoryRows, getAccountTerritorySettings } from "@/lib/territories/api";
 import { DEFAULT_TERRITORY_SETTINGS, enabledLevels } from "@/lib/territories/settings";
 import type { Territory, TerritorySettings } from "@/lib/territories/types";
-import { Loader2, ArrowLeft, UserPlus } from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
+import { FormPageShell } from "@/components/shared";
 import { logModuleActivity } from "@/lib/activities";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
@@ -392,31 +393,14 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
 
   if (asPage) {
     return (
-      <div className="p-8 w-full max-w-none space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
-            >
-              <ArrowLeft className="h-4 w-4 text-foreground" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <UserPlus className="w-6 h-6 text-primary" />
-                {lead ? 'Edit Lead' : 'Add New Lead'}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {lead ? 'Update lead details below.' : 'Create a new lead in your CRM.'}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          {formContent}
-        </div>
-      </div>
+      <FormPageShell
+        icon={UserPlus}
+        title={lead ? 'Edit Lead' : 'Add New Lead'}
+        subtitle={lead ? 'Update lead details below.' : 'Create a new lead in your CRM.'}
+        onBack={() => onOpenChange(false)}
+      >
+        {formContent}
+      </FormPageShell>
     );
   }
 

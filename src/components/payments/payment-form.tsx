@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, ArrowLeft, UploadCloud, X } from 'lucide-react';
+import { Loader2, UploadCloud, X, Banknote } from 'lucide-react';
+import { FormPageShell } from '@/components/shared';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -604,15 +605,14 @@ export function PaymentForm({
 
   if (asPage) {
     return (
-      <div className="w-full space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}><ArrowLeft className="h-5 w-5" /></Button>
-          <h1 className="text-2xl font-bold">New Payment</h1>
-        </div>
-        <div className="bg-card border rounded-xl shadow-sm p-6">
-          {content}
-        </div>
-      </div>
+      <FormPageShell
+        icon={Banknote}
+        title="New Payment"
+        subtitle="Record a customer payment collection with reference and proof."
+        onBack={() => onOpenChange(false)}
+      >
+        {content}
+      </FormPageShell>
     );
   }
 

@@ -21,7 +21,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Loader2, X, ArrowLeft, CheckSquare } from "lucide-react";
+import { Trash2, Loader2, X, CheckSquare } from "lucide-react";
+import { FormPageShell } from "@/components/shared";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -766,31 +767,14 @@ export function TaskForm({
 
   if (asPage) {
     return (
-      <div className="p-8 w-full max-w-none space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
-            >
-              <ArrowLeft className="h-4 w-4 text-foreground" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <CheckSquare className="w-6 h-6 text-primary" />
-                {task ? "Edit" : "Add"} {isNote ? "Note" : "Task / Activity"}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {task ? "Update the activity details below." : "Create a new task, meeting, call, or note."}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          {formContent}
-        </div>
-      </div>
+      <FormPageShell
+        icon={CheckSquare}
+        title={`${task ? "Edit" : "Add"} ${isNote ? "Note" : "Task / Activity"}`}
+        subtitle={task ? "Update the activity details below." : "Create a new task, meeting, call, or note."}
+        onBack={() => onOpenChange(false)}
+      >
+        {formContent}
+      </FormPageShell>
     );
   }
 

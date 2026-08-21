@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import { Loader2, Truck } from 'lucide-react';
+import { FormPageShell } from '@/components/shared';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { logModuleActivity } from '@/lib/activities';
@@ -259,16 +260,19 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
   }
 
   return (
-    <div className="space-y-6 w-full max-w-none pb-24">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}><ChevronLeft className="size-5" /></Button>
-          <h1 className="text-2xl font-bold">{isEdit ? `Edit Dispatch ${dispatchNumber}` : 'Create Dispatch'}</h1>
-        </div>
+    <FormPageShell
+      icon={Truck}
+      title={isEdit ? `Edit Dispatch ${dispatchNumber}` : 'Create Dispatch'}
+      subtitle={isEdit ? 'Update the dispatch details below.' : 'Record a dispatch against a confirmed order.'}
+      onBack={() => router.back()}
+      card={false}
+      actions={
         <Button onClick={handleSave} disabled={saving} className="gap-2">
           {saving ? <Loader2 className="size-4 animate-spin" /> : null} Save
         </Button>
-      </div>
+      }
+    >
+      <div className="space-y-6 w-full">
 
       {/* Basic Details */}
       <div className="bg-card border border-border rounded-lg p-5">
@@ -365,6 +369,7 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </FormPageShell>
   );
 }

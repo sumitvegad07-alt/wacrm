@@ -12,7 +12,8 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
-import { Loader2, Plus, Trash2, AlertTriangle, ArrowLeft, ShoppingCart, Tag } from 'lucide-react';
+import { Loader2, Plus, Trash2, AlertTriangle, ShoppingCart, Tag } from 'lucide-react';
+import { FormPageShell } from '@/components/shared';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -986,31 +987,15 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
 
   if (asPage) {
     return (
-      <div className="p-8 w-full max-w-none space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
-            >
-              <ArrowLeft className="h-4 w-4 text-foreground" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <ShoppingCart className="w-6 h-6 text-primary" />
-                {isEdit ? 'Edit Order' : 'Add New Order'}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {isEdit ? 'Update the order details below.' : 'Create a new sales order with live pricing and discounts.'}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          {formContent}
-        </div>
-      </div>
+      <FormPageShell
+        icon={ShoppingCart}
+        title={isEdit ? 'Edit Order' : 'Add New Order'}
+        subtitle={isEdit ? 'Update the order details below.' : 'Create a new sales order with live pricing and discounts.'}
+        onBack={() => onOpenChange(false)}
+        width="none"
+      >
+        {formContent}
+      </FormPageShell>
     );
   }
 

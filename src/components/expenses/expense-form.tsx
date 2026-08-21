@@ -5,7 +5,8 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
-import { CalendarIcon, UploadCloud, X, ArrowLeft, Receipt } from "lucide-react";
+import { CalendarIcon, UploadCloud, X, Receipt } from "lucide-react";
+import { FormPageShell } from "@/components/shared";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
@@ -411,33 +412,16 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
 
   if (asPage) {
     return (
-      <div className="p-8 w-full max-w-none space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 border border-border hover:bg-accent"
-            >
-              <ArrowLeft className="h-4 w-4 text-foreground" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <Receipt className="w-6 h-6 text-primary" />
-                {expense ? "Edit Expense" : "Submit New Expense"}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {expense ? "Update the expense details below." : "Submit an expense claim with receipts and remarks."}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            {formContent}
-          </form>
-        </div>
-      </div>
+      <FormPageShell
+        icon={Receipt}
+        title={expense ? "Edit Expense" : "Submit New Expense"}
+        subtitle={expense ? "Update the expense details below." : "Submit an expense claim with receipts and remarks."}
+        onBack={() => onOpenChange(false)}
+      >
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          {formContent}
+        </form>
+      </FormPageShell>
     );
   }
 
