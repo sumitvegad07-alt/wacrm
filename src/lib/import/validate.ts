@@ -85,13 +85,23 @@ export function validateRows(
       }
     }
 
-    // Dedupe identity — only when all key parts are present.
+    // Identity check. Normal imports flag duplicates; "match-required" imports
+    // (Outstanding, Opening Stock) invert it — a row must match an existing
+    // record, and no match is an error.
     let dupe = false;
     const keyParts = descriptor.dedupeKeys.map((k) => normalizeKey(values[k] ?? ""));
-    if (keyParts.every((p) => p !== "")) {
+    const keyComplete = keyParts.every((p) => p !== "");
+    if (keyComplete) {
       const key = keyParts.join("|");
-      if (existingKeys.has(key) || seen.has(key)) dupe = true;
-      seen.add(key);
+      if (descriptor.requiresExistingMatch) {
+        if (!existingKeys.has(key)) {
+          const noun = descriptor.keyTable === "contacts" ? "customer" : descriptor.keyTable === "products" ? "product" : "record";
+          errors.push({ message: `No matching ${noun} found — nothing to update` });
+        }
+      } else {
+        if (existingKeys.has(key) || seen.has(key)) dupe = true;
+        seen.add(key);
+      }
     }
 
     let status: RowValidation["status"];

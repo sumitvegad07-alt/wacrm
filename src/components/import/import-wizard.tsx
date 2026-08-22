@@ -452,25 +452,31 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                 <VerdictTile n={summary.duplicate} label="Duplicate" tone="warn" />
               </div>
 
-              <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  When a record already exists
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <ModeCard
-                    active={mode === "skip"}
-                    onClick={() => setMode("skip")}
-                    title="Skip existing"
-                    desc="Only add new records. Existing ones are left untouched."
-                  />
-                  <ModeCard
-                    active={mode === "update"}
-                    onClick={() => setMode("update")}
-                    title="Update existing"
-                    desc="Add new records and refresh matching ones from the file."
-                  />
+              {descriptor.requiresExistingMatch ? (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  This import <span className="font-medium text-foreground">updates existing records only</span> — each valid row is matched and updated. Rows that don&apos;t match anything are shown as invalid.
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    When a record already exists
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <ModeCard
+                      active={mode === "skip"}
+                      onClick={() => setMode("skip")}
+                      title="Skip existing"
+                      desc="Only add new records. Existing ones are left untouched."
+                    />
+                    <ModeCard
+                      active={mode === "update"}
+                      onClick={() => setMode("update")}
+                      title="Update existing"
+                      desc="Add new records and refresh matching ones from the file."
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="overflow-hidden rounded-lg border border-border">
                 <div className="max-h-64 overflow-y-auto">

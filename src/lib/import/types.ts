@@ -94,6 +94,15 @@ export interface ImportDescriptor {
   systemColumns?: string[];
   /** System keys hidden when the territory module replaces them (geo fields). */
   territoryReplacesKeys?: string[];
+
+  // ---- "Match-required update" imports (Outstanding, Opening Stock) ----
+  /** Update-only: every row must match an EXISTING record by the dedupe key
+   *  (a customer / product), which is then updated. A row that matches nothing is
+   *  invalid; matching is NOT a "duplicate to skip". No inserts, not undoable. */
+  requiresExistingMatch?: boolean;
+  /** Real table to load the existing dedupe keys from, when `targetTable` is a
+   *  virtual commit-dispatch target (e.g. 'outstanding' matches rows in 'contacts'). */
+  keyTable?: string;
 }
 
 /** Normalized output of the shared reader — same shape for CSV and XLSX. */

@@ -172,6 +172,49 @@ export const priceListsDescriptor: ImportDescriptor = {
   ],
 };
 
+// Outstanding = set each customer's opening balance. Match-required: every row
+// must match an existing customer by phone; the balance is then updated. No new
+// customers are created. (Commit dispatches on targetTable 'outstanding' → the
+// contacts.opening_balance branch; keyTable 'contacts' is where matches live.)
+export const outstandingDescriptor: ImportDescriptor = {
+  module: "outstanding",
+  targetTable: "outstanding",
+  label: "Outstanding",
+  undoable: false,
+  requiresExistingMatch: true,
+  keyTable: "contacts",
+  dedupeKeys: ["phone"],
+  maxRows: 50000,
+  fields: [
+    { key: "phone", label: "Customer Phone", required: true, type: "phone",
+      synonyms: ["phone", "mobile", "number", "customerphone", "contactnumber"], examples: ["+919876543210", "+919812345678"] },
+    { key: "opening_balance", label: "Opening Balance", required: true, type: "number",
+      synonyms: ["openingbalance", "balance", "outstanding", "amount", "due"], examples: ["5000", "0"] },
+  ],
+};
+
+// Opening Stock = set each product's opening stock balance. Match-required by
+// SKU or product name (an existing product). Commit dispatches on 'stock' →
+// products.opening_stock; keyTable 'products'.
+export const stockDescriptor: ImportDescriptor = {
+  module: "stock",
+  targetTable: "stock",
+  label: "Opening Stock",
+  undoable: false,
+  requiresExistingMatch: true,
+  keyTable: "products",
+  dedupeKeys: ["name"],
+  maxRows: 50000,
+  fields: [
+    { key: "name", label: "Product", required: true, type: "text",
+      synonyms: ["product", "productname", "item", "itemname", "name"], examples: ["Blue T-Shirt", "Running Shoes"] },
+    { key: "sku", label: "SKU", type: "text",
+      synonyms: ["sku", "code", "itemcode", "productcode"], examples: ["TSHIRT-001", "SHOE-045"] },
+    { key: "opening_stock", label: "Opening Stock", required: true, type: "number",
+      synonyms: ["openingstock", "stock", "qty", "quantity", "onhand"], examples: ["100", "40"] },
+  ],
+};
+
 // NOTE: priceListsDescriptor is intentionally NOT registered — there is no Price
 // List module in the product yet (the price_lists table is a dormant backing table
 // with no create/manage UI), so offering its import would be orphaned. Re-add it
@@ -183,4 +226,6 @@ export const WAVE1_DESCRIPTORS: ImportDescriptor[] = [
   leadsDescriptor,
   territoriesDescriptor,
   tasksDescriptor,
+  outstandingDescriptor,
+  stockDescriptor,
 ];

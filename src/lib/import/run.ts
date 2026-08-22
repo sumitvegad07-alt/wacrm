@@ -14,9 +14,12 @@ export async function loadExistingKeys(
   const cols = descriptor.dedupeKeys.join(",");
   const keys = new Set<string>();
   const PAGE = 1000;
+  // Match-required imports (Outstanding, Opening Stock) use a virtual target
+  // table, so their existing keys live in `keyTable` (contacts / products).
+  const fromTable = descriptor.keyTable ?? descriptor.targetTable;
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
-      .from(descriptor.targetTable)
+      .from(fromTable)
       .select(cols)
       .eq("account_id", accountId)
       .range(from, from + PAGE - 1);

@@ -19,6 +19,8 @@ const MODULES: { key: string; label: string; icon: React.ComponentType<{ classNa
   { key: "outstanding", label: "Outstanding", icon: Banknote },
   { key: "tasks", label: "Tasks", icon: CheckSquare },
   { key: "territories", label: "Territories", icon: MapPin },
+  { key: "outstanding", label: "Outstanding", icon: Banknote },
+  { key: "stock", label: "Opening Stock", icon: Boxes },
 ];
 
 export default function ImportHubPage() {
