@@ -27,7 +27,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
-import { ImportModal } from '@/components/contacts/import-modal';
+import { ImportWizard } from '@/components/import/import-wizard';
 import { useCan } from '@/hooks/use-can';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
@@ -589,7 +589,7 @@ export default function ContactsPage() {
       />
 
       <ContactForm open={formOpen} onOpenChange={setFormOpen} contact={editContact} contactTags={editContactTags} onSaved={fetchData} onViewExisting={(id) => { setFormOpen(false); router.push(`/contacts/${id}`); }} />
-      <ImportModal open={importOpen} onOpenChange={setImportOpen} onImported={fetchData} />
+      <ImportWizard open={importOpen} onOpenChange={setImportOpen} module="contacts" onImported={fetchData} />
 
       <ConfirmDialog
         open={deleteConfirmOpen}

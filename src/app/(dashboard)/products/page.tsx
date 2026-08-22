@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { ProductForm } from '@/components/products/product-form';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ImportProductsModal } from '@/components/products/import-products-modal';
+import { ImportWizard } from '@/components/import/import-wizard';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
 import { useCan } from '@/hooks/use-can';
 import { DataTable } from '@/components/ui/data-table/data-table';
@@ -395,7 +395,7 @@ export default function ProductsPage() {
       />
 
       <ProductForm open={formOpen} onOpenChange={setFormOpen} product={editProduct} onSaved={fetchProducts} />
-      {importOpen && <ImportProductsModal open={importOpen} onOpenChange={setImportOpen} onImported={fetchProducts} />}
+      {importOpen && <ImportWizard open={importOpen} onOpenChange={setImportOpen} module="products" onImported={fetchProducts} />}
 
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="border-border bg-popover text-popover-foreground sm:max-w-md">

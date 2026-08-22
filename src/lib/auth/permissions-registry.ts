@@ -100,5 +100,15 @@ export const PERMISSIONS = {
     VIEW_TEAM_MANAGEMENT: 'view_team_management',
     BILLING: 'billing',
     SETTINGS_GENERAL: 'settings_general',
-  }
+  },
+
+  // Data Import (Universal Import Framework)
+  IMPORT: {
+    // Baseline capability: can open the Import wizard and commit rows into a
+    // module (combined with that module's own create/manage permission + RLS).
+    DATA: 'import_data',
+    // Elevated: manage mapping templates, auto-create unknown master values
+    // during a guided-resolve, and undo an import. Admin-level.
+    MANAGE: 'import_manage',
+  },
 } as const;

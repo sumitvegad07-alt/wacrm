@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Scale } from "lucide-react";
+import { Loader2, Plus, Trash2, Scale, History } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProductUnit } from "@/types";
+import { ImportButton } from "@/components/import/import-button";
+import { ImportHistoryDialog } from "@/components/import/import-history-dialog";
 
 export function ProductUnitsSettings() {
   const supabase = createClient();
@@ -20,6 +22,7 @@ export function ProductUnitsSettings() {
   const [newName, setNewName] = useState("");
   const [newShortName, setNewShortName] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!accountId) return;
@@ -69,14 +72,31 @@ export function ProductUnitsSettings() {
 
   return (
     <div className="space-y-6 pt-6 border-t border-border">
-      <div>
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <Scale className="h-4 w-4 text-muted-foreground" /> Product Units
-        </h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          Manage measurement units for products (e.g., kg, pieces, boxes).
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Scale className="h-4 w-4 text-muted-foreground" /> Product Units
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Manage measurement units for products (e.g., kg, pieces, boxes).
+          </p>
+        </div>
+        {canEditSettings && (
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)}>
+              <History className="h-4 w-4 mr-1" /> History
+            </Button>
+            <ImportButton module="product_units" onImported={loadData} />
+          </div>
+        )}
       </div>
+
+      <ImportHistoryDialog
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        module="product_units"
+        onChanged={loadData}
+      />
 
       {canEditSettings && (
         <form onSubmit={handleAddUnit} className="flex items-end gap-3 p-4 border rounded-lg bg-muted/30">

@@ -34,6 +34,7 @@ import {
   Truck,
   PackageCheck,
   Boxes,
+  Upload,
   FileText,
   MapPin,
   Bot,
@@ -165,8 +166,16 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /** Renders a small "Soon" chip — for planned entries not yet functional. */
+  soon?: boolean;
   /** RBAC module key for permission checking */
   module?: string;
+  /**
+   * Explicit RBAC permission key. When set, the item is shown only if
+   * `hasPermission(permission)` is true (owner/admin always pass). Used for
+   * cross-cutting entries like Import that aren't tied to a `view_<module>` key.
+   */
+  permission?: string;
   /**
    * Admin-configurable module key. When set, this item is only shown if
    * the admin has enabled the corresponding module in Module Settings.
@@ -437,6 +446,33 @@ export function getMenuStructure(
 
     { type: "spacer" },
 
+    // ── Import (collapsed) — Universal Import Framework hub ──
+    // One central place for admins to bulk-import any master data. Each item
+    // opens that module's import wizard via /import/<key>. Only `product_units`
+    // is live in Wave 0; the rest carry a "Soon" chip and their page shows a
+    // coming-soon state until their descriptor + commit branch ship. Gated by
+    // the `import_data` permission (owner/admin always pass).
+    {
+      type: "group",
+      label: "Import",
+      icon: Upload,
+      items: [
+        { href: "/import", label: "All imports", icon: Upload, permission: "import_data" },
+        { href: "/import/contacts", label: "Customers", icon: Users, permission: "import_data" },
+        { href: "/import/products", label: "Products", icon: Package, permission: "import_data" },
+        { href: "/import/product_categories", label: "Product Categories", icon: Boxes, permission: "import_data" },
+        { href: "/import/product_units", label: "Product Units", icon: Boxes, permission: "import_data" },
+        { href: "/import/leads", label: "Leads", icon: UserPlus, permission: "import_data" },
+        { href: "/import/territories", label: "Territories", icon: MapPin, permission: "import_data" },
+        { href: "/import/tasks", label: "Tasks", icon: CheckSquare, permission: "import_data" },
+        { href: "/import/price_lists", label: "Price Lists", icon: Coins, permission: "import_data" },
+        { href: "/import/orders", label: "Orders", icon: ShoppingCart, permission: "import_data", soon: true },
+        { href: "/import/outstanding", label: "Outstanding", icon: Banknote, permission: "import_data", soon: true },
+      ],
+    },
+
+    { type: "spacer" },
+
     // ── Employees (collapsed) ──
     {
       type: "group",
@@ -587,6 +623,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     line === "crm" ? hasCRM : line === "wfa" ? hasWFA : hasSFA;
 
   const canViewItem = (item: NavItem): boolean => {
+    if (item.permission && !hasPermission(item.permission)) return false;
     if (item.module && !hasPermission(`view_${item.module}`)) return false;
     if (item.href === "/broadcasts" && !hasBroadcasts) return false;
     if (item.href === "/automations" && !hasAutomations) return false;
@@ -697,6 +734,14 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
             className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
           >
             Beta
+          </span>
+        )}
+        {item.soon && (
+          <span
+            aria-label="Coming soon"
+            className="rounded-full border border-border bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+          >
+            Soon
           </span>
         )}
         {showUnreadDot && (

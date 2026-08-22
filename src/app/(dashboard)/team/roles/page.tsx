@@ -56,6 +56,13 @@ const PERMISSION_GROUPS = [
     ]
   },
   {
+    category: "Data Import",
+    permissions: [
+      { id: PERMISSIONS.IMPORT.DATA, label: "Import Data (upload files to bulk-add records)" },
+      { id: PERMISSIONS.IMPORT.MANAGE, label: "Manage Imports (undo an import, save mapping templates, create missing values)" },
+    ]
+  },
+  {
     category: "Payments & Finance",
     permissions: [
       { id: PERMISSIONS.PAYMENTS.VIEW, label: "View Payments" },

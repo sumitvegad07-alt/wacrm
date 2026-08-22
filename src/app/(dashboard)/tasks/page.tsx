@@ -40,7 +40,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { TaskForm } from '@/components/tasks/task-form';
-import { ImportTasksModal } from '@/components/tasks/import-tasks-modal';
+import { ImportWizard } from '@/components/import/import-wizard';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
 import { DataTable } from '@/components/ui/data-table/data-table';
@@ -442,7 +442,7 @@ export default function TasksPage() {
       />
 
       <TaskForm open={formOpen} onOpenChange={setFormOpen} task={editTask} onSaved={fetchTasks} />
-      {importOpen && <ImportTasksModal open={importOpen} onOpenChange={setImportOpen} onImported={fetchTasks} />}
+      {importOpen && <ImportWizard open={importOpen} onOpenChange={setImportOpen} module="tasks" onImported={fetchTasks} />}
 
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="border-border bg-popover text-popover-foreground sm:max-w-md">

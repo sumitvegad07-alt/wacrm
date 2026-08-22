@@ -374,7 +374,16 @@ export function getVisibleTableColumns<T extends Record<string, any>>(
   const nonSystemFields = customFields.filter((cf) => !cf.system_key);
   appendCustomFieldColumns(visibleColumns, nonSystemFields, dataRows);
 
-  return visibleColumns;
+  // 3. Guard against duplicate column ids (a conditional column added twice, or a
+  //    custom field colliding with a system column) — React uses `col.id` as the
+  //    table key, and a duplicate throws "two children with the same key". Keep
+  //    the first occurrence.
+  const seen = new Set<string>();
+  return visibleColumns.filter((col) => {
+    if (seen.has(col.id)) return false;
+    seen.add(col.id);
+    return true;
+  });
 }
 
 /**

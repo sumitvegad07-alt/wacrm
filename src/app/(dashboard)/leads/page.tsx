@@ -16,7 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LeadForm } from "@/components/leads/lead-form";
-import { LeadImportDialog } from "@/components/leads/lead-import-dialog";
+import { ImportWizard } from "@/components/import/import-wizard";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
@@ -333,10 +333,11 @@ export default function LeadsPage() {
         lead={null} 
         onSaved={loadLeads} 
       />
-      <LeadImportDialog
+      <ImportWizard
         open={importOpen}
         onOpenChange={setImportOpen}
-        onSuccess={loadLeads}
+        module="leads"
+        onImported={loadLeads}
       />
 
       <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />

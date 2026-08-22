@@ -7,6 +7,7 @@ import { AppQueryProvider } from "@/components/providers/query-provider";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
+import { useImportNotifications } from "@/hooks/use-import-notifications";
 import { Button } from "@/components/ui/button";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
@@ -30,6 +31,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Completion notifications for background imports (Universal Import Framework).
+  useImportNotifications();
 
   // Sidebar drawer state — only used on mobile. On lg+ the sidebar is
   // always visible and this stays at `false` (ignored by the component).
