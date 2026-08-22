@@ -119,9 +119,16 @@ export const territoriesDescriptor: ImportDescriptor = {
       synonyms: ["parent", "parentterritory", "parentname"], examples: ["", "Gujarat", "Rajkot"] },
     { key: "code", label: "Code", type: "text", maxLength: 40, synonyms: ["code", "territorycode"], examples: ["GJ", "RJK", "RJK-E"] },
     { key: "notes", label: "Notes", type: "text", maxLength: 300, synonyms: ["notes", "remarks"], examples: ["", "", ""] },
+    { key: "status", label: "Status", type: "text", allowed: ["active", "inactive", "archived"], synonyms: ["status"], examples: ["active", "active", "active"] },
   ],
 };
 
+// Tasks is FORM-BACKED: its fields + required rules come from the `custom_fields`
+// config for module_name='task' (plus custom fields). The `fields` below are the
+// always-present core of the manual task form (title, description, priority,
+// status, dates, activity type) and the Assigned-To lookup (resolved to a
+// profile by name/email server-side). "Linked to" (contact/deal/…) is deferred —
+// it's a per-record link, not typically set in a bulk import.
 export const tasksDescriptor: ImportDescriptor = {
   module: "tasks",
   targetTable: "tasks",
@@ -129,6 +136,11 @@ export const tasksDescriptor: ImportDescriptor = {
   undoable: true,
   dedupeKeys: ["title"],
   maxRows: 20000,
+  formBacked: true,
+  fieldsModule: "task",
+  customValuesTable: "task_custom_values",
+  customValuesFk: "task_id",
+  systemColumns: ["title", "description", "priority", "status", "due_date", "due_time", "activity_type"],
   fields: [
     { key: "title", label: "Title", required: true, type: "text", maxLength: 200,
       synonyms: ["title", "task", "taskname", "subject", "name"], examples: ["Call ABC Traders", "Follow up quote"] },
@@ -137,8 +149,11 @@ export const tasksDescriptor: ImportDescriptor = {
       synonyms: ["priority"], examples: ["Medium", "High"] },
     { key: "status", label: "Status", type: "text", allowed: ["Pending", "In Progress", "Waiting", "Completed", "Cancelled"],
       synonyms: ["status"], examples: ["Pending", "Pending"] },
-    { key: "due_date", label: "Due Date", type: "date", synonyms: ["duedate", "date", "deadline"], examples: ["2026-09-01", "2026-09-05"] },
+    { key: "due_date", label: "Scheduled Date", type: "date", synonyms: ["duedate", "date", "deadline", "scheduleddate"], examples: ["2026-09-01", "2026-09-05"] },
+    { key: "due_time", label: "Scheduled Time", type: "text", synonyms: ["duetime", "time", "scheduledtime"], examples: ["10:00", "14:30"] },
     { key: "activity_type", label: "Activity Type", type: "text", maxLength: 40, synonyms: ["activitytype", "type"], examples: ["Call", "Meeting"] },
+    { key: "assignee", label: "Assigned To", type: "text", maxLength: 120,
+      synonyms: ["assignee", "assignedto", "assigned", "owner", "rep", "salesperson"], examples: ["Ravi Kumar", ""] },
   ],
 };
 
@@ -157,6 +172,10 @@ export const priceListsDescriptor: ImportDescriptor = {
   ],
 };
 
+// NOTE: priceListsDescriptor is intentionally NOT registered — there is no Price
+// List module in the product yet (the price_lists table is a dormant backing table
+// with no create/manage UI), so offering its import would be orphaned. Re-add it
+// here once a real Price List module ships.
 export const WAVE1_DESCRIPTORS: ImportDescriptor[] = [
   productCategoriesDescriptor,
   productsDescriptor,
@@ -164,5 +183,4 @@ export const WAVE1_DESCRIPTORS: ImportDescriptor[] = [
   leadsDescriptor,
   territoriesDescriptor,
   tasksDescriptor,
-  priceListsDescriptor,
 ];

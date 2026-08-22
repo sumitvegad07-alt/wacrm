@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Upload, Boxes, Users, Package, UserPlus, ShoppingCart, Banknote, CheckSquare, MapPin, Coins } from "lucide-react";
+import { Upload, Boxes, Users, Package, UserPlus, ShoppingCart, Banknote, CheckSquare, MapPin } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getImportDescriptor } from "@/lib/import/registry";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
@@ -19,7 +19,6 @@ const MODULES: { key: string; label: string; icon: React.ComponentType<{ classNa
   { key: "outstanding", label: "Outstanding", icon: Banknote },
   { key: "tasks", label: "Tasks", icon: CheckSquare },
   { key: "territories", label: "Territories", icon: MapPin },
-  { key: "price_lists", label: "Price Lists", icon: Coins },
 ];
 
 export default function ImportHubPage() {

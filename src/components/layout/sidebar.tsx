@@ -465,7 +465,6 @@ export function getMenuStructure(
         { href: "/import/leads", label: "Leads", icon: UserPlus, permission: "import_data" },
         { href: "/import/territories", label: "Territories", icon: MapPin, permission: "import_data" },
         { href: "/import/tasks", label: "Tasks", icon: CheckSquare, permission: "import_data" },
-        { href: "/import/price_lists", label: "Price Lists", icon: Coins, permission: "import_data" },
         { href: "/import/orders", label: "Orders", icon: ShoppingCart, permission: "import_data", soon: true },
         { href: "/import/outstanding", label: "Outstanding", icon: Banknote, permission: "import_data", soon: true },
       ],
