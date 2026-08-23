@@ -26,16 +26,48 @@ interface EmployeeRole {
   created_at: string;
 }
 
-const PERMISSION_GROUPS = [
+type PermGroup = {
+  category: string;
+  permissions: { id: string; label: string }[];
+  danger?: boolean;
+  note?: string;
+};
+
+const PERMISSION_GROUPS: PermGroup[] = [
   {
-    category: "Leads & Deals",
+    category: "Leads",
     permissions: [
       { id: PERMISSIONS.CRM.VIEW_DASHBOARD, label: "View Main Dashboard" },
       { id: PERMISSIONS.CRM.VIEW_LEADS, label: "View Leads" },
       { id: PERMISSIONS.CRM.CREATE_LEADS, label: "Create Leads" },
       { id: PERMISSIONS.CRM.EDIT_LEADS, label: "Edit Leads" },
       { id: PERMISSIONS.CRM.DELETE_LEADS, label: "Delete Leads" },
-      { id: PERMISSIONS.CRM.VIEW_DEALS, label: "View Pipelines / Deals" },
+      { id: PERMISSIONS.CRM.CONVERT_LEADS, label: "Convert Lead to Customer" },
+      { id: PERMISSIONS.CRM.ASSIGN_LEADS, label: "Assign Leads to Others" },
+      { id: PERMISSIONS.CRM.IMPORT_LEADS, label: "Import Leads" },
+      { id: PERMISSIONS.CRM.EXPORT_LEADS, label: "Export Leads" },
+    ]
+  },
+  {
+    category: "Deals / Pipeline",
+    permissions: [
+      { id: PERMISSIONS.DEALS.VIEW, label: "View Deals" },
+      { id: PERMISSIONS.DEALS.CREATE, label: "Create Deals" },
+      { id: PERMISSIONS.DEALS.EDIT, label: "Edit Deals" },
+      { id: PERMISSIONS.DEALS.DELETE, label: "Delete Deals" },
+      { id: PERMISSIONS.DEALS.MOVE_STAGE, label: "Move Deal Between Stages" },
+      { id: PERMISSIONS.DEALS.CONVERT_TO_QUOTATION, label: "Convert Deal to Quotation" },
+      { id: PERMISSIONS.DEALS.EXPORT, label: "Export Deals" },
+    ]
+  },
+  {
+    category: "Quotations",
+    permissions: [
+      { id: PERMISSIONS.QUOTATIONS.VIEW, label: "View Quotations" },
+      { id: PERMISSIONS.QUOTATIONS.CREATE, label: "Create Quotations" },
+      { id: PERMISSIONS.QUOTATIONS.EDIT, label: "Edit Quotations" },
+      { id: PERMISSIONS.QUOTATIONS.DELETE, label: "Delete Quotations" },
+      { id: PERMISSIONS.QUOTATIONS.PRINT, label: "Print / Export Quotation PDF" },
     ]
   },
   {
@@ -150,7 +182,6 @@ const PERMISSION_GROUPS = [
       { id: PERMISSIONS.MOBILE.VIEW_LOCATION_TRACKING, label: "View Location Dashboard (Web)" },
       { id: PERMISSIONS.MOBILE.LOCATION_SCREEN, label: "Location Map Screen (Mobile)" },
       { id: PERMISSIONS.MOBILE.ALLOW_LOGOUT, label: "Allow Mobile Logout" },
-      { id: PERMISSIONS.MOBILE.OFFLINE_MODE, label: "Allow Offline Sync" },
       { id: PERMISSIONS.MOBILE.VISIT_CHECKIN, label: "Allow Manual Check-ins" },
       { id: PERMISSIONS.MOBILE.EDIT_GEOTAG, label: "Edit Customer Geo-tag (Coordinates)" },
     ]
@@ -174,11 +205,190 @@ const PERMISSION_GROUPS = [
     ),
   },
   {
-    category: "Administration",
+    category: "Expenses",
     permissions: [
-      { id: PERMISSIONS.ADMIN.VIEW_TEAM_MANAGEMENT, label: "Manage Employees & Roles" },
+      { id: PERMISSIONS.EXPENSES.VIEW, label: "View Expenses" },
+      { id: PERMISSIONS.EXPENSES.CREATE, label: "Create Expense" },
+      { id: PERMISSIONS.EXPENSES.EDIT, label: "Edit Expense" },
+      { id: PERMISSIONS.EXPENSES.DELETE, label: "Delete Expense" },
+      { id: PERMISSIONS.EXPENSES.APPROVE, label: "Approve Expense" },
+      { id: PERMISSIONS.EXPENSES.REJECT, label: "Reject Expense" },
+      { id: PERMISSIONS.EXPENSES.EXPORT, label: "Export Expenses" },
+    ]
+  },
+  {
+    category: "Schemes & Pricing",
+    permissions: [
+      { id: PERMISSIONS.SCHEMES.VIEW, label: "View Schemes" },
+      { id: PERMISSIONS.SCHEMES.CREATE, label: "Create Scheme" },
+      { id: PERMISSIONS.SCHEMES.EDIT, label: "Edit Scheme" },
+      { id: PERMISSIONS.SCHEMES.DELETE, label: "Delete Scheme" },
+    ]
+  },
+  {
+    category: "Visits",
+    permissions: [
+      { id: PERMISSIONS.VISITS.VIEW, label: "View Customer Visits" },
+      { id: PERMISSIONS.MOBILE.VISIT_CHECKIN, label: "Check-in / Record Visit (Mobile)" },
+      { id: PERMISSIONS.MOBILE.EDIT_GEOTAG, label: "Edit Visit / Customer Geo-tag" },
+      { id: PERMISSIONS.VISITS.EXPORT, label: "Export Visits" },
+    ]
+  },
+  {
+    category: "Leave",
+    permissions: [
+      { id: PERMISSIONS.LEAVE.VIEW, label: "View Leaves" },
+      { id: PERMISSIONS.LEAVE.MANAGE, label: "Apply / Manage Leave (on behalf)" },
+      { id: PERMISSIONS.LEAVE.APPROVE, label: "Approve Leave" },
+    ]
+  },
+  {
+    category: "Location & Attendance",
+    permissions: [
+      { id: PERMISSIONS.MOBILE.VIEW_LOCATION_TRACKING, label: "View Location Dashboard (Web)" },
+      { id: PERMISSIONS.FIELD.VIEW_LIVE_FEED, label: "View Live Feed / All Locations" },
+      { id: PERMISSIONS.FIELD.VIEW_TRACKING_HEALTH, label: "View Tracking Health" },
+      { id: PERMISSIONS.FIELD.VIEW_ATTENDANCE, label: "View Attendance" },
+      { id: PERMISSIONS.FIELD.MANAGE_ATTENDANCE, label: "Edit / Regularize Attendance" },
+      { id: PERMISSIONS.FIELD.EXPORT_ATTENDANCE, label: "Export Attendance" },
+      { id: PERMISSIONS.MOBILE.LOCATION_SCREEN, label: "Location Map Screen (Mobile)" },
+      { id: PERMISSIONS.MOBILE.ALLOW_LOGOUT, label: "Allow Mobile Logout" },
+    ]
+  },
+  {
+    category: "Mobile Field Rules",
+    note: "Enforced inside the mobile app. Leave a box UNticked to require the check (e.g. require a selfie). These take effect once the mobile app build reads them.",
+    permissions: [
+      { id: PERMISSIONS.FIELD_RULES.ORDER_WITHOUT_CHECKIN, label: "Allow Order without Visit Check-in" },
+      { id: PERMISSIONS.FIELD_RULES.PAYMENT_WITHOUT_CHECKIN, label: "Allow Payment without Visit Check-in" },
+      { id: PERMISSIONS.FIELD_RULES.VISIT_WITHOUT_PUNCHIN, label: "Allow Visit without Punch-in (Attendance)" },
+      { id: PERMISSIONS.FIELD_RULES.PUNCH_SELFIE_REQUIRED, label: "Require Selfie on Punch In / Out" },
+      { id: PERMISSIONS.FIELD_RULES.ODOMETER_PHOTO_REQUIRED, label: "Require Odometer Photo" },
+    ]
+  },
+  {
+    category: "Reports",
+    permissions: [
+      { id: PERMISSIONS.REPORTS.VIEW_SALES, label: "Sales & Order Reports" },
+      { id: PERMISSIONS.REPORTS.VIEW_PAYMENTS, label: "Payment Reports" },
+      { id: PERMISSIONS.REPORTS.VIEW_AGEING, label: "Ageing / Outstanding Reports" },
+      { id: PERMISSIONS.REPORTS.VIEW_CRM, label: "Lead & Deal Reports" },
+      { id: PERMISSIONS.REPORTS.VIEW_FIELD, label: "Visit / DSR Reports" },
+      { id: PERMISSIONS.REPORTS.VIEW_EXPENSE, label: "Expense Reports" },
+      { id: PERMISSIONS.REPORTS.VIEW_STOCK, label: "Stock Reports" },
+      { id: PERMISSIONS.REPORTS.VIEW_TASK, label: "Task Reports" },
+      { id: PERMISSIONS.REPORTS.EXPORT, label: "Export any Report" },
+    ]
+  },
+  {
+    category: "Masters — Sales",
+    permissions: [
+      { id: PERMISSIONS.MASTERS.CREATE_PAYMENT_TYPES, label: "Create Payment Types" },
+      { id: PERMISSIONS.MASTERS.EDIT_PAYMENT_TYPES, label: "Edit Payment Types" },
+      { id: PERMISSIONS.MASTERS.DELETE_PAYMENT_TYPES, label: "Delete Payment Types" },
+      { id: PERMISSIONS.MASTERS.CREATE_EXPENSE_TYPES, label: "Create Expense Types" },
+      { id: PERMISSIONS.MASTERS.EDIT_EXPENSE_TYPES, label: "Edit Expense Types" },
+      { id: PERMISSIONS.MASTERS.DELETE_EXPENSE_TYPES, label: "Delete Expense Types" },
+      { id: PERMISSIONS.MASTERS.CREATE_TASK_TYPES, label: "Create Task / Activity Types" },
+      { id: PERMISSIONS.MASTERS.EDIT_TASK_TYPES, label: "Edit Task / Activity Types" },
+      { id: PERMISSIONS.MASTERS.DELETE_TASK_TYPES, label: "Delete Task / Activity Types" },
+      { id: PERMISSIONS.MASTERS.CREATE_TAX_SLABS, label: "Create Tax Slabs" },
+      { id: PERMISSIONS.MASTERS.EDIT_TAX_SLABS, label: "Edit Tax Slabs" },
+      { id: PERMISSIONS.MASTERS.DELETE_TAX_SLABS, label: "Delete Tax Slabs" },
+      { id: PERMISSIONS.MASTERS.CREATE_PRODUCT_UNITS, label: "Create Product Units" },
+      { id: PERMISSIONS.MASTERS.EDIT_PRODUCT_UNITS, label: "Edit Product Units" },
+      { id: PERMISSIONS.MASTERS.DELETE_PRODUCT_UNITS, label: "Delete Product Units" },
+      { id: PERMISSIONS.MASTERS.CREATE_PRODUCT_CATEGORIES, label: "Create Product Categories" },
+      { id: PERMISSIONS.MASTERS.EDIT_PRODUCT_CATEGORIES, label: "Edit Product Categories" },
+      { id: PERMISSIONS.MASTERS.DELETE_PRODUCT_CATEGORIES, label: "Delete Product Categories" },
+      { id: PERMISSIONS.MASTERS.CREATE_PRICE_LISTS, label: "Create Price Lists" },
+      { id: PERMISSIONS.MASTERS.EDIT_PRICE_LISTS, label: "Edit Price Lists" },
+      { id: PERMISSIONS.MASTERS.DELETE_PRICE_LISTS, label: "Delete Price Lists" },
+    ]
+  },
+  {
+    category: "Masters — Leads & Deals",
+    permissions: [
+      { id: PERMISSIONS.MASTERS.CREATE_LEAD_SOURCES, label: "Create Lead Sources" },
+      { id: PERMISSIONS.MASTERS.EDIT_LEAD_SOURCES, label: "Edit Lead Sources" },
+      { id: PERMISSIONS.MASTERS.DELETE_LEAD_SOURCES, label: "Delete Lead Sources" },
+      { id: PERMISSIONS.MASTERS.CREATE_LEAD_STATUSES, label: "Create Lead Statuses" },
+      { id: PERMISSIONS.MASTERS.EDIT_LEAD_STATUSES, label: "Edit Lead Statuses" },
+      { id: PERMISSIONS.MASTERS.DELETE_LEAD_STATUSES, label: "Delete Lead Statuses" },
+      { id: PERMISSIONS.MASTERS.CREATE_LEAD_INDUSTRIES, label: "Create Lead Industries" },
+      { id: PERMISSIONS.MASTERS.EDIT_LEAD_INDUSTRIES, label: "Edit Lead Industries" },
+      { id: PERMISSIONS.MASTERS.DELETE_LEAD_INDUSTRIES, label: "Delete Lead Industries" },
+      { id: PERMISSIONS.MASTERS.CREATE_PIPELINES, label: "Create Deal Pipelines & Stages" },
+      { id: PERMISSIONS.MASTERS.EDIT_PIPELINES, label: "Edit Deal Pipelines & Stages" },
+      { id: PERMISSIONS.MASTERS.DELETE_PIPELINES, label: "Delete Deal Pipelines & Stages" },
+    ]
+  },
+  {
+    category: "Masters — Geography & Field",
+    permissions: [
+      { id: PERMISSIONS.MASTERS.CREATE_TERRITORIES, label: "Create Territories" },
+      { id: PERMISSIONS.MASTERS.EDIT_TERRITORIES, label: "Edit Territories" },
+      { id: PERMISSIONS.MASTERS.DELETE_TERRITORIES, label: "Delete Territories" },
+      { id: PERMISSIONS.MASTERS.CREATE_GEOFENCES, label: "Create Geofences" },
+      { id: PERMISSIONS.MASTERS.EDIT_GEOFENCES, label: "Edit Geofences" },
+      { id: PERMISSIONS.MASTERS.DELETE_GEOFENCES, label: "Delete Geofences" },
+    ]
+  },
+  {
+    category: "Masters — HR",
+    permissions: [
+      { id: PERMISSIONS.MASTERS.CREATE_LEAVE_TYPES, label: "Create Leave Types" },
+      { id: PERMISSIONS.MASTERS.EDIT_LEAVE_TYPES, label: "Edit Leave Types" },
+      { id: PERMISSIONS.MASTERS.DELETE_LEAVE_TYPES, label: "Delete Leave Types" },
+      { id: PERMISSIONS.MASTERS.CREATE_HOLIDAYS, label: "Create Holidays" },
+      { id: PERMISSIONS.MASTERS.EDIT_HOLIDAYS, label: "Edit Holidays" },
+      { id: PERMISSIONS.MASTERS.DELETE_HOLIDAYS, label: "Delete Holidays" },
+    ]
+  },
+  {
+    category: "Masters — Workspace",
+    permissions: [
+      { id: PERMISSIONS.MASTERS.CREATE_DOCUMENT_TEMPLATES, label: "Create Document (PDF) Templates" },
+      { id: PERMISSIONS.MASTERS.EDIT_DOCUMENT_TEMPLATES, label: "Edit Document (PDF) Templates" },
+      { id: PERMISSIONS.MASTERS.DELETE_DOCUMENT_TEMPLATES, label: "Delete Document (PDF) Templates" },
+      { id: PERMISSIONS.MASTERS.CREATE_CUSTOM_FIELDS, label: "Create Custom Fields" },
+      { id: PERMISSIONS.MASTERS.EDIT_CUSTOM_FIELDS, label: "Edit Custom Fields" },
+      { id: PERMISSIONS.MASTERS.DELETE_CUSTOM_FIELDS, label: "Delete Custom Fields" },
+      { id: PERMISSIONS.MASTERS.CREATE_QUOTATION_TERMS, label: "Create Quotation Terms" },
+      { id: PERMISSIONS.MASTERS.EDIT_QUOTATION_TERMS, label: "Edit Quotation Terms" },
+      { id: PERMISSIONS.MASTERS.DELETE_QUOTATION_TERMS, label: "Delete Quotation Terms" },
+    ]
+  },
+  {
+    category: "Settings",
+    permissions: [
+      { id: PERMISSIONS.SETTINGS.MANAGE_ORG, label: "Manage Organization Settings (module toggles, working days)" },
+      { id: PERMISSIONS.SETTINGS.MANAGE_ORDER_SETTINGS, label: "Manage Order Settings" },
+      { id: PERMISSIONS.SETTINGS.MANAGE_ROUTE_SETTINGS, label: "Manage Route Settings" },
+      { id: PERMISSIONS.SETTINGS.MANAGE_COMPANY_PROFILE, label: "Manage Company Profile" },
+      { id: PERMISSIONS.SETTINGS.MANAGE_API_KEYS, label: "Manage API Keys & Webhooks" },
+      { id: PERMISSIONS.SETTINGS.MANAGE_WHATSAPP_SETTINGS, label: "Manage WhatsApp Settings" },
+      { id: PERMISSIONS.SETTINGS.MANAGE_TAGS, label: "Manage Tags" },
       { id: PERMISSIONS.ADMIN.BILLING, label: "Manage Subscription & Billing" },
-      { id: PERMISSIONS.ADMIN.SETTINGS_GENERAL, label: "Access General Settings" },
+    ]
+  },
+  {
+    category: "Login Access",
+    note: "Controls sign-in per surface. Web Access → can log into the web portal. Mobile Access → can log into the Android app. Missing one blocks that surface.",
+    permissions: [
+      { id: PERMISSIONS.ACCESS.WEB, label: "Web Portal Access" },
+      { id: PERMISSIONS.ACCESS.MOBILE, label: "Mobile App Access" },
+    ]
+  },
+  {
+    category: "Team & Roles",
+    danger: true,
+    note: "DANGER: a role that can manage roles can grant itself ANY permission. Give this only to trusted admins.",
+    permissions: [
+      { id: PERMISSIONS.ADMIN.VIEW_TEAM_MANAGEMENT, label: "View Team / Employees" },
+      { id: PERMISSIONS.TEAM.MANAGE_EMPLOYEES, label: "Create / Edit / Deactivate Employees" },
+      { id: PERMISSIONS.TEAM.MANAGE_ROLES, label: "Create / Edit Roles & Permissions" },
+      { id: PERMISSIONS.TEAM.APPROVE_DEVICES, label: "Approve Mobile Devices" },
     ]
   }
 ];
@@ -310,6 +520,15 @@ export default function RolesPage() {
       ...prev,
       [key]: checked
     }));
+  };
+
+  // Apply All / Clear All for a whole module group.
+  const toggleGroupAll = (group: PermGroup, checked: boolean) => {
+    setPermissions((prev) => {
+      const next = { ...prev };
+      for (const p of group.permissions) next[p.id] = checked;
+      return next;
+    });
   };
 
   if (!hasPermission("view_team_management") && !isSuperadmin) {
@@ -557,11 +776,32 @@ export default function RolesPage() {
                   {/* Checklist Groups */}
                   {!permissions.all && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
-                      {PERMISSION_GROUPS.map((group, i) => (
-                        <Card key={i} className="overflow-hidden flex flex-col">
-                          <div className="px-4 py-3 border-b bg-muted/50 font-semibold text-sm">
-                            {group.category}
+                      {PERMISSION_GROUPS.map((group, i) => {
+                        const allOn = group.permissions.every((p) => !!permissions[p.id]);
+                        const canToggle = isEditing && !isAdminRole;
+                        return (
+                        <Card key={i} className={`overflow-hidden flex flex-col ${group.danger ? "border-red-500/60 shadow-[0_0_0_1px_rgba(239,68,68,0.35)]" : ""}`}>
+                          <div className={`px-4 py-3 border-b font-semibold text-sm flex items-center justify-between gap-2 ${group.danger ? "bg-red-500/10 text-red-600" : "bg-muted/50"}`}>
+                            <span className="flex items-center gap-2">
+                              {group.danger && <AlertCircle className="w-4 h-4" />}
+                              {group.category}
+                              {group.danger && <span className="text-[10px] font-extrabold tracking-wider uppercase px-1.5 py-0.5 rounded bg-red-600 text-white">Danger</span>}
+                            </span>
+                            {canToggle && (
+                              <button
+                                type="button"
+                                onClick={() => toggleGroupAll(group, !allOn)}
+                                className={`text-[11px] font-medium px-2 py-0.5 rounded border ${allOn ? "border-input text-muted-foreground hover:bg-muted" : "border-primary/40 text-primary hover:bg-primary/10"}`}
+                              >
+                                {allOn ? "Clear all" : "Apply all"}
+                              </button>
+                            )}
                           </div>
+                          {group.note && (
+                            <div className={`px-4 py-2 text-[11px] leading-snug border-b ${group.danger ? "bg-red-500/5 text-red-600/90" : "bg-amber-500/5 text-amber-700 dark:text-amber-400"}`}>
+                              {group.note}
+                            </div>
+                          )}
                           <div className="p-4 space-y-4 flex-1 bg-card">
                             {group.permissions.map((perm) => {
                               const isChecked = !!permissions[perm.id];
@@ -599,7 +839,8 @@ export default function RolesPage() {
                             })}
                           </div>
                         </Card>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 

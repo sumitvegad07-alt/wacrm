@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const {
     user,
+    profile,
     loading,
     account,
     hasWhatsApp,
@@ -130,6 +131,38 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return null;
+
+  // Login-surface access (Module-wise RBAC): a member whose Web Portal Access is
+  // switched OFF cannot use the web app. Owners always keep web access so an
+  // account can never lock its own owner out. Enforced here (client) and — for a
+  // hard boundary — should also be checked server-side in a future pass.
+  const webAccessDisabled =
+    profile != null &&
+    profile.account_role !== "owner" &&
+    (profile as { web_access?: boolean }).web_access === false;
+
+  if (webAccessDisabled) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <h2 className="mb-2 text-xl font-semibold text-foreground">Web access disabled</h2>
+          <p className="mb-6 text-sm text-muted-foreground">
+            Your account does not have access to the web portal. Please use the mobile app, or ask your administrator to enable Web Portal Access for your role.
+          </p>
+          <button
+            type="button"
+            onClick={async () => { await signOut(); router.replace("/login"); }}
+            className="w-full rounded-md border border-border bg-muted px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted/70"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const now = new Date();
   const expiryDate = account?.subscription_expires_at ? new Date(account.subscription_expires_at) : null;

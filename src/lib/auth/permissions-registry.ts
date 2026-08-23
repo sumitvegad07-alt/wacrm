@@ -3,6 +3,16 @@
  *
  * Source of truth for all permission strings used throughout the application.
  * Use these constants in `hasPermission()` instead of hardcoded strings.
+ *
+ * Module-wise RBAC v2 (2026-08-23): every module + master exposes its own rights.
+ * The original groups (CRM, CATALOGUE, …) are kept verbatim for backward-compat;
+ * new module/master/settings groups are appended below. Keys are resolved by
+ * has_permission() (owner/admin bypass, {"all":true} bypass, add_/create_ alias,
+ * prefix_* wildcard).
+ *
+ * NOTE — MOBILE-ENFORCED KEYS (FIELD_RULES + ACCESS.MOBILE): these gate behavior
+ * inside the React Native app. The web app stores/renders them; the mobile build
+ * must read them to actually enforce on-device.
  */
 export const PERMISSIONS = {
   // CRM & Sales
@@ -12,6 +22,10 @@ export const PERMISSIONS = {
     CREATE_LEADS: 'create_leads',
     EDIT_LEADS: 'edit_leads',
     DELETE_LEADS: 'delete_leads',
+    CONVERT_LEADS: 'convert_leads',
+    ASSIGN_LEADS: 'assign_leads',
+    IMPORT_LEADS: 'import_leads',
+    EXPORT_LEADS: 'export_leads',
     VIEW_CONTACTS: 'view_contacts',
     CREATE_CONTACTS: 'create_contacts',
     EDIT_CONTACTS: 'edit_contacts',
@@ -25,9 +39,19 @@ export const PERMISSIONS = {
     DELETE_ORDERS: 'delete_orders',
     MANAGE_ORDER_STATUS: 'manage_order_status',
     APPLY_ORDER_DISCOUNT: 'apply_order_discount',
-    // Override a product's unit price on an order line (distinct from a discount).
     OVERRIDE_ORDER_PRICE: 'override_order_price',
     EXPORT_ORDERS: 'export_orders',
+  },
+
+  // Deals / Pipeline (separate module)
+  DEALS: {
+    VIEW: 'view_deals',
+    CREATE: 'create_deals',
+    EDIT: 'edit_deals',
+    DELETE: 'delete_deals',
+    MOVE_STAGE: 'move_deal_stage',
+    CONVERT_TO_QUOTATION: 'convert_deal_to_quotation',
+    EXPORT: 'export_deals',
   },
 
   // Catalogue (Products, Units, Categories)
@@ -42,6 +66,15 @@ export const PERMISSIONS = {
     MANAGE_CATEGORIES: 'manage_product_categories',
   },
 
+  // Quotations
+  QUOTATIONS: {
+    VIEW: 'view_quotations',
+    CREATE: 'create_quotations',
+    EDIT: 'edit_quotations',
+    DELETE: 'delete_quotations',
+    PRINT: 'print_quotations',
+  },
+
   // Dispatch (for a dispatch executive)
   DISPATCH: {
     VIEW: 'view_dispatch',
@@ -50,11 +83,30 @@ export const PERMISSIONS = {
     DELETE: 'delete_dispatch',
   },
 
+  // Expenses
+  EXPENSES: {
+    VIEW: 'view_expenses',
+    CREATE: 'create_expenses',
+    EDIT: 'edit_expenses',
+    DELETE: 'delete_expenses',
+    APPROVE: 'approve_expenses',
+    REJECT: 'reject_expenses',
+    EXPORT: 'export_expenses',
+  },
+
   // Stock / Inventory
   STOCK: {
     VIEW: 'view_stock',
-    MANAGE: 'manage_stock', // set opening stock + create Stock In/Out adjustments; implies VIEW
+    MANAGE: 'manage_stock',
     IMPORT: 'import_stock',
+  },
+
+  // Schemes
+  SCHEMES: {
+    VIEW: 'view_schemes',
+    CREATE: 'create_schemes',
+    EDIT: 'edit_schemes',
+    DELETE: 'delete_schemes',
   },
 
   // Payments & Finance
@@ -68,9 +120,6 @@ export const PERMISSIONS = {
     VIEW_ATTACHMENTS: 'view_payment_attachments',
     VIEW_REPORTS: 'view_payment_reports',
     EXPORT_REPORTS: 'export_payment_reports',
-    // Recording a collection dated further back than the account's
-    // `allow_backdate_days` window. Withheld from field reps by default: a
-    // backdated collection can make an overdue account look settled.
     BACKDATE: 'backdate_payments',
   },
 
@@ -93,7 +142,7 @@ export const PERMISSIONS = {
   // Task Management
   TASKS: {
     VIEW: 'view_tasks',
-    CREATE: 'create_task', // Kept as create_task since it was already create_task
+    CREATE: 'create_task',
     EDIT: 'edit_task',
     DELETE: 'delete_task',
     ASSIGN_PARENT: 'assign_tasks_parent',
@@ -101,7 +150,20 @@ export const PERMISSIONS = {
     ASSIGN_ALL: 'assign_tasks_all',
   },
 
-  // Mobile App & Field Force
+  // Leave
+  LEAVE: {
+    VIEW: 'view_leaves',
+    MANAGE: 'manage_leaves',
+    APPROVE: 'approve_leaves',
+  },
+
+  // Visits
+  VISITS: {
+    VIEW: 'view_visits',
+    EXPORT: 'export_visits',
+  },
+
+  // Mobile App & Field Force (existing keys)
   MOBILE: {
     VIEW_LOCATION_TRACKING: 'view_location_tracking',
     LOCATION_SCREEN: 'mobile_location_screen',
@@ -111,9 +173,41 @@ export const PERMISSIONS = {
     EDIT_GEOTAG: 'edit_geotag',
   },
 
+  // Location / Attendance (new field rights)
+  FIELD: {
+    VIEW_LIVE_FEED: 'view_live_feed',
+    VIEW_TRACKING_HEALTH: 'view_tracking_health',
+    VIEW_ATTENDANCE: 'view_attendance',
+    MANAGE_ATTENDANCE: 'manage_attendance',
+    EXPORT_ATTENDANCE: 'export_attendance',
+  },
+
+  // Mobile field RULES — enforced INSIDE the mobile app (web stores + renders).
+  FIELD_RULES: {
+    ORDER_WITHOUT_CHECKIN: 'order_without_checkin',
+    PAYMENT_WITHOUT_CHECKIN: 'payment_without_checkin',
+    VISIT_WITHOUT_PUNCHIN: 'visit_without_punchin',
+    PUNCH_SELFIE_REQUIRED: 'punch_selfie_required',
+    ODOMETER_PHOTO_REQUIRED: 'odometer_photo_required',
+  },
+
+  // Routes / Beat
+  ROUTES: {
+    VIEW: 'view_routes',
+    CREATE: 'create_routes',
+    EDIT: 'edit_routes',
+    DELETE: 'delete_routes',
+    ASSIGN: 'assign_routes',
+    EXECUTE: 'execute_route',
+    APPROVE: 'approve_routes',
+    MANAGE_CUSTOMERS: 'manage_route_customers',
+    MANAGE_SCHEDULE: 'manage_route_schedule',
+  },
+
   // WhatsApp Features
   WHATSAPP: {
     VIEW: 'view_whatsapp',
+    SEND: 'send_whatsapp',
     VIEW_BROADCASTS: 'view_whatsapp_broadcasts',
     VIEW_AUTOMATIONS: 'view_whatsapp_automations',
     VIEW_FLOWS: 'view_whatsapp_flows',
@@ -121,7 +215,66 @@ export const PERMISSIONS = {
     VIEW_AI_ASSISTANT: 'view_ai_assistant',
   },
 
-  // Administration
+  // Reports (per family) + export
+  REPORTS: {
+    VIEW_SALES: 'view_sales_reports',
+    VIEW_PAYMENTS: 'view_payment_reports',
+    VIEW_AGEING: 'view_ageing_reports',
+    VIEW_CRM: 'view_crm_reports',
+    VIEW_FIELD: 'view_field_reports',
+    VIEW_EXPENSE: 'view_expense_reports',
+    VIEW_STOCK: 'view_stock_reports',
+    VIEW_TASK: 'view_task_reports',
+    EXPORT: 'export_reports',
+  },
+
+  // Masters — create/edit/delete each (founder request).
+  MASTERS: {
+    CREATE_PAYMENT_TYPES: 'create_payment_types', EDIT_PAYMENT_TYPES: 'edit_payment_types', DELETE_PAYMENT_TYPES: 'delete_payment_types',
+    CREATE_EXPENSE_TYPES: 'create_expense_types', EDIT_EXPENSE_TYPES: 'edit_expense_types', DELETE_EXPENSE_TYPES: 'delete_expense_types',
+    CREATE_TASK_TYPES: 'create_task_types', EDIT_TASK_TYPES: 'edit_task_types', DELETE_TASK_TYPES: 'delete_task_types',
+    CREATE_TAX_SLABS: 'create_tax_slabs', EDIT_TAX_SLABS: 'edit_tax_slabs', DELETE_TAX_SLABS: 'delete_tax_slabs',
+    CREATE_PRODUCT_UNITS: 'create_product_units', EDIT_PRODUCT_UNITS: 'edit_product_units', DELETE_PRODUCT_UNITS: 'delete_product_units',
+    CREATE_PRODUCT_CATEGORIES: 'create_product_categories', EDIT_PRODUCT_CATEGORIES: 'edit_product_categories', DELETE_PRODUCT_CATEGORIES: 'delete_product_categories',
+    CREATE_PRICE_LISTS: 'create_price_lists', EDIT_PRICE_LISTS: 'edit_price_lists', DELETE_PRICE_LISTS: 'delete_price_lists',
+    CREATE_LEAD_SOURCES: 'create_lead_sources', EDIT_LEAD_SOURCES: 'edit_lead_sources', DELETE_LEAD_SOURCES: 'delete_lead_sources',
+    CREATE_LEAD_STATUSES: 'create_lead_statuses', EDIT_LEAD_STATUSES: 'edit_lead_statuses', DELETE_LEAD_STATUSES: 'delete_lead_statuses',
+    CREATE_LEAD_INDUSTRIES: 'create_lead_industries', EDIT_LEAD_INDUSTRIES: 'edit_lead_industries', DELETE_LEAD_INDUSTRIES: 'delete_lead_industries',
+    CREATE_PIPELINES: 'create_pipelines', EDIT_PIPELINES: 'edit_pipelines', DELETE_PIPELINES: 'delete_pipelines',
+    CREATE_TERRITORIES: 'create_territories', EDIT_TERRITORIES: 'edit_territories', DELETE_TERRITORIES: 'delete_territories',
+    CREATE_GEOFENCES: 'create_geofences', EDIT_GEOFENCES: 'edit_geofences', DELETE_GEOFENCES: 'delete_geofences',
+    CREATE_LEAVE_TYPES: 'create_leave_types', EDIT_LEAVE_TYPES: 'edit_leave_types', DELETE_LEAVE_TYPES: 'delete_leave_types',
+    CREATE_HOLIDAYS: 'create_holidays', EDIT_HOLIDAYS: 'edit_holidays', DELETE_HOLIDAYS: 'delete_holidays',
+    CREATE_DOCUMENT_TEMPLATES: 'create_document_templates', EDIT_DOCUMENT_TEMPLATES: 'edit_document_templates', DELETE_DOCUMENT_TEMPLATES: 'delete_document_templates',
+    CREATE_CUSTOM_FIELDS: 'create_custom_fields', EDIT_CUSTOM_FIELDS: 'edit_custom_fields', DELETE_CUSTOM_FIELDS: 'delete_custom_fields',
+    CREATE_QUOTATION_TERMS: 'create_quotation_terms', EDIT_QUOTATION_TERMS: 'edit_quotation_terms', DELETE_QUOTATION_TERMS: 'delete_quotation_terms',
+  },
+
+  // Settings (per-panel, decision #5)
+  SETTINGS: {
+    MANAGE_ORG: 'manage_org_settings',
+    MANAGE_ORDER_SETTINGS: 'manage_order_settings',
+    MANAGE_ROUTE_SETTINGS: 'manage_route_settings',
+    MANAGE_COMPANY_PROFILE: 'manage_company_profile',
+    MANAGE_API_KEYS: 'manage_api_keys',
+    MANAGE_WHATSAPP_SETTINGS: 'manage_whatsapp_settings',
+    MANAGE_TAGS: 'manage_tags',
+  },
+
+  // Team & Admin — SENSITIVE. manage_roles is escalation-capable.
+  TEAM: {
+    MANAGE_EMPLOYEES: 'manage_employees',
+    MANAGE_ROLES: 'manage_roles',
+    APPROVE_DEVICES: 'approve_devices',
+  },
+
+  // Login surface access (gates sign-in per surface).
+  ACCESS: {
+    WEB: 'web_access',
+    MOBILE: 'mobile_access',
+  },
+
+  // Administration (existing)
   ADMIN: {
     VIEW_TEAM_MANAGEMENT: 'view_team_management',
     BILLING: 'billing',
@@ -130,11 +283,7 @@ export const PERMISSIONS = {
 
   // Data Import (Universal Import Framework)
   IMPORT: {
-    // Baseline capability: can open the Import wizard and commit rows into a
-    // module (combined with that module's own create/manage permission + RLS).
     DATA: 'import_data',
-    // Elevated: manage mapping templates, auto-create unknown master values
-    // during a guided-resolve, and undo an import. Admin-level.
     MANAGE: 'import_manage',
   },
 } as const;
