@@ -199,6 +199,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
     category: "WhatsApp Features",
     permissions: [
       { id: PERMISSIONS.WHATSAPP.VIEW, label: "Access WhatsApp Dashboard" },
+      { id: PERMISSIONS.WHATSAPP.SEND, label: "Send Message / Reply" },
       { id: PERMISSIONS.WHATSAPP.VIEW_BROADCASTS, label: "Manage Broadcasts" },
       { id: PERMISSIONS.WHATSAPP.VIEW_AUTOMATIONS, label: "Manage Automations" },
       { id: PERMISSIONS.WHATSAPP.VIEW_FLOWS, label: "Manage Workflows" },
