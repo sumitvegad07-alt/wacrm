@@ -28,24 +28,60 @@ interface EmployeeRole {
 
 const PERMISSION_GROUPS = [
   {
-    category: "CRM & Sales",
+    category: "Leads & Deals",
     permissions: [
       { id: PERMISSIONS.CRM.VIEW_DASHBOARD, label: "View Main Dashboard" },
       { id: PERMISSIONS.CRM.VIEW_LEADS, label: "View Leads" },
       { id: PERMISSIONS.CRM.CREATE_LEADS, label: "Create Leads" },
       { id: PERMISSIONS.CRM.EDIT_LEADS, label: "Edit Leads" },
       { id: PERMISSIONS.CRM.DELETE_LEADS, label: "Delete Leads" },
+      { id: PERMISSIONS.CRM.VIEW_DEALS, label: "View Pipelines / Deals" },
+    ]
+  },
+  {
+    category: "Customers",
+    permissions: [
       { id: PERMISSIONS.CRM.VIEW_CONTACTS, label: "View Customers" },
       { id: PERMISSIONS.CRM.CREATE_CONTACTS, label: "Create Customers" },
       { id: PERMISSIONS.CRM.EDIT_CONTACTS, label: "Edit Customers" },
       { id: PERMISSIONS.CRM.DELETE_CONTACTS, label: "Delete Customers" },
-      { id: PERMISSIONS.CRM.VIEW_DEALS, label: "View Pipelines / Deals" },
-      { id: PERMISSIONS.CRM.VIEW_PRODUCTS, label: "View Products" },
+      { id: PERMISSIONS.CRM.IMPORT_CONTACTS, label: "Import Customers" },
+      { id: PERMISSIONS.CRM.EXPORT_CONTACTS, label: "Export Customers" },
+    ]
+  },
+  {
+    category: "Catalogue (Products)",
+    permissions: [
+      { id: PERMISSIONS.CATALOGUE.VIEW_PRODUCTS, label: "View Products" },
+      { id: PERMISSIONS.CATALOGUE.CREATE_PRODUCTS, label: "Create Products" },
+      { id: PERMISSIONS.CATALOGUE.EDIT_PRODUCTS, label: "Edit Products" },
+      { id: PERMISSIONS.CATALOGUE.DELETE_PRODUCTS, label: "Delete Products" },
+      { id: PERMISSIONS.CATALOGUE.IMPORT_PRODUCTS, label: "Import Products" },
+      { id: PERMISSIONS.CATALOGUE.EXPORT_PRODUCTS, label: "Export Products" },
+      { id: PERMISSIONS.CATALOGUE.MANAGE_UNITS, label: "Manage Product Units" },
+      { id: PERMISSIONS.CATALOGUE.MANAGE_CATEGORIES, label: "Manage Product Categories / Sub-categories" },
+    ]
+  },
+  {
+    category: "Orders",
+    permissions: [
       { id: PERMISSIONS.CRM.VIEW_ORDERS, label: "View Quotations / Orders" },
       { id: PERMISSIONS.CRM.CREATE_ORDERS, label: "Create Orders" },
       { id: PERMISSIONS.CRM.EDIT_ORDERS, label: "Edit Orders" },
-      { id: PERMISSIONS.CRM.MANAGE_ORDER_STATUS, label: "Manage Order Status (approve / reject / cancel)" },
+      { id: PERMISSIONS.CRM.DELETE_ORDERS, label: "Delete Orders" },
       { id: PERMISSIONS.CRM.APPLY_ORDER_DISCOUNT, label: "Apply Discounts on Orders" },
+      { id: PERMISSIONS.CRM.OVERRIDE_ORDER_PRICE, label: "Change Product Price on an Order Line" },
+      { id: PERMISSIONS.CRM.MANAGE_ORDER_STATUS, label: "Manage Order Status (approve / reject / cancel)" },
+      { id: PERMISSIONS.CRM.EXPORT_ORDERS, label: "Export Orders" },
+    ]
+  },
+  {
+    category: "Dispatch",
+    permissions: [
+      { id: PERMISSIONS.DISPATCH.VIEW, label: "View Dispatches" },
+      { id: PERMISSIONS.DISPATCH.CREATE, label: "Create Dispatch" },
+      { id: PERMISSIONS.DISPATCH.EDIT, label: "Edit Dispatch" },
+      { id: PERMISSIONS.DISPATCH.DELETE, label: "Delete Dispatch" },
     ]
   },
   {
@@ -53,6 +89,7 @@ const PERMISSION_GROUPS = [
     permissions: [
       { id: PERMISSIONS.STOCK.VIEW, label: "View Stock (closing stock, ledger, report)" },
       { id: PERMISSIONS.STOCK.MANAGE, label: "Manage Stock (set opening, Stock In / Out adjustments)" },
+      { id: PERMISSIONS.STOCK.IMPORT, label: "Import Opening Stock" },
     ]
   },
   {

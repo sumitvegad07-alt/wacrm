@@ -7,16 +7,16 @@ import { useAuth } from "@/hooks/use-auth";
 
 export default function NewProductPage() {
   const router = useRouter();
-  // Catalogue create is admin-only at the DB layer (Hardening Sprint 1).
-  // Block non-admins from the create page so they never hit a silent RLS failure.
-  const { isOwner, isAdmin, loading } = useAuth();
-  const canManageCatalogue = isOwner || isAdmin;
+  // Catalogue create is per-key at the DB layer (Module-wise RBAC v1: create_products).
+  // Block users without the right from the create page so they never hit a silent RLS failure.
+  const { hasPermission, loading } = useAuth();
+  const canCreateProducts = hasPermission("create_products");
 
   useEffect(() => {
-    if (!loading && !canManageCatalogue) router.replace("/products");
-  }, [loading, canManageCatalogue, router]);
+    if (!loading && !canCreateProducts) router.replace("/products");
+  }, [loading, canCreateProducts, router]);
 
-  if (!loading && !canManageCatalogue) return null;
+  if (!loading && !canCreateProducts) return null;
 
   return (
     <ProductForm

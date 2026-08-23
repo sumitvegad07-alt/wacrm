@@ -51,12 +51,18 @@ export default function ProductsPage() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { account, isOwner, isAdmin } = useAuth();
+  const { account, hasPermission } = useAuth();
   const canEditSettings = useCan('edit-settings');
-  // Catalogue writes are admin-only at the database layer (Hardening Sprint 1:
-  // products RLS is is_account_member(account_id,'admin')). Gate the UI to match
-  // so non-admins never hit a silent RLS failure on create/edit/delete.
-  const canManageCatalogue = isOwner || isAdmin;
+  // Catalogue writes are per-key at the database layer (Module-wise RBAC v1:
+  // products RLS requires create_/edit_/delete_products + an agent floor).
+  // Gate the UI to match so users only see actions they can actually perform.
+  // hasPermission() bypasses for owner/admin and honors {"all":true}.
+  const canCreateProducts = hasPermission('create_products');
+  const canEditProducts = hasPermission('edit_products');
+  const canDeleteProducts = hasPermission('delete_products');
+  const canImportProducts = hasPermission('import_products');
+  // Any catalogue write capability — used where the older single flag was needed.
+  const canManageCatalogue = canCreateProducts || canEditProducts || canDeleteProducts;
 
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -254,12 +260,12 @@ export default function ProductsPage() {
           <DropdownMenuContent align="end" className="w-40 border-border bg-popover">
             <DropdownMenuItem onClick={(e) => {
               e.stopPropagation();
-              if (canManageCatalogue) { setEditProduct(product); setFormOpen(true); }
+              if (canEditProducts) { setEditProduct(product); setFormOpen(true); }
               else { router.push(`/products/${product.id}`); }
             }}>
-              <Pencil className="mr-2 h-4 w-4" /> {canManageCatalogue ? 'Edit' : 'View'}
+              <Pencil className="mr-2 h-4 w-4" /> {canEditProducts ? 'Edit' : 'View'}
             </DropdownMenuItem>
-            {canManageCatalogue && (
+            {canDeleteProducts && (
               <>
                 <DropdownMenuSeparator className="bg-border" />
                 <DropdownMenuItem className="text-red-500 focus:text-red-600 focus:bg-red-500/10" onClick={(e) => { e.stopPropagation(); setDeleteTarget(product); setDeleteConfirmOpen(true); }}>
@@ -365,7 +371,7 @@ export default function ProductsPage() {
         rowKey={(product) => product.id}
         onRowClick={(product) => router.push(`/products/${product.id}`)}
         actions={
-          canManageCatalogue ? (
+          canCreateProducts ? (
             <Button
               onClick={() => router.push('/products/new')}
               size="sm"
@@ -377,7 +383,7 @@ export default function ProductsPage() {
         }
         menuActions={
           <>
-            {canManageCatalogue && (
+            {canImportProducts && (
               <DropdownMenuItem onClick={() => setImportOpen(true)} className="cursor-pointer gap-2">
                 <Upload className="size-3.5" />
                 Import Products

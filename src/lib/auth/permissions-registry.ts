@@ -16,19 +16,45 @@ export const PERMISSIONS = {
     CREATE_CONTACTS: 'create_contacts',
     EDIT_CONTACTS: 'edit_contacts',
     DELETE_CONTACTS: 'delete_contacts',
+    IMPORT_CONTACTS: 'import_contacts',
+    EXPORT_CONTACTS: 'export_contacts',
     VIEW_DEALS: 'view_deals',
-    VIEW_PRODUCTS: 'view_products',
     VIEW_ORDERS: 'view_orders',
     CREATE_ORDERS: 'create_orders',
     EDIT_ORDERS: 'edit_orders',
+    DELETE_ORDERS: 'delete_orders',
     MANAGE_ORDER_STATUS: 'manage_order_status',
     APPLY_ORDER_DISCOUNT: 'apply_order_discount',
+    // Override a product's unit price on an order line (distinct from a discount).
+    OVERRIDE_ORDER_PRICE: 'override_order_price',
+    EXPORT_ORDERS: 'export_orders',
+  },
+
+  // Catalogue (Products, Units, Categories)
+  CATALOGUE: {
+    VIEW_PRODUCTS: 'view_products',
+    CREATE_PRODUCTS: 'create_products',
+    EDIT_PRODUCTS: 'edit_products',
+    DELETE_PRODUCTS: 'delete_products',
+    IMPORT_PRODUCTS: 'import_products',
+    EXPORT_PRODUCTS: 'export_products',
+    MANAGE_UNITS: 'manage_product_units',
+    MANAGE_CATEGORIES: 'manage_product_categories',
+  },
+
+  // Dispatch (for a dispatch executive)
+  DISPATCH: {
+    VIEW: 'view_dispatch',
+    CREATE: 'create_dispatch',
+    EDIT: 'edit_dispatch',
+    DELETE: 'delete_dispatch',
   },
 
   // Stock / Inventory
   STOCK: {
     VIEW: 'view_stock',
     MANAGE: 'manage_stock', // set opening stock + create Stock In/Out adjustments; implies VIEW
+    IMPORT: 'import_stock',
   },
 
   // Payments & Finance
