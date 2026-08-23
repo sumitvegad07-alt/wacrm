@@ -492,18 +492,18 @@ export function getMenuStructure(
       label: "Custom Fields",
       icon: SlidersHorizontal,
       items: [
-        { href: "/custom-fields/user", label: "User", icon: User },
-        { href: "/custom-fields/contact", label: "Customer", icon: Users },
-        { href: "/custom-fields/product", label: "Product", icon: Package },
-        { href: "/custom-fields/quotation", label: "Sale Quotation", icon: FileText },
-        { href: "/custom-fields/lead", label: "Lead", icon: UserPlus },
-        { href: "/custom-fields/deal", label: "Deal", icon: GitBranch },
-        { href: "/custom-fields/task", label: "Task", icon: CheckSquare },
-        { href: "/custom-fields/customer_visit", label: "Customer Visit", icon: Building2 },
-        { href: "/custom-fields/lead_visit", label: "Lead Visit", icon: MapPin },
-        { href: "/custom-fields/order", label: "Order", icon: ShoppingCart },
-        { href: "/custom-fields/dispatch", label: "Dispatch", icon: Truck },
-        { href: "/custom-fields/expense", label: "Expense", icon: Coins },
+        { href: "/custom-fields/user", label: "User", icon: User, permission: "edit_custom_fields" },
+        { href: "/custom-fields/contact", label: "Customer", icon: Users, permission: "edit_custom_fields" },
+        { href: "/custom-fields/product", label: "Product", icon: Package, permission: "edit_custom_fields" },
+        { href: "/custom-fields/quotation", label: "Sale Quotation", icon: FileText, permission: "edit_custom_fields" },
+        { href: "/custom-fields/lead", label: "Lead", icon: UserPlus, permission: "edit_custom_fields" },
+        { href: "/custom-fields/deal", label: "Deal", icon: GitBranch, permission: "edit_custom_fields" },
+        { href: "/custom-fields/task", label: "Task", icon: CheckSquare, permission: "edit_custom_fields" },
+        { href: "/custom-fields/customer_visit", label: "Customer Visit", icon: Building2, permission: "edit_custom_fields" },
+        { href: "/custom-fields/lead_visit", label: "Lead Visit", icon: MapPin, permission: "edit_custom_fields" },
+        { href: "/custom-fields/order", label: "Order", icon: ShoppingCart, permission: "edit_custom_fields" },
+        { href: "/custom-fields/dispatch", label: "Dispatch", icon: Truck, permission: "edit_custom_fields" },
+        { href: "/custom-fields/expense", label: "Expense", icon: Coins, permission: "edit_custom_fields" },
       ],
     },
 
@@ -513,14 +513,16 @@ export function getMenuStructure(
       href: "/company-profile",
       label: "Company Profile",
       icon: Building2,
+      permission: "manage_company_profile",
     },
-    
+
     // ── Subscription ──
     {
       type: "link",
       href: "/subscription",
       label: "Subscription",
       icon: Shield,
+      permission: "billing",
     },
 
     { type: "spacer" },
@@ -531,28 +533,29 @@ export function getMenuStructure(
       label: "Settings",
       icon: Settings,
       items: [
-        { href: "/settings?tab=module_settings", label: "Organization Settings", icon: Settings },
+        { href: "/settings?tab=module_settings", label: "Organization Settings", icon: Settings, permission: "manage_org_settings" },
+        // Appearance is a personal theme preference — available to everyone.
         { href: "/settings?tab=appearance", label: "Appearance", icon: Palette },
         ...(!moduleSettings || moduleSettings.whatsapp !== false
-          ? [{ href: "/settings?tab=whatsapp", label: "Whatsapp", icon: MessageSquare }]
+          ? [{ href: "/settings?tab=whatsapp", label: "Whatsapp", icon: MessageSquare, permission: "manage_whatsapp_settings" }]
           : []),
-        { href: "/settings?tab=fields", label: "Tags", icon: Tags },
-        { href: "/settings?tab=document_templates", label: "Template", icon: FileText },
-        { href: "/settings?tab=deal_pipelines", label: "Deals", icon: Briefcase },
-        { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter },
-        { href: "/settings?tab=tasks", label: "Task Settings", icon: CheckSquare },
-        { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent },
+        { href: "/settings?tab=fields", label: "Tags", icon: Tags, permission: "manage_tags" },
+        { href: "/settings?tab=document_templates", label: "Template", icon: FileText, permission: "edit_document_templates" },
+        { href: "/settings?tab=deal_pipelines", label: "Deals", icon: Briefcase, permission: "edit_pipelines" },
+        { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter, permission: "edit_lead_sources" },
+        { href: "/settings?tab=tasks", label: "Task Settings", icon: CheckSquare, permission: "edit_task_types" },
+        { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent, permission: "edit_tax_slabs" },
         ...(!moduleSettings || moduleSettings.expense === true
-          ? [{ href: "/settings?tab=expense_types", label: "Expense Settings", icon: Wallet }]
+          ? [{ href: "/settings?tab=expense_types", label: "Expense Settings", icon: Wallet, permission: "edit_expense_types" }]
           : []),
-        { href: "/settings?tab=leave_types", label: "Leave Settings", icon: CalendarOff },
+        { href: "/settings?tab=leave_types", label: "Leave Settings", icon: CalendarOff, permission: "edit_leave_types" },
         ...(!moduleSettings || moduleSettings.payment === true
-          ? [{ href: "/settings?tab=payments", label: "Payment Settings", icon: Banknote }]
+          ? [{ href: "/settings?tab=payments", label: "Payment Settings", icon: Banknote, permission: "edit_payment_types" }]
           : []),
         ...(assignmentMode === 'area' && (!moduleSettings || moduleSettings.territory !== false)
-          ? [{ href: "/settings?tab=territories", label: "Territory Master", icon: Map }]
+          ? [{ href: "/settings?tab=territories", label: "Territory Master", icon: Map, permission: "edit_territories" }]
           : []),
-        { href: "/settings?tab=api", label: "API Keys & Webhooks", icon: KeyRound },
+        { href: "/settings?tab=api", label: "API Keys & Webhooks", icon: KeyRound, permission: "manage_api_keys" },
       ],
     },
   ];
