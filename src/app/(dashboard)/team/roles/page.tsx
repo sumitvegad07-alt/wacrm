@@ -522,7 +522,9 @@ export default function RolesPage() {
     setSelectedRole(null);
     setName("");
     setDescription("");
-    setPermissions({});
+    // New roles get web + mobile login access by default (admin unticks to deny),
+    // so the Login Access checkboxes read truthfully out of the box.
+    setPermissions({ web_access: true, mobile_access: true });
     setIsEditing(true);
   };
 

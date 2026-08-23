@@ -19,6 +19,13 @@ export type RolePermissions = {
  * @param permissions The parsed JSONB permissions from employee_roles
  * @param key The specific permission key (e.g., 'view_leads', 'mobile_logout')
  */
+// Permission values are stored inconsistently as the boolean `true` (UI-saved
+// keys) or the string `'true'` (SQL/JSONB backfills, and the has_permission()
+// Postgres function). Treat both as granted so the client matches RLS exactly.
+function isTrue(v: unknown): boolean {
+  return v === true || v === "true";
+}
+
 export function hasPermission(
   permissions: RolePermissions | null | undefined,
   key: string
@@ -26,9 +33,9 @@ export function hasPermission(
   if (!permissions) return false;
 
   // Super Admin / Owner override
-  if (permissions.all === true) return true;
+  if (isTrue(permissions.all)) return true;
 
-  if (permissions[key] === true) return true;
+  if (isTrue(permissions[key])) return true;
 
   // Creation rights were stored as `add_<module>` before the move to `create_<module>`,
   // and roles in the wild still carry either spelling. Installed mobile builds check the
@@ -40,7 +47,7 @@ export function hasPermission(
       ? `create_${key.slice("add_".length)}`
       : null;
 
-  return alias !== null && permissions[alias] === true;
+  return alias !== null && isTrue(permissions[alias]);
 }
 
 /**
@@ -70,8 +77,8 @@ export function getDataScope(
   module: string
 ): DataScope {
   if (!permissions) return "own";
-  
-  if (permissions.all === true) return "all";
+
+  if (isTrue(permissions.all)) return "all";
 
   const scope = permissions[`${module}_scope`];
   if (!scope || typeof scope !== "string") return "own";

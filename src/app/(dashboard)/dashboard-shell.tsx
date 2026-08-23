@@ -28,6 +28,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasSFA,
     isModuleEnabled,
     moduleSettingsLoaded,
+    hasPermission,
     signOut,
   } = useAuth();
   const router = useRouter();
@@ -133,13 +134,21 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   // Login-surface access (Module-wise RBAC): a member whose Web Portal Access is
-  // switched OFF cannot use the web app. Owners always keep web access so an
-  // account can never lock its own owner out. Enforced here (client) and — for a
-  // hard boundary — should also be checked server-side in a future pass.
+  // switched OFF cannot use the web app. Two sources are honored — the per-employee
+  // `profiles.web_access` toggle AND the role's `web_access` permission (set in the
+  // roles editor "Login Access" section; hasPermission bypasses owner/admin/{all}).
+  // Owners are never blocked so an account can't lock its own owner out. A member
+  // with no business role assigned is not evaluated against the role permission.
+  // Enforced here (client); a server-side check is a future hardening pass.
+  const isOwnerAccount = profile?.account_role === "owner";
+  const hasBusinessRole = !!(profile as { employee_role_id?: string } | null)?.employee_role_id;
   const webAccessDisabled =
     profile != null &&
-    profile.account_role !== "owner" &&
-    (profile as { web_access?: boolean }).web_access === false;
+    !isOwnerAccount &&
+    (
+      (profile as { web_access?: boolean }).web_access === false ||
+      (hasBusinessRole && !hasPermission("web_access"))
+    );
 
   if (webAccessDisabled) {
     return (
