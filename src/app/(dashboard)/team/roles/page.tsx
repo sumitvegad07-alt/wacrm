@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -406,12 +406,51 @@ const PERMISSION_GROUPS: PermGroup[] = [
 const DATA_SCOPES: { value: DataScope; label: string }[] = [
   { value: "own", label: "Own Records Only" },
   { value: "team", label: "Own & Team Records" },
-  { value: "department", label: "Department Records" },
-  { value: "company", label: "Entire Company" },
 ];
 
+// Maps each rights section to the plan line that unlocks it. Groups not listed
+// here are base features shown on every plan. A group is only shown if the
+// account's purchased plan includes its line (CRM / SFA / WFA).
+const GROUP_LINE: Record<string, "crm" | "sfa" | "wfa"> = {
+  "Leads": "crm",
+  "Deals / Pipeline": "crm",
+  "WhatsApp Features": "crm",
+  "Catalogue (Products)": "sfa",
+  "Quotations": "sfa",
+  "Orders": "sfa",
+  "Dispatch": "sfa",
+  "Payments & Finance": "sfa",
+  "Customer Financials": "sfa",
+  "Credit Control": "sfa",
+  "Expenses": "sfa",
+  "Stock / Inventory": "sfa",
+  "Schemes & Pricing": "sfa",
+  "Visits": "wfa",
+  "Leave": "wfa",
+  "Location & Attendance": "wfa",
+  "Mobile App & Field Force": "wfa",
+  "Mobile Field Rules": "wfa",
+  "Route Management": "wfa",
+};
+
 export default function RolesPage() {
-  const { accountId, isSuperadmin, hasPermission } = useAuth();
+  const { accountId, isSuperadmin, hasPermission, hasCRM, hasSFA, hasWFA } = useAuth();
+
+  // Rights sections visible for this account's plan, with Login Access pinned first.
+  const visibleGroups = useMemo(() => {
+    const lineOk = (cat: string) => {
+      const line = GROUP_LINE[cat];
+      if (!line) return true; // base feature — always shown
+      if (line === "crm") return hasCRM;
+      if (line === "sfa") return hasSFA;
+      if (line === "wfa") return hasWFA;
+      return true;
+    };
+    const shown = PERMISSION_GROUPS.filter((g) => lineOk(g.category));
+    const top = shown.filter((g) => g.category === "Login Access");
+    const rest = shown.filter((g) => g.category !== "Login Access");
+    return [...top, ...rest];
+  }, [hasCRM, hasSFA, hasWFA]);
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<EmployeeRole | null>(null);
@@ -553,6 +592,16 @@ export default function RolesPage() {
     });
   };
 
+  // Global "Select all" across every visible (plan-allowed) rights section.
+  const toggleAllVisible = (checked: boolean) => {
+    setPermissions((prev) => {
+      const next = { ...prev };
+      for (const g of visibleGroups) for (const p of g.permissions) next[p.id] = checked;
+      return next;
+    });
+  };
+  const allVisibleOn = visibleGroups.length > 0 && visibleGroups.every((g) => g.permissions.every((p) => !!permissions[p.id]));
+
   if (!hasPermission("view_team_management") && !isSuperadmin) {
     return (
       <div className="p-8">
@@ -572,53 +621,43 @@ export default function RolesPage() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-background">
-      <div className="flex flex-1 overflow-hidden">
-        
-        {/* Left Sidebar - Roles List */}
-        <div className="w-80 border-r bg-card flex flex-col">
-          <div className="p-4 border-b flex items-center justify-between">
-            <h2 className="font-semibold flex items-center gap-2 text-foreground">
-              <Shield className="w-4 h-4 text-muted-foreground" />
-              Employee Roles
-            </h2>
-            <Button size="sm" onClick={handleNewRole} variant="outline">
-              <Plus className="w-4 h-4" />
-            </Button>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {loading ? (
-              <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-            ) : roles.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center p-4">No roles found.</p>
-            ) : (
-              roles.map((role) => (
-                <div
-                  key={role.id}
-                  onClick={() => handleSelectRole(role)}
-                  className={`p-3 rounded-xl cursor-pointer border transition-all ${
-                    selectedRole?.id === role.id && !isEditing
-                      ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-transparent hover:bg-muted/50"
-                  }`}
-                >
-                  <div className="font-medium text-foreground">{role.name}</div>
-                  <div className="text-xs text-muted-foreground truncate mt-1">
-                    {role.description || "No description"}
-                  </div>
-                  {role.permissions?.all && (
-                    <span className="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-sm mt-2">
-                      Admin (Full Access)
-                    </span>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
+      {/* Top bar: horizontal role selector (replaces the old left column, so the
+          rights screen below gets the full width). */}
+      <div className="border-b bg-card px-4 py-2.5 flex items-center gap-3 flex-wrap shrink-0">
+        <h2 className="font-semibold flex items-center gap-2 text-foreground shrink-0">
+          <Shield className="w-4 h-4 text-muted-foreground" />
+          Employee Roles
+        </h2>
+        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          ) : (
+            roles.map((role) => (
+              <button
+                key={role.id}
+                type="button"
+                onClick={() => handleSelectRole(role)}
+                className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                  selectedRole?.id === role.id && !isEditing
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border hover:bg-muted text-foreground"
+                }`}
+              >
+                {role.name}
+                {role.permissions?.all && (
+                  <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-600">Admin</span>
+                )}
+              </button>
+            ))
+          )}
         </div>
+        <Button size="sm" onClick={handleNewRole} variant="outline" className="shrink-0">
+          <Plus className="w-4 h-4 mr-1" /> New Role
+        </Button>
+      </div>
 
-        {/* Right Content - Role Details & Permissions */}
-        <div className="flex-1 flex flex-col bg-background overflow-hidden">
+      {/* Content — full width */}
+      <div className="flex-1 flex flex-col bg-background overflow-hidden">
           {(!selectedRole && !isEditing) ? (
             <div className="flex-1 flex flex-col p-8 overflow-y-auto bg-muted/10">
               <div className="flex items-center gap-3 mb-6">
@@ -799,12 +838,31 @@ export default function RolesPage() {
                     </Card>
                   )}
 
+                  {/* Rights heading + global Select all */}
+                  {!permissions.all && (
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <h3 className="text-lg font-semibold text-foreground">Rights</h3>
+                      {isEditing && !isAdminRole && (
+                        <button
+                          type="button"
+                          onClick={() => toggleAllVisible(!allVisibleOn)}
+                          className="flex items-center gap-2 text-sm text-foreground"
+                        >
+                          <span className={`flex w-5 h-5 items-center justify-center rounded border ${allVisibleOn ? "bg-primary border-primary text-primary-foreground" : "border-input bg-background"}`}>
+                            {allVisibleOn && <Check className="w-3.5 h-3.5" />}
+                          </span>
+                          Select all
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Module-wise permission sections (reference layout: a grey header
                       bar with a select-all checkbox + the module name, then a
                       multi-column grid of that module's rights). */}
                   {!permissions.all && (
                     <div className="space-y-4 pb-20">
-                      {PERMISSION_GROUPS.map((group, i) => {
+                      {visibleGroups.map((group, i) => {
                         const onCount = group.permissions.filter((p) => !!permissions[p.id]).length;
                         const total = group.permissions.length;
                         const allOn = onCount === total;
@@ -881,7 +939,6 @@ export default function RolesPage() {
             </>
           )}
         </div>
-      </div>
     </div>
   );
 }
