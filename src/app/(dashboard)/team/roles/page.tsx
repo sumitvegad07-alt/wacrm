@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -433,10 +433,27 @@ const GROUP_LINE: Record<string, "crm" | "sfa" | "wfa"> = {
   "Route Management": "wfa",
 };
 
-export default function RolesPage() {
-  const { accountId, isSuperadmin, hasPermission, hasCRM, hasSFA, hasWFA } = useAuth();
+// Maps a rights section to an Organization-Settings module toggle. A section is
+// hidden when that module is switched OFF in settings. Groups not listed are
+// always shown (no toggle).
+const GROUP_MODULE: Record<string, keyof ModuleSettings> = {
+  "Quotations": "quotation",
+  "Dispatch": "dispatch",
+  "Expenses": "expense",
+  "Payments & Finance": "payment",
+  "Schemes & Pricing": "scheme",
+  "Stock / Inventory": "stock",
+  "WhatsApp Features": "whatsapp",
+  "Route Management": "route",
+  "Masters — Geography & Field": "territory",
+};
 
-  // Rights sections visible for this account's plan, with Login Access pinned first.
+export default function RolesPage() {
+  const { accountId, isSuperadmin, hasPermission, hasCRM, hasSFA, hasWFA, isModuleEnabled, moduleSettingsLoaded } = useAuth();
+
+  // Rights sections visible for this account: (1) the plan line must be owned,
+  // and (2) the module must be enabled in Organization Settings. Login Access is
+  // pinned first.
   const visibleGroups = useMemo(() => {
     const lineOk = (cat: string) => {
       const line = GROUP_LINE[cat];
@@ -446,11 +463,16 @@ export default function RolesPage() {
       if (line === "wfa") return hasWFA;
       return true;
     };
-    const shown = PERMISSION_GROUPS.filter((g) => lineOk(g.category));
+    const moduleOk = (cat: string) => {
+      const mod = GROUP_MODULE[cat];
+      return !mod || isModuleEnabled(mod); // no toggle → always shown; else honor the setting
+    };
+    const shown = PERMISSION_GROUPS.filter((g) => lineOk(g.category) && moduleOk(g.category));
     const top = shown.filter((g) => g.category === "Login Access");
     const rest = shown.filter((g) => g.category !== "Login Access");
     return [...top, ...rest];
-  }, [hasCRM, hasSFA, hasWFA]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCRM, hasSFA, hasWFA, isModuleEnabled, moduleSettingsLoaded]);
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<EmployeeRole | null>(null);
