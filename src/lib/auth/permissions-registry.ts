@@ -40,7 +40,11 @@ export const PERMISSIONS = {
     MANAGE_ORDER_STATUS: 'manage_order_status',
     APPLY_ORDER_DISCOUNT: 'apply_order_discount',
     OVERRIDE_ORDER_PRICE: 'override_order_price',
+    EDIT_ORDER_TAX: 'edit_order_tax',
+    IMPORT_ORDERS: 'import_orders',
     EXPORT_ORDERS: 'export_orders',
+    SHARE_ORDERS: 'share_orders',              // share the order (PDF / link)
+    MANAGE_APPROVAL_PROCESS: 'manage_approval_process', // change / reset approval flow
   },
 
   // Deals / Pipeline (separate module)
@@ -73,6 +77,7 @@ export const PERMISSIONS = {
     EDIT: 'edit_quotations',
     DELETE: 'delete_quotations',
     PRINT: 'print_quotations',
+    SHARE: 'share_quotations',
   },
 
   // Dispatch (for a dispatch executive)
@@ -81,6 +86,10 @@ export const PERMISSIONS = {
     CREATE: 'create_dispatch',
     EDIT: 'edit_dispatch',
     DELETE: 'delete_dispatch',
+    IMPORT: 'import_dispatch',
+    EXPORT: 'export_dispatch',
+    SHARE: 'share_dispatch',                    // share dispatch details (future)
+    TRANSPORT_COMPULSORY: 'transport_compulsory', // field rule: require transport details
   },
 
   // Expenses

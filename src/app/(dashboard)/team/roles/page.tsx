@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Shield, Plus, AlertCircle, Save, Trash2, Edit2, Users, Check } from "lucide-react";
+import { Loader2, Shield, Plus, AlertCircle, Save, Trash2, Edit2, Users, Check, Minus, Copy } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
@@ -68,6 +68,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.QUOTATIONS.EDIT, label: "Edit Quotations" },
       { id: PERMISSIONS.QUOTATIONS.DELETE, label: "Delete Quotations" },
       { id: PERMISSIONS.QUOTATIONS.PRINT, label: "Print / Export Quotation PDF" },
+      { id: PERMISSIONS.QUOTATIONS.SHARE, label: "Share Quotation (PDF / Link)" },
     ]
   },
   {
@@ -97,14 +98,18 @@ const PERMISSION_GROUPS: PermGroup[] = [
   {
     category: "Orders",
     permissions: [
-      { id: PERMISSIONS.CRM.VIEW_ORDERS, label: "View Quotations / Orders" },
+      { id: PERMISSIONS.CRM.VIEW_ORDERS, label: "View Orders" },
       { id: PERMISSIONS.CRM.CREATE_ORDERS, label: "Create Orders" },
       { id: PERMISSIONS.CRM.EDIT_ORDERS, label: "Edit Orders" },
       { id: PERMISSIONS.CRM.DELETE_ORDERS, label: "Delete Orders" },
       { id: PERMISSIONS.CRM.APPLY_ORDER_DISCOUNT, label: "Apply Discounts on Orders" },
-      { id: PERMISSIONS.CRM.OVERRIDE_ORDER_PRICE, label: "Change Product Price on an Order Line" },
+      { id: PERMISSIONS.CRM.OVERRIDE_ORDER_PRICE, label: "Change Product Price on a Line" },
+      { id: PERMISSIONS.CRM.EDIT_ORDER_TAX, label: "Edit Tax on an Order" },
       { id: PERMISSIONS.CRM.MANAGE_ORDER_STATUS, label: "Manage Order Status (approve / reject / cancel)" },
+      { id: PERMISSIONS.CRM.MANAGE_APPROVAL_PROCESS, label: "Change / Reset Approval Process" },
+      { id: PERMISSIONS.CRM.IMPORT_ORDERS, label: "Import Orders" },
       { id: PERMISSIONS.CRM.EXPORT_ORDERS, label: "Export Orders" },
+      { id: PERMISSIONS.CRM.SHARE_ORDERS, label: "Share Order (PDF / Link)" },
     ]
   },
   {
@@ -114,6 +119,10 @@ const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.DISPATCH.CREATE, label: "Create Dispatch" },
       { id: PERMISSIONS.DISPATCH.EDIT, label: "Edit Dispatch" },
       { id: PERMISSIONS.DISPATCH.DELETE, label: "Delete Dispatch" },
+      { id: PERMISSIONS.DISPATCH.IMPORT, label: "Import Dispatch" },
+      { id: PERMISSIONS.DISPATCH.EXPORT, label: "Export Dispatch" },
+      { id: PERMISSIONS.DISPATCH.SHARE, label: "Share Dispatch Details" },
+      { id: PERMISSIONS.DISPATCH.TRANSPORT_COMPULSORY, label: "Transport Details Compulsory" },
     ]
   },
   {
@@ -348,9 +357,9 @@ const PERMISSION_GROUPS: PermGroup[] = [
   {
     category: "Masters — Workspace",
     permissions: [
-      { id: PERMISSIONS.MASTERS.CREATE_DOCUMENT_TEMPLATES, label: "Create Document (PDF) Templates" },
-      { id: PERMISSIONS.MASTERS.EDIT_DOCUMENT_TEMPLATES, label: "Edit Document (PDF) Templates" },
-      { id: PERMISSIONS.MASTERS.DELETE_DOCUMENT_TEMPLATES, label: "Delete Document (PDF) Templates" },
+      { id: PERMISSIONS.MASTERS.CREATE_DOCUMENT_TEMPLATES, label: "Create Templates" },
+      { id: PERMISSIONS.MASTERS.EDIT_DOCUMENT_TEMPLATES, label: "Edit Templates" },
+      { id: PERMISSIONS.MASTERS.DELETE_DOCUMENT_TEMPLATES, label: "Delete Templates" },
       { id: PERMISSIONS.MASTERS.CREATE_CUSTOM_FIELDS, label: "Create Custom Fields" },
       { id: PERMISSIONS.MASTERS.EDIT_CUSTOM_FIELDS, label: "Edit Custom Fields" },
       { id: PERMISSIONS.MASTERS.DELETE_CUSTOM_FIELDS, label: "Delete Custom Fields" },
@@ -453,6 +462,18 @@ export default function RolesPage() {
     setDescription("");
     setPermissions({});
     setIsEditing(true);
+  };
+
+  // Clone the selected role: start a NEW role pre-filled with the same rights,
+  // so an admin can duplicate a role and tweak a few checkboxes.
+  const handleCloneRole = () => {
+    if (!selectedRole) return;
+    setSelectedRole(null); // null => Save inserts a new role
+    setName(`Copy of ${selectedRole.name}`);
+    setDescription(selectedRole.description || "");
+    setPermissions({ ...(selectedRole.permissions || {}) });
+    setIsEditing(true);
+    toast.info("Cloned role — rename and adjust rights, then Save.");
   };
 
   const handleSave = async () => {
@@ -688,6 +709,10 @@ export default function RolesPage() {
                         <Edit2 className="w-4 h-4 mr-2" />
                         Edit Role
                       </Button>
+                      <Button variant="outline" onClick={handleCloneRole} disabled={!selectedRole} title="Duplicate this role with the same rights">
+                        <Copy className="w-4 h-4 mr-2" />
+                        Clone
+                      </Button>
                       <Button variant="destructive" size="icon" onClick={() => selectedRole && handleDelete(selectedRole.id)} disabled={isAdminRole}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -773,72 +798,78 @@ export default function RolesPage() {
                     </Card>
                   )}
 
-                  {/* Checklist Groups */}
+                  {/* Module-wise permission sections (reference layout: a grey header
+                      bar with a select-all checkbox + the module name, then a
+                      multi-column grid of that module's rights). */}
                   {!permissions.all && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
+                    <div className="space-y-4 pb-20">
                       {PERMISSION_GROUPS.map((group, i) => {
-                        const allOn = group.permissions.every((p) => !!permissions[p.id]);
+                        const onCount = group.permissions.filter((p) => !!permissions[p.id]).length;
+                        const total = group.permissions.length;
+                        const allOn = onCount === total;
+                        const someOn = onCount > 0 && !allOn;
                         const canToggle = isEditing && !isAdminRole;
                         return (
-                        <Card key={i} className={`overflow-hidden flex flex-col ${group.danger ? "border-red-500/60 shadow-[0_0_0_1px_rgba(239,68,68,0.35)]" : ""}`}>
-                          <div className={`px-4 py-3 border-b font-semibold text-sm flex items-center justify-between gap-2 ${group.danger ? "bg-red-500/10 text-red-600" : "bg-muted/50"}`}>
-                            <span className="flex items-center gap-2">
-                              {group.danger && <AlertCircle className="w-4 h-4" />}
-                              {group.category}
-                              {group.danger && <span className="text-[10px] font-extrabold tracking-wider uppercase px-1.5 py-0.5 rounded bg-red-600 text-white">Danger</span>}
-                            </span>
-                            {canToggle && (
-                              <button
-                                type="button"
-                                onClick={() => toggleGroupAll(group, !allOn)}
-                                className={`text-[11px] font-medium px-2 py-0.5 rounded border ${allOn ? "border-input text-muted-foreground hover:bg-muted" : "border-primary/40 text-primary hover:bg-primary/10"}`}
+                          <div
+                            key={i}
+                            className={`rounded-lg border overflow-hidden ${group.danger ? "border-red-500/60 shadow-[0_0_0_1px_rgba(239,68,68,0.30)]" : "border-border"}`}
+                          >
+                            {/* Header bar — checkbox selects/clears the whole module */}
+                            <button
+                              type="button"
+                              disabled={!canToggle}
+                              onClick={() => toggleGroupAll(group, !allOn)}
+                              className={`w-full flex items-center gap-3 px-4 py-3 text-left ${group.danger ? "bg-red-500/10" : "bg-muted/60"} ${canToggle ? "cursor-pointer hover:bg-muted" : "cursor-default"}`}
+                            >
+                              <span
+                                className={`flex w-5 h-5 shrink-0 items-center justify-center rounded border ${
+                                  allOn || someOn ? "bg-primary border-primary text-primary-foreground" : "border-input bg-background"
+                                } ${!canToggle ? "opacity-60" : ""}`}
                               >
-                                {allOn ? "Clear all" : "Apply all"}
-                              </button>
+                                {allOn && <Check className="w-3.5 h-3.5" />}
+                                {someOn && <Minus className="w-3.5 h-3.5" />}
+                              </span>
+                              <span className={`font-semibold text-sm flex items-center gap-2 ${group.danger ? "text-red-600" : "text-foreground"}`}>
+                                {group.danger && <AlertCircle className="w-4 h-4" />}
+                                {group.category}
+                                {group.danger && (
+                                  <span className="text-[10px] font-extrabold tracking-wider uppercase px-1.5 py-0.5 rounded bg-red-600 text-white">Danger</span>
+                                )}
+                                <span className="text-[11px] font-normal text-muted-foreground">({onCount}/{total})</span>
+                              </span>
+                            </button>
+
+                            {group.note && (
+                              <div className={`px-4 py-2 text-[11px] leading-snug border-b ${group.danger ? "bg-red-500/5 text-red-600/90" : "bg-amber-500/5 text-amber-700 dark:text-amber-400"}`}>
+                                {group.note}
+                              </div>
                             )}
-                          </div>
-                          {group.note && (
-                            <div className={`px-4 py-2 text-[11px] leading-snug border-b ${group.danger ? "bg-red-500/5 text-red-600/90" : "bg-amber-500/5 text-amber-700 dark:text-amber-400"}`}>
-                              {group.note}
-                            </div>
-                          )}
-                          <div className="p-4 space-y-4 flex-1 bg-card">
-                            {group.permissions.map((perm) => {
-                              const isChecked = !!permissions[perm.id];
-                              return (
-                                <div key={perm.id} className="flex items-start gap-3">
-                                  <div className="flex items-center h-5">
-                                    <button
-                                      type="button"
-                                      disabled={!isEditing || isAdminRole}
-                                      onClick={() => togglePermission(perm.id, !isChecked)}
-                                      className={`flex w-5 h-5 items-center justify-center rounded border ${
-                                        isChecked 
-                                          ? "bg-primary border-primary text-primary-foreground" 
-                                          : "border-input bg-background"
-                                      } ${(isAdminRole || !isEditing) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+
+                            {/* Rights grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-3 p-4 bg-card">
+                              {group.permissions.map((perm) => {
+                                const isChecked = !!permissions[perm.id];
+                                return (
+                                  <button
+                                    key={perm.id}
+                                    type="button"
+                                    disabled={!canToggle}
+                                    onClick={() => togglePermission(perm.id, !isChecked)}
+                                    className={`flex items-center gap-2.5 text-left ${canToggle ? "cursor-pointer" : "cursor-default"}`}
+                                  >
+                                    <span
+                                      className={`flex w-5 h-5 shrink-0 items-center justify-center rounded border ${
+                                        isChecked ? "bg-primary border-primary text-primary-foreground" : "border-input bg-background"
+                                      } ${!canToggle ? "opacity-60" : ""}`}
                                     >
                                       {isChecked && <Check className="w-3.5 h-3.5" />}
-                                    </button>
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <label 
-                                      className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${
-                                        (isAdminRole || !isEditing) ? "cursor-not-allowed" : "cursor-pointer"
-                                      }`}
-                                      onClick={() => (!isAdminRole && isEditing) && togglePermission(perm.id, !isChecked)}
-                                    >
-                                      {perm.label}
-                                    </label>
-                                    <span className="text-[10px] text-muted-foreground font-mono mt-1 opacity-70">
-                                      key: {perm.id}
                                     </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                    <span className="text-sm text-foreground leading-tight">{perm.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </Card>
                         );
                       })}
                     </div>
