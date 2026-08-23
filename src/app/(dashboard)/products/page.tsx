@@ -51,8 +51,12 @@ export default function ProductsPage() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { account } = useAuth();
+  const { account, isOwner, isAdmin } = useAuth();
   const canEditSettings = useCan('edit-settings');
+  // Catalogue writes are admin-only at the database layer (Hardening Sprint 1:
+  // products RLS is is_account_member(account_id,'admin')). Gate the UI to match
+  // so non-admins never hit a silent RLS failure on create/edit/delete.
+  const canManageCatalogue = isOwner || isAdmin;
 
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,13 +252,21 @@ export default function ProductsPage() {
             <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40 border-border bg-popover">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditProduct(product); setFormOpen(true); }}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit
+            <DropdownMenuItem onClick={(e) => {
+              e.stopPropagation();
+              if (canManageCatalogue) { setEditProduct(product); setFormOpen(true); }
+              else { router.push(`/products/${product.id}`); }
+            }}>
+              <Pencil className="mr-2 h-4 w-4" /> {canManageCatalogue ? 'Edit' : 'View'}
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem className="text-red-500 focus:text-red-600 focus:bg-red-500/10" onClick={(e) => { e.stopPropagation(); setDeleteTarget(product); setDeleteConfirmOpen(true); }}>
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
-            </DropdownMenuItem>
+            {canManageCatalogue && (
+              <>
+                <DropdownMenuSeparator className="bg-border" />
+                <DropdownMenuItem className="text-red-500 focus:text-red-600 focus:bg-red-500/10" onClick={(e) => { e.stopPropagation(); setDeleteTarget(product); setDeleteConfirmOpen(true); }}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )
@@ -353,20 +365,24 @@ export default function ProductsPage() {
         rowKey={(product) => product.id}
         onRowClick={(product) => router.push(`/products/${product.id}`)}
         actions={
-          <Button 
-            onClick={() => router.push('/products/new')} 
-            size="sm"
-            className="h-7 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium px-2.5"
-          >
-            <Plus className="size-3.5 mr-1" /> New Product
-          </Button>
+          canManageCatalogue ? (
+            <Button
+              onClick={() => router.push('/products/new')}
+              size="sm"
+              className="h-7 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium px-2.5"
+            >
+              <Plus className="size-3.5 mr-1" /> New Product
+            </Button>
+          ) : null
         }
         menuActions={
           <>
-            <DropdownMenuItem onClick={() => setImportOpen(true)} className="cursor-pointer gap-2">
-              <Upload className="size-3.5" />
-              Import Products
-            </DropdownMenuItem>
+            {canManageCatalogue && (
+              <DropdownMenuItem onClick={() => setImportOpen(true)} className="cursor-pointer gap-2">
+                <Upload className="size-3.5" />
+                Import Products
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem 
               onClick={(e) => {
                 e.preventDefault();
