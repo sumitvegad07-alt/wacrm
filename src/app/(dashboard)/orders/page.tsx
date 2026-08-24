@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -149,6 +150,7 @@ export default function OrdersPage() {
   }, [accountId, supabase]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useRealtimeRefresh('orders', fetchData);
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {

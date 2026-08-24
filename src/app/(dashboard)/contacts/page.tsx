@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, CustomField } from '@/types';
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from '@/lib/custom-fields';
@@ -164,6 +165,7 @@ export default function ContactsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+  useRealtimeRefresh('contacts', fetchData);
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {

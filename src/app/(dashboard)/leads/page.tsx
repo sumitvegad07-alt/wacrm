@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LeadForm } from "@/components/leads/lead-form";
@@ -123,6 +124,7 @@ export default function LeadsPage() {
   useEffect(() => {
     loadLeads();
   }, [account]);
+  useRealtimeRefresh('leads', loadLeads);
 
   // Removed dynamic extraction in favor of fetched lookups
 

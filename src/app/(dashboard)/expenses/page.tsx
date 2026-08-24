@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useAuth } from "@/hooks/use-auth";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
@@ -93,6 +94,7 @@ export default function ExpensesPage() {
   useEffect(() => {
     loadExpenses();
   }, [accountId, profile]);
+  useRealtimeRefresh('expenses', loadExpenses);
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Plus, CheckCircle2, XCircle, Ban, Loader2, Edit } from 'lucide-react';
@@ -119,6 +120,7 @@ export default function PaymentsPage() {
   }, [accountId, supabase]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useRealtimeRefresh('payments', fetchData);
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {

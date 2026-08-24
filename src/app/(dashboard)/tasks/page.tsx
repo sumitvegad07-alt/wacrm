@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { toast } from 'sonner';
 import type { Task, CustomField } from '@/types';
 import { useCan } from '@/hooks/use-can';
@@ -137,6 +138,7 @@ export default function TasksPage() {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+  useRealtimeRefresh('tasks', fetchTasks);
 
   useEffect(() => {
     if (searchParams.get("new") === "true") {
