@@ -116,6 +116,10 @@ export const PERMISSIONS = {
     CREATE: 'create_schemes',
     EDIT: 'edit_schemes',
     DELETE: 'delete_schemes',
+    // Activate / deactivate a scheme (the on/off toggle). Separate from EDIT so a
+    // role can be allowed to flip a scheme live/paused without full edit rights —
+    // and, conversely, an editor can be denied the toggle. Enforced on mobile.
+    TOGGLE: 'toggle_schemes',
   },
 
   // Payments & Finance

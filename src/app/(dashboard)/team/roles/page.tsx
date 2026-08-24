@@ -232,6 +232,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.SCHEMES.VIEW, label: "View Schemes" },
       { id: PERMISSIONS.SCHEMES.CREATE, label: "Create Scheme" },
       { id: PERMISSIONS.SCHEMES.EDIT, label: "Edit Scheme" },
+      { id: PERMISSIONS.SCHEMES.TOGGLE, label: "Activate / Deactivate Scheme" },
       { id: PERMISSIONS.SCHEMES.DELETE, label: "Delete Scheme" },
     ]
   },
