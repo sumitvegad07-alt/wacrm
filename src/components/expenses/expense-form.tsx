@@ -48,6 +48,8 @@ const expenseSchema = z.object({
   expense_date: z.date(),
   amount: z.number().min(0, "Amount must be positive").optional(),
   travel_km: z.number().min(0, "KM must be positive").optional(),
+  odometer_start: z.number().min(0).optional(),
+  odometer_end: z.number().min(0).optional(),
   remarks: z.string().optional(),
   proof_file: z.any().optional(),
 });
@@ -99,6 +101,8 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
         expense_date: new Date(expense.expense_date),
         amount: expense.amount,
         travel_km: expense.travel_km || 0,
+        odometer_start: expense.odometer_start ?? 0,
+        odometer_end: expense.odometer_end ?? 0,
         remarks: expense.remarks || "",
       });
       const type = expenseTypes.find(t => t.id === expense.expense_type_id);
@@ -109,6 +113,8 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
         expense_date: new Date(),
         amount: 0,
         travel_km: 0,
+        odometer_start: 0,
+        odometer_end: 0,
         remarks: "",
       });
       setSelectedType(null);
@@ -182,16 +188,29 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
         form.setValue("amount", 0);
       }
       form.setValue("travel_km", 0);
+      form.setValue("odometer_start", 0);
+      form.setValue("odometer_end", 0);
     }
   };
 
-  const handleKmChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const km = parseFloat(e.target.value) || 0;
+  // Manual odometer entry: distance = End - Start, amount = distance x admin rate.
+  const recomputeFromOdometer = (start: number, end: number) => {
+    const km = end > start ? end - start : 0;
     form.setValue("travel_km", km);
     if (selectedType && selectedType.is_per_km !== "NO") {
       const rate = resolvedRate !== null ? resolvedRate : selectedType.rate_per_km;
       form.setValue("amount", km * rate);
     }
+  };
+  const handleOdoStartChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const start = parseFloat(e.target.value) || 0;
+    form.setValue("odometer_start", start);
+    recomputeFromOdometer(start, form.getValues("odometer_end") || 0);
+  };
+  const handleOdoEndChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const end = parseFloat(e.target.value) || 0;
+    form.setValue("odometer_end", end);
+    recomputeFromOdometer(form.getValues("odometer_start") || 0, end);
   };
 
   const onSubmit = async (data: FormValues) => {
@@ -200,6 +219,16 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
     if (selectedType?.proof_required && !proofFile && !expense?.proof_file) {
       toast.error("Proof file is required for this expense type");
       return;
+    }
+
+    // Travelling with manual odometer entry: End must exceed Start.
+    if (selectedType?.allowance_type === "TRAVELLING" && selectedType.is_per_km !== "NO") {
+      const s = data.odometer_start || 0;
+      const en = data.odometer_end || 0;
+      if (!(en > s)) {
+        toast.error("Enter valid odometer readings — End must be greater than Start.");
+        return;
+      }
     }
 
     const cfError = validateRequiredCustomFields(customFields, customValues, {
@@ -244,6 +273,8 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
       expense_date: format(data.expense_date, "yyyy-MM-dd"),
       amount: data.amount,
       travel_km: selectedType?.allowance_type === "TRAVELLING" ? data.travel_km : null,
+      odometer_start: selectedType?.allowance_type === "TRAVELLING" ? (data.odometer_start || null) : null,
+      odometer_end: selectedType?.allowance_type === "TRAVELLING" ? (data.odometer_end || null) : null,
       rate_per_km: selectedType?.is_per_km !== "NO" ? (resolvedRate !== null ? resolvedRate : selectedType?.rate_per_km) : null,
       remarks: data.remarks,
       proof_file: proofUrl,
@@ -317,15 +348,34 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
               )}
             </div>
 
-            {selectedType?.allowance_type === "TRAVELLING" && selectedType.is_per_km === "USER" && (
-              <div className="grid gap-2">
-                <Label>Travel KM</Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  {...form.register("travel_km", { valueAsNumber: true })}
-                  onChange={handleKmChange}
-                />
+            {selectedType?.allowance_type === "TRAVELLING" && selectedType.is_per_km !== "NO" && (
+              <div className="grid gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label>Odometer Start (KM)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="Start reading"
+                      {...form.register("odometer_start", { valueAsNumber: true })}
+                      onChange={handleOdoStartChange}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Odometer End (KM)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="End reading"
+                      {...form.register("odometer_end", { valueAsNumber: true })}
+                      onChange={handleOdoEndChange}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Distance: {form.watch("travel_km") || 0} KM × ₹{resolvedRate !== null ? resolvedRate : selectedType.rate_per_km}/KM
+                  {" = ₹"}{form.watch("amount") || 0}
+                </p>
               </div>
             )}
 
