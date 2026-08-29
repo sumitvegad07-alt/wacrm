@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -20,7 +20,7 @@ import type { ReportMeasure } from '@/lib/reports/types';
  */
 type Row = Record<string, string | number | null>;
 
-export default function ReportPrintView() {
+function ReportPrintInner() {
   const params = useSearchParams();
   const supabase = createClient();
 
@@ -151,5 +151,17 @@ export default function ReportPrintView() {
       </table>
       <div className="foot">{rows.length} row(s).</div>
     </div>
+  );
+}
+
+// This view reads query params (useSearchParams) and runs the report at request
+// time, so it must not be statically prerendered — Suspense + force-dynamic.
+export const dynamic = 'force-dynamic';
+
+export default function ReportPrintView() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+      <ReportPrintInner />
+    </Suspense>
   );
 }
