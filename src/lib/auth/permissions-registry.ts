@@ -44,7 +44,6 @@ export const PERMISSIONS = {
     IMPORT_ORDERS: 'import_orders',
     EXPORT_ORDERS: 'export_orders',
     SHARE_ORDERS: 'share_orders',              // share the order (PDF / link)
-    MANAGE_APPROVAL_PROCESS: 'manage_approval_process', // change / reset approval flow
   },
 
   // Deals / Pipeline (separate module)

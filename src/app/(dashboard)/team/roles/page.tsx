@@ -106,7 +106,6 @@ const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.CRM.OVERRIDE_ORDER_PRICE, label: "Change Product Price on a Line" },
       { id: PERMISSIONS.CRM.EDIT_ORDER_TAX, label: "Edit Tax on an Order" },
       { id: PERMISSIONS.CRM.MANAGE_ORDER_STATUS, label: "Manage Order Status (approve / reject / cancel)" },
-      { id: PERMISSIONS.CRM.MANAGE_APPROVAL_PROCESS, label: "Change / Reset Approval Process" },
       { id: PERMISSIONS.CRM.IMPORT_ORDERS, label: "Import Orders" },
       { id: PERMISSIONS.CRM.EXPORT_ORDERS, label: "Export Orders" },
       { id: PERMISSIONS.CRM.SHARE_ORDERS, label: "Share Order (PDF / Link)" },
