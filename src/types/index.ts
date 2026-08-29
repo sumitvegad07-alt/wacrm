@@ -868,6 +868,8 @@ export interface Expense {
   expense_date: string;
   amount: number;
   travel_km?: number | null;
+  odometer_start?: number | null;
+  odometer_end?: number | null;
   rate_per_km?: number | null;
   proof_file?: string | null;
   remarks?: string | null;

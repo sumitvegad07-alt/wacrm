@@ -341,6 +341,9 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
                     <div>
                       <p className="text-xs text-muted-foreground font-medium uppercase">Distance Travelled</p>
                       <p className="text-sm font-medium">{expense.travel_km} KM</p>
+                      {expense.odometer_start != null && expense.odometer_end != null && (
+                        <p className="text-xs text-muted-foreground">Odometer {expense.odometer_start} → {expense.odometer_end}</p>
+                      )}
                       {expense.rate_per_km && <p className="text-xs text-muted-foreground">@ ₹{expense.rate_per_km}/km</p>}
                     </div>
                   </div>
