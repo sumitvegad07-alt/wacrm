@@ -239,6 +239,7 @@ export const PERMISSIONS = {
     VIEW_STOCK: 'view_stock_reports',
     VIEW_TASK: 'view_task_reports',
     EXPORT: 'export_reports',
+    SHARE: 'share_reports',                     // share a report as a PDF (mobile-enforced too)
   },
 
   // Masters — create/edit/delete each (founder request).

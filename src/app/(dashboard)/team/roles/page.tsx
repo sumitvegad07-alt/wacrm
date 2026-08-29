@@ -289,6 +289,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.REPORTS.VIEW_STOCK, label: "Stock Reports" },
       { id: PERMISSIONS.REPORTS.VIEW_TASK, label: "Task Reports" },
       { id: PERMISSIONS.REPORTS.EXPORT, label: "Export any Report" },
+      { id: PERMISSIONS.REPORTS.SHARE, label: "Share a Report as PDF" },
     ]
   },
   {
