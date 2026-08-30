@@ -11,7 +11,7 @@ import { Loader2, Shield, Plus, AlertCircle, Save, Trash2, Edit2, Users, Check, 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
-import type { RolePermissions, DataScope } from "@/lib/auth/rbac";
+import type { RolePermissions } from "@/lib/auth/rbac";
 import { ROUTE_PERMISSION_GROUPS } from "@/lib/route/permissions";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 import { toast } from "sonner";
@@ -255,9 +255,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.FIELD.VIEW_LIVE_FEED, label: "View Live Feed / All Locations" },
       { id: PERMISSIONS.FIELD.VIEW_TRACKING_HEALTH, label: "View Tracking Health" },
       { id: PERMISSIONS.FIELD.VIEW_ATTENDANCE, label: "View Attendance" },
-      { id: PERMISSIONS.FIELD.MANAGE_ATTENDANCE, label: "Edit / Regularize Attendance" },
       { id: PERMISSIONS.FIELD.EXPORT_ATTENDANCE, label: "Export Attendance" },
-      { id: PERMISSIONS.MOBILE.LOCATION_SCREEN, label: "Location Map Screen (Mobile)" },
       { id: PERMISSIONS.MOBILE.ALLOW_LOGOUT, label: "Allow Mobile Logout" },
     ]
   },
@@ -388,6 +386,14 @@ const PERMISSION_GROUPS: PermGroup[] = [
     ]
   },
   {
+    category: "Data Visibility",
+    note: "By default a user sees only their OWN records (Leads, Customers, Orders, etc.). These widen that through the reporting hierarchy. Owner/Admin always see everything.",
+    permissions: [
+      { id: PERMISSIONS.DATA_ACCESS.VIEW_CHILD_DATA, label: "View Subordinate (Child) Data — everyone reporting under this user" },
+      { id: PERMISSIONS.DATA_ACCESS.VIEW_PARENT_DATA, label: "View Manager (Parent) Data — this user's reporting chain upward" },
+    ]
+  },
+  {
     category: "Team & Roles",
     danger: true,
     note: "DANGER: a role that can manage roles can grant itself ANY permission. Give this only to trusted admins.",
@@ -398,11 +404,6 @@ const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.TEAM.APPROVE_DEVICES, label: "Approve Mobile Devices" },
     ]
   }
-];
-
-const DATA_SCOPES: { value: DataScope; label: string }[] = [
-  { value: "own", label: "Own Records Only" },
-  { value: "team", label: "Own & Team Records" },
 ];
 
 // Maps each rights section to the plan line that unlocks it. Groups not listed
@@ -831,33 +832,9 @@ export default function RolesPage() {
                     </Card>
                   )}
 
-                  {/* General Data Scope Setting */}
-                  {!permissions.all && (
-                    <Card className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-foreground">Global Data Visibility Scope</h3>
-                          <p className="text-sm text-muted-foreground mt-1">Determine what records (Leads, Customers, etc.) this role can see across the CRM.</p>
-                        </div>
-                        <Select 
-                          value={(permissions.global_scope as string) || 'own'} 
-                          onValueChange={(val) => setPermissions({...permissions, global_scope: val || undefined, leads_scope: val || undefined, contacts_scope: val || undefined})}
-                          disabled={!isEditing || isAdminRole}
-                        >
-                          <SelectTrigger className="w-[200px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {DATA_SCOPES.map(scope => (
-                              <SelectItem key={scope.value} value={scope.value}>
-                                {scope.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </Card>
-                  )}
+                  {/* The old own/team "Global Data Visibility Scope" selector was replaced by the
+                      directional "Data Visibility" rights (view_child_data / view_parent_data) in
+                      the permission list above — enforced app-level (Phase 9). */}
 
                   {/* Rights heading + global Select all */}
                   {!permissions.all && (

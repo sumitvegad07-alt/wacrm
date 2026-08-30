@@ -151,6 +151,15 @@ export const PERMISSIONS = {
     OVERRIDE_CREDIT_LIMIT: 'override_credit_limit',
   },
 
+  // Data Visibility — directional scoping through the reporting hierarchy (profiles.manager_id).
+  // Default (neither right) = a user sees only their OWN records. These widen that; owner/admin
+  // and any {all:true} role see everything regardless. Replaced the old own/team `global_scope`
+  // selector. Enforced app-level first (mobile), RLS hardening to follow.
+  DATA_ACCESS: {
+    VIEW_CHILD_DATA: 'view_child_data',   // also see subordinates' (downline) records
+    VIEW_PARENT_DATA: 'view_parent_data', // also see managers' (upline) records
+  },
+
   // Task Management
   TASKS: {
     VIEW: 'view_tasks',
@@ -178,11 +187,13 @@ export const PERMISSIONS = {
   // Mobile App & Field Force (existing keys)
   MOBILE: {
     VIEW_LOCATION_TRACKING: 'view_location_tracking',
-    LOCATION_SCREEN: 'mobile_location_screen',
     ALLOW_LOGOUT: 'allow_logout',
     OFFLINE_MODE: 'mobile_offline_mode',
     VISIT_CHECKIN: 'mobile_visit_checkin',
     EDIT_GEOTAG: 'edit_geotag',
+    // Removed 2026-08-30: LOCATION_SCREEN ('mobile_location_screen') — the mobile location
+    // screen now exists (Field Team → Live Feed) gated by view_location_tracking / view_live_feed,
+    // so this key was a redundant placeholder gating nothing.
   },
 
   // Location / Attendance (new field rights)
@@ -190,8 +201,9 @@ export const PERMISSIONS = {
     VIEW_LIVE_FEED: 'view_live_feed',
     VIEW_TRACKING_HEALTH: 'view_tracking_health',
     VIEW_ATTENDANCE: 'view_attendance',
-    MANAGE_ATTENDANCE: 'manage_attendance',
     EXPORT_ATTENDANCE: 'export_attendance',
+    // Removed 2026-08-30: MANAGE_ATTENDANCE ('manage_attendance') — gated nothing on web or
+    // mobile (no attendance-regularization feature exists). Re-add when that feature is built.
   },
 
   // Mobile field RULES — enforced INSIDE the mobile app (web stores + renders).
