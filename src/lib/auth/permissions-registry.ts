@@ -146,10 +146,9 @@ export const PERMISSIONS = {
     EDIT_OPENING_BALANCE: 'edit_opening_balance',
   },
 
-  // Credit Control
-  CREDIT_CONTROL: {
-    OVERRIDE_CREDIT_LIMIT: 'override_credit_limit',
-  },
+  // Credit Control — removed 2026-08-30: `override_credit_limit` was a dormant per-role right.
+  // Credit control is enforced on the order form by the account setting `creditLimitAction`
+  // (ignore / warn / block), which applies org-wide; the per-role override was never wired in.
 
   // Data Visibility — directional scoping through the reporting hierarchy (profiles.manager_id).
   // Default (neither right) = a user sees only their OWN records. These widen that; owner/admin

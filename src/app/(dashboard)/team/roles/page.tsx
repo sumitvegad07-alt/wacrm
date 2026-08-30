@@ -33,6 +33,12 @@ type PermGroup = {
   note?: string;
 };
 
+// Shown on sections whose features live only in the Web admin portal (masters, settings, imports,
+// WhatsApp, team & roles). The mobile app has no screens for these, so ticking them changes nothing
+// on a phone. The banner stops admins expecting a mobile effect.
+const WEB_ONLY_NOTE =
+  "🖥️ These rights apply to the Web admin portal only — they have no effect on the mobile app.";
+
 const PERMISSION_GROUPS: PermGroup[] = [
   {
     category: "Leads",
@@ -135,6 +141,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "Data Import",
+    note: WEB_ONLY_NOTE,
     permissions: [
       { id: PERMISSIONS.IMPORT.DATA, label: "Import Data (upload files to bulk-add records)" },
       { id: PERMISSIONS.IMPORT.MANAGE, label: "Manage Imports (undo an import, save mapping templates, create missing values)" },
@@ -168,12 +175,6 @@ const PERMISSION_GROUPS: PermGroup[] = [
     ]
   },
   {
-    category: "Credit Control",
-    permissions: [
-      { id: PERMISSIONS.CREDIT_CONTROL.OVERRIDE_CREDIT_LIMIT, label: "Override Credit Limit on Orders" },
-    ]
-  },
-  {
     category: "Task Management",
     permissions: [
       { id: PERMISSIONS.TASKS.VIEW, label: "View Tasks" },
@@ -187,6 +188,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "WhatsApp Features",
+    note: WEB_ONLY_NOTE,
     permissions: [
       { id: PERMISSIONS.WHATSAPP.VIEW, label: "Access WhatsApp Dashboard" },
       { id: PERMISSIONS.WHATSAPP.SEND, label: "Send Message / Reply" },
@@ -287,6 +289,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "Masters — Sales",
+    note: WEB_ONLY_NOTE,
     permissions: [
       { id: PERMISSIONS.MASTERS.CREATE_PAYMENT_TYPES, label: "Create Payment Types" },
       { id: PERMISSIONS.MASTERS.EDIT_PAYMENT_TYPES, label: "Edit Payment Types" },
@@ -313,6 +316,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "Masters — Leads & Deals",
+    note: WEB_ONLY_NOTE,
     permissions: [
       { id: PERMISSIONS.MASTERS.CREATE_LEAD_SOURCES, label: "Create Lead Sources" },
       { id: PERMISSIONS.MASTERS.EDIT_LEAD_SOURCES, label: "Edit Lead Sources" },
@@ -330,6 +334,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "Masters — Geography & Field",
+    note: WEB_ONLY_NOTE,
     permissions: [
       { id: PERMISSIONS.MASTERS.CREATE_TERRITORIES, label: "Create Territories" },
       { id: PERMISSIONS.MASTERS.EDIT_TERRITORIES, label: "Edit Territories" },
@@ -341,6 +346,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "Masters — HR",
+    note: WEB_ONLY_NOTE,
     permissions: [
       { id: PERMISSIONS.MASTERS.CREATE_LEAVE_TYPES, label: "Create Leave Types" },
       { id: PERMISSIONS.MASTERS.EDIT_LEAVE_TYPES, label: "Edit Leave Types" },
@@ -352,6 +358,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "Masters — Workspace",
+    note: WEB_ONLY_NOTE,
     permissions: [
       { id: PERMISSIONS.MASTERS.CREATE_DOCUMENT_TEMPLATES, label: "Create Templates" },
       { id: PERMISSIONS.MASTERS.EDIT_DOCUMENT_TEMPLATES, label: "Edit Templates" },
@@ -366,6 +373,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "Settings",
+    note: WEB_ONLY_NOTE,
     permissions: [
       { id: PERMISSIONS.SETTINGS.MANAGE_ORG, label: "Manage Organization Settings (module toggles, working days)" },
       { id: PERMISSIONS.SETTINGS.MANAGE_ORDER_SETTINGS, label: "Manage Order Settings" },
@@ -396,7 +404,7 @@ const PERMISSION_GROUPS: PermGroup[] = [
   {
     category: "Team & Roles",
     danger: true,
-    note: "DANGER: a role that can manage roles can grant itself ANY permission. Give this only to trusted admins.",
+    note: `DANGER: a role that can manage roles can grant itself ANY permission. Give this only to trusted admins. ${WEB_ONLY_NOTE}`,
     permissions: [
       { id: PERMISSIONS.ADMIN.VIEW_TEAM_MANAGEMENT, label: "View Team / Employees" },
       { id: PERMISSIONS.TEAM.MANAGE_EMPLOYEES, label: "Create / Edit / Deactivate Employees" },
@@ -419,7 +427,6 @@ const GROUP_LINE: Record<string, "crm" | "sfa" | "wfa"> = {
   "Dispatch": "sfa",
   "Payments & Finance": "sfa",
   "Customer Financials": "sfa",
-  "Credit Control": "sfa",
   "Expenses": "sfa",
   "Stock / Inventory": "sfa",
   "Schemes & Pricing": "sfa",

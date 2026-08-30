@@ -55,7 +55,6 @@ describe('payment permission gating', () => {
   it('does not leak credit limits to a rep who only sees outstanding', () => {
     expect(hasPermission(FIELD_REP, PERMISSIONS.CUSTOMERS.VIEW_OUTSTANDING)).toBe(true);
     expect(hasPermission(FIELD_REP, PERMISSIONS.CUSTOMERS.VIEW_CUSTOMER_CREDIT_LIMIT)).toBe(false);
-    expect(hasPermission(FIELD_REP, PERMISSIONS.CREDIT_CONTROL.OVERRIDE_CREDIT_LIMIT)).toBe(false);
   });
 
   it('returns false for a role with no permissions at all', () => {
