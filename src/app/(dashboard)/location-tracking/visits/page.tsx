@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useDataScope } from "@/hooks/use-data-scope";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Image as ImageIcon, Search } from "lucide-react";
@@ -28,10 +29,13 @@ export default function CustomerVisitsPage() {
   const [filterState, setFilterState] = useState<FilterState>({});
 
   const supabase = createClient();
+  const scope = useDataScope();
 
   useEffect(() => {
+    if (!scope.ready) return; // wait for the scoped id set
     fetchVisits();
-  }, [selectedDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, scope.ready, scope.key]);
 
   const fetchVisits = async () => {
     setIsLoading(true);
@@ -40,7 +44,10 @@ export default function CustomerVisitsPage() {
     const endOfDay = new Date(selectedDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const { data, error } = await supabase
+    // Directional data-scoping (app-level; RLS is the real boundary). No-op unless the account
+    // has Reporting Hierarchy on and the role isn't a bypass — see useDataScope.
+    const { data, error } = await scope.apply(
+      supabase
       .from('site_visits')
       .select(`
         id,
@@ -60,7 +67,9 @@ export default function CustomerVisitsPage() {
       `)
       .gte('check_in_at', startOfDay.toISOString())
       .lte('check_in_at', endOfDay.toISOString())
-      .order('check_in_at', { ascending: false });
+      .order('check_in_at', { ascending: false }),
+      'user_id',
+    );
 
     if (data) {
       // Visits are polymorphic (target_type 'Customer' | 'Lead'). The

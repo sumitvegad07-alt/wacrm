@@ -30,6 +30,7 @@ import { GitBranch, Plus, ChevronDown, Settings, Upload, CheckCircle, XCircle, M
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
+import { useDataScope } from "@/hooks/use-data-scope";
 import { GatedButton } from "@/components/ui/gated-button";
 
 import { DataTable } from "@/components/ui/data-table/data-table";
@@ -50,6 +51,7 @@ export default function PipelinesPage() {
   const canEditSettings = useCan("edit-settings");
   const canCreateDeals = useCan("send-messages");
   const { accountId } = useAuth();
+  const scope = useDataScope();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -166,11 +168,16 @@ export default function PipelinesPage() {
 
   const loadDeals = useCallback(
     async (pipelineId: string) => {
-      const { data: dealsData } = await supabase
-        .from("deals")
-        .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
-        .eq("pipeline_id", pipelineId)
-        .order("created_at", { ascending: false });
+      // Directional data-scoping (app-level; RLS is the real boundary). No-op unless the account
+      // has Reporting Hierarchy on and the role isn't a bypass — see useDataScope.
+      const { data: dealsData } = await scope.apply(
+        supabase
+          .from("deals")
+          .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
+          .eq("pipeline_id", pipelineId)
+          .order("created_at", { ascending: false }),
+        "user_id",
+      );
 
       const { data: fieldsData } = await supabase
         .from("custom_fields")
@@ -200,7 +207,7 @@ export default function PipelinesPage() {
       }
       return enhancedDeals as Deal[];
     },
-    [supabase],
+    [supabase, scope.apply, scope.key],
   );
 
   const seedDefaultPipeline = useCallback(async (): Promise<Pipeline | null> => {
@@ -267,6 +274,7 @@ export default function PipelinesPage() {
       setDeals([]);
       return;
     }
+    if (!scope.ready) return; // wait for the scoped id set before fetching deals
     let cancelled = false;
     (async () => {
       const [s, d] = await Promise.all([
@@ -280,7 +288,7 @@ export default function PipelinesPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedPipelineId, loadStages, loadDeals]);
+  }, [selectedPipelineId, loadStages, loadDeals, scope.ready]);
 
   const refreshPipelines = useCallback(async () => {
     const list = await loadPipelines();

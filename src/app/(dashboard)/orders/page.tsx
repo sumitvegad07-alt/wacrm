@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Search, Plus, TrendingUp, Pencil, CheckCircle2, XCircle, Ban, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
+import { useDataScope } from '@/hooks/use-data-scope';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
@@ -80,6 +81,7 @@ export default function OrdersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner } = useAuth();
+  const scope = useDataScope();
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -96,15 +98,22 @@ export default function OrdersPage() {
   const canManageStatus = hasPermission(PERMISSIONS.CRM.MANAGE_ORDER_STATUS);
 
   const fetchData = useCallback(async () => {
-    if (!accountId) return;
+    if (!accountId || !scope.ready) return;
     setLoading(true);
 
-    const [{ data: orderData }, { data: profiles }, { data: fieldsData }, { data: acctData }] = await Promise.all([
+    // Directional data-scoping (app-level; RLS is the real boundary). No-op unless the account
+    // has Reporting Hierarchy on and the role isn't a bypass — see useDataScope.
+    const ordersQuery = scope.apply(
       supabase
         .from('orders')
         .select('*, order_items(count), contacts(company, name), leads(name)')
         .eq('account_id', accountId)
         .order('created_at', { ascending: false }),
+      'user_id',
+    );
+
+    const [{ data: orderData }, { data: profiles }, { data: fieldsData }, { data: acctData }] = await Promise.all([
+      ordersQuery,
       supabase.from('profiles').select('id, full_name').eq('account_id', accountId),
       supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'order'),
       supabase.from('accounts').select('settings').eq('id', accountId).single(),
@@ -147,7 +156,7 @@ export default function OrdersPage() {
     setOrders(rows);
     setSelectedIds(new Set());
     setLoading(false);
-  }, [accountId, supabase]);
+  }, [accountId, supabase, scope.ready, scope.key, scope.apply]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useRealtimeRefresh('orders', fetchData);

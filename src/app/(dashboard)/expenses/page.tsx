@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useAuth } from "@/hooks/use-auth";
+import { useDataScope } from "@/hooks/use-data-scope";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -22,6 +23,7 @@ import { Expense, CustomField } from "@/types";
 
 export default function ExpensesPage() {
   const { accountId, profile, accountRole, user } = useAuth();
+  const scope = useDataScope();
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -39,19 +41,21 @@ export default function ExpensesPage() {
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
   async function loadExpenses() {
-    if (!accountId) return;
+    if (!accountId || !scope.ready) return;
     setLoading(true);
-    
-    const query = supabase
-      .from("expenses")
-      .select("*, expense_type:expense_types(*), employee:profiles!expenses_employee_id_fkey(*)")
-      .eq("account_id", accountId)
-      .order("created_at", { ascending: false });
-      
-    // Non-admins only see their own expenses
-    if (!isAdmin) {
-      query.eq("employee_id", profile?.id);
-    }
+
+    // Directional data-scoping on employee_id (profiles.id). No-op unless the account has
+    // Reporting Hierarchy on and the role isn't a bypass; otherwise RLS still caps non-admins at
+    // their own rows (expenses_select = admin OR own OR extends). See useDataScope.
+    const query = scope.apply(
+      supabase
+        .from("expenses")
+        .select("*, expense_type:expense_types(*), employee:profiles!expenses_employee_id_fkey(*)")
+        .eq("account_id", accountId)
+        .order("created_at", { ascending: false }),
+      "employee_id",
+      "profile",
+    );
 
     const { data, error } = await query;
     
@@ -93,7 +97,8 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     loadExpenses();
-  }, [accountId, profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId, profile, scope.ready, scope.key]);
   useRealtimeRefresh('expenses', loadExpenses);
 
   useEffect(() => {
