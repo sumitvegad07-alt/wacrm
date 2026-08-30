@@ -80,6 +80,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<EmployeeDevice[]>([]);
   const [holidayLists, setHolidayLists] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
+  // Other employees, for the Reporting Manager picker (only used when Reporting Hierarchy is on).
+  const [managers, setManagers] = useState<{ id: string; full_name: string }[]>([]);
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -159,6 +161,15 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         .order("name");
       setHolidayLists(listData ?? []);
       setDevices((devData || []) as EmployeeDevice[]);
+
+      // Manager options for the reporting hierarchy — everyone else in the account (never self, to
+      // keep a person from being their own manager; the DB also blocks cycles).
+      const { data: mgrData } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .neq("id", employeeId)
+        .order("full_name");
+      setManagers((mgrData ?? []) as { id: string; full_name: string }[]);
 
       if (accountId && user?.id) {
         await ensureDefaultSectionsAndFields(accountId, "user", user.id, supabase);
@@ -497,6 +508,50 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               </p>
             </div>
           </Card>
+
+          {/* Reporting Manager — only when Reporting Hierarchy is enabled in Organisation Settings.
+              Sets profiles.manager_id, which drives the View Subordinate/Manager Data rights. */}
+          {isModuleEnabled("reporting_hierarchy") && (
+            <Card className="border-border shadow-sm overflow-hidden">
+              <div className="p-4 border-b bg-muted/20">
+                <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <User className="w-5 h-5 text-primary" /> Reporting Manager
+                </h2>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Who this employee reports to. Sets the reporting hierarchy that the
+                  &ldquo;View Subordinate / Manager Data&rdquo; rights walk.
+                </p>
+                {isEditing ? (
+                  <Select
+                    value={form.manager_id || "__none__"}
+                    items={Object.fromEntries([
+                      ["__none__", "— No manager —"],
+                      ...managers.map((m) => [m.id, m.full_name] as [string, string]),
+                    ])}
+                    onValueChange={(v) =>
+                      setForm({ ...form, manager_id: v === "__none__" ? "" : (v ?? "") })
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— No manager —</SelectItem>
+                      {managers.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="font-medium text-foreground text-base">
+                    {managers.find((m) => m.id === form.manager_id)?.full_name ?? "— No manager —"}
+                  </p>
+                )}
+              </div>
+            </Card>
+          )}
 
           <Card className="border-border shadow-sm overflow-hidden">
             <div className="p-4 border-b bg-muted/20">

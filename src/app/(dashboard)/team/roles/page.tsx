@@ -444,6 +444,9 @@ const GROUP_MODULE: Record<string, keyof ModuleSettings> = {
   "WhatsApp Features": "whatsapp",
   "Route Management": "route",
   "Masters — Geography & Field": "territory",
+  // Data Visibility (view_child/parent_data) is meaningless without a reporting tree, so it only
+  // appears when Reporting Hierarchy is enabled in Organisation Settings.
+  "Data Visibility": "reporting_hierarchy",
 };
 
 export default function RolesPage() {
