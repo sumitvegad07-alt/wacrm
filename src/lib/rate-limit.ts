@@ -152,6 +152,10 @@ export const RATE_LIMITS = {
    *  user is plenty for opportunisitic offline-sync bursts without
    *  choking the server or their data plan. */
   locationPings: { limit: 10, windowMs: 60_000 },
+  /** ASK OZZO question (per user). Each call is one Claude generation, so
+   *  this bounds cost/abuse: 20 questions / 5 min is well above a human
+   *  reading answers, while stopping a runaway loop from burning tokens. */
+  askOzzo: { limit: 20, windowMs: 5 * 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't

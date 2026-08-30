@@ -310,4 +310,12 @@ export const PERMISSIONS = {
     DATA: 'import_data',
     MANAGE: 'import_manage',
   },
+
+  // ASK OZZO — Support & Implementation Copilot (read-only assistant).
+  // Default-granted; owner/admin resolve as all-true via has_permission().
+  // Gating is soft (it's help, not a privileged action); an org can also
+  // switch the whole feature off via accounts.settings.ask_ozzo_enabled.
+  ASSISTANT: {
+    USE_ASK_OZZO: 'use_ask_ozzo',
+  },
 } as const;

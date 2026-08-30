@@ -9,6 +9,7 @@ import { Header } from "@/components/layout/header";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { useImportNotifications } from "@/hooks/use-import-notifications";
 import { Button } from "@/components/ui/button";
+import { AskOzzo } from "@/components/ozzo/ask-ozzo";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -255,6 +256,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      {/* ASK OZZO — read-only support/implementation copilot, available app-wide. */}
+      <AskOzzo />
     </div>
   );
 }
