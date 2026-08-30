@@ -193,9 +193,14 @@ export async function POST(request: Request) {
         controller.close();
       } catch (err) {
         console.error('[POST /api/ozzo/ask] stream error:', err);
+        // Surface a short, non-secret detail so config/billing issues are
+        // diagnosable from the UI instead of an opaque "having trouble".
+        const detail =
+          err instanceof Error ? err.message.slice(0, 200) : 'Unknown error';
         send({
           type: 'error',
           message: "I'm having trouble right now. Please try again in a moment.",
+          detail,
         });
         controller.close();
       }

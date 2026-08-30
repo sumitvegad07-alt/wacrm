@@ -140,6 +140,7 @@ export function AskOzzo() {
             type: string;
             text?: string;
             message?: string;
+            detail?: string;
             conversationId?: string;
             citations?: Citation[];
           };
@@ -157,9 +158,10 @@ export function AskOzzo() {
               copy[copy.length - 1] = { ...last, citations: evt.citations ?? [] };
               if (evt.conversationId) setConversationId(evt.conversationId);
             } else if (evt.type === "error") {
+              const base = last.content || (evt.message ?? "Something went wrong.");
               copy[copy.length - 1] = {
                 ...last,
-                content: last.content || (evt.message ?? "Something went wrong."),
+                content: evt.detail ? `${base}\n\n(details: ${evt.detail})` : base,
                 error: true,
               };
             }
