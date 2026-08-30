@@ -388,13 +388,16 @@ export function getMenuStructure(
       label: "Location Tracking",
       icon: MapPin,
       items: [
+        // Overview is the area entry point — gated by the umbrella `view_location_tracking` only
+        // (the module gate on line ~630). The pages below add their own finer right on top, so a
+        // role can be given the area but only the specific screens it should see. Owner/admin pass.
         { href: "/location-tracking/overview", label: "Overview", icon: LayoutDashboard, module: "location_tracking" },
-        { href: "/location-tracking/health", label: "Tracking Health", icon: HeartPulse, module: "location_tracking" },
-        { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin, module: "location_tracking" },
-        { href: "/location-tracking/all-locations", label: "All Locations", icon: Map, module: "location_tracking" },
+        { href: "/location-tracking/health", label: "Tracking Health", icon: HeartPulse, module: "location_tracking", permission: "view_tracking_health" },
+        { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin, module: "location_tracking", permission: "view_live_feed" },
+        { href: "/location-tracking/all-locations", label: "All Locations", icon: Map, module: "location_tracking", permission: "view_live_feed" },
         { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
         // Track report was merged into Tracking Health — one table, nothing lost.
-        { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking" },
+        { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking", permission: "view_attendance" },
         { href: "/location-tracking/leaves", label: "Leaves", icon: CalendarOff, module: "location_tracking" },
         { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking" },
       ],

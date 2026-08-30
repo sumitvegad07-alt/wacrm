@@ -126,10 +126,11 @@ const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "Stock / Inventory",
+    note: "On mobile, stock is view-only (gated by View Stock, shown while placing an order). Manage Stock and Import Opening Stock apply to the web app only.",
     permissions: [
       { id: PERMISSIONS.STOCK.VIEW, label: "View Stock (closing stock, ledger, report)" },
-      { id: PERMISSIONS.STOCK.MANAGE, label: "Manage Stock (set opening, Stock In / Out adjustments)" },
-      { id: PERMISSIONS.STOCK.IMPORT, label: "Import Opening Stock" },
+      { id: PERMISSIONS.STOCK.MANAGE, label: "Manage Stock — set opening, Stock In / Out adjustments (Web only)" },
+      { id: PERMISSIONS.STOCK.IMPORT, label: "Import Opening Stock (Web only)" },
     ]
   },
   {
@@ -182,16 +183,6 @@ const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.TASKS.ASSIGN_PARENT, label: "Assign Tasks to Parent User" },
       { id: PERMISSIONS.TASKS.ASSIGN_CHILD, label: "Assign Tasks to Child User" },
       { id: PERMISSIONS.TASKS.ASSIGN_ALL, label: "Assign Tasks to All Users" },
-    ]
-  },
-  {
-    category: "Mobile App & Field Force",
-    permissions: [
-      { id: PERMISSIONS.MOBILE.VIEW_LOCATION_TRACKING, label: "View Location Dashboard (Web)" },
-      { id: PERMISSIONS.MOBILE.LOCATION_SCREEN, label: "Location Map Screen (Mobile)" },
-      { id: PERMISSIONS.MOBILE.ALLOW_LOGOUT, label: "Allow Mobile Logout" },
-      { id: PERMISSIONS.MOBILE.VISIT_CHECKIN, label: "Allow Manual Check-ins" },
-      { id: PERMISSIONS.MOBILE.EDIT_GEOTAG, label: "Edit Customer Geo-tag (Coordinates)" },
     ]
   },
   {
@@ -253,9 +244,14 @@ const PERMISSION_GROUPS: PermGroup[] = [
     ]
   },
   {
-    category: "Location & Attendance",
+    // Merged from the old "Mobile App & Field Force" + "Location & Attendance" sections, which
+    // overlapped on View Location Dashboard, Location Map Screen and Allow Mobile Logout. One home
+    // for every location / attendance / mobile-device right. The view rights here gate BOTH the web
+    // /location-tracking pages and the matching mobile Field Team screens.
+    category: "Mobile App, Location & Attendance",
+    note: "Location, attendance and mobile-device rights. View Location Dashboard / Live Feed / Tracking Health / Attendance gate the matching pages on BOTH web and the mobile Field Team module.",
     permissions: [
-      { id: PERMISSIONS.MOBILE.VIEW_LOCATION_TRACKING, label: "View Location Dashboard (Web)" },
+      { id: PERMISSIONS.MOBILE.VIEW_LOCATION_TRACKING, label: "View Location Dashboard" },
       { id: PERMISSIONS.FIELD.VIEW_LIVE_FEED, label: "View Live Feed / All Locations" },
       { id: PERMISSIONS.FIELD.VIEW_TRACKING_HEALTH, label: "View Tracking Health" },
       { id: PERMISSIONS.FIELD.VIEW_ATTENDANCE, label: "View Attendance" },

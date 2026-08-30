@@ -15,6 +15,7 @@ import { ISSUE_CATALOG } from "@/lib/location/tracking-issues";
 import { normalizeTrackingSettings } from "@/lib/location/tracking-window";
 import { computeFilteredDistanceKm, isTrustworthyPing } from "@/lib/location/distance";
 import { useAuth } from "@/hooks/use-auth";
+import { ScreenAccessDenied } from "@/components/location-tracking/screen-access-denied";
 
 /**
  * Tracking Health — the single location-quality report.
@@ -74,7 +75,7 @@ const num = (v: number | null | undefined, suffix = "") => (
 );
 
 export default function TrackingHealthPage() {
-  const { accountId } = useAuth();
+  const { accountId, hasPermission } = useAuth();
   const [fromDate, setFromDate] = useState(todayStr);
   const [toDate, setToDate] = useState(todayStr);
   const [rows, setRows] = useState<HealthRow[]>([]);
@@ -424,6 +425,11 @@ export default function TrackingHealthPage() {
       rows.filter((r) => !globalSearch || r.name.toLowerCase().includes(globalSearch.toLowerCase())),
     [rows, globalSearch],
   );
+
+  // Direct-URL guard — the sidebar hides this without view_tracking_health. Owner/admin pass.
+  if (!hasPermission("view_tracking_health")) {
+    return <ScreenAccessDenied title="No access to Tracking Health" rightLabel="View tracking health" />;
+  }
 
   return (
     <div className="space-y-6">

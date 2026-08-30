@@ -30,9 +30,10 @@ import {
   PointMapDialog,
   formatLatLng,
 } from '@/components/location-tracking/point-map-dialog';
+import { ScreenAccessDenied } from '@/components/location-tracking/screen-access-denied';
 
 export default function AllLocationsPage() {
-  const { accountId } = useAuth();
+  const { accountId, hasPermission } = useAuth();
   const [mapRow, setMapRow] = useState<any | null>(null);
   const [issueRow, setIssueRow] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -375,6 +376,12 @@ export default function AllLocationsPage() {
       return true;
     });
   }, [searchQuery, pingsData, filterState]);
+
+  // Direct-URL guard: the sidebar hides this link without view_live_feed, but a bookmark would
+  // still render it. Owner/admin pass inside hasPermission.
+  if (!hasPermission("view_live_feed")) {
+    return <ScreenAccessDenied title="No access to All Locations" rightLabel="View live feed" />;
+  }
 
   return (
     <div className="space-y-6">

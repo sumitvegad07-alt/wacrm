@@ -20,6 +20,8 @@ import {
 import type { RouteOverlay } from '@/components/location-tracking/map-view';
 import { computeFilteredDistanceKm, isTrustworthyPing } from '@/lib/location/distance';
 import { isManualPing, pingSourceLabel } from '@/lib/location/ping-source';
+import { useAuth } from '@/hooks/use-auth';
+import { ScreenAccessDenied } from '@/components/location-tracking/screen-access-denied';
 
 /** Colour for a visit's feedback verdict, so a bad call stands out when scanning the day. */
 function feedbackTone(type: string): string {
@@ -52,6 +54,7 @@ const MapView = dynamic(
 );
 
 export default function LocationDashboardPage() {
+  const { hasPermission } = useAuth();
   const [usersData, setUsersData] = useState<any[]>([]);
   const [pointsData, setPointsData] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -546,6 +549,11 @@ export default function LocationDashboardPage() {
       return true;
     });
   }, [pointsData, filters]);
+
+  // Direct-URL guard — the sidebar hides Live Feed without view_live_feed. Owner/admin pass.
+  if (!hasPermission("view_live_feed")) {
+    return <ScreenAccessDenied title="No access to Live Feed" rightLabel="View live feed" />;
+  }
 
   return (
     <div className="border-border bg-background -m-4 flex h-[calc(100vh-2rem)] overflow-hidden rounded-xl border sm:-m-6">

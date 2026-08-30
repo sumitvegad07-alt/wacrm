@@ -30,10 +30,11 @@ import {
   type AttendanceTone,
 } from "@/lib/location/attendance-status";
 import { monthWorkingDays, toDateKey } from "@/lib/location/working-days";
+import { ScreenAccessDenied } from "@/components/location-tracking/screen-access-denied";
 import { listApprovedLeaveDays, resolveEmployeeCalendars } from "@/lib/leave/api";
 
 export default function UserAttendancePage() {
-  const { accountId } = useAuth();
+  const { accountId, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState("Punch in");
   const [globalSearch, setGlobalSearch] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -546,6 +547,11 @@ export default function UserAttendancePage() {
     setActiveTab(tab);
     setFilterState({});
   };
+
+  // Direct-URL guard — the sidebar hides this without view_attendance. Owner/admin pass.
+  if (!hasPermission("view_attendance")) {
+    return <ScreenAccessDenied title="No access to User Attendance" rightLabel="View attendance" />;
+  }
 
   return (
     <div className="space-y-6">
