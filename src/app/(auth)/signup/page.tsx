@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { MessageSquare, CheckCircle, UsersRound } from "lucide-react";
+import { isNewPlan, PLAN_LABEL } from "@/lib/plans/catalog";
 
 export default function SignupPage() {
   return (
@@ -27,6 +28,14 @@ export default function SignupPage() {
 function SignupPageInner() {
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite");
+
+  // Plan the signup link is selling (?plan=CRM|WFA|CRM_WFA|SFA|CRM_SFA).
+  // Case-insensitive; anything unknown falls back to null, and the DB trigger
+  // then defaults the account to CRM. This is the only thing that decides which
+  // product lines the new account unlocks. Ignored on invite signups — an
+  // invitee joins an existing account and inherits that account's plan.
+  const planParam = (searchParams.get("plan") ?? "").toUpperCase();
+  const plan = !inviteToken && isNewPlan(planParam) ? planParam : null;
 
   const [fullName, setFullName] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -64,6 +73,10 @@ function SignupPageInner() {
           company_name: companyName,
           sales_users: salesUsers ? parseInt(salesUsers, 10) : null,
           phone: phone,
+          // Carried into raw_user_meta_data and read by the handle_new_user
+          // trigger, which sets the account's subscription_plan + default
+          // module_settings. Omitted → trigger defaults to CRM.
+          ...(plan ? { plan } : {}),
         },
         ...(emailRedirectTo ? { emailRedirectTo } : {}),
       },
@@ -141,7 +154,9 @@ function SignupPageInner() {
           <CardDescription className="text-muted-foreground">
             {inviteToken
               ? "Verify your email, then accept the invitation to join your team."
-              : "Get started with CRM Template for WhatsApp"}
+              : plan
+                ? `Get started on the ${PLAN_LABEL[plan]} plan`
+                : "Get started with OZZO"}
           </CardDescription>
         </CardHeader>
         <CardContent>
