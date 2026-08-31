@@ -28,9 +28,9 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
-  icons: {
-    icon: [{ url: "/icon" }],
-  },
+  // Favicon + apple-touch icon come from the file-based convention
+  // (src/app/icon.png and src/app/apple-icon.png) — the OZZO brand mark.
+  // Next.js auto-injects the <link rel="icon"> / apple-touch-icon tags.
   formatDetection: {
     email: false,
     address: false,

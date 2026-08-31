@@ -144,6 +144,7 @@ const ROLE_CHIP: Record<
       "border-border bg-card text-muted-foreground",
   },
 };
+import { BrandWordmark } from "@/components/shared/brand";
 import {
   Avatar,
   AvatarFallback,
@@ -832,13 +833,8 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-16 shrink-0 items-center px-6">
-          <Link href="/follow-ups" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-semibold text-foreground">
-              CRM Template for WhatsApp
-            </span>
+          <Link href="/follow-ups" className="flex items-center" aria-label="OZZO home">
+            <BrandWordmark />
           </Link>
           <button
             type="button"

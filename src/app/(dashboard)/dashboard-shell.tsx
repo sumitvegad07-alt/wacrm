@@ -10,6 +10,7 @@ import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { useImportNotifications } from "@/hooks/use-import-notifications";
 import { Button } from "@/components/ui/button";
 import { AskOzzo } from "@/components/ozzo/ask-ozzo";
+import { BrandSplash } from "@/components/shared/brand";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -122,14 +123,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   }, [account]);
 
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
+    return <BrandSplash />;
   }
 
   if (!user) return null;
