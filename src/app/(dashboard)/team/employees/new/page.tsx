@@ -17,6 +17,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import type { EmployeeRole, CustomField } from "@/types";
+import { TerritoryPicker } from "@/components/territories/territory-picker";
+import { getTerritoryRows, getAccountTerritorySettings, assignEmployeeAreas } from "@/lib/territories/api";
+import type { Territory, TerritorySettings } from "@/lib/territories/types";
+import { DEFAULT_TERRITORY_SETTINGS } from "@/lib/territories/settings";
 
 export default function NewEmployeePage() {
   const router = useRouter();
@@ -27,6 +31,12 @@ export default function NewEmployeePage() {
   const [creating, setCreating] = useState(false);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  // Territory Master area assignment. The legacy free-text "area" system field is
+  // replaced in the form by the real cascade picker (Country → State → City), and
+  // the chosen leaf territory is saved as an employee_area_assignment on submit.
+  const [territoryRows, setTerritoryRows] = useState<Territory[]>([]);
+  const [territorySettings, setTerritorySettings] = useState<TerritorySettings>(DEFAULT_TERRITORY_SETTINGS);
+  const [areaTerritoryId, setAreaTerritoryId] = useState<string | null>(null);
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -61,7 +71,19 @@ export default function NewEmployeePage() {
         .eq("module_name", "user")
         .order("created_at");
       if (fieldsData) setCustomFields(fieldsData);
-      
+
+      // Territory data for the area picker (same source as Company Profile).
+      try {
+        const [rows, settings] = await Promise.all([
+          getTerritoryRows(accountId),
+          getAccountTerritorySettings(accountId),
+        ]);
+        setTerritoryRows(rows);
+        setTerritorySettings(settings);
+      } catch {
+        // Non-fatal — the picker just shows no options if territories can't load.
+      }
+
       setLoading(false);
     }
     loadData();
@@ -130,6 +152,23 @@ export default function NewEmployeePage() {
         }
       }
 
+      // Assign the picked Territory Master area to the new employee. Non-blocking:
+      // the account is already created, so a failure here only warns.
+      if (profileId && areaTerritoryId) {
+        try {
+          const res = (await assignEmployeeAreas(profileId, [areaTerritoryId])) as {
+            ok: boolean; reason?: string; territory_name?: string;
+          };
+          if (!res.ok && res.reason === "area_taken") {
+            toast.warning(
+              `Employee created, but "${res.territory_name}" is already owned by another employee (area-wise mode allows one owner per area). Assign a different area from their Territory tab.`
+            );
+          }
+        } catch {
+          toast.warning("Employee created, but the area assignment could not be saved. Set it from their Territory tab.");
+        }
+      }
+
       toast.success("Employee created successfully!");
       router.push(profileId ? `/team/employees/${profileId}` : "/team/employees");
     } catch (err: any) {
@@ -143,7 +182,21 @@ export default function NewEmployeePage() {
   const renderCustomSystemField = (field: CustomField) => {
     if (!field.system_key) return null;
     const key = field.system_key as keyof typeof form;
-    
+
+    // The predefined "area" field becomes the Territory Master cascade picker
+    // (selecting a city auto-selects its state + country), matching Company
+    // Profile. The chosen leaf is assigned as the employee's area on save.
+    if (field.system_key === 'area') {
+      return (
+        <TerritoryPicker
+          rows={territoryRows}
+          settings={territorySettings}
+          value={areaTerritoryId}
+          onChange={(id) => setAreaTerritoryId(id)}
+        />
+      );
+    }
+
     if (key === 'employee_role_id') {
       return (
         <Select value={form.employee_role_id} onValueChange={v => setForm({...form, employee_role_id: v || ""})}>
