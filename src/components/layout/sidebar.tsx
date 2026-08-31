@@ -8,7 +8,6 @@ import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { useExtraSettings, type AssignmentMode } from "@/hooks/use-extra-settings";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import {
-  Crown,
   GitBranch,
   LayoutDashboard,
   LogOut,
@@ -18,7 +17,6 @@ import {
   Settings,
   Shield,
   User,
-  UserCog,
   Users,
   UsersRound,
   CalendarOff,
@@ -104,46 +102,7 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
   </svg>
 );
-import type { AccountRole } from "@/lib/auth/roles";
 import type { ProductLine } from "@/lib/plans/catalog";
-
-// Per-role chip metadata used in the sidebar's account strip + the
-// Members tab roster. Keeping this near both consumers in a single
-// place avoids drift between the two surfaces — when a designer
-// wants to recolour "agent" rows, this is the one diff.
-const ROLE_CHIP: Record<
-  AccountRole,
-  { icon: typeof Crown; label: string; className: string }
-> = {
-  owner: {
-    icon: Crown,
-    label: "Owner",
-    // Amber: scarce, immutable, "the boss" — gets visual emphasis.
-    className:
-      "border-amber-500/40 bg-amber-500/10 text-amber-300",
-  },
-  admin: {
-    icon: Shield,
-    label: "Admin",
-    // Primary-tinted: significant but not as scarce as owner.
-    className:
-      "border-primary/40 bg-primary/10 text-primary",
-  },
-  agent: {
-    icon: UserCog,
-    label: "Agent",
-    // Neutral slate: the operational default.
-    className:
-      "border-border bg-muted text-foreground",
-  },
-  viewer: {
-    icon: User,
-    label: "Viewer",
-    // Muted slate: read-only role; visually quieter than agent.
-    className:
-      "border-border bg-card text-muted-foreground",
-  },
-};
 import { BrandWordmark } from "@/components/shared/brand";
 import {
   Avatar,
@@ -545,8 +504,9 @@ export function getMenuStructure(
           : []),
         { href: "/settings?tab=fields", label: "Tags", icon: Tags, permission: "manage_tags" },
         { href: "/settings?tab=document_templates", label: "Template", icon: FileText, permission: "edit_document_templates" },
-        { href: "/settings?tab=deal_pipelines", label: "Deals", icon: Briefcase, permission: "edit_pipelines" },
-        { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter, permission: "edit_lead_sources" },
+        // Deals & Leads settings belong to the CRM line — hidden on SFA/WFA-only plans.
+        { href: "/settings?tab=deal_pipelines", label: "Deals", icon: Briefcase, permission: "edit_pipelines", line: "crm" },
+        { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter, permission: "edit_lead_sources", line: "crm" },
         { href: "/settings?tab=tasks", label: "Task Settings", icon: CheckSquare, permission: "edit_task_types" },
         { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent, permission: "edit_tax_slabs" },
         ...(!moduleSettings || moduleSettings.expense === true
@@ -577,9 +537,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
   const router = useRouter();
   const {
     profile,
-    profileLoading,
     account,
-    accountRole,
     isSuperadmin,
     signOut,
     hasAutomations,
@@ -664,19 +622,6 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
       return items.length > 0 ? { ...node, items } : null;
     })
     .filter((node): node is MenuNode => node !== null);
-
-  // Only surface the account-name strip when it actually carries
-  // information. A solo user's personal account is named after them
-  // (the 017 signup trigger seeds it from `full_name`), so showing it
-  // here would just duplicate the user name in the footer below. Once
-  // the account is renamed or the user joins a shared account, the
-  // name diverges and the strip becomes meaningful — that's the signal
-  // we gate on. Wait for the profile fetch to settle first, otherwise
-  // the strip flashes in once the row resolves (a layout jump).
-  const showAccountStrip =
-    !profileLoading &&
-    !!account?.name &&
-    account.name !== profile?.full_name;
 
   // Close the drawer when route changes — users opened it to navigate,
   // so once they pick a destination the drawer should get out of the way.
@@ -914,43 +859,10 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
           </div>
         </nav>
 
-        {/* User section */}
+        {/* User section. The footer identity shows the COMPANY name (the user's
+            own name already lives in the top-right bar). Role chips
+            (Owner/Admin/…) were removed here per founder request. */}
         <div className="shrink-0 border-t border-border p-3">
-          {/* Account name display — surfaced only when the account
-              name differs from the user's own name (see
-              `showAccountStrip`). For a default solo account the two
-              match, so we hide it to avoid duplicating the user name
-              below; for renamed or shared accounts it tells the user
-              which account they're acting in. */}
-          {showAccountStrip && account?.name ? (
-            <div className="mb-2 flex items-center gap-2 px-3 text-xs text-muted-foreground">
-              <UsersRound className="size-3.5 shrink-0" />
-              {/* `title=` exposes the full name on hover when it
-                  gets truncated (long account names + narrow
-                  sidebars). Cheap a11y win. */}
-              <span className="truncate" title={account.name}>
-                {account.name}
-              </span>
-              {accountRole ? (
-                // Always render the chip — owners used to be
-                // invisible here, which made them indistinguishable
-                // from admins at a glance. Now everyone sees their
-                // role (with a colour cue) regardless of tier.
-                (() => {
-                  const meta = ROLE_CHIP[accountRole];
-                  const Icon = meta.icon;
-                  return (
-                    <span
-                      className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${meta.className}`}
-                    >
-                      <Icon className="size-3" />
-                      {meta.label}
-                    </span>
-                  );
-                })()
-              ) : null}
-            </div>
-          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60 focus:bg-muted/60 focus:outline-none data-popup-open:bg-muted/60">
               <Avatar className="size-8 shrink-0">
@@ -961,14 +873,16 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                   />
                 ) : null}
                 <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
-                  {profile?.full_name?.charAt(0)?.toUpperCase() ??
+                  {account?.name?.charAt(0)?.toUpperCase() ??
                     profile?.email?.charAt(0)?.toUpperCase() ??
-                    "U"}
+                    "C"}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
+                {/* Company name, not the user's — the user's name is in the
+                    top-right bar, so repeating it here was redundant. */}
                 <p className="truncate text-sm font-medium text-foreground">
-                  {profile?.full_name ?? "User"}
+                  {account?.name ?? "Company"}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {profile?.email ?? ""}

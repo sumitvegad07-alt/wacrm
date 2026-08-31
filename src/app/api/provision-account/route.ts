@@ -166,7 +166,6 @@ export async function POST(req: Request) {
 
 
     // Assign Admin role to the creator
-    // Assign Admin role to the creator
     if (adminRole && userId) {
       await supabase
         .from('profiles')
@@ -174,6 +173,62 @@ export async function POST(req: Request) {
         .eq('user_id', userId)
         .eq('account_id', account_id);
     }
+
+    // Default "Sales Executive" role — a mobile-only field rep. Permissions are a
+    // flat { key: true } map of rights (same shape the Roles editor reads/writes).
+    // web_access is explicitly false so the rep can sign into the Android app only.
+    // Rights outside the account's plan are simply inert until that line is bought.
+    await supabase
+      .from('employee_roles')
+      .insert({
+        account_id,
+        name: 'Sales Executive',
+        description: 'Mobile-only field sales rep — sell, collect, visit and report from the app.',
+        status: 'active',
+        permissions: {
+          // Login surface — mobile only
+          web_access: false,
+          mobile_access: true,
+          // Customers — view + create
+          view_contacts: true,
+          create_contacts: true,
+          // Products — view only
+          view_products: true,
+          // Orders — view + create
+          view_orders: true,
+          create_orders: true,
+          // Payments — view, create, attachments, reports
+          view_payments: true,
+          create_payments: true,
+          view_payment_attachments: true,
+          view_payment_reports: true,
+          // Customer financials — outstanding only
+          view_customer_outstanding: true,
+          // Tasks — view, create, edit
+          view_tasks: true,
+          create_task: true,
+          edit_task: true,
+          // Expenses — view, create
+          view_expenses: true,
+          create_expenses: true,
+          // Visits — view + check-in
+          view_visits: true,
+          mobile_visit_checkin: true,
+          // Leave — view + apply
+          view_leaves: true,
+          manage_leaves: true,
+          // Mobile attendance & location — location dashboard only
+          view_location_tracking: true,
+          // Reports — sales/order, payment, ageing, expense, visit/DSR, task + share PDF
+          // (view_payment_reports above already covers the payment report)
+          view_sales_reports: true,
+          view_ageing_reports: true,
+          view_expense_reports: true,
+          view_field_reports: true,
+          view_task_reports: true,
+          share_reports: true,
+        },
+      });
 
     // Load default Indian territories
     await supabase.rpc('territory_bulk_seed', { 

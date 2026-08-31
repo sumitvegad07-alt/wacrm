@@ -110,7 +110,15 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   ]);
 
   useEffect(() => {
-    if (account && !account.is_provisioned && account.subscription_status === 'active') {
+    // Fire first-load provisioning for a fresh account. New signups start on a
+    // 'trialing' status (10-day trial), so 'active' alone would never provision
+    // them — include 'trialing' too.
+    if (
+      account &&
+      !account.is_provisioned &&
+      (account.subscription_status === 'active' ||
+        account.subscription_status === 'trialing')
+    ) {
       fetch("/api/provision-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

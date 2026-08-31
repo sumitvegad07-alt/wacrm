@@ -26,9 +26,15 @@ interface EmployeeRole {
   created_at: string;
 }
 
+type PermLine = "crm" | "sfa" | "wfa";
+
 type PermGroup = {
   category: string;
-  permissions: { id: string; label: string }[];
+  // A permission may carry its own `line` when it sits inside an otherwise
+  // always-shown group but belongs to a single product line (e.g. the
+  // "Lead & Deal Reports" right inside the shared Reports group). It's hidden
+  // when the account's plan doesn't own that line.
+  permissions: { id: string; label: string; line?: PermLine }[];
   danger?: boolean;
   note?: string;
 };
@@ -278,7 +284,8 @@ const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.REPORTS.VIEW_SALES, label: "Sales & Order Reports" },
       { id: PERMISSIONS.REPORTS.VIEW_PAYMENTS, label: "Payment Reports" },
       { id: PERMISSIONS.REPORTS.VIEW_AGEING, label: "Ageing / Outstanding Reports" },
-      { id: PERMISSIONS.REPORTS.VIEW_CRM, label: "Lead & Deal Reports" },
+      // Lead & Deal reporting is a CRM-line right — hide it on SFA/WFA-only plans.
+      { id: PERMISSIONS.REPORTS.VIEW_CRM, label: "Lead & Deal Reports", line: "crm" },
       { id: PERMISSIONS.REPORTS.VIEW_FIELD, label: "Visit / DSR Reports" },
       { id: PERMISSIONS.REPORTS.VIEW_EXPENSE, label: "Expense Reports" },
       { id: PERMISSIONS.REPORTS.VIEW_STOCK, label: "Stock Reports" },
@@ -421,6 +428,7 @@ const GROUP_LINE: Record<string, "crm" | "sfa" | "wfa"> = {
   "Leads": "crm",
   "Deals / Pipeline": "crm",
   "WhatsApp Features": "crm",
+  "Masters — Leads & Deals": "crm",
   "Catalogue (Products)": "sfa",
   "Quotations": "sfa",
   "Orders": "sfa",
@@ -475,7 +483,18 @@ export default function RolesPage() {
       const mod = GROUP_MODULE[cat];
       return !mod || isModuleEnabled(mod); // no toggle → always shown; else honor the setting
     };
-    const shown = PERMISSION_GROUPS.filter((g) => lineOk(g.category) && moduleOk(g.category));
+    const permLineOk = (line?: PermLine) => {
+      if (!line) return true;
+      if (line === "crm") return hasCRM;
+      if (line === "sfa") return hasSFA;
+      return hasWFA;
+    };
+    const shown = PERMISSION_GROUPS
+      .filter((g) => lineOk(g.category) && moduleOk(g.category))
+      // Drop individual rights whose own line the plan doesn't own (e.g. the
+      // CRM "Lead & Deal Reports" right inside the shared Reports group).
+      .map((g) => ({ ...g, permissions: g.permissions.filter((p) => permLineOk(p.line)) }))
+      .filter((g) => g.permissions.length > 0);
     const top = shown.filter((g) => g.category === "Login Access");
     const rest = shown.filter((g) => g.category !== "Login Access");
     return [...top, ...rest];

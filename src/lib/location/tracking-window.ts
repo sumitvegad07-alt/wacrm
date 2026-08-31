@@ -42,8 +42,10 @@ export interface TrackingSettings {
 }
 
 export const DEFAULT_TRACKING: TrackingSettings = {
-  start_time: "09:00",
-  end_time: "18:00",
+  // Founder default: a 10:00–19:00 working day (was 09:00–18:00). Applies to any
+  // account that hasn't customised its shift in Organisation Settings.
+  start_time: "10:00",
+  end_time: "19:00",
   // Founder decision: default to 10 minutes (the reference UI showed 15).
   interval_minutes: 10,
   grace_minutes: 15,
