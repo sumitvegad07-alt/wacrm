@@ -231,12 +231,38 @@ export async function POST(req: Request) {
       });
 
     // Load default Indian territories
-    await supabase.rpc('territory_bulk_seed', { 
-      p_account_id: account_id, 
-      p_countries: SEED_COUNTRIES, 
-      p_states: SEED_INDIA_STATES, 
-      p_districts: SEED_INDIA_DISTRICTS 
+    await supabase.rpc('territory_bulk_seed', {
+      p_account_id: account_id,
+      p_countries: SEED_COUNTRIES,
+      p_states: SEED_INDIA_STATES,
+      p_districts: SEED_INDIA_DISTRICTS
     });
+
+    // Configure Territory Master to area-wise with the default Country/State/City
+    // hierarchy, so the area picker works immediately and customer creation is
+    // area-scoped to each rep's assignment. Merged so the trigger-seeded
+    // company_profile in settings is preserved.
+    {
+      const { data: acctSettings } = await supabase
+        .from('accounts')
+        .select('settings')
+        .eq('id', account_id)
+        .single();
+      const mergedSettings = {
+        ...((acctSettings?.settings as Record<string, unknown>) || {}),
+        territory_settings: {
+          levels: [
+            { position: 1, name: 'Country', enabled: true },
+            { position: 2, name: 'State', enabled: true },
+            { position: 3, name: 'City', enabled: true },
+            { position: 4, name: 'Area', enabled: false },
+            { position: 5, name: 'Sub Area', enabled: false },
+          ],
+          assignment_mode: 'area_wise',
+        },
+      };
+      await supabase.from('accounts').update({ settings: mergedSettings }).eq('id', account_id);
+    }
 
     return NextResponse.json({ message: "Account provisioned successfully" });
   } catch (error: any) {
