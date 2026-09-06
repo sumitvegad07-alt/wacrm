@@ -90,10 +90,10 @@ function SignupPageInner() {
 
     if (data.session) {
       // User is logged in directly since email verification is off. Land on the
-      // app's default screen (My Activity), NOT "/" — the root route is the
-      // public marketing landing page, and it's also where the dashboard shell
-      // fires first-load provisioning (territory seed, default roles).
-      router.push("/follow-ups");
+      // plan-aware dashboard, NOT "/" — the root route is the public marketing
+      // landing page. /dashboard is inside the dashboard shell, which fires
+      // first-load provisioning (territory seed, default roles) on any page.
+      router.push("/dashboard");
       router.refresh();
       return;
     }

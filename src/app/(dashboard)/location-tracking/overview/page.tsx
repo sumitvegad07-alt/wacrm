@@ -46,11 +46,12 @@ export default function LocationTrackingOverviewPage() {
         .select("user_id, battery_pct, lat, lng, accuracy_m, is_mocked, recorded_at")
         .gte("recorded_at", startOfDay.toISOString());
 
-      // Fetch today's visits
+      // Fetch today's visits (site_visits is the real table; customer_visits
+      // does not exist. Dated by check_in_at; RLS scopes it per hierarchy).
       const { count: visitsCount } = await supabase
-        .from("customer_visits")
+        .from("site_visits")
         .select("*", { count: "exact", head: true })
-        .gte("created_at", startOfDay.toISOString());
+        .gte("check_in_at", startOfDay.toISOString());
 
       // Fetch profiles for names
       const { data: profiles } = await supabase

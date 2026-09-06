@@ -47,9 +47,17 @@ const WEB_ONLY_NOTE =
 
 const PERMISSION_GROUPS: PermGroup[] = [
   {
+    // Base right — the home dashboard exists on every plan (its sections adapt to
+    // the plan), so this must NOT be line-gated. Kept out of GROUP_LINE so a
+    // WFA/SFA-only account can still grant it on web + mobile.
+    category: "Dashboard",
+    permissions: [
+      { id: PERMISSIONS.CRM.VIEW_DASHBOARD, label: "View Dashboard" },
+    ],
+  },
+  {
     category: "Leads",
     permissions: [
-      { id: PERMISSIONS.CRM.VIEW_DASHBOARD, label: "View Main Dashboard" },
       { id: PERMISSIONS.CRM.VIEW_LEADS, label: "View Leads" },
       { id: PERMISSIONS.CRM.CREATE_LEADS, label: "Create Leads" },
       { id: PERMISSIONS.CRM.EDIT_LEADS, label: "Edit Leads" },
