@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronsUpDown, Search } from "lucide-react";
+import { Check, ChevronsUpDown, Search, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -19,6 +19,14 @@ interface SearchableSelectProps {
   emptyMessage?: string;
   className?: string;
   disabled?: boolean;
+  /**
+   * When provided, the dropdown offers "+ Create '<typed text>'" whenever the
+   * typed text doesn't match an existing option. The handler creates the record
+   * and returns the new option; it is then selected automatically. This is what
+   * makes any lookup dropdown (lead source/industry/status, etc.) able to add a
+   * new value inline instead of sending the user to Settings.
+   */
+  onCreateOption?: (label: string) => Promise<{ value: string; label: string } | null>;
 }
 
 export function SearchableSelect({
@@ -30,13 +38,34 @@ export function SearchableSelect({
   emptyMessage = "No results found.",
   className,
   disabled = false,
+  onCreateOption,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const filteredOptions = options.filter((option) =>
     option.label.toLowerCase().includes(search.toLowerCase())
   );
+
+  const trimmed = search.trim();
+  const exactExists = options.some((o) => o.label.toLowerCase() === trimmed.toLowerCase());
+  const canCreate = !!onCreateOption && trimmed.length > 0 && !exactExists;
+
+  const handleCreate = async () => {
+    if (!onCreateOption || !trimmed || creating) return;
+    setCreating(true);
+    try {
+      const created = await onCreateOption(trimmed);
+      if (created) {
+        onChange(created.value);
+        setSearch("");
+        setOpen(false);
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -62,12 +91,25 @@ export function SearchableSelect({
           />
         </div>
         <ScrollArea className="max-h-[300px] overflow-y-auto">
-          {filteredOptions.length === 0 ? (
+          {filteredOptions.length === 0 && !canCreate ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
               {emptyMessage}
             </div>
           ) : (
             <div className="p-1">
+              {canCreate && (
+                <div
+                  className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm font-medium text-primary outline-none hover:bg-accent"
+                  onClick={handleCreate}
+                >
+                  {creating ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="mr-2 h-4 w-4" />
+                  )}
+                  Create &ldquo;{trimmed}&rdquo;
+                </div>
+              )}
               {filteredOptions.map((option) => (
                 <div
                   key={option.value}

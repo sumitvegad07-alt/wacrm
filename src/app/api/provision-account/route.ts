@@ -140,6 +140,15 @@ export async function POST(req: Request) {
       await supabase.from('tags').insert(tagsToInsert);
     }
 
+    // Seed the standard default lead statuses. New leads default to "New".
+    await supabase.from('lead_statuses').insert([
+      { account_id, name: 'New', color: '#3b82f6', position: 0 },
+      { account_id, name: 'Qualified', color: '#8b5cf6', position: 1 },
+      { account_id, name: 'Hot', color: '#ef4444', position: 2 },
+      { account_id, name: 'Follow-up', color: '#eab308', position: 3 },
+      { account_id, name: 'Disqualified', color: '#6b7280', position: 4 },
+    ]);
+
     // Insert Custom Fields
     if (customFields.length > 0) {
       const fieldsToInsert = customFields.map(f => ({

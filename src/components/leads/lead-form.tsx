@@ -144,6 +144,28 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
     }
   }
 
+  // Inline "Create new" for the Source / Industry lookups — insert the value and
+  // return it so SearchableSelect can select it immediately, no trip to Settings.
+  async function createLeadLookup(
+    table: 'lead_sources' | 'lead_industries',
+    name: string,
+  ): Promise<{ value: string; label: string } | null> {
+    if (!accountId) return null;
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from(table)
+      .insert({ account_id: accountId, name })
+      .select('id, name')
+      .single();
+    if (error || !data) {
+      toast.error(error?.message || 'Could not create');
+      return null;
+    }
+    if (table === 'lead_sources') setSources((prev) => [...prev, data]);
+    else setIndustries((prev) => [...prev, data]);
+    return { value: data.name, label: data.name };
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!accountId || !user?.id) {
@@ -295,6 +317,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                   options={sources.map((s) => ({ value: s.name, label: s.name }))}
                   placeholder="Select source..."
                   className="bg-muted border-border"
+                  onCreateOption={(name) => createLeadLookup('lead_sources', name)}
                 />
               );
             }
@@ -306,6 +329,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                   options={industries.map((i) => ({ value: i.name, label: i.name }))}
                   placeholder="Select industry..."
                   className="bg-muted border-border"
+                  onCreateOption={(name) => createLeadLookup('lead_industries', name)}
                 />
               );
             }

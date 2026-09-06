@@ -801,10 +801,15 @@ export function ProductForm({
                       accept="image/*"
                       multiple
                       onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          setNewImageFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
-                        }
+                        // Capture the files BEFORE clearing the input — resetting
+                        // e.target.value empties e.target.files, and the setState
+                        // updater below runs after that, so it must not read from
+                        // the event.
+                        const picked = e.target.files ? Array.from(e.target.files) : [];
                         e.target.value = '';
+                        if (picked.length > 0) {
+                          setNewImageFiles((prev) => [...prev, ...picked]);
+                        }
                       }}
                       className="hidden"
                     />

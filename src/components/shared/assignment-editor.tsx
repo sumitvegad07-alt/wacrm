@@ -37,6 +37,8 @@ export interface AssignmentEditorProps {
     column: string;
     value: string | null;
     options: { value: string; label: string }[];
+    /** Optional inline "Create new" for the status list. */
+    onCreate?: (label: string) => Promise<{ value: string; label: string } | null>;
   };
   onSaved?: () => void;
   canEdit?: boolean;
@@ -140,6 +142,7 @@ export function AssignmentEditor({
             placeholder={`Select ${status.label.toLowerCase()}...`}
             className="bg-muted border-border"
             disabled={!canEdit}
+            onCreateOption={status.onCreate}
           />
         </div>
       )}
