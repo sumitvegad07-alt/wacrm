@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { DealForm } from "@/components/pipelines/deal-form";
 import { Timeline } from "@/components/shared/timeline";
+import { AssignmentEditor } from "@/components/shared/assignment-editor";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,7 @@ export default function DealDetailsPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [dealItems, setDealItems] = useState<any[]>([]);
   const [collaboratorProfiles, setCollaboratorProfiles] = useState<Profile[]>([]);
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [lead, setLead] = useState<any | null>(null);
   
   const [loading, setLoading] = useState(true);
@@ -111,6 +113,7 @@ export default function DealDetailsPage() {
 
     if (profilesRes.data) {
       const allProfiles = profilesRes.data as Profile[];
+      setAllProfiles(allProfiles);
       if (dealData.collaborator_ids && Array.isArray(dealData.collaborator_ids)) {
         const collabProfs = allProfiles.filter(p => 
           dealData.collaborator_ids.includes(p.id) || dealData.collaborator_ids.includes(p.user_id)
@@ -524,23 +527,23 @@ export default function DealDetailsPage() {
               )}
             </div>
 
-            {/* Collaborators List */}
-            <div className="pt-2">
-              <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
-                <Users className="h-4 w-4" />
-                Collaborators ({collaboratorProfiles.length})
-              </p>
-              {collaboratorProfiles.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No additional collaborators added.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {collaboratorProfiles.map((prof) => (
-                    <Badge key={prof.id} variant="secondary" className="px-2.5 py-1 text-xs font-normal">
-                      {prof.full_name || prof.email}
-                    </Badge>
-                  ))}
-                </div>
-              )}
+            {/* Owner + Collaborators — assigned here, not at creation. The deal's
+                stage (its "status") is changed via the stage bar above. */}
+            <div className="pt-2 border-t border-border/50">
+              <AssignmentEditor
+                table="deals"
+                recordId={deal.id}
+                moduleName="deal"
+                profiles={allProfiles}
+                ownerColumn="assigned_to"
+                ownerValue={
+                  allProfiles.find(
+                    (p) => p.user_id === deal.assigned_to || p.id === deal.assigned_to,
+                  )?.user_id ?? null
+                }
+                collaboratorIds={Array.isArray(deal.collaborator_ids) ? deal.collaborator_ids : []}
+                onSaved={fetchAllData}
+              />
             </div>
 
             {deal.notes && (

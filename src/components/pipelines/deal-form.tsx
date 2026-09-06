@@ -451,36 +451,10 @@ export function DealForm({
                 )}
               </div>
 
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Stage</Label>
-                <select
-                  value={stageId}
-                  onChange={(e) => setStageId(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
-                >
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Assigned To</Label>
-                <select
-                  value={assignedTo}
-                  onChange={(e) => setAssignedTo(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
-                >
-                  <option value="">Unassigned</option>
-                  {profiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.full_name || p.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Stage ("status") and Owner ("Assigned To") are not chosen at
+                  creation. A new deal enters its pipeline's first stage and is
+                  owned by its creator; both are changed on the deal's detail page
+                  (the stage bar and the assignment panel). */}
             </div>
 
             <div className="grid gap-2">

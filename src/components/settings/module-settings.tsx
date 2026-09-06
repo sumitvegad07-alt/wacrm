@@ -25,6 +25,20 @@ interface HierarchyLevel {
 
 const LEVEL_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
+// The plan-gated module toggles, in display order. Anything the account's plan
+// does not include is hidden entirely (no greyed-out row) — founder request.
+const MODULE_TOGGLES: { key: keyof ModuleSettings; label: string }[] = [
+  { key: "whatsapp", label: "Enable WhatsApp Integration" },
+  { key: "quotation", label: "Enable Sale Quotation" },
+  { key: "expense", label: "Enable Expense Tracking" },
+  { key: "payment", label: "Enable Payment Collection" },
+  { key: "dispatch", label: "Enable Dispatch" },
+  { key: "pending_dispatch", label: "Enable Pending Dispatch" },
+  { key: "territory", label: "Enable Territory Master" },
+  { key: "reporting_hierarchy", label: "Enable Reporting Hierarchy" },
+  { key: "route", label: "Can set routes for User" },
+];
+
 // ── Koops Screenshot Radio Button Toggle (No / Yes) ─────────────
 function KoopsRadioToggle({
   enabled,
@@ -404,124 +418,23 @@ export function ModuleSettingsPanel() {
             Modules / System config
           </h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Greyed-out modules aren&apos;t part of your current plan. Contact us to
-            upgrade and unlock them.
+            Turn the features included in your plan on or off for your organization.
           </p>
         </div>
 
-        {/* 4-column Koops grid with only real WACRM modules */}
+        {/* 4-column grid. Only modules the plan includes are shown — off-plan
+            modules are hidden rather than greyed out. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-6">
-          {/* 1. WhatsApp Integration */}
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              Enable WhatsApp Integration
-            </p>
-            <KoopsRadioToggle
-              enabled={draft.whatsapp}
-              onChange={(val) => handleModuleToggle("whatsapp", val)}
-              disabled={moduleLocked("whatsapp")}
-            />
-          </div>
-
-          {/* 2. Sale Quotation */}
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              Enable Sale Quotation
-            </p>
-            <KoopsRadioToggle
-              enabled={draft.quotation}
-              onChange={(val) => handleModuleToggle("quotation", val)}
-              disabled={moduleLocked("quotation")}
-            />
-          </div>
-
-          {/* 3. Expense Tracking */}
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              Enable Expense Tracking
-            </p>
-            <KoopsRadioToggle
-              enabled={draft.expense}
-              onChange={(val) => handleModuleToggle("expense", val)}
-              disabled={moduleLocked("expense")}
-            />
-          </div>
-
-          {/* Payment Collection */}
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              Enable Payment Collection
-            </p>
-            <KoopsRadioToggle
-              enabled={draft.payment}
-              onChange={(val) => handleModuleToggle("payment", val)}
-              disabled={moduleLocked("payment")}
-            />
-          </div>
-
-          {/* 4. Dispatch */}
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              Enable Dispatch
-            </p>
-            <KoopsRadioToggle
-              enabled={draft.dispatch}
-              onChange={(val) => handleModuleToggle("dispatch", val)}
-              disabled={moduleLocked("dispatch")}
-            />
-          </div>
-
-          {/* 5. Pending Dispatch */}
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              Enable Pending Dispatch
-            </p>
-            <KoopsRadioToggle
-              enabled={draft.pending_dispatch}
-              onChange={(val) =>
-                handleModuleToggle("pending_dispatch", val)
-              }
-              disabled={moduleLocked("pending_dispatch")}
-            />
-          </div>
-
-          {/* 6. Territory Master */}
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              Enable Territory Master
-            </p>
-            <KoopsRadioToggle
-              enabled={draft.territory}
-              onChange={(val) => handleModuleToggle("territory", val)}
-              disabled={moduleLocked("territory")}
-            />
-          </div>
-
-          {/* 7. Reporting Hierarchy */}
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              Enable Reporting Hierarchy
-            </p>
-            <KoopsRadioToggle
-              enabled={draft.reporting_hierarchy}
-              onChange={(val) =>
-                handleModuleToggle("reporting_hierarchy", val)
-              }
-              disabled={moduleLocked("reporting_hierarchy")}
-            />
-          </div>
-
-          {/* 8. Can set routes for User */}
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              Can set routes for User
-            </p>
-            <KoopsRadioToggle
-              enabled={draft.route}
-              onChange={(val) => handleModuleToggle("route", val)}
-              disabled={moduleLocked("route")}
-            />
-          </div>
+          {MODULE_TOGGLES.filter((m) => planModules.has(m.key as never)).map((m) => (
+            <div key={m.key}>
+              <p className="text-xs font-medium text-foreground">{m.label}</p>
+              <KoopsRadioToggle
+                enabled={!!draft[m.key]}
+                onChange={(val) => handleModuleToggle(m.key, val)}
+                disabled={moduleLocked(m.key)}
+              />
+            </div>
+          ))}
         </div>
       </div>
 

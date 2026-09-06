@@ -402,6 +402,7 @@ export interface Product {
   sku?: string | null;
   price?: number | null;
   image?: string | null;
+  images?: string[] | null;
   category?: string | null;
   category_id?: string | null;
   unit?: string | null;

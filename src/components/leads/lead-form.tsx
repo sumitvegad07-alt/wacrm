@@ -106,7 +106,17 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       supabase.from("custom_fields").select("*").eq("account_id", accountId).eq("module_name", "lead").order("position", { ascending: true }).order("created_at", { ascending: true })
     ]);
 
-    if (statusRes.data) setStatuses(statusRes.data);
+    if (statusRes.data) {
+      setStatuses(statusRes.data);
+      // New leads default to the "New" status (or the first configured status).
+      if (!lead) {
+        const def =
+          statusRes.data.find((s) => s.name.toLowerCase() === "new")?.name ||
+          statusRes.data[0]?.name ||
+          "";
+        if (def) setFormData((prev) => (prev.status ? prev : { ...prev, status: def }));
+      }
+    }
     if (sourceRes.data) setSources(sourceRes.data);
     if (industryRes.data) setIndustries(industryRes.data);
     if (tagsRes.data) setTags(tagsRes.data);
@@ -158,24 +168,26 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
     setIsSubmitting(true);
     const supabase = createClient();
 
-    const payload = {
+    const defaultStatusName =
+      statuses.find((s) => s.name.toLowerCase() === "new")?.name || statuses[0]?.name || "New";
+
+    // Core fields common to create + edit. Owner, collaborators and status are
+    // deliberately NOT here: they are set at creation (defaults) or edited on the
+    // lead's detail page — never reassigned by a plain edit of the core details.
+    const basePayload = {
       account_id: accountId,
-      owner_id: user.id,
-      user_id: user.id,
       name: formData.name.trim(),
       contact_person: formData.contact_person.trim() || null,
       whatsapp: formData.whatsapp.trim() || null,
       email: formData.email.trim() || null,
       source: formData.source.trim() || null,
       industry: formData.industry.trim() || null,
-      status: formData.status.trim() || null,
       address: formData.address.trim() || null,
       city: formData.city.trim() || null,
       state: formData.state.trim() || null,
       country: formData.country.trim() || null,
       latitude: formData.latitude.trim() || null,
       longitude: formData.longitude.trim() || null,
-      collaborator_ids: collaboratorIds,
       ...(territoryEnabled ? { territory_id: territoryId } : {}),
     };
 
@@ -183,10 +195,22 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
     let saveError = null;
 
     if (lead?.id) {
-      const { error } = await supabase.from("leads").update(payload).eq("id", lead.id);
+      // Edit: never touch owner_id / collaborator_ids / status here.
+      const { error } = await supabase.from("leads").update(basePayload).eq("id", lead.id);
       saveError = error;
     } else {
-      const { data, error } = await supabase.from("leads").insert(payload).select("id").single();
+      // Create: owner defaults to the creator, no collaborators, status = New.
+      const { data, error } = await supabase
+        .from("leads")
+        .insert({
+          ...basePayload,
+          owner_id: user.id,
+          user_id: user.id,
+          collaborator_ids: [],
+          status: formData.status.trim() || defaultStatusName || null,
+        })
+        .select("id")
+        .single();
       saveError = error;
       if (data) savedId = data.id;
     }
@@ -259,15 +283,9 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
             const k = (fld.system_key || '').toLowerCase();
             const nameLower = (fld.field_name || '').toLowerCase();
             if (k === 'status' || k === 'lead_status' || nameLower === 'lead status' || nameLower === 'status') {
-              return (
-                <SearchableSelect
-                  value={formData.status}
-                  onChange={(val) => setFormData((prev) => ({ ...prev, status: val }))}
-                  options={statuses.map((s) => ({ value: s.name, label: s.name }))}
-                  placeholder="Select status..."
-                  className="bg-muted border-border"
-                />
-              );
+              // Status is not chosen on the form. New leads default to "New"; the
+              // status is changed afterwards on the lead's detail page.
+              return null;
             }
             if (k === 'source' || k === 'lead_source' || nameLower === 'lead source' || nameLower === 'source') {
               return (

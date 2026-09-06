@@ -9,23 +9,40 @@ import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 // The full planned import catalogue. Availability is derived live from the
 // registry, so a module lights up here the moment its descriptor ships — this
 // list never needs a second edit to mark something "available".
-const MODULES: { key: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+//
+// `line` gates an import to a product line (CRM/WFA/SFA) so a CRM-only plan
+// never sees Orders / Outstanding / Opening Stock, etc. `configModule` further
+// hides opt-in modules that are toggled off. Entries with neither are base
+// features shown on every plan.
+type ProductLine = "crm" | "wfa" | "sfa";
+const MODULES: {
+  key: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  line?: ProductLine;
+  configModule?: string;
+}[] = [
   { key: "product_units", label: "Product Units", icon: Boxes },
   { key: "contacts", label: "Customers", icon: Users },
   { key: "products", label: "Products", icon: Package },
   { key: "product_categories", label: "Product Categories", icon: Boxes },
-  { key: "leads", label: "Leads", icon: UserPlus },
-  { key: "orders", label: "Orders", icon: ShoppingCart },
-  { key: "outstanding", label: "Outstanding", icon: Banknote },
+  { key: "leads", label: "Leads", icon: UserPlus, line: "crm" },
+  { key: "orders", label: "Orders", icon: ShoppingCart, line: "sfa" },
+  { key: "outstanding", label: "Outstanding", icon: Banknote, line: "sfa" },
   { key: "tasks", label: "Tasks", icon: CheckSquare },
-  { key: "territories", label: "Territories", icon: MapPin },
-  { key: "outstanding", label: "Outstanding", icon: Banknote },
-  { key: "stock", label: "Opening Stock", icon: Boxes },
+  { key: "territories", label: "Territories", icon: MapPin, line: "wfa", configModule: "territory" },
+  { key: "stock", label: "Opening Stock", icon: Boxes, line: "sfa", configModule: "stock" },
 ];
 
 export default function ImportHubPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasCRM, hasWFA, hasSFA, isModuleEnabled } = useAuth();
   const canImport = hasPermission(PERMISSIONS.IMPORT.DATA);
+
+  const lineEnabled = (line?: ProductLine) =>
+    !line || (line === "crm" ? hasCRM : line === "wfa" ? hasWFA : hasSFA);
+  const visibleModules = MODULES.filter(
+    (m) => lineEnabled(m.line) && (!m.configModule || isModuleEnabled(m.configModule as never)),
+  );
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6">
@@ -44,7 +61,7 @@ export default function ImportHubPage() {
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {MODULES.map((m) => {
+          {visibleModules.map((m) => {
             const available = !!getImportDescriptor(m.key);
             const Icon = m.icon;
             return (

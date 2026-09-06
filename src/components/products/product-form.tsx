@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Upload, X, Package } from 'lucide-react';
+import { Trash2, Upload, X, Package, Plus } from 'lucide-react';
 import { FormPageShell } from '@/components/shared';
 import { logModuleActivity } from '@/lib/activities';
 
@@ -47,13 +47,15 @@ export function ProductForm({
   const [description, setDescription] = useState('');
   const [sku, setSku] = useState('');
   const [price, setPrice] = useState('');
-  const [image, setImage] = useState('');
+  // Multiple product images. `images` holds already-uploaded URLs; `newImageFiles`
+  // are freshly picked files uploaded on save. products.image mirrors images[0].
+  const [images, setImages] = useState<string[]>([]);
+  const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
   const [category, setCategory] = useState('');
   const [unit, setUnit] = useState('');
   // Stock Management: opening balance + per-product tracking flag (module-gated).
   const [trackStock, setTrackStock] = useState(true);
   const [openingStock, setOpeningStock] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -68,6 +70,20 @@ export function ProductForm({
   const [minPrice, setMinPrice] = useState('');
   const [hsnCode, setHsnCode] = useState('');
   const [taxSlabs, setTaxSlabs] = useState<{ id: string; name: string; rate: number }[]>([]);
+
+  // Inline "create new" for the Unit and Tax dropdowns — add a master on the fly
+  // without leaving the product form. The new record is selected immediately.
+  const [newUnitOpen, setNewUnitOpen] = useState(false);
+  const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitShort, setNewUnitShort] = useState('');
+  const [creatingUnit, setCreatingUnit] = useState(false);
+  const [newTaxOpen, setNewTaxOpen] = useState(false);
+  const [newTaxName, setNewTaxName] = useState('');
+  const [newTaxRate, setNewTaxRate] = useState('');
+  const [creatingTax, setCreatingTax] = useState(false);
+  const [newCatLevel, setNewCatLevel] = useState<1 | 2 | 3 | null>(null);
+  const [newCatName, setNewCatName] = useState('');
+  const [creatingCat, setCreatingCat] = useState(false);
 
   const [categoryId, setCategoryId] = useState('');
   const [l1Id, setL1Id] = useState('');
@@ -86,7 +102,16 @@ export function ProductForm({
       setDescription(product?.description ?? '');
       setSku(product?.sku ?? '');
       setPrice(product?.price?.toString() ?? '');
-      setImage(product?.image ?? '');
+      {
+        const existing = (product as { images?: string[] | null })?.images;
+        setImages(
+          Array.isArray(existing) && existing.length > 0
+            ? existing
+            : product?.image
+              ? [product.image]
+              : [],
+        );
+      }
       setCategoryId(product?.category_id ?? '');
       setUnitId(product?.unit_id ?? '');
       // Fallback for legacy text values if needed
@@ -97,7 +122,7 @@ export function ProductForm({
       setTaxSlabId((product as { tax_slab_id?: string | null })?.tax_slab_id ?? '');
       setMinPrice((product as { min_price?: number | null })?.min_price?.toString() ?? '');
       setHsnCode((product as { hsn_code?: string | null })?.hsn_code ?? '');
-      setImageFile(null);
+      setNewImageFiles([]);
       setActive(product?.active ?? true);
       fetchCustomFields();
       fetchTaxSlabs();
@@ -158,6 +183,87 @@ export function ProductForm({
     setTaxSlabs(data ?? []);
   }
 
+  async function createUnitInline() {
+    if (!accountId || !newUnitName.trim()) return;
+    setCreatingUnit(true);
+    const { data, error } = await supabase
+      .from('product_units')
+      .insert({ account_id: accountId, name: newUnitName.trim(), short_name: newUnitShort.trim() || null })
+      .select('*')
+      .single();
+    setCreatingUnit(false);
+    if (error || !data) {
+      toast.error(error?.message || 'Could not create unit');
+      return;
+    }
+    setUnits((prev) => [...prev, data as ProductUnit].sort((a, b) => a.name.localeCompare(b.name)));
+    setUnitId(data.id);
+    setNewUnitName('');
+    setNewUnitShort('');
+    setNewUnitOpen(false);
+    toast.success('Unit created');
+  }
+
+  async function createCategoryInline(level: 1 | 2 | 3) {
+    if (!accountId || !newCatName.trim()) return;
+    const parent_id = level === 1 ? null : level === 2 ? l1Id || null : l2Id || null;
+    if (level > 1 && !parent_id) {
+      toast.error(`Select a ${level === 2 ? levelNames.l1 : levelNames.l2} first`);
+      return;
+    }
+    setCreatingCat(true);
+    const { data, error } = await supabase
+      .from('product_categories')
+      .insert({ account_id: accountId, name: newCatName.trim(), level, parent_id })
+      .select('*')
+      .single();
+    setCreatingCat(false);
+    if (error || !data) {
+      toast.error(error?.message || 'Could not create');
+      return;
+    }
+    setCategories((prev) => [...prev, data as ProductCategory]);
+    if (level === 1) {
+      setL1Id(data.id);
+      setL2Id('');
+      setL3Id('');
+    } else if (level === 2) {
+      setL2Id(data.id);
+      setL3Id('');
+    } else {
+      setL3Id(data.id);
+    }
+    setNewCatName('');
+    setNewCatLevel(null);
+    toast.success('Created');
+  }
+
+  async function createTaxInline() {
+    if (!accountId || !newTaxName.trim()) return;
+    const rate = parseFloat(newTaxRate);
+    if (Number.isNaN(rate)) {
+      toast.error('Enter a valid tax rate');
+      return;
+    }
+    setCreatingTax(true);
+    const { data, error } = await supabase
+      .from('tax_slabs')
+      .insert({ account_id: accountId, name: newTaxName.trim(), rate })
+      .select('id, name, rate')
+      .single();
+    setCreatingTax(false);
+    if (error || !data) {
+      toast.error(error?.message || 'Could not create tax slab');
+      return;
+    }
+    setTaxSlabs((prev) => [...prev, data as { id: string; name: string; rate: number }]);
+    setTaxSlabId(data.id);
+    setNewTaxName('');
+    setNewTaxRate('');
+    setNewTaxOpen(false);
+    toast.success('Tax slab created');
+  }
+
   async function fetchCustomFields() {
     if (!accountId) return;
     if (user?.id) {
@@ -201,7 +307,17 @@ export function ProductForm({
     }
     if (!accountId || !user) return;
 
-    const cfError = validateRequiredCustomFields(customFields, customValues);
+    // Predefined (system_key) fields keep their value in local state, not in
+    // customValues — the validator must read them from formData or it will
+    // reject a filled-in name. Mirror the real selection for each system key.
+    const cfError = validateRequiredCustomFields(customFields, customValues, {
+      name,
+      sku,
+      category: l3Id || l2Id || l1Id || category,
+      unit: unitId || unit,
+      price,
+      min_price: minPrice,
+    });
     if (cfError) {
       toast.error(cfError);
       return;
@@ -210,23 +326,28 @@ export function ProductForm({
     setSaving(true);
 
     try {
-      let finalImageUrl = image.trim() || null;
-
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${accountId}-${Date.now()}.${fileExt}`;
+      // Upload any newly picked files, then combine with the already-uploaded
+      // URLs (kept in order). image = images[0] keeps single-image readers working.
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < newImageFiles.length; i++) {
+        const file = newImageFiles[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${accountId}-${Date.now()}-${i}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from('product-images')
-          .upload(fileName, imageFile);
+          .upload(fileName, file);
 
         if (uploadError) throw uploadError;
 
         const { data: { publicUrl } } = supabase.storage
           .from('product-images')
           .getPublicUrl(fileName);
-          
-        finalImageUrl = publicUrl;
+
+        uploadedUrls.push(publicUrl);
       }
+
+      const finalImages = [...images, ...uploadedUrls];
+      const finalImageUrl = finalImages[0] ?? null;
 
       const payload = {
         name: name.trim(),
@@ -234,6 +355,7 @@ export function ProductForm({
         sku: sku.trim() || null,
         price: price ? parseFloat(price) : null,
         image: finalImageUrl,
+        images: finalImages.length > 0 ? finalImages : null,
         category: null,
         category_id: l3Id || l2Id || l1Id || null,
         unit: null,
@@ -333,6 +455,35 @@ export function ProductForm({
     onSaved();
   }
 
+  // "+ Create new" affordance for a category level — a link that swaps to an
+  // inline name input, inserts the category at that level, and selects it.
+  const catCreateRow = (level: 1 | 2 | 3, label: string) =>
+    newCatLevel === level ? (
+      <div className="flex items-center gap-2">
+        <Input
+          value={newCatName}
+          onChange={(e) => setNewCatName(e.target.value)}
+          placeholder={`New ${label.toLowerCase()} name`}
+          className="h-8 text-sm"
+          autoFocus
+        />
+        <Button type="button" size="sm" className="h-8" disabled={creatingCat || !newCatName.trim()} onClick={() => createCategoryInline(level)}>
+          {creatingCat ? 'Adding…' : 'Add'}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setNewCatLevel(null)}>
+          Cancel
+        </Button>
+      </div>
+    ) : (
+      <button
+        type="button"
+        onClick={() => { setNewCatLevel(level); setNewCatName(''); }}
+        className="flex items-center gap-1 self-start text-xs font-medium text-primary hover:underline"
+      >
+        <Plus className="h-3 w-3" /> Create new {label.toLowerCase()}
+      </button>
+    );
+
   const formContent = (
     <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -382,7 +533,8 @@ export function ProductForm({
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
-                      
+                      {catCreateRow(1, levelNames.l1)}
+
                       {levelsCount >= 2 && (
                         <select
                           value={l2Id}
@@ -399,7 +551,8 @@ export function ProductForm({
                           ))}
                         </select>
                       )}
-                      
+                      {levelsCount >= 2 && l1Id && catCreateRow(2, levelNames.l2)}
+
                       {levelsCount >= 3 && (
                         <select
                           value={l3Id}
@@ -413,6 +566,7 @@ export function ProductForm({
                           ))}
                         </select>
                       )}
+                      {levelsCount >= 3 && l2Id && catCreateRow(3, levelNames.l3)}
                     </div>
                   );
                 }
@@ -429,6 +583,36 @@ export function ProductForm({
                           <option key={u.id} value={u.id}>{u.name} {u.short_name ? `(${u.short_name})` : ''}</option>
                         ))}
                       </select>
+                      {!newUnitOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => setNewUnitOpen(true)}
+                          className="mt-1 flex items-center gap-1 self-start text-xs font-medium text-primary hover:underline"
+                        >
+                          <Plus className="h-3 w-3" /> Create new unit
+                        </button>
+                      ) : (
+                        <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
+                          <Input
+                            value={newUnitName}
+                            onChange={(e) => setNewUnitName(e.target.value)}
+                            placeholder="Unit name (e.g. Box)"
+                            className="h-8 flex-1 min-w-[120px] text-sm"
+                          />
+                          <Input
+                            value={newUnitShort}
+                            onChange={(e) => setNewUnitShort(e.target.value)}
+                            placeholder="Short (e.g. BX)"
+                            className="h-8 w-24 text-sm"
+                          />
+                          <Button type="button" size="sm" className="h-8" disabled={creatingUnit || !newUnitName.trim()} onClick={createUnitInline}>
+                            {creatingUnit ? 'Adding…' : 'Add'}
+                          </Button>
+                          <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setNewUnitOpen(false)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   );
                 }
@@ -523,10 +707,38 @@ export function ProductForm({
                       </option>
                     ))}
                   </select>
-                  {taxSlabs.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground">
-                      No slabs defined yet. Add them in Settings → Pricing &amp; Schemes.
-                    </p>
+                  {!newTaxOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setNewTaxOpen(true)}
+                      className="flex items-center gap-1 self-start text-xs font-medium text-primary hover:underline"
+                    >
+                      <Plus className="h-3 w-3" /> Create new tax slab
+                    </button>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
+                      <Input
+                        value={newTaxName}
+                        onChange={(e) => setNewTaxName(e.target.value)}
+                        placeholder="Name (e.g. GST 18%)"
+                        className="h-8 flex-1 min-w-[120px] text-sm"
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newTaxRate}
+                        onChange={(e) => setNewTaxRate(e.target.value)}
+                        placeholder="Rate %"
+                        className="h-8 w-20 text-sm"
+                      />
+                      <Button type="button" size="sm" className="h-8" disabled={creatingTax || !newTaxName.trim()} onClick={createTaxInline}>
+                        {creatingTax ? 'Adding…' : 'Add'}
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setNewTaxOpen(false)}>
+                        Cancel
+                      </Button>
+                    </div>
                   )}
                 </div>
 
@@ -548,42 +760,59 @@ export function ProductForm({
               </div>
 
               <div className="grid gap-2">
-                <Label className="text-muted-foreground">Product Image</Label>
-                <div className="flex items-center gap-4">
-                  {(image || imageFile) ? (
-                    <div className="relative size-16 rounded-md border border-border bg-muted overflow-hidden shrink-0">
-                      <img 
-                        src={imageFile ? URL.createObjectURL(imageFile) : image} 
-                        alt="Preview" 
-                        className="w-full h-full object-cover" 
-                      />
+                <Label className="text-muted-foreground">Product Images</Label>
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Already-uploaded images */}
+                  {images.map((url, idx) => (
+                    <div key={`img-${idx}`} className="relative size-16 rounded-md border border-border bg-muted overflow-hidden shrink-0">
+                      <img src={url} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" />
+                      {idx === 0 && (
+                        <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] text-center py-0.5">Primary</span>
+                      )}
                       <button
                         type="button"
-                        onClick={() => { setImage(''); setImageFile(null); }}
+                        onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
                         className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full p-0.5"
                       >
                         <X className="size-3" />
                       </button>
                     </div>
-                  ) : (
-                    <label className="size-16 rounded-md border border-dashed border-border flex items-center justify-center bg-muted shrink-0 cursor-pointer hover:bg-muted/80 hover:border-primary/50 transition-colors">
-                      <Upload className="size-5 text-muted-foreground" />
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            setImageFile(e.target.files[0]);
-                          }
-                        }}
-                        className="hidden"
-                      />
-                    </label>
-                  )}
-                  <div className="text-sm text-muted-foreground">
-                    Upload a product image. <br/>Recommended size: 500x500px.
-                  </div>
+                  ))}
+
+                  {/* Newly picked (not yet uploaded) files */}
+                  {newImageFiles.map((file, idx) => (
+                    <div key={`new-${idx}`} className="relative size-16 rounded-md border border-primary/40 bg-muted overflow-hidden shrink-0">
+                      <img src={URL.createObjectURL(file)} alt={`New ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setNewImageFiles((prev) => prev.filter((_, i) => i !== idx))}
+                        className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full p-0.5"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Add tile — accepts multiple files at once */}
+                  <label className="size-16 rounded-md border border-dashed border-border flex items-center justify-center bg-muted shrink-0 cursor-pointer hover:bg-muted/80 hover:border-primary/50 transition-colors">
+                    <Upload className="size-5 text-muted-foreground" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          setNewImageFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                        }
+                        e.target.value = '';
+                      }}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Add one or more images. The first is the primary image shown in lists. Recommended size: 500×500px.
+                </p>
               </div>
 
               <div className="flex items-center gap-2 pt-2">

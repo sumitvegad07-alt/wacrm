@@ -6,11 +6,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Phone, Mail, Building2, MessageSquare, Pencil, UserCheck, MapPin, FileText, Loader2, User as UserIcon, Users, ExternalLink, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, Phone, Mail, Building2, MessageSquare, Pencil, UserCheck, MapPin, FileText, Loader2, User as UserIcon, ExternalLink, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadForm } from "@/components/leads/lead-form";
 import { Timeline } from "@/components/shared/timeline";
+import { AssignmentEditor } from "@/components/shared/assignment-editor";
 import { logModuleActivity } from "@/lib/activities";
 import type { Profile } from "@/types";
 
@@ -33,6 +34,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [ownerName, setOwnerName] = useState<string>("Unassigned");
   const [creatorName, setCreatorName] = useState<string>("Unknown");
   const [collaboratorProfiles, setCollaboratorProfiles] = useState<Profile[]>([]);
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
@@ -69,6 +71,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
 
     if (allProfilesData) {
       const allProfiles = allProfilesData as Profile[];
+      setAllProfiles(allProfiles);
 
       // Creator
       const creator = allProfiles.find(p => p.id === leadData.user_id || p.user_id === leadData.user_id);
@@ -298,6 +301,31 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Column: Details & Ownership */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Owner / Collaborators / Status — assigned here on the record, not at
+              creation. Each control auto-saves. */}
+          <div className="bg-card border border-border rounded-lg p-5 shadow-sm">
+            <h3 className="text-lg font-semibold border-b border-border pb-3 mb-4 text-foreground">
+              Assignment
+            </h3>
+            <AssignmentEditor
+              table="leads"
+              recordId={lead.id}
+              moduleName="lead"
+              profiles={allProfiles}
+              ownerColumn="owner_id"
+              ownerValue={lead.owner_id || lead.assigned_to || null}
+              collaboratorIds={Array.isArray(lead.collaborator_ids) ? lead.collaborator_ids : []}
+              status={{
+                label: "Lead Status",
+                column: "status",
+                value: lead.status || null,
+                options: statuses.map((s) => ({ value: s.name, label: s.name })),
+              }}
+              onSaved={fetchAllData}
+              canEdit={canManageMembers || lead.owner_id === user?.id || lead.user_id === user?.id}
+            />
+          </div>
+
           <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-6">
             <h3 className="text-lg font-semibold border-b border-border pb-3 text-foreground">
               Lead Details & Ownership
@@ -342,25 +370,6 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* Collaborators List */}
-            <div className="pt-2">
-              <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
-                <Users className="h-4 w-4" />
-                Collaborators ({collaboratorProfiles.length})
-              </p>
-              {collaboratorProfiles.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No collaborators assigned.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {collaboratorProfiles.map((prof) => (
-                    <Badge key={prof.id} variant="secondary" className="px-2.5 py-1 text-xs font-normal">
-                      {prof.full_name || prof.email}
-                    </Badge>
-                  ))}
-                </div>
-              )}
             </div>
 
             {lead.notes && (

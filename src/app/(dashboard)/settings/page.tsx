@@ -29,16 +29,7 @@ import {
   SECTION_META,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
-import { Zap, AlertTriangle, ArrowRight, ArrowLeft, MapPin } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Zap, ArrowLeft } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
 function SettingsContent() {
@@ -51,8 +42,6 @@ function SettingsContent() {
     if (!rawTab || rawTab === 'overview') return 'module_settings';
     return resolveSection(rawTab);
   });
-
-  const [manageState, setManageState] = useState<'overview' | 'downgrade'>('overview');
 
   // Sync when tab query parameter changes
   useEffect(() => {
@@ -124,94 +113,6 @@ function SettingsContent() {
             {SECTION_META[section]?.label || 'Organization Settings'}
           </h1>
         </div>
-
-        {/* Downgrade/Cancel Modal */}
-        <Dialog onOpenChange={(open) => !open && setTimeout(() => setManageState('overview'), 200)}>
-          <DialogTrigger render={<Button variant="outline" className="text-muted-foreground shrink-0" />}>
-            Manage Plan
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            {manageState === 'overview' ? (
-              <>
-                <DialogHeader>
-                  <DialogTitle>Your Subscription</DialogTitle>
-                  <DialogDescription>
-                    Manage your base plan and add-ons.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="py-2">
-                  <div className="mb-4 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-foreground">Pro Plan</span>
-                      <span className="font-bold text-blue-500">₹200/mo</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-3">Includes WhatsApp Integration, Automations, and Core CRM.</p>
-                    <Button variant="outline" size="sm" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive" onClick={() => setManageState('downgrade')}>
-                      Cancel / Downgrade
-                    </Button>
-                  </div>
-
-                  <div className="rounded-xl border border-border p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-foreground flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" /> Location Tracking Add-on</span>
-                      <span className="font-bold text-foreground">₹50/mo</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-3">Track field sales staff and visits in real-time. (Requires Pro plan or higher)</p>
-                    <Button size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                      Add to Plan
-                    </Button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-destructive">
-                    <AlertTriangle className="h-5 w-5" /> Cancel Subscription?
-                  </DialogTitle>
-                  <DialogDescription>
-                    If you downgrade to the Free plan, you will lose access to several premium features immediately:
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="py-3">
-                  <ul className="space-y-2.5 text-sm">
-                    <li className="flex items-start gap-2.5">
-                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-destructive">
-                        <span className="text-xs font-bold">✕</span>
-                      </div>
-                      <div>
-                        <span className="font-medium text-foreground">WhatsApp API Integration</span>
-                        <p className="text-xs text-muted-foreground">Team inbox, templates, and automated message workflows will stop working.</p>
-                      </div>
-                    </li>
-                    <li className="flex items-start gap-2.5">
-                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-destructive">
-                        <span className="text-xs font-bold">✕</span>
-                      </div>
-                      <div>
-                        <span className="font-medium text-foreground">Live GPS Staff Tracking</span>
-                        <p className="text-xs text-muted-foreground">Real-time attendance and field check-in monitoring will be disabled.</p>
-                      </div>
-                    </li>
-                  </ul>
-                  <div className="mt-6 rounded-lg bg-muted p-4">
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Are you sure you want to give up these features? Over <strong>85% of businesses</strong> see a drop in lead response times after downgrading.
-                    </p>
-                    <Button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold" onClick={() => setManageState('overview')}>
-                      Keep My Plan <ArrowRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </div>
-                </div>
-                <DialogFooter className="sm:justify-center">
-                  <Button variant="ghost" className="text-muted-foreground text-xs hover:text-destructive">
-                    Yes, downgrade and lose features
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Main Panel Content — cleanly displays the active openable settings panel */}

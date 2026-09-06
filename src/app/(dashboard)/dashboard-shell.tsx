@@ -236,8 +236,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
-        {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        {/* Thinner horizontal padding on mobile so cards have room to breathe.
+            Extra bottom padding reserves space for the fixed "Ask Ozzo" launcher
+            (bottom-right) so it never covers page controls like table pagination. */}
+        <main className="flex-1 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-28">
           {account?.subscription_status === 'trialing' && (
             <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-2">
               <div>

@@ -660,8 +660,8 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
         className={cn(
           "flex items-center gap-3 rounded-lg transition-all duration-150 group relative",
           isTopLevel
-            ? "px-3 py-2 text-sm font-medium"
-            : "px-3 py-1.5 text-sm font-medium",
+            ? "px-3 py-1.5 text-sm font-medium"
+            : "px-3 py-1.5 text-[13px] font-medium",
           isActive
             ? isTopLevel
               ? "bg-primary text-primary-foreground font-semibold shadow-sm"
@@ -767,17 +767,17 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
       <aside
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-60 flex-col border-r border-border bg-card",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-56 flex-col border-r border-border bg-card",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
-          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
+          "lg:static lg:z-0 lg:w-56 lg:translate-x-0 lg:transition-none",
         )}
         aria-label="Primary"
       >
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
-        <div className="flex h-16 shrink-0 items-center px-6">
+        <div className="flex h-14 shrink-0 items-center px-4">
           <Link href="/follow-ups" className="flex items-center" aria-label="OZZO home">
             <BrandWordmark />
           </Link>
@@ -791,8 +791,8 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3">
-          <div className="flex flex-col gap-1">
+        <nav className="flex-1 overflow-y-auto px-2 py-2">
+          <div className="flex flex-col gap-0.5">
             {filteredMenu.map((node, idx) => {
               if (node.type === "spacer") {
                 return (
@@ -819,7 +819,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                     type="button"
                     onClick={() => toggleGroup(node.label)}
                     className={cn(
-                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors group",
+                      "flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-sm font-medium transition-colors group",
                       isGroupActive
                         ? "text-foreground font-semibold bg-muted/50"
                         : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
@@ -845,7 +845,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                   </button>
 
                   {isOpen && (
-                    <ul className="flex flex-col gap-1 ml-7 my-1 max-h-[340px] overflow-y-auto pr-1 scrollbar-thin">
+                    <ul className="flex flex-col gap-0.5 ml-4 my-0.5 max-h-[340px] overflow-y-auto border-l border-border/60 pl-2 pr-1 scrollbar-thin">
                       {node.items.map((item) => (
                         <li key={`${item.href}-${item.label}`}>
                           {renderNavLink(item, false)}
