@@ -10,13 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, GitBranch, Loader2, User, Users, ShoppingBag } from "lucide-react";
+import { ArrowLeft, GitBranch, Loader2, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import type { Profile, Contact, Lead, PipelineStage } from "@/types";
 import { DealItemsTable, type PartialDealItem } from "@/components/deals/deal-items-table";
-import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { isWonLostName } from "@/lib/pipelines/default-stages";
 
 export default function NewDealPage() {
   const router = useRouter();
@@ -32,7 +32,6 @@ export default function NewDealPage() {
   const [creating, setCreating] = useState(false);
 
   const [dealFor, setDealFor] = useState<"customer" | "lead">("customer");
-  const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
   const [items, setItems] = useState<PartialDealItem[]>([]);
 
   const [form, setForm] = useState({
@@ -121,7 +120,11 @@ export default function NewDealPage() {
         contact_id: dealFor === "customer" ? form.contact_id : null,
         lead_id: dealFor === "lead" ? form.lead_id : null,
         creator_id: user.id,
-        collaborator_ids: collaboratorIds,
+        // Owner is auto-assigned to whoever generated the deal. assigned_to is a
+        // FK to profiles.id (not the auth user id), so use the profile row id.
+        // Collaborators are added later from the deal detail page, not at creation.
+        assigned_to: (profile as any)?.id || null,
+        collaborator_ids: [],
         pipeline_id: defaultPipelineId || (stages[0]?.pipeline_id || null),
         stage_id: form.stage_id || (stages[0]?.id || null),
         expected_close_date: form.expected_close_date || null,
@@ -280,28 +283,12 @@ export default function NewDealPage() {
                 onChange={v => setForm({ ...form, stage_id: v })}
                 placeholder="Select Stage..."
                 searchPlaceholder="Search stage..."
-                options={stages.map(s => ({
-                  value: s.id,
-                  label: s.name
-                }))}
-              />
-            </div>
-          </div>
-        </Card>
-
-        {/* Ownership & Collaboration */}
-        <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Collaboration
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label>Collaborators</Label>
-              <CollaboratorsSelect
-                profiles={profiles}
-                selectedIds={collaboratorIds}
-                onChange={setCollaboratorIds}
+                options={stages
+                  .filter(s => !isWonLostName(s.name)) // deals are resolved Won/Lost from the detail page, not created there
+                  .map(s => ({
+                    value: s.id,
+                    label: s.name
+                  }))}
               />
             </div>
           </div>

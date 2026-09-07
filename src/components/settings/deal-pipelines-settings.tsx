@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { GitBranch, Plus, Trash2, Edit2, Loader2, GripVertical, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { PipelineSettings } from "@/components/pipelines/pipeline-settings";
+import { DEFAULT_PIPELINE_STAGES } from "@/lib/pipelines/default-stages";
 import { useAuth } from "@/hooks/use-auth";
 
 export function DealPipelinesSettings() {
@@ -104,14 +105,8 @@ export function DealPipelinesSettings() {
       return;
     }
 
-    // Default stages for the new pipeline
-    const defaultStages = [
-      { name: "New Lead", color: "#3b82f6", position: 0 },
-      { name: "Contacted", color: "#6366f1", position: 1 },
-      { name: "Proposal Sent", color: "#eab308", position: 2 },
-      { name: "Won", color: "#22c55e", position: 3 },
-      { name: "Lost", color: "#f43f5e", position: 4 },
-    ].map(s => ({
+    // Default stages for the new pipeline — New first, Won/Lost last (locked).
+    const defaultStages = DEFAULT_PIPELINE_STAGES.map(s => ({
       ...s,
       pipeline_id: newPipeline.id,
       user_id: user.user?.id,

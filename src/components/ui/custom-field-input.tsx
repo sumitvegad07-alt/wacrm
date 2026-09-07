@@ -22,17 +22,46 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
   const [uploading, setUploading] = useState(false);
   const [dynamicOptions, setDynamicOptions] = useState<{label: string, value: string}[]>([]);
   const [loadingDynamic, setLoadingDynamic] = useState(false);
-  
+  // Options added inline this session (persisted to the field definition below).
+  const [addedChoices, setAddedChoices] = useState<string[]>([]);
+
   const supabase = createClient();
-  const { account } = useAuth();
+  const { account, isAdmin, isOwner } = useAuth();
 
   const options = field.field_options as { choices?: string[] } | undefined;
-  
+
   // Calculate final choices: either dynamic options or static choices
   let choices = options?.choices || [];
   if (field.source_type === 'module' && dynamicOptions.length > 0) {
     choices = dynamicOptions.map(o => o.label);
+  } else if (field.source_type !== 'module') {
+    // Include any options added inline this session.
+    choices = [...(options?.choices || []), ...addedChoices];
   }
+
+  // Only admins/owners can extend a custom field's option list (custom_fields
+  // UPDATE is admin-gated by RLS), and only for static (non-module) dropdowns.
+  const canCreateOption = (isAdmin || isOwner) && field.source_type !== 'module';
+
+  const createChoice = async (label: string): Promise<{ value: string; label: string } | null> => {
+    const trimmed = label.trim();
+    if (!trimmed) return null;
+    const current = [...(options?.choices || []), ...addedChoices];
+    if (current.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      return { value: trimmed, label: trimmed };
+    }
+    const nextChoices = [...current, trimmed];
+    const { error } = await supabase
+      .from('custom_fields')
+      .update({ field_options: { ...(field.field_options as Record<string, unknown>), choices: nextChoices } })
+      .eq('id', field.id);
+    if (error) {
+      toast.error(error.message || 'Could not add option');
+      return null;
+    }
+    setAddedChoices((prev) => [...prev, trimmed]);
+    return { value: trimmed, label: trimmed };
+  };
 
   useEffect(() => {
     async function loadDynamicOptions() {
@@ -87,6 +116,8 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
           placeholder={`Select ${field.field_name}...`}
           searchPlaceholder="Search options..."
           emptyMessage="No options available"
+          createLabel={field.field_name?.toLowerCase() || 'option'}
+          onCreateOption={canCreateOption ? createChoice : undefined}
         />
         {loadingDynamic && (
           <Loader2 className="size-4 animate-spin text-muted-foreground absolute right-8 top-2.5 pointer-events-none" />

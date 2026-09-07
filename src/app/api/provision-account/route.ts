@@ -52,28 +52,28 @@ export async function POST(req: Request) {
        return NextResponse.json({ error: "No user found for account" }, { status: 400 });
     }
 
+    // Every pipeline is bookended by two predefined, locked stages: "New" first
+    // and "Won/Lost" last. Only the middle stages differ by industry. The
+    // terminal "Won/Lost" stage is where a deal is resolved (won or lost) — see
+    // the deal detail page. Middle-stage colours cycle through this palette.
+    const MIDDLE_COLORS = ["#6366f1", "#eab308", "#f97316", "#8b5cf6", "#14b8a6"];
+    const buildStages = (middle: string[]) => {
+      const rows = [{ name: "New", color: "#3b82f6" }];
+      middle.forEach((name, i) => rows.push({ name, color: MIDDLE_COLORS[i % MIDDLE_COLORS.length] }));
+      rows.push({ name: "Won/Lost", color: "#64748b" });
+      return rows.map((s, position) => ({ ...s, position }));
+    };
+
     // Default basic data everyone gets
-    let pipelineName = "Main Sales Pipeline";
-    let stages = [
-      { name: "New Lead", position: 0, color: "#3b82f6" },
-      { name: "Contacted", position: 1, color: "#eab308" },
-      { name: "Qualified", position: 2, color: "#8b5cf6" },
-      { name: "Closed Won", position: 3, color: "#22c55e" },
-      { name: "Closed Lost", position: 4, color: "#ef4444" },
-    ];
+    let pipelineName = "Sales Pipeline";
+    let stages = buildStages(["Contacted", "Follow-up", "Quotation Sent"]);
     let tags = ["Hot", "Warm", "Cold"];
     let customFields: any[] = [];
 
-    // Industry specific overrides
+    // Industry specific overrides (middle stages only — New / Won/Lost are fixed)
     if (industry.includes("Real Estate")) {
       pipelineName = "Property Sales";
-      stages = [
-        { name: "New Inquiry", position: 0, color: "#3b82f6" },
-        { name: "Property Shown", position: 1, color: "#eab308" },
-        { name: "Offer Made", position: 2, color: "#8b5cf6" },
-        { name: "Under Contract", position: 3, color: "#f97316" },
-        { name: "Closed", position: 4, color: "#22c55e" },
-      ];
+      stages = buildStages(["Property Shown", "Offer Made", "Under Contract"]);
       tags = ["Buyer", "Seller", "Renter", "Investor", "High Budget"];
       customFields = [
         { field_name: "Budget", field_type: "text" },
@@ -81,33 +81,18 @@ export async function POST(req: Request) {
       ];
     } else if (industry.includes("Healthcare") || industry.includes("Dental")) {
       pipelineName = "Patient Intake";
-      stages = [
-        { name: "New Inquiry", position: 0, color: "#3b82f6" },
-        { name: "Consultation Booked", position: 1, color: "#eab308" },
-        { name: "Consultation Done", position: 2, color: "#8b5cf6" },
-        { name: "Treatment Started", position: 3, color: "#22c55e" },
-      ];
+      stages = buildStages(["Consultation Booked", "Consultation Done", "Treatment Started"]);
       tags = ["New Patient", "Returning Patient", "Checkup", "Emergency"];
       customFields = [
         { field_name: "Last Visit Date", field_type: "text" },
       ];
     } else if (industry.includes("Retail")) {
       pipelineName = "Order Fulfillment";
-      stages = [
-        { name: "Order Placed", position: 0, color: "#3b82f6" },
-        { name: "Processing", position: 1, color: "#eab308" },
-        { name: "Shipped", position: 2, color: "#8b5cf6" },
-        { name: "Delivered", position: 3, color: "#22c55e" },
-      ];
+      stages = buildStages(["Processing", "Shipped", "Delivered"]);
       tags = ["VIP Customer", "Repeat Buyer", "Refund Request"];
     } else if (industry.includes("Education")) {
       pipelineName = "Admissions";
-      stages = [
-        { name: "Lead", position: 0, color: "#3b82f6" },
-        { name: "Application Submitted", position: 1, color: "#eab308" },
-        { name: "Interview Scheduled", position: 2, color: "#8b5cf6" },
-        { name: "Enrolled", position: 3, color: "#22c55e" },
-      ];
+      stages = buildStages(["Application Submitted", "Interview Scheduled", "Enrolled"]);
       tags = ["Student", "Parent", "Scholarship"];
     }
 
@@ -148,6 +133,32 @@ export async function POST(req: Request) {
       { account_id, name: 'Follow-up', color: '#eab308', position: 3 },
       { account_id, name: 'Disqualified', color: '#6b7280', position: 4 },
     ]);
+
+    // Seed the standard default expense types. These are the out-of-the-box
+    // allowances every new account starts with; the admin can add/remove more
+    // from Settings. Only seeded for plans that include the Workforce (WFA)
+    // line, since the Expense module is a WFA feature — CRM-only accounts get
+    // nothing to keep their setup uncluttered.
+    {
+      const { data: acct } = await supabase
+        .from('accounts')
+        .select('subscription_plan')
+        .eq('id', account_id)
+        .single();
+      const plan = String(acct?.subscription_plan || '').toUpperCase();
+      const hasWorkforce =
+        plan === 'WFA' || plan === 'CRM_WFA' || plan === 'SFA' || plan === 'CRM_SFA' ||
+        // Legacy / unrecognised plans get full access (mirrors catalog.ts), so seed them too.
+        !['CRM'].includes(plan);
+      if (hasWorkforce) {
+        await supabase.from('expense_types').insert([
+          { account_id, allowance_type: 'REGULAR', expense_name: 'Food', created_by: userId },
+          { account_id, allowance_type: 'REGULAR', expense_name: 'Hotel', created_by: userId },
+          { account_id, allowance_type: 'TRAVELLING', expense_name: 'Travel by Bike', created_by: userId },
+          { account_id, allowance_type: 'TRAVELLING', expense_name: 'Travel by Car', created_by: userId },
+        ]);
+      }
+    }
 
     // Insert Custom Fields
     if (customFields.length > 0) {

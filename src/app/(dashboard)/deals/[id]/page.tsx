@@ -15,6 +15,7 @@ import { DealForm } from "@/components/pipelines/deal-form";
 import { Timeline } from "@/components/shared/timeline";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
+import { isWonLostName } from "@/lib/pipelines/default-stages";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +64,11 @@ export default function DealDetailsPage() {
   const [lostReason, setLostReason] = useState("");
   const [lostReasonText, setLostReasonText] = useState("");
   const [markingLost, setMarkingLost] = useState(false);
+
+  // Won/Lost resolution dialog — shown when a deal is moved to the terminal
+  // "Won/Lost" stage. The user picks Won (deal is won) or Lost (asks for a reason).
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [marking, setMarking] = useState(false);
 
   const fetchAllData = useCallback(async () => {
     setLoading(true);
@@ -170,8 +176,20 @@ export default function DealDetailsPage() {
     fetchAllData();
   }, [fetchAllData]);
 
+  // The terminal "Won/Lost" stage is the last stage of the pipeline whose name
+  // reads as Won/Lost. Moving a deal there opens the resolve dialog instead of a
+  // plain stage change. Legacy pipelines (separate Won/Lost stages) are unaffected.
+  const terminalStage = stages.length > 0 ? stages[stages.length - 1] : null;
+  const terminalIsWonLost = !!terminalStage && isWonLostName(terminalStage.name);
+
   const handleStageChange = async (newStageId: string) => {
     if (!deal || deal.stage_id === newStageId) return;
+
+    // Moving into the terminal Won/Lost stage → ask the user to resolve it.
+    if (terminalIsWonLost && terminalStage && newStageId === terminalStage.id) {
+      setResolveOpen(true);
+      return;
+    }
 
     const { error } = await supabase
       .from("deals")
@@ -222,6 +240,35 @@ export default function DealDetailsPage() {
     }
   };
 
+  const handleMarkWon = async () => {
+    if (!deal) return;
+    setMarking(true);
+    try {
+      const patch: Record<string, unknown> = { status: "won" };
+      if (terminalStage) patch.stage_id = terminalStage.id;
+      const { error } = await supabase.from("deals").update(patch).eq("id", id);
+      if (error) throw error;
+
+      await supabase.from("module_activities").insert({
+        account_id: (deal as any).account_id,
+        user_id: user?.id,
+        module_name: "deal",
+        record_id: id,
+        action: "won",
+        message: "Deal marked as Won",
+      });
+
+      toast.success("Deal marked as Won");
+      setResolveOpen(false);
+      fetchAllData();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to mark deal as won");
+    } finally {
+      setMarking(false);
+    }
+  };
+
   const handleMarkLost = async () => {
     if (!deal) return;
     const finalReason = lostReasonText.trim() || lostReason;
@@ -232,9 +279,11 @@ export default function DealDetailsPage() {
 
     setMarkingLost(true);
     try {
+      const patch: Record<string, unknown> = { status: "lost", is_active: false };
+      if (terminalStage) patch.stage_id = terminalStage.id;
       const { error } = await supabase
         .from("deals")
-        .update({ status: "lost", is_active: false })
+        .update(patch)
         .eq("id", id);
 
       if (error) throw error;
@@ -252,6 +301,7 @@ export default function DealDetailsPage() {
 
       toast.success("Deal marked as Lost");
       setLostDialogOpen(false);
+      setResolveOpen(false);
       setLostReason("");
       setLostReasonText("");
       fetchAllData();
@@ -283,8 +333,10 @@ export default function DealDetailsPage() {
     toast.success("Updated");
     fetchAllData();
   };
-  const ownerOptions = allProfiles.map((p) => ({ value: p.user_id, label: p.full_name || p.email || "User" }));
-  const ownerValue = allProfiles.find((p) => p.user_id === deal.assigned_to || p.id === deal.assigned_to)?.user_id ?? "";
+  // deals.assigned_to is a FK to profiles.id, so the owner picker keys on profile id.
+  // (The read still tolerates a legacy user_id value for safety.)
+  const ownerOptions = allProfiles.map((p) => ({ value: p.id, label: p.full_name || p.email || "User" }));
+  const ownerValue = allProfiles.find((p) => p.id === deal.assigned_to || p.user_id === deal.assigned_to)?.id ?? "";
   const dealCollaboratorIds: string[] = Array.isArray(deal.collaborator_ids) ? deal.collaborator_ids : [];
 
   const isLost = deal.status === "lost";
@@ -486,8 +538,8 @@ export default function DealDetailsPage() {
               );
             })}
 
-            {/* Won indicator at end */}
-            {isWon && (
+            {/* Won indicator at end (legacy pipelines only — the Won/Lost terminal stage already shows this) */}
+            {isWon && !terminalIsWonLost && (
               <div className="flex items-center min-w-[120px]">
                 <ArrowRight className="h-4 w-4 mx-1.5 shrink-0 text-emerald-500/50" />
                 <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-emerald-600 text-white font-medium w-full">
@@ -499,8 +551,8 @@ export default function DealDetailsPage() {
               </div>
             )}
 
-            {/* Lost indicator at end */}
-            {isLost && (
+            {/* Lost indicator at end (legacy pipelines only — the Won/Lost terminal stage already shows this) */}
+            {isLost && !terminalIsWonLost && (
               <div className="flex items-center min-w-[120px]">
                 <ArrowRight className="h-4 w-4 mx-1.5 shrink-0 text-red-500/30" />
                 <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-red-600 text-white font-medium w-full">
@@ -681,6 +733,43 @@ export default function DealDetailsPage() {
         stages={stages}
         onSaved={fetchAllData}
       />
+
+      {/* Resolve (Won / Lost) Dialog — shown when moving a deal to the terminal stage */}
+      <Dialog open={resolveOpen} onOpenChange={setResolveOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Resolve this deal</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Was this deal won or lost? Choosing Lost will ask you for a reason.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={handleMarkWon}
+                disabled={marking}
+                className="flex flex-col items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5 text-emerald-500 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+              >
+                {marking ? <Loader2 className="h-6 w-6 animate-spin" /> : <CheckCircle2 className="h-6 w-6" />}
+                <span className="text-sm font-semibold">Won</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setResolveOpen(false); setLostDialogOpen(true); }}
+                disabled={marking}
+                className="flex flex-col items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-5 text-red-500 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+              >
+                <XCircle className="h-6 w-6" />
+                <span className="text-sm font-semibold">Lost</span>
+              </button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResolveOpen(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Mark as Lost Dialog */}
       <Dialog open={lostDialogOpen} onOpenChange={setLostDialogOpen}>

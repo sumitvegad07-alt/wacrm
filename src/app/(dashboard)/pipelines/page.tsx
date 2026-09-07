@@ -37,14 +37,9 @@ import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, EmptyState, StatusBadge } from "@/components/shared";
+import { DEFAULT_PIPELINE_STAGES } from "@/lib/pipelines/default-stages";
 
-const SPEC_DEFAULT_STAGES = [
-  { name: "New Lead", color: "#3b82f6", position: 0 },
-  { name: "Qualified", color: "#eab308", position: 1 },
-  { name: "Proposal Sent", color: "#f97316", position: 2 },
-  { name: "Negotiation", color: "#8b5cf6", position: 3 },
-  { name: "Won", color: "#22c55e", position: 4 },
-];
+const SPEC_DEFAULT_STAGES = DEFAULT_PIPELINE_STAGES;
 
 export default function PipelinesPage() {
   const supabase = createClient();
@@ -717,7 +712,7 @@ export default function PipelinesPage() {
               }}
             />
             <p className="mt-2 text-xs text-muted-foreground">
-              Default stages (New Lead → Won) will be created automatically.
+              Default stages (New → Contacted → Follow-up → Quotation Sent → Won/Lost) will be created automatically.
             </p>
           </div>
           <DialogFooter className="bg-popover/50 border-border">

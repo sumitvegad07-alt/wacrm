@@ -33,6 +33,7 @@ import {
   Plus,
   GripVertical,
   AlertTriangle,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -93,13 +94,21 @@ export function PipelineSettings({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
+  // The first ("New") and last ("Won/Lost") stages are predefined bookends:
+  // they can't be deleted or reordered, and new stages always land between them.
+  const lastIndex = localStages.length - 1;
+  const isProtectedIndex = (i: number) => i === 0 || i === lastIndex;
+
   function handleReorder(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = localStages.findIndex((s) => s.id === active.id);
     const newIndex = localStages.findIndex((s) => s.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
-    setLocalStages(arrayMove(localStages, oldIndex, newIndex));
+    // Bookends stay put, and nothing may be dropped into a bookend slot.
+    if (isProtectedIndex(oldIndex)) return;
+    const clamped = Math.min(Math.max(newIndex, 1), lastIndex - 1);
+    setLocalStages(arrayMove(localStages, oldIndex, clamped));
   }
 
   async function handleSave() {
@@ -140,13 +149,15 @@ export function PipelineSettings({
   async function handleAddStage() {
     const trimmed = newStageName.trim();
     if (!trimmed) return;
+    // New stages slot in just before the terminal "Won/Lost" bookend.
+    const insertAt = Math.max(localStages.length - 1, 0);
     const { data, error } = await supabase
       .from("pipeline_stages")
       .insert({
         pipeline_id: pipeline.id,
         name: trimmed,
         color: newStageColor,
-        position: localStages.length,
+        position: insertAt,
       })
       .select()
       .single();
@@ -154,12 +165,20 @@ export function PipelineSettings({
       toast.error("Failed to add stage");
       return;
     }
-    setLocalStages([...localStages, data as PipelineStage]);
+    const next = [...localStages];
+    next.splice(insertAt, 0, data as PipelineStage);
+    setLocalStages(next);
     setNewStageName("");
     setNewStageColor(STAGE_COLORS[(localStages.length + 1) % STAGE_COLORS.length]);
   }
 
   async function handleRemoveStage(stageId: string) {
+    // Bookend stages ("New" / "Won/Lost") are protected and cannot be removed.
+    const idx = localStages.findIndex((s) => s.id === stageId);
+    if (isProtectedIndex(idx)) {
+      toast.error("The New and Won/Lost stages can't be removed");
+      return;
+    }
     // Refuse to delete if deals still reference the stage (FK would fail).
     const { count } = await supabase
       .from("deals")
@@ -263,6 +282,7 @@ export function PipelineSettings({
                         <SortableStageRow
                           key={stage.id}
                           stage={stage}
+                          locked={isProtectedIndex(index)}
                           onNameChange={(v) => {
                             const updated = [...localStages];
                             updated[index] = { ...updated[index], name: v };
@@ -365,19 +385,21 @@ export function PipelineSettings({
 
 function SortableStageRow({
   stage,
+  locked = false,
   onNameChange,
   onColorChange,
   onRemove,
   colors,
 }: {
   stage: PipelineStage;
+  locked?: boolean;
   onNameChange: (v: string) => void;
   onColorChange: (v: string) => void;
   onRemove: () => void;
   colors: string[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: stage.id });
+    useSortable({ id: stage.id, disabled: locked });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -391,29 +413,43 @@ function SortableStageRow({
       style={style}
       className="flex items-center gap-2 rounded-lg border border-border bg-muted p-2"
     >
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        className="cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
-        aria-label="Drag to reorder"
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
+      {locked ? (
+        <span
+          className="text-muted-foreground/40"
+          aria-label="Locked stage"
+          title="Predefined stage — can't be moved or deleted"
+        >
+          <Lock className="h-4 w-4" />
+        </span>
+      ) : (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      )}
       <ColorSwatch value={stage.color || "#94a3b8"} onChange={onColorChange} colors={colors} />
       <Input
         value={stage.name}
         onChange={(e) => onNameChange(e.target.value)}
         className="h-7 flex-1 border-transparent bg-transparent text-sm text-foreground focus:border-border"
       />
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onRemove}
-        className="text-muted-foreground hover:text-red-400"
-      >
-        <Trash2 className="h-3 w-3" />
-      </Button>
+      {locked ? (
+        <span className="w-7 shrink-0" />
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onRemove}
+          className="text-muted-foreground hover:text-red-400"
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      )}
     </div>
   );
 }
