@@ -81,8 +81,9 @@ export function QuotationForm({
     async function fetchData() {
       if (!accountId) return;
       setLoading(true);
+      try {
       await ensureDefaultSectionsAndFields(accountId, 'quotation', user?.id, supabase);
-      
+
       // Fetch dependencies
       const [
         { data: contactsData },
@@ -228,12 +229,21 @@ export function QuotationForm({
         const defaultTemplate = (templatesData || []).find((t: any) => t.is_default);
         if (defaultTemplate) setTerms(defaultTemplate.content);
       }
-
-      setLoading(false);
+      } catch (err) {
+        // Never leave the form stuck on the loading spinner: any failure here
+        // (query error, or accountId arriving late) must still release `loading`.
+        console.error('[QuotationForm] failed to load form data:', err);
+        toast.error('Failed to load the quotation form. Please retry.');
+      } finally {
+        setLoading(false);
+      }
     }
-    
+
     fetchData();
-  }, [initialData, supabase]);
+    // accountId MUST be a dependency: it is null on first render (auth resolves
+    // async) and the early `return` above bails; without it the effect never
+    // re-runs once accountId arrives and the form hangs forever.
+  }, [initialData, supabase, accountId]);
 
   const handleSave = async () => {
     if (targetType === 'contact' && !contactId) {

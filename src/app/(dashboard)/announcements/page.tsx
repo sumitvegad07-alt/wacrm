@@ -14,6 +14,7 @@ import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { isDateInFilter } from "@/lib/date-filters";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 export default function AnnouncementsPage() {
   const { accountId, accountRole } = useAuth();
@@ -24,7 +25,9 @@ export default function AnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [globalSearch, setGlobalSearch] = useState("");
   const [filterState, setFilterState] = useState<FilterState>({});
-  
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
   const loadAnnouncements = useCallback(async () => {
@@ -49,14 +52,21 @@ export default function AnnouncementsPage() {
     loadAnnouncements();
   }, [loadAnnouncements]);
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const requestDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this announcement?")) return;
-    const { error } = await supabase.from("tenant_announcements").delete().eq("id", id);
+    setDeleteId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    setDeleting(true);
+    const { error } = await supabase.from("tenant_announcements").delete().eq("id", deleteId);
+    setDeleting(false);
     if (error) {
       toast.error("Failed to delete announcement");
     } else {
       toast.success("Announcement deleted successfully");
+      setDeleteId(null);
       loadAnnouncements();
     }
   };
@@ -149,7 +159,7 @@ export default function AnnouncementsPage() {
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={(e) => handleDelete(row.id, e)} 
+              onClick={(e) => requestDelete(row.id, e)}
               className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
               title="Delete"
             >
@@ -229,6 +239,17 @@ export default function AnnouncementsPage() {
           onRowClick={(row) => router.push(`/announcements/${row.id}`)}
         />
       </div>
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(o) => { if (!o) setDeleteId(null); }}
+        title="Delete announcement"
+        description="Are you sure you want to delete this announcement? This cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </PageLayout>
   );
 }

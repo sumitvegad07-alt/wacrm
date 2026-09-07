@@ -253,17 +253,11 @@ export default function EmployeesPage() {
     }
   };
 
-  if (!hasPermission("view_team_management") && !isSuperadmin) {
-    return (
-      <div className="p-8">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Access Denied</AlertTitle>
-          <AlertDescription>You do not have permission to view this page.</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+  // NOTE: the "Access Denied" permission guard must NOT early-return here — the
+  // `columns` useMemo below is a hook, and returning before it changes the hook
+  // count between renders (permissions resolve async), which crashes React with
+  // error #310 ("rendered fewer hooks than expected"). The guard is applied after
+  // all hooks, just before the main return.
 
   const filtered = employees.filter(e => {
     // Global search
@@ -374,6 +368,20 @@ export default function EmployeesPage() {
       },
     },
   ], [roles, router, holidayLists]);
+
+  // Permission guard — safe here because every hook above has already run, so the
+  // hook count is identical whether or not this returns early (avoids React #310).
+  if (!hasPermission("view_team_management") && !isSuperadmin) {
+    return (
+      <div className="p-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Access Denied</AlertTitle>
+          <AlertDescription>You do not have permission to view this page.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <PageLayout>

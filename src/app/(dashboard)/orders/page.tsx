@@ -114,7 +114,7 @@ export default function OrdersPage() {
 
     const [{ data: orderData }, { data: profiles }, { data: fieldsData }, { data: acctData }] = await Promise.all([
       ordersQuery,
-      supabase.from('profiles').select('id, full_name').eq('account_id', accountId),
+      supabase.from('profiles').select('id, full_name, user_id').eq('account_id', accountId),
       supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'order'),
       supabase.from('accounts').select('settings').eq('id', accountId).single(),
     ]);
@@ -129,8 +129,12 @@ export default function OrdersPage() {
       orderValues = vals || [];
     }
 
+    // Key by auth user_id: orders.user_id is the auth uid (= profiles.user_id),
+    // NOT profiles.id — keying by p.id made every salesman read "Unknown".
     const profileMap: Record<string, string> = {};
-    profiles?.forEach((p: { id: string; full_name: string }) => { profileMap[p.id] = p.full_name; });
+    profiles?.forEach((p: { id: string; full_name: string; user_id: string }) => {
+      if (p.user_id) profileMap[p.user_id] = p.full_name;
+    });
 
     const rows: OrderRow[] = (orderData || []).map((o: Record<string, any>) => {
       const customData: Record<string, any> = {};

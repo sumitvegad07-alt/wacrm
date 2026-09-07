@@ -254,11 +254,12 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       if (user?.id) {
         await ensureDefaultSectionsAndFields(accountId, 'order', user.id, supabase);
       }
-      const [{ data: contactData }, { data: productData }, { data: acct }, { data: fieldsData }] = await Promise.all([
+      const [{ data: contactData }, { data: productData }, { data: acct }, { data: fieldsData }, { data: unitData }] = await Promise.all([
         supabase.from('contacts').select('id, company, name').eq('account_id', accountId).order('company'),
-        supabase.from('products').select('id, name, sku, price, unit').eq('account_id', accountId).eq('active', true).order('name'),
+        supabase.from('products').select('id, name, sku, price, unit, unit_id').eq('account_id', accountId).eq('active', true).order('name'),
         supabase.from('accounts').select('settings').eq('id', accountId).single(),
         supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'order').order('position', { ascending: true }).order('created_at', { ascending: true }),
+        supabase.from('product_units').select('id, name').eq('account_id', accountId),
       ]);
       if (!alive) return;
       setCustomFields(fieldsData || []);
@@ -266,7 +267,15 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
         id: c.id as string,
         label: (c.company as string) || (c.name as string) || 'Unnamed',
       })));
-      setProducts((productData ?? []) as ProductOption[]);
+      // Product unit is stored as unit_id (FK to product_units); the legacy `unit`
+      // text column is null for products created via the modern form — resolve the
+      // unit name so the order line shows "Pcs" instead of "—".
+      const unitMap: Record<string, string> = {};
+      (unitData ?? []).forEach((u: { id: string; name: string }) => { unitMap[u.id] = u.name; });
+      setProducts(((productData ?? []) as Record<string, unknown>[]).map((p) => ({
+        ...p,
+        unit: (p.unit as string) || (p.unit_id ? unitMap[p.unit_id as string] : '') || '',
+      })) as ProductOption[]);
       if (stockEnabled) {
         setRestrictStock(acct?.settings?.stock_settings?.restrict_on_insufficient === true);
         const prodIds = (productData ?? []).map((p: Record<string, unknown>) => p.id as string);

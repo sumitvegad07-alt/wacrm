@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { SEED_COUNTRIES, SEED_INDIA_STATES, SEED_INDIA_DISTRICTS } from "@/lib/territories/seed-data.generated";
 import { ForbiddenError, getCurrentAccount, toErrorResponse } from "@/lib/auth/account";
+import { planLines } from "@/lib/plans/catalog";
 
 export async function POST(req: Request) {
   try {
@@ -51,6 +52,15 @@ export async function POST(req: Request) {
     if (!userId) {
        return NextResponse.json({ error: "No user found for account" }, { status: 400 });
     }
+
+    // The account's plan decides which product lines the seeded data + default
+    // role may include. Legacy/unknown plans resolve to full access (planLines).
+    const { data: acctPlan } = await supabase
+      .from('accounts')
+      .select('subscription_plan')
+      .eq('id', account_id)
+      .single();
+    const lines = planLines(acctPlan?.subscription_plan);
 
     // Every pipeline is bookended by two predefined, locked stages: "New" first
     // and "Won/Lost" last. Only the middle stages differ by industry. The
@@ -140,22 +150,27 @@ export async function POST(req: Request) {
     // line, since the Expense module is a WFA feature — CRM-only accounts get
     // nothing to keep their setup uncluttered.
     {
-      const { data: acct } = await supabase
-        .from('accounts')
-        .select('subscription_plan')
-        .eq('id', account_id)
-        .single();
-      const plan = String(acct?.subscription_plan || '').toUpperCase();
-      const hasWorkforce =
-        plan === 'WFA' || plan === 'CRM_WFA' || plan === 'SFA' || plan === 'CRM_SFA' ||
-        // Legacy / unrecognised plans get full access (mirrors catalog.ts), so seed them too.
-        !['CRM'].includes(plan);
-      if (hasWorkforce) {
+      if (lines.wfa) {
         await supabase.from('expense_types').insert([
           { account_id, allowance_type: 'REGULAR', expense_name: 'Food', created_by: userId },
           { account_id, allowance_type: 'REGULAR', expense_name: 'Hotel', created_by: userId },
           { account_id, allowance_type: 'TRAVELLING', expense_name: 'Travel by Bike', created_by: userId },
           { account_id, allowance_type: 'TRAVELLING', expense_name: 'Travel by Car', created_by: userId },
+        ]);
+      }
+    }
+
+    // Seed the standard default payment types so a rep can record a collection
+    // immediately (Payment Type is required). Only for plans with the SFA line,
+    // since Payment Collection is an SFA feature. Cash needs no reference; the
+    // bank-style methods default to requiring a reference number.
+    {
+      if (lines.sfa) {
+        await supabase.from('payment_types').insert([
+          { account_id, name: 'Cash', requires_reference: false, position: 0 },
+          { account_id, name: 'UPI', requires_reference: true, position: 1 },
+          { account_id, name: 'Bank Transfer', requires_reference: true, position: 2 },
+          { account_id, name: 'Cheque', requires_reference: true, position: 3 },
         ]);
       }
     }
@@ -197,7 +212,14 @@ export async function POST(req: Request) {
     // Default "Sales Executive" role — a mobile-only field rep. Permissions are a
     // flat { key: true } map of rights (same shape the Roles editor reads/writes).
     // web_access is explicitly false so the rep can sign into the Android app only.
-    // Rights outside the account's plan are simply inert until that line is bought.
+    //
+    // The permission set is PLAN-AWARE: only rights whose product line the account
+    // actually bought are seeded. A CRM-only signup must not get a rep who can take
+    // orders or record payments (SFA) — those rights are not inert, they light up
+    // features on mobile and (before the DB backstop) were writable. WFA rights
+    // (expenses, visits, location) are seeded only when the plan includes WFA, and
+    // SFA rights (orders, payments, financials) only when it includes SFA. Base
+    // rights (customers, products, tasks, leaves) are seeded on every plan.
     await supabase
       .from('employee_roles')
       .insert({
@@ -209,44 +231,47 @@ export async function POST(req: Request) {
           // Login surface — mobile only
           web_access: false,
           mobile_access: true,
-          // Customers — view + create
+          // Customers — view + create (base: every plan)
           view_contacts: true,
           create_contacts: true,
-          // Products — view only
+          // Products — view only (base)
           view_products: true,
-          // Orders — view + create
-          view_orders: true,
-          create_orders: true,
-          // Payments — view, create, attachments, reports
-          view_payments: true,
-          create_payments: true,
-          view_payment_attachments: true,
-          view_payment_reports: true,
-          // Customer financials — outstanding only
-          view_customer_outstanding: true,
-          // Tasks — view, create, edit
+          // Tasks — view, create, edit (base)
           view_tasks: true,
           create_task: true,
           edit_task: true,
-          // Expenses — view, create
-          view_expenses: true,
-          create_expenses: true,
-          // Visits — view + check-in
-          view_visits: true,
-          mobile_visit_checkin: true,
-          // Leave — view + apply
+          // Leave — view + apply (base: attendance & leaves are on every plan)
           view_leaves: true,
           manage_leaves: true,
-          // Mobile attendance & location — location dashboard only
-          view_location_tracking: true,
-          // Reports — sales/order, payment, ageing, expense, visit/DSR, task + share PDF
-          // (view_payment_reports above already covers the payment report)
-          view_sales_reports: true,
-          view_ageing_reports: true,
-          view_expense_reports: true,
-          view_field_reports: true,
+          // Task report + share PDF (base)
           view_task_reports: true,
           share_reports: true,
+          // ── Workforce (WFA) line ──
+          ...(lines.wfa
+            ? {
+                view_expenses: true,
+                create_expenses: true,
+                view_visits: true,
+                mobile_visit_checkin: true,
+                view_location_tracking: true,
+                view_expense_reports: true,
+                view_field_reports: true,
+              }
+            : {}),
+          // ── Field Sales (SFA) line ──
+          ...(lines.sfa
+            ? {
+                view_orders: true,
+                create_orders: true,
+                view_payments: true,
+                create_payments: true,
+                view_payment_attachments: true,
+                view_payment_reports: true,
+                view_customer_outstanding: true,
+                view_sales_reports: true,
+                view_ageing_reports: true,
+              }
+            : {}),
         },
       });
 
