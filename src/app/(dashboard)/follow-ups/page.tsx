@@ -263,10 +263,10 @@ export default function FollowUpsPage() {
                   onClick={(e) => toggleTaskStatus(task, e)}
                   title={isCompleted ? "Mark as pending" : "Mark as completed"}
                   className={cn(
-                    "size-6 border rounded flex items-center justify-center transition-colors",
+                    "size-6 border-2 rounded flex items-center justify-center transition-colors",
                     isCompleted
                       ? "bg-green-500 text-white border-green-500"
-                      : "bg-background border-muted-foreground/50 text-transparent hover:border-green-500 hover:text-green-500 hover:bg-green-500/10"
+                      : "bg-background border-muted-foreground/70 text-muted-foreground/50 hover:border-green-500 hover:text-green-600 hover:bg-green-500/10"
                   )}
                 >
                   <CheckCircle2 className="size-4" />
