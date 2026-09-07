@@ -697,11 +697,12 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
 
         <nav className="flex-1 overflow-y-auto px-2 py-2">
           <div className="flex flex-col gap-0.5">
-            {filteredMenu.map((node, idx) => {
+            {filteredMenu.map((node) => {
               if (node.type === "spacer") {
-                return (
-                  <div key={`spacer-${idx}`} className="my-2" />
-                );
+                // Founder wants a single, tightly-spaced menu — no large gaps
+                // between clusters. Spacers render nothing so every item sits at
+                // the uniform `gap-0.5` spacing of the list.
+                return null;
               }
 
               if (node.type === "link") {
