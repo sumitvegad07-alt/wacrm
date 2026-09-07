@@ -37,6 +37,11 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
   const { accountId, user, isModuleEnabled } = useAuth();
   const territoryEnabled = isModuleEnabled('territory');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Holds the whole form body until the custom-field definitions are loaded, so
+  // the async CustomFieldsSectionRenderer (Primary Details / Status / Address)
+  // and the hardcoded Territory / GPS sections paint together in the right order
+  // instead of Territory flashing first and Primary Details popping in above it.
+  const [fieldsLoaded, setFieldsLoaded] = useState(false);
   const [territorySettings, setTerritorySettings] = useState<TerritorySettings>(DEFAULT_TERRITORY_SETTINGS);
   const [territoryRows, setTerritoryRows] = useState<Territory[]>([]);
   const [territoryId, setTerritoryId] = useState<string | null>(null);
@@ -72,7 +77,8 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         });
       }
       setTerritoryId((lead as (typeof lead) & { territory_id?: string | null })?.territory_id ?? null);
-      fetchLookups();
+      setFieldsLoaded(false);
+      fetchLookups().finally(() => setFieldsLoaded(true));
       if (territoryEnabled) fetchTerritoryData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,6 +284,20 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid gap-6 py-4">
+        {!fieldsLoaded ? (
+          <div className="space-y-6" aria-hidden="true">
+            <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                  <div className="h-9 w-full rounded bg-muted animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+        <>
         <CustomFieldsSectionRenderer
           accountId={accountId}
           moduleName="lead"
@@ -424,6 +444,8 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
       <div className="flex items-center justify-end gap-2 pt-4 border-t border-border mt-6">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>

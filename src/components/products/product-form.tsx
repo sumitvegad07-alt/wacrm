@@ -62,6 +62,8 @@ export function ProductForm({
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  // Hold the form body until custom-field defs load so sections paint in order.
+  const [fieldsLoaded, setFieldsLoaded] = useState(false);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   // Tax slab + price floor. The slab supplies the rate an order line will
@@ -124,7 +126,8 @@ export function ProductForm({
       setHsnCode((product as { hsn_code?: string | null })?.hsn_code ?? '');
       setNewImageFiles([]);
       setActive(product?.active ?? true);
-      fetchCustomFields();
+      setFieldsLoaded(false);
+      fetchCustomFields().finally(() => setFieldsLoaded(true));
       fetchTaxSlabs();
       fetchCategoriesAndUnits();
     }
@@ -487,6 +490,20 @@ export function ProductForm({
   const formContent = (
     <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            {!fieldsLoaded ? (
+              <div className="space-y-6" aria-hidden="true">
+                <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="space-y-2">
+                      <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                      <div className="h-9 w-full rounded bg-muted animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+            <>
             <CustomFieldsSectionRenderer
               accountId={accountId}
               moduleName="product"
@@ -831,6 +848,8 @@ export function ProductForm({
                 <Label htmlFor="active" className="text-muted-foreground font-normal">Active Product</Label>
               </div>
             </div>
+          </>
+          )}
           </div>
 
           <div className="border-t border-border/50 bg-popover/80 p-4 shrink-0 mt-auto">

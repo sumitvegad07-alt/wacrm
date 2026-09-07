@@ -102,6 +102,10 @@ export function ContactForm({
   const [checkingDup, setCheckingDup] = useState(false);
 
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  // Hold the whole form body until custom-field defs load, so the async section
+  // renderer and the hardcoded GPS/Financial sections paint together (no flash
+  // of the lower sections before Primary Details).
+  const [fieldsLoaded, setFieldsLoaded] = useState(false);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   // Order-hierarchy config drives the Customer Level field's visibility.
@@ -174,7 +178,8 @@ export function ContactForm({
       setDupMatch(null);
       setTerritoryId((contact as Contact & { territory_id?: string | null })?.territory_id ?? null);
       setNeedsTerritoryReview(!!(contact as Contact & { needs_territory_review?: boolean })?.needs_territory_review);
-      fetchCustomFields();
+      setFieldsLoaded(false);
+      fetchCustomFields().finally(() => setFieldsLoaded(true));
       fetchSettingsConfig();
       if (territoryEnabled) fetchTerritoryData();
     }
@@ -380,6 +385,20 @@ export function ContactForm({
 
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+          {!fieldsLoaded ? (
+            <div className="space-y-6" aria-hidden="true">
+              <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                    <div className="h-9 w-full rounded bg-muted animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+          <>
           <CustomFieldsSectionRenderer
             accountId={accountId}
             moduleName="contact"
@@ -614,6 +633,8 @@ export function ContactForm({
                 )}
               </div>
             </div>
+          )}
+          </>
           )}
 
           {asPage ? (

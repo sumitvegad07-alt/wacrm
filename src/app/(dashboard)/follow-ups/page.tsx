@@ -259,14 +259,17 @@ export default function FollowUpsPage() {
               </button>
               
               {!isNote && (
-                <button 
+                <button
                   onClick={(e) => toggleTaskStatus(task, e)}
+                  title={isCompleted ? "Mark as pending" : "Mark as completed"}
                   className={cn(
-                    "size-6 border rounded hover:border-primary flex items-center justify-center transition-colors",
-                    isCompleted ? "bg-green-500 text-white border-green-500" : "bg-background border-border"
+                    "size-6 border rounded flex items-center justify-center transition-colors",
+                    isCompleted
+                      ? "bg-green-500 text-white border-green-500"
+                      : "bg-background border-muted-foreground/50 text-transparent hover:border-green-500 hover:text-green-500 hover:bg-green-500/10"
                   )}
                 >
-                  {isCompleted && <CheckCircle2 className="size-4" />}
+                  <CheckCircle2 className="size-4" />
                 </button>
               )}
             </div>
