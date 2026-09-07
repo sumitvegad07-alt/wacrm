@@ -43,7 +43,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
 
   const [formData, setFormData] = useState({
     name: "", contact_person: "", whatsapp: "", email: "", source: "", industry: "", status: "",
-    address: "", city: "", state: "", country: "", latitude: "", longitude: ""
+    address: "", city: "", state: "", country: "", pincode: "", latitude: "", longitude: ""
   });
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -62,13 +62,13 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         setFormData({
           name: lead.name || "", contact_person: lead.contact_person || "", whatsapp: lead.whatsapp || "", email: lead.email || "",
           source: lead.source || "", industry: lead.industry || "", status: lead.status || "", address: lead.address || "",
-          city: lead.city || "", state: lead.state || "", country: lead.country || "",
+          city: lead.city || "", state: lead.state || "", country: lead.country || "", pincode: (lead as any).pincode || "",
           latitude: lead.latitude || "", longitude: lead.longitude || ""
         });
       } else {
         setFormData({
           name: "", contact_person: "", whatsapp: "+91", email: "", source: "", industry: "", status: "",
-          address: "", city: "", state: "", country: "", latitude: "", longitude: ""
+          address: "", city: "", state: "", country: "", pincode: "", latitude: "", longitude: ""
         });
       }
       setTerritoryId((lead as (typeof lead) & { territory_id?: string | null })?.territory_id ?? null);
@@ -208,6 +208,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       city: formData.city.trim() || null,
       state: formData.state.trim() || null,
       country: formData.country.trim() || null,
+      pincode: formData.pincode.trim() || null,
       latitude: formData.latitude.trim() || null,
       longitude: formData.longitude.trim() || null,
       ...(territoryEnabled ? { territory_id: territoryId } : {}),
@@ -297,6 +298,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
             city: formData.city,
             state: formData.state,
             country: formData.country,
+            pincode: formData.pincode,
           }}
           onFormDataChange={(key, val) => {
             setFormData((prev) => ({ ...prev, [key]: val }));

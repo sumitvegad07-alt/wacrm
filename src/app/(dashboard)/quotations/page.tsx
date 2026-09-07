@@ -93,23 +93,44 @@ export default function QuotationsPage() {
   const fetchQuotations = useCallback(async () => {
     setLoading(true);
 
-    const [{ data: quotationsData }, { data: fieldsData }] = await Promise.all([
-      supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), lead:leads!quotations_lead_id_fkey(title, contact_person), creator:profiles!quotations_user_id_fkey(full_name, email)').eq('is_latest_version', true).order('created_at', { ascending: false }),
+    const [{ data: quotationsData, error: quotationsError }, { data: fieldsData }] = await Promise.all([
+      supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), lead:leads!quotations_lead_id_fkey(name, contact_person)').eq('is_latest_version', true).order('created_at', { ascending: false }),
       supabase.from('custom_fields').select('*').eq('module_name', 'quotation')
     ]);
+
+    if (quotationsError) {
+      console.error('Error fetching quotations:', quotationsError.message);
+      toast.error('Failed to load quotations');
+    }
 
     setCustomFields(fieldsData || []);
 
     let enhancedQuotations = quotationsData || [];
     if (quotationsData && quotationsData.length > 0) {
       const quotationIds = quotationsData.map(q => q.id);
+
+      // Fetch creators separately: quotations.user_id references auth.users, not
+      // profiles, so it cannot be embedded via a PostgREST relationship hint.
+      const creatorIds = Array.from(new Set(quotationsData.map(q => q.user_id).filter(Boolean)));
+      const creatorMap: Record<string, { full_name: string | null; email: string | null }> = {};
+      if (creatorIds.length > 0) {
+        const { data: creatorsData } = await supabase
+          .from('profiles')
+          .select('user_id, full_name, email')
+          .in('user_id', creatorIds);
+        (creatorsData || []).forEach((c: any) => {
+          creatorMap[c.user_id] = { full_name: c.full_name, email: c.email };
+        });
+      }
+      enhancedQuotations = quotationsData.map(q => ({ ...q, creator: creatorMap[q.user_id] || null }));
+
       const { data: valuesData } = await supabase
         .from('quotation_custom_values')
         .select('*')
         .in('quotation_id', quotationIds);
 
       if (valuesData && valuesData.length > 0) {
-        enhancedQuotations = quotationsData.map(quotation => {
+        enhancedQuotations = enhancedQuotations.map(quotation => {
           const quotationValues = valuesData.filter((v: any) => v.quotation_id === quotation.id);
           const customData: any = {};
           quotationValues.forEach((v: any) => {
@@ -203,7 +224,7 @@ export default function QuotationsPage() {
         if (quotation.lead) {
           return (
             <div className="flex flex-col">
-              <span className="font-medium text-foreground">{quotation.lead.title}</span>
+              <span className="font-medium text-foreground">{quotation.lead.name}</span>
               <span className="text-xs text-muted-foreground">Lead</span>
             </div>
           );
@@ -346,7 +367,7 @@ export default function QuotationsPage() {
         const search = globalSearch.toLowerCase();
         const matchesNumber = quotation.quotation_number?.toLowerCase().includes(search);
         const matchesContact = quotation.contact?.name?.toLowerCase().includes(search);
-        const matchesLead = quotation.lead?.title?.toLowerCase().includes(search);
+        const matchesLead = quotation.lead?.name?.toLowerCase().includes(search);
         const matchesCustom = matchesSearchableCustomFields(quotation, customFields, globalSearch);
         if (!matchesNumber && !matchesContact && !matchesLead && !matchesCustom) {
           return false;
@@ -363,7 +384,7 @@ export default function QuotationsPage() {
           if (!(val as string[]).includes(quotation.status)) return false;
         } else if (colId === "contact") {
           const matchC = quotation.contact?.name?.toLowerCase().includes((val as string).toLowerCase());
-          const matchL = quotation.lead?.title?.toLowerCase().includes((val as string).toLowerCase());
+          const matchL = quotation.lead?.name?.toLowerCase().includes((val as string).toLowerCase());
           if (!matchC && !matchL) return false;
         } else if (colId === "creator") {
           const creatorName = quotation.creator?.full_name || quotation.creator?.email || "";

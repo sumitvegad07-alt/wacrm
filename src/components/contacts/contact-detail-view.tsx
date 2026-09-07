@@ -59,7 +59,8 @@ export function ContactDetailView({
   onUpdated,
 }: ContactDetailViewProps) {
   const supabase = createClient();
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, isModuleEnabled, hasSFA } = useAuth();
+  const showFinancials = hasSFA && isModuleEnabled('payment');
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(false);
@@ -479,12 +480,14 @@ export function ContactDetailView({
                 >
                   Notes
                 </TabsTrigger>
-                <TabsTrigger
-                  value="financials"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
-                >
-                  Financials
-                </TabsTrigger>
+                {showFinancials && (
+                  <TabsTrigger
+                    value="financials"
+                    className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  >
+                    Financials
+                  </TabsTrigger>
+                )}
                 <TabsTrigger
                   value="custom"
                   className="data-active:bg-muted data-active:text-primary text-muted-foreground"

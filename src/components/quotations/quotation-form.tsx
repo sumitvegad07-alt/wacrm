@@ -93,7 +93,7 @@ export function QuotationForm({
         { data: fieldsData }
       ] = await Promise.all([
         supabase.from('contacts').select('id, name').order('name'),
-        supabase.from('leads').select('id, title').order('title'),
+        supabase.from('leads').select('id, name').order('name'),
         supabase.from('products').select('id, name, sku, price').eq('active', true).order('name'),
         supabase.from('quotation_terms_templates').select('*').order('title'),
         supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'quotation').order('created_at')
@@ -481,7 +481,7 @@ export function QuotationForm({
               emptyMessage="No leads found."
               options={leads.map((l) => ({
                 value: l.id,
-                label: l.title,
+                label: l.name,
               }))}
             />
           )}

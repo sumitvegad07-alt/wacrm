@@ -64,7 +64,7 @@ export default function ContactsPage() {
   const searchParams = useSearchParams();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
-  const { accountId, isModuleEnabled, hasPermission, defaultCurrency } = useAuth();
+  const { accountId, isModuleEnabled, hasPermission, defaultCurrency, hasSFA } = useAuth();
   const territoryEnabled = isModuleEnabled('territory');
 
   const [contacts, setContacts] = useState<ContactWithData[]>([]);
@@ -408,8 +408,9 @@ export default function ContactsPage() {
     });
   }
 
-  if (isModuleEnabled('payment')) {
-    columns.splice(columns.length - 1, 0, 
+  // Financial columns are SFA-line only (credit / opening balance / outstanding).
+  if (hasSFA && isModuleEnabled('payment')) {
+    columns.splice(columns.length - 1, 0,
       {
         id: "credit_limit",
         label: "Credit Limit",

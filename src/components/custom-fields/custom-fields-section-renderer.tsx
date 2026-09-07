@@ -30,6 +30,7 @@ export function CustomFieldsSectionRenderer({
   isEditing = true,
 }: CustomFieldsSectionRendererProps) {
   const [sections, setSections] = useState<CustomFieldSection[]>([]);
+  const [sectionsLoaded, setSectionsLoaded] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -45,11 +46,13 @@ export function CustomFieldsSectionRenderer({
           .order('position', { ascending: true })
           .order('created_at', { ascending: true });
 
-        if (active && data) {
-          setSections(data as CustomFieldSection[]);
+        if (active) {
+          if (data) setSections(data as CustomFieldSection[]);
+          setSectionsLoaded(true);
         }
       } catch (err) {
         console.error('Failed loading custom field sections:', err);
+        if (active) setSectionsLoaded(true);
       }
     }
     loadSections();
@@ -61,6 +64,27 @@ export function CustomFieldsSectionRenderer({
   // Filter only active custom fields
   const activeFields = customFields.filter((f) => f.is_active !== false);
   if (activeFields.length === 0) return null;
+
+  // Wait for the section fetch to resolve before painting. Without this the
+  // first render (sections = []) collapses every field into one synthesized
+  // section sorted by per-section position, which briefly mis-orders the form
+  // (Address/Territory fields flashing before Primary Details) until the real
+  // sections arrive. Render a stable-height skeleton meanwhile to avoid a jump.
+  if (!sectionsLoaded) {
+    return (
+      <div className="space-y-6" aria-hidden="true">
+        <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Array.from({ length: Math.min(activeFields.length, 6) }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+              <div className="h-9 w-full rounded bg-muted animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   // If we don't have sections yet, synthesize a default one for display
   const displaySections: { id: string; name: string; position: number }[] =

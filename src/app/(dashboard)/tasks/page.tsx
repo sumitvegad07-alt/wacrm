@@ -209,7 +209,8 @@ export default function TasksPage() {
         <div className="flex items-center gap-3">
           <button 
             onClick={(e) => handleQuickComplete(task, e)}
-            className={`size-5 shrink-0 rounded-full border flex items-center justify-center ${task.status === 'Completed' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-muted-foreground/30 text-transparent hover:border-emerald-500 hover:text-emerald-500/20'}`}
+            title={task.status === 'Completed' ? 'Mark as pending' : 'Mark as completed'}
+            className={`size-5 shrink-0 rounded-full border flex items-center justify-center transition-colors ${task.status === 'Completed' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-muted-foreground/60 text-muted-foreground/40 hover:border-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10'}`}
           >
             <CheckSquare className="size-3.5" />
           </button>

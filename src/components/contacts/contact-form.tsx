@@ -59,7 +59,7 @@ export function ContactForm({
   onViewExisting,
 }: ContactFormProps) {
   const supabase = createClient();
-  const { accountId, user, isModuleEnabled, hasPermission, defaultCurrency } = useAuth();
+  const { accountId, user, isModuleEnabled, hasPermission, defaultCurrency, hasSFA } = useAuth();
   // These three fields decide what a customer owes, so the database refuses to change
   // them without the matching permission. Mirror that here rather than letting someone
   // fill in a value that will be rejected on save.
@@ -574,7 +574,11 @@ export function ContactForm({
             </div>
           </div>
 
-          {isModuleEnabled('payment') && (
+          {/* Financial Settings (credit limit / days / opening balance) are an
+              SFA-line concept. Only show them on plans that include the SFA line
+              (SFA, CRM+SFA, and legacy full-access) AND have the payment module on.
+              CRM / WFA / CRM+WFA plans never see these fields. */}
+          {hasSFA && isModuleEnabled('payment') && (
             <div className="space-y-3 pt-4 border-t border-border/50">
               <h4 className="text-sm font-semibold text-foreground">Financial Settings</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -72,6 +72,7 @@ export const DEFAULT_MODULE_SECTIONS_AND_FIELDS: Record<string, DefaultSectionDe
         { system_key: 'city', field_name: 'City', field_type: 'text', is_required: false, show_in_table: false, position: 1 },
         { system_key: 'state', field_name: 'State', field_type: 'text', is_required: false, show_in_table: false, position: 2 },
         { system_key: 'country', field_name: 'Country', field_type: 'text', is_required: false, show_in_table: false, position: 3 },
+        { system_key: 'pincode', field_name: 'Pincode / ZIP', field_type: 'text', is_required: false, show_in_table: false, position: 4 },
       ],
     },
   ],
