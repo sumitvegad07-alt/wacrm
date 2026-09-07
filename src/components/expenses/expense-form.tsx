@@ -10,6 +10,7 @@ import { FormPageShell } from "@/components/shared";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAuth } from "@/hooks/use-auth";
 import { Expense, ExpenseType, Profile, CustomField } from "@/types";
 import { cn } from "@/lib/utils";
@@ -33,13 +34,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 // We define a flexible schema since fields change based on expense type
@@ -327,20 +321,28 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
                 control={form.control}
                 name="expense_type_id"
                 render={({ field }) => (
-                  <Select key={expenseTypes.length} value={field.value || ""} onValueChange={(val) => handleTypeChange(val || "")}>
-                    <SelectTrigger id="expense_type">
-                      <SelectValue placeholder="Select type">
-                        {expenseTypes.find(t => t.id === field.value)?.expense_name || "Select type"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {expenseTypes.map((type) => (
-                        <SelectItem key={type.id} value={type.id}>
-                          {type.expense_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={field.value || ""}
+                    onChange={(val) => handleTypeChange(val || "")}
+                    options={expenseTypes.map((type) => ({ value: type.id, label: type.expense_name }))}
+                    placeholder="Select type..."
+                    createLabel="expense type"
+                    onCreateOption={async (name) => {
+                      if (!accountId) return null;
+                      // New inline types default to a REGULAR (non-travel) allowance.
+                      const { data, error } = await supabase
+                        .from("expense_types")
+                        .insert({ account_id: accountId, expense_name: name, allowance_type: "REGULAR" })
+                        .select("*")
+                        .single();
+                      if (error || !data) {
+                        toast.error(error?.message || "Could not create expense type");
+                        return null;
+                      }
+                      setExpenseTypes((prev) => [...prev, data as ExpenseType]);
+                      return { value: data.id, label: data.expense_name };
+                    }}
+                  />
                 )}
               />
               {form.formState.errors.expense_type_id && (

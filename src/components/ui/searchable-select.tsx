@@ -20,13 +20,16 @@ interface SearchableSelectProps {
   className?: string;
   disabled?: boolean;
   /**
-   * When provided, the dropdown offers "+ Create '<typed text>'" whenever the
-   * typed text doesn't match an existing option. The handler creates the record
-   * and returns the new option; it is then selected automatically. This is what
-   * makes any lookup dropdown (lead source/industry/status, etc.) able to add a
-   * new value inline instead of sending the user to Settings.
+   * When provided, the dropdown shows an always-visible "+ Create new …" footer.
+   * Typing a value that doesn't exist turns it into Create "<typed>"; otherwise
+   * clicking it reveals an inline input. The handler creates the record and
+   * returns the new option, which is then selected — so any lookup dropdown
+   * (lead source/industry/status, expense/payment type, …) can add a value
+   * inline instead of sending the user to Settings.
    */
   onCreateOption?: (label: string) => Promise<{ value: string; label: string } | null>;
+  /** Noun shown in the footer, e.g. "source" → "Create new source". */
+  createLabel?: string;
 }
 
 export function SearchableSelect({
@@ -39,10 +42,13 @@ export function SearchableSelect({
   className,
   disabled = false,
   onCreateOption,
+  createLabel = "option",
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const [createMode, setCreateMode] = useState(false);
+  const [createText, setCreateText] = useState("");
 
   const filteredOptions = options.filter((option) =>
     option.label.toLowerCase().includes(search.toLowerCase())
@@ -50,16 +56,19 @@ export function SearchableSelect({
 
   const trimmed = search.trim();
   const exactExists = options.some((o) => o.label.toLowerCase() === trimmed.toLowerCase());
-  const canCreate = !!onCreateOption && trimmed.length > 0 && !exactExists;
+  const canCreateTyped = !!onCreateOption && trimmed.length > 0 && !exactExists;
 
-  const handleCreate = async () => {
-    if (!onCreateOption || !trimmed || creating) return;
+  const doCreate = async (label: string) => {
+    const name = label.trim();
+    if (!onCreateOption || !name || creating) return;
     setCreating(true);
     try {
-      const created = await onCreateOption(trimmed);
+      const created = await onCreateOption(name);
       if (created) {
         onChange(created.value);
         setSearch("");
+        setCreateText("");
+        setCreateMode(false);
         setOpen(false);
       }
     } finally {
@@ -90,26 +99,13 @@ export function SearchableSelect({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <ScrollArea className="max-h-[300px] overflow-y-auto">
-          {filteredOptions.length === 0 && !canCreate ? (
+        <ScrollArea className="max-h-[280px] overflow-y-auto">
+          {filteredOptions.length === 0 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
               {emptyMessage}
             </div>
           ) : (
             <div className="p-1">
-              {canCreate && (
-                <div
-                  className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm font-medium text-primary outline-none hover:bg-accent"
-                  onClick={handleCreate}
-                >
-                  {creating ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" />
-                  )}
-                  Create &ldquo;{trimmed}&rdquo;
-                </div>
-              )}
               {filteredOptions.map((option) => (
                 <div
                   key={option.value}
@@ -134,6 +130,53 @@ export function SearchableSelect({
             </div>
           )}
         </ScrollArea>
+
+        {/* Always-visible "Create new" footer — the discoverable way to add a value. */}
+        {onCreateOption && (
+          <div className="border-t border-border/60 p-1">
+            {createMode ? (
+              <div className="flex items-center gap-1 p-1">
+                <input
+                  autoFocus
+                  value={createText}
+                  onChange={(e) => setCreateText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") doCreate(createText);
+                    if (e.key === "Escape") setCreateMode(false);
+                  }}
+                  placeholder={`New ${createLabel} name`}
+                  className="h-8 flex-1 rounded-md border border-border bg-muted px-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => doCreate(createText)}
+                  disabled={creating || !createText.trim()}
+                  className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                </button>
+                <button type="button" onClick={() => setCreateMode(false)} className="inline-flex h-8 items-center rounded-md px-2 text-xs text-muted-foreground hover:bg-muted">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (canCreateTyped) doCreate(trimmed);
+                  else {
+                    setCreateText(trimmed);
+                    setCreateMode(true);
+                  }
+                }}
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm font-medium text-primary outline-none hover:bg-accent"
+              >
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {canCreateTyped ? <>Create &ldquo;{trimmed}&rdquo;</> : <>Create new {createLabel}</>}
+              </button>
+            )}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

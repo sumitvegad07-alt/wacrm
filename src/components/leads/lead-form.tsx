@@ -318,6 +318,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                   placeholder="Select source..."
                   className="bg-muted border-border"
                   onCreateOption={(name) => createLeadLookup('lead_sources', name)}
+                  createLabel="source"
                 />
               );
             }
@@ -330,6 +331,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                   placeholder="Select industry..."
                   className="bg-muted border-border"
                   onCreateOption={(name) => createLeadLookup('lead_industries', name)}
+                  createLabel="industry"
                 />
               );
             }

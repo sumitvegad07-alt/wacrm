@@ -13,7 +13,8 @@ import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { DealForm } from "@/components/pipelines/deal-form";
 import { Timeline } from "@/components/shared/timeline";
-import { AssignmentEditor } from "@/components/shared/assignment-editor";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
 import {
   Dialog,
   DialogContent,
@@ -272,6 +273,20 @@ export default function DealDetailsPage() {
 
   if (!deal) return null;
 
+  // Auto-save owner / collaborators from the assignment band (parity with leads).
+  const persistDeal = async (patch: Record<string, unknown>) => {
+    const { error } = await supabase.from("deals").update(patch).eq("id", deal.id);
+    if (error) {
+      toast.error(`Could not update: ${error.message}`);
+      return;
+    }
+    toast.success("Updated");
+    fetchAllData();
+  };
+  const ownerOptions = allProfiles.map((p) => ({ value: p.user_id, label: p.full_name || p.email || "User" }));
+  const ownerValue = allProfiles.find((p) => p.user_id === deal.assigned_to || p.id === deal.assigned_to)?.user_id ?? "";
+  const dealCollaboratorIds: string[] = Array.isArray(deal.collaborator_ids) ? deal.collaborator_ids : [];
+
   const isLost = deal.status === "lost";
   const isWon = deal.status === "won" || deal.is_converted;
   const currentStageIndex = stages.findIndex(s => s.id === deal.stage_id);
@@ -377,6 +392,28 @@ export default function DealDetailsPage() {
             <Pencil className="size-4" />
             Edit Deal
           </Button>
+        </div>
+      </div>
+
+      {/* Owner / Collaborators band — assigned here, not at creation (parity with leads). */}
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3 sm:flex-row sm:items-start sm:gap-10">
+        <div className="min-w-[200px]">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Owner</p>
+          <SearchableSelect
+            value={ownerValue}
+            onChange={(val) => persistDeal({ assigned_to: val || null })}
+            options={ownerOptions}
+            placeholder="Unassigned"
+            className="bg-background"
+          />
+        </div>
+        <div className="flex-1">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Collaborators</p>
+          <CollaboratorsSelect
+            profiles={allProfiles}
+            selectedIds={dealCollaboratorIds}
+            onChange={(ids) => persistDeal({ collaborator_ids: ids })}
+          />
         </div>
       </div>
 
@@ -527,24 +564,6 @@ export default function DealDetailsPage() {
               )}
             </div>
 
-            {/* Owner + Collaborators — assigned here, not at creation. The deal's
-                stage (its "status") is changed via the stage bar above. */}
-            <div className="pt-2 border-t border-border/50">
-              <AssignmentEditor
-                table="deals"
-                recordId={deal.id}
-                moduleName="deal"
-                profiles={allProfiles}
-                ownerColumn="assigned_to"
-                ownerValue={
-                  allProfiles.find(
-                    (p) => p.user_id === deal.assigned_to || p.id === deal.assigned_to,
-                  )?.user_id ?? null
-                }
-                collaboratorIds={Array.isArray(deal.collaborator_ids) ? deal.collaborator_ids : []}
-                onSaved={fetchAllData}
-              />
-            </div>
 
             {deal.notes && (
               <div className="pt-4 border-t border-border/50">

@@ -455,6 +455,21 @@ export function PaymentForm({
                 value={field.value}
                 onChange={field.onChange}
                 placeholder="Select payment type..."
+                createLabel="payment type"
+                onCreateOption={async (name) => {
+                  if (!accountId) return null;
+                  const { data, error } = await supabase
+                    .from('payment_types')
+                    .insert({ account_id: accountId, name })
+                    .select('*')
+                    .single();
+                  if (error || !data) {
+                    toast.error(error?.message || 'Could not create payment type');
+                    return null;
+                  }
+                  setPaymentTypes((prev) => [...prev, data as PaymentTypeOption]);
+                  return { value: data.id, label: data.name };
+                }}
               />
             )}
           />

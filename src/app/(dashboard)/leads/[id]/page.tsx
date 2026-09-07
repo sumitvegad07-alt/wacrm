@@ -230,7 +230,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const collaboratorIds: string[] = Array.isArray(lead.collaborator_ids) ? lead.collaborator_ids : [];
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-7xl">
       {/* Breadcrumb + actions */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
         <div className="flex items-center gap-2 text-sm">
@@ -282,6 +282,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
+      {/* Two columns: details on the left, activity timeline on the right. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
       {/* Name + status */}
       <div className="flex flex-col gap-4 px-4 py-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -305,6 +308,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             placeholder="Set status..."
             disabled={!canEdit}
             onCreateOption={createStatusInline}
+            createLabel="status"
           />
         </div>
       </div>
@@ -408,9 +412,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         )}
       </div>
 
-      {/* Timeline */}
-      <div className="border-t border-border px-4 py-6">
-        <Timeline moduleName="lead" recordId={lead.id} tasks={tasks} notes={notes} activities={activities} onRefresh={fetchAllData} />
+        </div>
+
+        {/* Right column: activity timeline (kept on the right, as before). */}
+        <div className="lg:col-span-1">
+          <div className="rounded-lg border border-border bg-card p-4 lg:sticky lg:top-4">
+            <Timeline moduleName="lead" recordId={lead.id} tasks={tasks} notes={notes} activities={activities} onRefresh={fetchAllData} />
+          </div>
+        </div>
       </div>
 
       <LeadForm open={editOpen} onOpenChange={setEditOpen} lead={lead} onSaved={fetchAllData} />

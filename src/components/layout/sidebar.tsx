@@ -216,124 +216,28 @@ export function getMenuStructure(
 
     { type: "spacer" },
 
-    // ── Customer ──
-    {
-      type: "link",
-      href: "/contacts",
-      label: "Customer",
-      icon: Users,
-      module: "contacts",
-    },
-    { type: "spacer" },
-
-    // ── Product, Quotation ──
-    {
-      type: "link",
-      href: "/products",
-      label: "Product",
-      icon: Package,
-      module: "products",
-    },
-    {
-      type: "link",
-      href: "/quotations",
-      label: "Quotation",
-      icon: FileText,
-      module: "orders",
-      configModule: "quotation" as const,
-    },
-    {
-      type: "link",
-      href: "/schemes",
-      label: "Scheme",
-      icon: Percent,
-      module: "orders",
-      // Opt-in module: hidden until an admin enables it in Catalogue Settings.
-      configModule: "scheme" as const,
-      line: "sfa",
-    },
-    {
-      type: "link",
-      href: "/stock",
-      label: "Stock",
-      icon: Boxes,
-      module: "products",
-      // Opt-in module: hidden until an admin enables it in Catalogue Settings.
-      configModule: "stock" as const,
-      line: "sfa",
-    },
+    // ── CRM: Customer, Lead, Deal ──
+    { type: "link", href: "/contacts", label: "Customer", icon: Users, module: "contacts" },
+    { type: "link", href: "/leads", label: "Lead", icon: UserPlus, module: "leads", line: "crm" },
+    { type: "link", href: "/pipelines", label: "Deal", icon: GitBranch, module: "deals", line: "crm" },
 
     { type: "spacer" },
 
-    // ── Expense ──
-    {
-      type: "link",
-      href: "/expenses",
-      label: "Expense",
-      icon: Coins,
-      module: "expenses",
-      configModule: "expense" as const,
-    },
+    // ── Sales: Product, Quotation, Scheme, Stock, Order, Dispatch, Pending Dispatch, Payment ──
+    { type: "link", href: "/products", label: "Product", icon: Package, module: "products" },
+    { type: "link", href: "/quotations", label: "Quotation", icon: FileText, module: "orders", configModule: "quotation" as const },
+    // Opt-in modules (Scheme, Stock): hidden until enabled in Catalogue Settings.
+    { type: "link", href: "/schemes", label: "Scheme", icon: Percent, module: "orders", configModule: "scheme" as const, line: "sfa" },
+    { type: "link", href: "/stock", label: "Stock", icon: Boxes, module: "products", configModule: "stock" as const, line: "sfa" },
+    { type: "link", href: "/orders", label: "Order", icon: ShoppingCart, module: "orders", line: "sfa" },
+    { type: "link", href: "/dispatches", label: "Dispatch", icon: Truck, module: "orders", configModule: "dispatch" as const },
+    { type: "link", href: "/pending-dispatch", label: "Pending Dispatch", icon: PackageCheck, module: "orders", configModule: "pending_dispatch" as const },
+    { type: "link", href: "/payments", label: "Payment", icon: Banknote, module: "payments", configModule: "payment" as const },
 
     { type: "spacer" },
 
-    // ── Payment ──
-    {
-      type: "link",
-      href: "/payments",
-      label: "Payment",
-      icon: Banknote,
-      module: "payments",
-      configModule: "payment" as const,
-    },
-
-    { type: "spacer" },
-
-    // ── Order, Dispatch, Pending Dispatch ──
-    {
-      type: "link",
-      href: "/orders",
-      label: "Order",
-      icon: ShoppingCart,
-      module: "orders",
-      line: "sfa",
-    },
-    {
-      type: "link",
-      href: "/dispatches",
-      label: "Dispatch",
-      icon: Truck,
-      module: "orders",
-      configModule: "dispatch" as const,
-    },
-    {
-      type: "link",
-      href: "/pending-dispatch",
-      label: "Pending Dispatch",
-      icon: PackageCheck,
-      module: "orders",
-      configModule: "pending_dispatch" as const,
-    },
-
-    { type: "spacer" },
-
-    // ── Lead, Deal ──
-    {
-      type: "link",
-      href: "/leads",
-      label: "Lead",
-      icon: UserPlus,
-      module: "leads",
-      line: "crm",
-    },
-    {
-      type: "link",
-      href: "/pipelines",
-      label: "Deal",
-      icon: GitBranch,
-      module: "deals",
-      line: "crm",
-    },
+    // ── Field: Expense (Location Tracking group follows) ──
+    { type: "link", href: "/expenses", label: "Expense", icon: Coins, module: "expenses", configModule: "expense" as const },
 
     { type: "spacer" },
 
@@ -658,10 +562,10 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
         href={item.href}
         onClick={onClose}
         className={cn(
-          "flex items-center gap-3 rounded-lg transition-all duration-150 group relative",
+          "flex items-center rounded-lg transition-all duration-150 group relative",
           isTopLevel
-            ? "px-3 py-1.5 text-sm font-medium"
-            : "px-3 py-1.5 text-[13px] font-medium",
+            ? "gap-3 px-3 py-1.5 text-sm font-medium"
+            : "gap-2 px-2 py-1.5 text-[13px] font-medium",
           isActive
             ? isTopLevel
               ? "bg-primary text-primary-foreground font-semibold shadow-sm"
@@ -767,11 +671,11 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
       <aside
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-56 flex-col border-r border-border bg-card",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-60 flex-col border-r border-border bg-card",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
-          "lg:static lg:z-0 lg:w-56 lg:translate-x-0 lg:transition-none",
+          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
         )}
         aria-label="Primary"
       >
@@ -845,7 +749,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                   </button>
 
                   {isOpen && (
-                    <ul className="flex flex-col gap-0.5 ml-4 my-0.5 max-h-[340px] overflow-y-auto border-l border-border/60 pl-2 pr-1 scrollbar-thin">
+                    <ul className="flex flex-col gap-0.5 ml-2 my-0.5 max-h-[340px] overflow-y-auto border-l border-border/60 pl-1.5 scrollbar-thin">
                       {node.items.map((item) => (
                         <li key={`${item.href}-${item.label}`}>
                           {renderNavLink(item, false)}
