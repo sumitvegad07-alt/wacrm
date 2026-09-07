@@ -223,6 +223,29 @@ export function getMenuStructure(
 
     { type: "spacer" },
 
+    // ── Location Tracking (collapsed) — its own cluster between CRM and Sales ──
+    // NOTE: Route Management deliberately has NO top-level sidebar entry (see commit 9e9e213
+    // "remove routes from main menu"). Route creation/assignment/approval lives inside the
+    // employee panel (Team → Employees → an employee → Routes tab). Execution monitoring
+    // stays under Location Tracking → Route Monitor.
+    {
+      type: "group",
+      label: "Location Tracking",
+      icon: MapPin,
+      items: [
+        { href: "/location-tracking/overview", label: "Overview", icon: LayoutDashboard, module: "location_tracking" },
+        { href: "/location-tracking/health", label: "Tracking Health", icon: HeartPulse, module: "location_tracking", permission: "view_tracking_health" },
+        { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin, module: "location_tracking", permission: "view_live_feed" },
+        { href: "/location-tracking/all-locations", label: "All Locations", icon: Map, module: "location_tracking", permission: "view_live_feed" },
+        { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
+        { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking", permission: "view_attendance" },
+        { href: "/location-tracking/leaves", label: "Leaves", icon: CalendarOff, module: "location_tracking" },
+        { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking" },
+      ],
+    },
+
+    { type: "spacer" },
+
     // ── Sales: Product, Quotation, Scheme, Stock, Order, Dispatch, Pending Dispatch, Payment ──
     { type: "link", href: "/products", label: "Product", icon: Package, module: "products" },
     { type: "link", href: "/quotations", label: "Quotation", icon: FileText, module: "orders", configModule: "quotation" as const },
@@ -236,38 +259,8 @@ export function getMenuStructure(
 
     { type: "spacer" },
 
-    // ── Field: Expense (Location Tracking group follows) ──
+    // ── Field cluster: Expense, Report, Import, Employees (one tight group of rows) ──
     { type: "link", href: "/expenses", label: "Expense", icon: Coins, module: "expenses", configModule: "expense" as const },
-
-    { type: "spacer" },
-
-    // NOTE: Route Management deliberately has NO top-level sidebar entry (see commit 9e9e213
-    // "remove routes from main menu"). Route creation/assignment/approval lives inside the
-    // employee panel (Team → Employees → an employee → Routes tab), which is the simpler flow
-    // the founder wants. Execution monitoring stays under Location Tracking → Route Monitor.
-
-    // ── Location Tracking (collapsed) ──
-    {
-      type: "group",
-      label: "Location Tracking",
-      icon: MapPin,
-      items: [
-        // Overview is the area entry point — gated by the umbrella `view_location_tracking` only
-        // (the module gate on line ~630). The pages below add their own finer right on top, so a
-        // role can be given the area but only the specific screens it should see. Owner/admin pass.
-        { href: "/location-tracking/overview", label: "Overview", icon: LayoutDashboard, module: "location_tracking" },
-        { href: "/location-tracking/health", label: "Tracking Health", icon: HeartPulse, module: "location_tracking", permission: "view_tracking_health" },
-        { href: "/location-tracking/dashboard", label: "Live Feed", icon: MapPin, module: "location_tracking", permission: "view_live_feed" },
-        { href: "/location-tracking/all-locations", label: "All Locations", icon: Map, module: "location_tracking", permission: "view_live_feed" },
-        { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
-        // Track report was merged into Tracking Health — one table, nothing lost.
-        { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking", permission: "view_attendance" },
-        { href: "/location-tracking/leaves", label: "Leaves", icon: CalendarOff, module: "location_tracking" },
-        { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking" },
-      ],
-    },
-
-    { type: "spacer" },
 
     // ── Report (collapsed) ──
     {
@@ -311,8 +304,6 @@ export function getMenuStructure(
       ],
     },
 
-    { type: "spacer" },
-
     // ── Import (collapsed) — Universal Import Framework hub ──
     // One central place for admins to bulk-import any master data. Each item
     // opens that module's import wizard via /import/<key>. Only `product_units`
@@ -337,8 +328,6 @@ export function getMenuStructure(
         { href: "/import/orders", label: "Orders", icon: ShoppingCart, permission: "import_data", soon: true },
       ],
     },
-
-    { type: "spacer" },
 
     // ── Employees (collapsed) ──
     {
@@ -697,12 +686,11 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
 
         <nav className="flex-1 overflow-y-auto px-2 py-2">
           <div className="flex flex-col gap-0.5">
-            {filteredMenu.map((node) => {
+            {filteredMenu.map((node, idx) => {
               if (node.type === "spacer") {
-                // Founder wants a single, tightly-spaced menu — no large gaps
-                // between clusters. Spacers render nothing so every item sits at
-                // the uniform `gap-0.5` spacing of the list.
-                return null;
+                // One line of space between clusters — a light "grouping" cue
+                // without any dropdown/collapsible wrapper.
+                return <div key={`spacer-${idx}`} className="h-3" />;
               }
 
               if (node.type === "link") {
