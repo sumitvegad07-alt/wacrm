@@ -30,6 +30,11 @@ export interface BulkActionItem {
    * Whether the button is currently disabled.
    */
   disabled?: boolean;
+  /**
+   * Optional native tooltip, shown on hover — useful for explaining why a
+   * disabled action can't run against the current selection.
+   */
+  title?: string;
 }
 
 export interface BulkActionBarProps extends React.ComponentProps<"div"> {
@@ -102,6 +107,7 @@ export function BulkActionBar({
             size="sm"
             onClick={action.onClick}
             disabled={action.disabled}
+            title={action.title}
             className="h-7 text-xs"
           >
             {action.icon && <span className="mr-1.5">{action.icon}</span>}

@@ -49,12 +49,14 @@ export async function getWfaAnalytics(freq: Frequency): Promise<WfaAnalytics | n
       ["visit_count", "customer_visit_count", "unique_customer_count", "productive_visit_count"],
       curFilter,
     ),
-    // Trend — visits by day across the trailing window (total, productive, customer)
+    // Trend — visits by day across the trailing window (total, productive, customer).
+    // Group on `day` (YYYY-MM-DD), not `date` (a "September 2026" label) — the JS
+    // bucketer needs a parseable calendar day, otherwise every row is dropped.
     runReport(
       supabase,
       accountId,
       "visit",
-      ["date"],
+      ["day"],
       ["visit_count", "productive_visit_count", "customer_visit_count"],
       trendFilter,
     ),
@@ -76,15 +78,15 @@ export async function getWfaAnalytics(freq: Frequency): Promise<WfaAnalytics | n
   ]);
 
   const customerVisitSeries = foldIntoBuckets(
-    visitTrend.map((r) => ({ date: str(r.date), value: num(r.customer_visit_count) })),
+    visitTrend.map((r) => ({ date: str(r.day), value: num(r.customer_visit_count) })),
     freq,
   );
   const totalSeries = foldIntoBuckets(
-    visitTrend.map((r) => ({ date: str(r.date), value: num(r.visit_count) })),
+    visitTrend.map((r) => ({ date: str(r.day), value: num(r.visit_count) })),
     freq,
   );
   const productiveSeries = foldIntoBuckets(
-    visitTrend.map((r) => ({ date: str(r.date), value: num(r.productive_visit_count) })),
+    visitTrend.map((r) => ({ date: str(r.day), value: num(r.productive_visit_count) })),
     freq,
   );
   const visitProductivity = totalSeries.map((b, i) => ({

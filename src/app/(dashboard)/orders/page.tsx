@@ -333,12 +333,26 @@ export default function OrdersPage() {
           canManageStatus
             ? BULK_ACTIONS.map((a) => {
                 const Icon = a.icon;
+                // How many of the currently-selected orders are actually in a
+                // state this transition is legal from. When it's zero, the
+                // button is disabled with a tooltip instead of letting the
+                // user click into the confusing "None of the selected orders
+                // can be moved to X" error.
+                const eligible = orders.filter(
+                  (o) => selectedIds.has(o.id) && (LEGAL_TO[o.status] || []).includes(a.to),
+                ).length;
                 return {
-                  label: a.label,
+                  label: eligible > 0 ? `${a.label} (${eligible})` : a.label,
                   icon: <Icon className="size-4" />,
                   variant: a.variant,
                   onClick: () => handleBulkStatus(a.to),
-                  disabled: bulkLoading,
+                  disabled: bulkLoading || eligible === 0,
+                  title:
+                    eligible === 0
+                      ? `None of the selected orders can be moved to ${a.to}.`
+                      : eligible < selectedIds.size
+                        ? `${eligible} of ${selectedIds.size} selected order(s) can be moved to ${a.to}; the rest will be skipped.`
+                        : undefined,
                 };
               })
             : []

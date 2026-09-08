@@ -61,10 +61,12 @@ export async function getSfaAnalytics(freq: Frequency): Promise<SfaAnalytics | n
     runReport(supabase, accountId, "sales", [], ["net_amount"], curFilter),
     // KPI — visits in the current period
     runReport(supabase, accountId, "visit", [], ["customer_visit_count", "unique_customer_count"], curFilter),
-    // Trend series — order value by day across the trailing window
-    runReport(supabase, accountId, "order", ["date"], ["net_amount"], trendFilter),
+    // Trend series — order value by day across the trailing window. NOTE: we
+    // group on the `day` dimension (YYYY-MM-DD), not `date` (a "September 2026"
+    // label) — the JS bucketer needs a parseable calendar day.
+    runReport(supabase, accountId, "order", ["day"], ["net_amount"], trendFilter),
     // Trend series — sales value by dispatch day across the trailing window
-    runReport(supabase, accountId, "sales", ["date"], ["net_amount"], trendFilter),
+    runReport(supabase, accountId, "sales", ["day"], ["net_amount"], trendFilter),
     // Top 5 salespeople by order value (current period)
     runReport(supabase, accountId, "order", ["user"], ["net_amount", "order_count"], curFilter, "net_amount", 5),
     // Top 5 products by quantity ordered (current period)
@@ -96,11 +98,11 @@ export async function getSfaAnalytics(freq: Frequency): Promise<SfaAnalytics | n
 
   // ── Trend series ─────────────────────────────────────────────
   const orderValueSeries = foldIntoBuckets(
-    orderTrend.map((r) => ({ date: str(r.date), value: num(r.net_amount) })),
+    orderTrend.map((r) => ({ date: str(r.day), value: num(r.net_amount) })),
     freq,
   );
   const salesSeries = foldIntoBuckets(
-    salesTrend.map((r) => ({ date: str(r.date), value: num(r.net_amount) })),
+    salesTrend.map((r) => ({ date: str(r.day), value: num(r.net_amount) })),
     freq,
   );
   const paymentRowsData = (paymentRows.data ?? []) as {
