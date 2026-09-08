@@ -1,6 +1,6 @@
 # Feature Specification: Multi Unit (Product Unit Conversion)
 
-**Status:** Confirmed — IN BUILD by Claude Code (direct, not Antigravity), from 2026-09-08
+**Status:** BUILT & PUSHED by Claude Code 2026-09-08 (web 357aa87 → Vercel, mobile 97645ae). DB migration applied to prod + verified. Remaining: report base-quantity measure, mobile APK build, live screen-verify.
 **Module:** CRM → Catalogue / Orders (Order Management) + Field Force (mobile order entry) + Stock
 **Date:** 2026-09-08
 

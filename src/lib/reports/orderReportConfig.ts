@@ -22,6 +22,9 @@ export const orderReportConfig: ReportDefinition = {
     { key: 'order_count', label: '# of order', type: 'number' },
     { key: 'product_count', label: '# of product', type: 'number' },
     { key: 'product_quantity', label: 'Quantity', type: 'number' },
+    // Multi Unit: converted base-unit quantity (2 BOX → 24). Equals Quantity for
+    // single-unit / legacy lines (base_quantity falls back to quantity).
+    { key: 'base_quantity', label: 'Base Quantity', type: 'number' },
     { key: 'gross_amount', label: 'Sub Amount', type: 'currency' },
     { key: 'net_amount', label: 'Amount', type: 'currency' },
     { key: 'discount_amount', label: 'Discount Amount', type: 'currency' },
