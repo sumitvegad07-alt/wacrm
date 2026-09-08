@@ -614,6 +614,84 @@ export const PRICING_FIXTURES: PricingFixture[] = [
       effective_unit_prices: [100, 95],
     },
   },
+  // ── Multi Unit (v4) ─────────────────────────────────────────────────────────
+  {
+    name: 'multi-unit: base quantity drives the line',
+    proves: 'qty 2 × factor 12 = base 24; line = base_qty × base price (₹100)',
+    lines: [{ productId: 'aaaaaaaa-0000-4000-8000-000000000001', quantity: 2, conversionFactor: 12 }],
+    context: CTX_PLAIN,
+    expect: {
+      sub_total: 2400,
+      tax_total: 0,
+      total_amount: 2400,
+      discount_total: 0,
+      classification: 'direct',
+      valid: true,
+      // effective unit price is PER BASE UNIT
+      effective_unit_prices: [100],
+    },
+  },
+  {
+    name: 'multi-unit: decimal conversion factor',
+    proves: 'a decimal factor (0.5) yields a fractional base quantity (3 × 0.5 = 1.5)',
+    lines: [{ productId: 'aaaaaaaa-0000-4000-8000-000000000001', quantity: 3, conversionFactor: 0.5 }],
+    context: CTX_PLAIN,
+    expect: {
+      sub_total: 150,
+      tax_total: 0,
+      total_amount: 150,
+      discount_total: 0,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [100],
+    },
+  },
+  {
+    name: 'multi-unit: amount discount, entered basis (default)',
+    proves: '₹5/unit amount discount × ENTERED qty 2 = ₹10 off a ₹2400 line',
+    lines: [
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000001',
+        quantity: 2,
+        conversionFactor: 12,
+        discountType: 'amount',
+        discountValue: 5,
+      },
+    ],
+    context: CTX_PLAIN, // amountDiscountBasis defaults to 'entered'
+    expect: {
+      sub_total: 2390,
+      tax_total: 0,
+      total_amount: 2390,
+      discount_total: 10,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [99.5833],
+    },
+  },
+  {
+    name: 'multi-unit: amount discount, base basis',
+    proves: '₹5/unit amount discount × BASE qty 24 = ₹120 off a ₹2400 line',
+    lines: [
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000001',
+        quantity: 2,
+        conversionFactor: 12,
+        discountType: 'amount',
+        discountValue: 5,
+      },
+    ],
+    context: { hierarchyEnabled: false, enforcePriceFloor: true, customerLevel: null, amountDiscountBasis: 'base' },
+    expect: {
+      sub_total: 2280,
+      tax_total: 0,
+      total_amount: 2280,
+      discount_total: 120,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [95],
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

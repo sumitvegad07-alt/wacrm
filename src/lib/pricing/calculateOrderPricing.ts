@@ -97,10 +97,20 @@ export function calculateOrderPricing(
   const lookup = (id: string): PricingProduct | undefined =>
     products instanceof Map ? products.get(id) : products[id];
 
+  // Multi Unit (v4): an 'amount' line discount multiplies by base or entered qty
+  // per the account setting. Default 'entered' = pre-multi-unit behaviour.
+  const amountDiscountBasis: 'base' | 'entered' =
+    ctx.amountDiscountBasis === 'base' ? 'base' : 'entered';
+
   // ---- pass 1: resolve, apply scheme + salesman line discounts ----
   const scratch = (lines ?? []).map((line, index) => {
     const product = lookup(line.productId);
     const quantity = Math.max(Number(line.quantity) || 0, 0);
+    // Multi Unit (v4): base units per entered unit (1 = single-unit). Pricing
+    // works in BASE units — base_quantity = entered quantity × factor.
+    const conversionFactor = Math.max(Number(line.conversionFactor) || 1, 0.000001);
+    const baseQuantity = round(quantity * conversionFactor, 6);
+    const enteredUnitId = line.enteredUnitId ?? null;
     const cataloguePrice = Number(product?.price ?? 0);
     // Phase 3 resolves the customer's price list here. Until then the admin
     // price is the catalogue price, or the locked price when an existing line
@@ -122,6 +132,9 @@ export function calculateOrderPricing(
         position: index + 1,
         product,
         quantity,
+        conversionFactor,
+        baseQuantity,
+        enteredUnitId,
         taxMode,
         cataloguePrice,
         priceListPrice,
@@ -136,17 +149,20 @@ export function calculateOrderPricing(
       };
     }
 
-    const gross = round2(priceListPrice * quantity);
+    // gross in BASE units: base-unit price × base_quantity.
+    const gross = round2(priceListPrice * baseQuantity);
     // Scheme comes before the salesman discount in the sequence. Its rupee
     // effect is already resolved by detection; here we only apply and cap it.
     const schemeDiscountAmount = Math.min(round2(Number(line.schemeDiscountAmount) || 0), gross);
 
     let discountAmount = 0;
-    // 'amount' is PER UNIT (× quantity) — a field discount is spoken per unit
-    // ("5 off each"), consistent with percentage. The whole-order amount
-    // discount (below) stays one amount across the order.
+    // 'amount' is PER UNIT — a field discount is spoken per unit ("5 off each").
+    // Multi Unit (v4): "per unit" means per BASE unit or per ENTERED unit by the
+    // admin setting (amountDiscountBasis). Default 'entered' keeps the old math
+    // (× entered quantity). Percentage works off gross, so it's unaffected.
     if (discountType === 'percent') discountAmount = round2((gross * discountValue) / 100);
-    else if (discountType === 'amount') discountAmount = round2(discountValue * quantity);
+    else if (discountType === 'amount')
+      discountAmount = round2(discountValue * (amountDiscountBasis === 'base' ? baseQuantity : quantity));
     // The salesman discount can never take the line below what the scheme has
     // already left — scheme + salesman jointly cannot exceed the line.
     discountAmount = Math.min(discountAmount, gross - schemeDiscountAmount);
@@ -155,6 +171,9 @@ export function calculateOrderPricing(
       position: index + 1,
       product,
       quantity,
+      conversionFactor,
+      baseQuantity,
+      enteredUnitId,
       taxMode,
       cataloguePrice,
       priceListPrice,
@@ -236,7 +255,9 @@ export function calculateOrderPricing(
     const rateInclUnit =
       s.taxMode === 'inclusive' ? s.cataloguePrice : round2(s.cataloguePrice * (1 + taxRate / 100));
 
-    const effectiveUnit = s.quantity > 0 ? round4(nativeAfter / s.quantity) : 0;
+    // Effective price is PER BASE UNIT (÷ base_quantity), so it stays comparable
+    // to products.min_price (a base-unit floor). Factor 1 => identical to v3.
+    const effectiveUnit = s.baseQuantity > 0 ? round4(nativeAfter / s.baseQuantity) : 0;
     const minPrice = s.product?.minPrice ?? null;
     // A free-goods reward line is priced to ₹0 by design and is exempt from the
     // floor — a giveaway is never a floor breach.
@@ -256,7 +277,11 @@ export function calculateOrderPricing(
       product_id: s.product?.id ?? null,
       product_name: s.product?.name ?? 'Unknown product',
       unit: s.product?.unit ?? null,
+      entered_unit_id: s.enteredUnitId,
+      conversion_factor: s.conversionFactor,
       quantity: s.quantity,
+      base_quantity: s.baseQuantity,
+      base_unit_price: s.priceListPrice,
       tax_mode: s.taxMode,
       catalogue_price: s.cataloguePrice,
       price_list_price: s.priceListPrice,
@@ -297,6 +322,6 @@ export function calculateOrderPricing(
     floor_violations: floorViolations,
     enforce_floor: ctx.enforcePriceFloor,
     valid: !(ctx.enforcePriceFloor && floorViolations.length > 0),
-    engine_version: 3,
+    engine_version: 4,
   };
 }

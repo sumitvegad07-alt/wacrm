@@ -49,12 +49,20 @@ interface OrderFormProps {
   orderId?: string | null;
 }
 
+interface UnitConversion {
+  unit_id: string;
+  name: string;
+  factor: number;
+}
 interface ProductOption {
   id: string;
   name: string;
   sku: string | null;
   price: number | null;
   unit: string | null;
+  /** Multi Unit: the base unit id (factor 1) and the alternate units. */
+  base_unit_id?: string | null;
+  conversions?: UnitConversion[];
 }
 
 type DiscountType = 'percent' | 'amount';
@@ -74,6 +82,8 @@ interface LineInput {
   locked_price?: number | null;
   /** Set for an existing line: its stored tax basis. New lines use the account default. */
   tax_mode?: 'exclusive' | 'inclusive';
+  /** Multi Unit: the unit the rep picked. Defaults to the product's base unit. */
+  unit_id?: string | null;
   /** True when this existing line's product was deleted (product_id null) and needs re-attaching. */
   detached?: boolean;
   /** Snapshot name of a detached line's original product, shown so the user knows what to replace. */
@@ -201,6 +211,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const [discountMode, setDiscountMode] = useState<DiscountMode>('off');
   const [discountValueType, setDiscountValueType] = useState<DiscountValueType>('both');
   const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive');
+  const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
   const [gstEnabled, setGstEnabled] = useState(false);
   const [companyState, setCompanyState] = useState('');
   const [customerState, setCustomerState] = useState('');
@@ -254,14 +265,17 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       if (user?.id) {
         await ensureDefaultSectionsAndFields(accountId, 'order', user.id, supabase);
       }
-      const [{ data: contactData }, { data: productData }, { data: acct }, { data: fieldsData }, { data: unitData }] = await Promise.all([
+      const [{ data: contactData }, { data: productData }, { data: acct }, { data: fieldsData }, { data: unitData }, { data: convData }] = await Promise.all([
         supabase.from('contacts').select('id, company, name').eq('account_id', accountId).order('company'),
         supabase.from('products').select('id, name, sku, price, unit, unit_id').eq('account_id', accountId).eq('active', true).order('name'),
         supabase.from('accounts').select('settings').eq('id', accountId).single(),
         supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'order').order('position', { ascending: true }).order('created_at', { ascending: true }),
         supabase.from('product_units').select('id, name').eq('account_id', accountId),
+        supabase.from('product_unit_conversions').select('product_id, unit_id, conversion_factor').eq('account_id', accountId).eq('active', true),
       ]);
       if (!alive) return;
+      const multiUnit = !!acct?.settings?.extra_settings?.multi_unit_enabled;
+      setMultiUnitEnabled(multiUnit);
       setCustomFields(fieldsData || []);
       setContacts((contactData ?? []).map((c: Record<string, unknown>) => ({
         id: c.id as string,
@@ -272,9 +286,18 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       // unit name so the order line shows "Pcs" instead of "—".
       const unitMap: Record<string, string> = {};
       (unitData ?? []).forEach((u: { id: string; name: string }) => { unitMap[u.id] = u.name; });
+      // Group Multi Unit conversions by product (base unit itself is implicit factor 1).
+      const convByProduct = new Map<string, UnitConversion[]>();
+      (convData ?? []).forEach((r: { product_id: string; unit_id: string; conversion_factor: number }) => {
+        const list = convByProduct.get(r.product_id) ?? [];
+        list.push({ unit_id: r.unit_id, name: unitMap[r.unit_id] || 'unit', factor: Number(r.conversion_factor) });
+        convByProduct.set(r.product_id, list);
+      });
       setProducts(((productData ?? []) as Record<string, unknown>[]).map((p) => ({
         ...p,
         unit: (p.unit as string) || (p.unit_id ? unitMap[p.unit_id as string] : '') || '',
+        base_unit_id: (p.unit_id as string) ?? null,
+        conversions: convByProduct.get(p.id as string) ?? [],
       })) as ProductOption[]);
       if (stockEnabled) {
         setRestrictStock(acct?.settings?.stock_settings?.restrict_on_insufficient === true);
@@ -329,6 +352,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
           // Existing lines keep their agreed unit price + original tax basis.
           locked_price: (it.price_list_price as number) ?? null,
           tax_mode: ((it.tax_mode as 'exclusive' | 'inclusive') ?? 'exclusive'),
+          unit_id: (it.entered_unit_id as string) ?? null,
           detached: !it.product_id,
           detached_name: (it.product_name as string) ?? undefined,
         }));
@@ -360,19 +384,43 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
     return () => { alive = false; };
   }, [open, accountId, supabase, prefillContactId, isEdit, orderId]);
 
+  // Multi Unit: resolve a line's entered unit id, its conversion factor to the
+  // base unit (base unit = factor 1), and the display name. When the feature is
+  // off, or the product has no conversions, this collapses to base/factor 1 — so
+  // every downstream number is identical to single-unit behaviour. Declared here
+  // (before detection/pricing memos) because both use it.
+  const unitInfoOf = useCallback(
+    (l: LineInput) => {
+      const p = products.find((pp) => pp.id === l.product_id);
+      const baseId = p?.base_unit_id ?? null;
+      const enteredId = l.unit_id ?? baseId ?? null;
+      let factor = 1;
+      let name = p?.unit || '';
+      if (enteredId && enteredId !== baseId) {
+        const c = p?.conversions?.find((x) => x.unit_id === enteredId);
+        if (c) { factor = c.factor; name = c.name; }
+      }
+      return { enteredId, baseId, factor, name };
+    },
+    [products],
+  );
+
   // ---- scheme detection (Phase 4): run on the salesman's product lines ----
   // A compact signature so detection only re-runs when a product or quantity
   // changes, not on every discount keystroke.
+  // Signature carries the conversion factor too, so detection re-runs when the
+  // rep switches units (scheme thresholds can be measured in base units).
   const detectionSignature = useMemo(
-    () => lines.filter((l) => l.product_id && Number(l.quantity) > 0).map((l) => `${l.product_id}:${Number(l.quantity) || 0}`).join('|'),
-    [lines],
+    () => lines.filter((l) => l.product_id && Number(l.quantity) > 0)
+      .map((l) => `${l.product_id}:${Number(l.quantity) || 0}:${unitInfoOf(l).factor}`).join('|'),
+    [lines, unitInfoOf],
   );
   const detectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!accountId || !contactId || !detectionSignature) { setSchemeDetection(null); return; }
     const base = detectionSignature.split('|').map((s) => {
-      const [product_id, qty] = s.split(':');
-      return { product_id, quantity: Number(qty) || 0 };
+      const [product_id, qty, factor] = s.split(':');
+      return { product_id, quantity: Number(qty) || 0, conversion_factor: Number(factor) || 1 };
     });
     if (detectRef.current) clearTimeout(detectRef.current);
     detectRef.current = setTimeout(async () => {
@@ -397,9 +445,13 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const pricingInputs = useMemo(() => {
     const productLines = lines.filter((l) => l.product_id && Number(l.quantity) > 0);
     const priced = productLines.map((l, i) => {
+      const info = unitInfoOf(l);
       const base: Record<string, unknown> = {
         product_id: l.product_id,
         quantity: Number(l.quantity) || 0,
+        // Multi Unit: base_quantity = quantity × factor is derived server-side.
+        conversion_factor: info.factor,
+        entered_unit_id: info.enteredId,
         discount_type: itemDiscountAllowed && Number(l.discount_value) > 0 ? (forcedDiscountType ?? l.discount_type) : null,
         discount_value: itemDiscountAllowed ? (Number(l.discount_value) || 0) : 0,
         tax_mode: l.tax_mode ?? taxMode,
@@ -427,7 +479,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       ? { type: forcedDiscountType ?? orderDiscountType, value: Number(orderDiscountValue) }
       : null;
     return { priced: [...priced, ...freeLines], orderDiscount, orderSchemes, productCount: productLines.length };
-  }, [lines, schemeDetection, isAccepted, itemDiscountAllowed, orderDiscountAllowed, orderDiscountType, orderDiscountValue, forcedDiscountType, taxMode]);
+  }, [lines, schemeDetection, isAccepted, itemDiscountAllowed, orderDiscountAllowed, orderDiscountType, orderDiscountValue, forcedDiscountType, taxMode, unitInfoOf]);
 
   // ---- debounced live pricing via the ONE authority ----
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -755,6 +807,16 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
                       // modes. Line total incl. (before line discount) = that × qty.
                       const rateInclUnit = priced ? priced.rate_incl_unit : null;
                       const lineInclPreDiscount = priced && rateInclUnit != null ? rateInclUnit * priced.quantity : null;
+                      // Multi Unit line context.
+                      const prod = products.find((p) => p.id === line.product_id);
+                      const info = unitInfoOf(line);
+                      const showUnitPicker = multiUnitEnabled && !!prod && (prod.conversions?.length ?? 0) > 0;
+                      const enteredQty = Number(line.quantity) || 0;
+                      const baseQty = enteredQty * info.factor;
+                      const baseUnitName = prod?.unit || '';
+                      // Price is per BASE unit; when a bigger unit is picked, show the
+                      // derived "per selected unit" price so the amount reads right.
+                      const perSelectedUnit = priced && info.factor !== 1 ? priced.effective_unit_price * info.factor : null;
                       return (
                         <tr key={line.key} className="border-b border-border/60 last:border-0 align-top">
                           <td className="px-3 py-2">
@@ -763,7 +825,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
                               value={line.product_id}
                               // Changing/re-attaching a product clears the locked price so the
                               // line prices at the new product's current rate (founder's decision).
-                              onChange={(v) => updateLine(line.key, { product_id: v, detached: false, locked_price: null })}
+                              onChange={(v) => updateLine(line.key, { product_id: v, detached: false, locked_price: null, unit_id: null })}
                               placeholder={line.detached ? 'Re-attach a product' : 'Select a product'}
                             />
                             {line.detached && !line.product_id && (
@@ -783,13 +845,34 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
                               );
                             })()}
                           </td>
-                          <td className="px-2 py-2 text-muted-foreground whitespace-nowrap">{unit || '—'}</td>
+                          <td className="px-2 py-2 text-muted-foreground whitespace-nowrap">
+                            {showUnitPicker ? (
+                              <select
+                                value={info.enteredId ?? ''}
+                                onChange={(e) => updateLine(line.key, { unit_id: e.target.value || null })}
+                                aria-label="Unit"
+                                className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                              >
+                                {prod?.base_unit_id && <option value={prod.base_unit_id}>{baseUnitName || 'Base'}</option>}
+                                {(prod?.conversions ?? []).map((c) => (
+                                  <option key={c.unit_id} value={c.unit_id}>{c.name}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              unit || '—'
+                            )}
+                          </td>
                           <td className="px-2 py-2">
                             <Input
-                              type="number" min="0" step="1" value={line.quantity}
+                              type="number" min="0" step="any" value={line.quantity}
                               onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
                               className="w-16 text-right ml-auto" aria-label="Quantity"
                             />
+                            {showUnitPicker && info.factor !== 1 && enteredQty > 0 && (
+                              <p className="mt-1 text-[11px] text-muted-foreground text-right whitespace-nowrap">
+                                = {baseQty} {baseUnitName}
+                              </p>
+                            )}
                           </td>
                           <td className="px-2 py-2 text-right whitespace-nowrap">
                             {priced ? (
@@ -803,6 +886,11 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
                               )
                             ) : (
                               <span className="text-muted-foreground">—</span>
+                            )}
+                            {perSelectedUnit != null && (
+                              <p className="mt-0.5 text-[11px] text-muted-foreground whitespace-nowrap">
+                                = {money(perSelectedUnit)} / {info.name}
+                              </p>
                             )}
                           </td>
                           <td className="px-2 py-2 text-right whitespace-nowrap">

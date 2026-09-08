@@ -32,6 +32,8 @@ export interface SchemeRow {
   scheme_type: SchemeType;
   slab_mode: SlabMode;
   target_type: SchemeTargetType;
+  /** Multi Unit: qty thresholds measured in base or entered units. */
+  qty_unit_basis: 'base' | 'entered';
   max_free_units_per_order: number | null;
   priority: number;
   starts_on: string; // YYYY-MM-DD
@@ -54,6 +56,8 @@ export interface SchemeFormValues {
   schemeType: SchemeType;
   slabMode: SlabMode;
   targetType: SchemeTargetType;
+  /** Multi Unit: qty thresholds measured in base or entered units. Default 'base'. */
+  qtyUnitBasis: 'base' | 'entered';
   maxFreeUnitsPerOrder: number | null;
   priority: number;
   startsOn: string;

@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -110,6 +111,7 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
   const isEdit = !!schemeId;
   const sourceId = schemeId ?? cloneFromId ?? null;
 
+  const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
@@ -119,6 +121,8 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
   const [slabMode, setSlabMode] = useState<"step_up" | "repeat">("step_up");
   const [rewardType, setRewardType] = useState<SchemeRewardType>("discount_percent");
   const [targetType, setTargetType] = useState<"all" | "specific_customers">("all");
+  const [qtyUnitBasis, setQtyUnitBasis] = useState<"base" | "entered">("base");
+  const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
   const [productIds, setProductIds] = useState<string[]>([]);
   const [customerIds, setCustomerIds] = useState<string[]>([]);
   const [priority, setPriority] = useState("0");
@@ -134,9 +138,14 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
     if (!accountId) return;
     setLoading(true);
     try {
-      const [p, c] = await Promise.all([getProductOptions(accountId), getCustomerOptions(accountId)]);
+      const [p, c, acct] = await Promise.all([
+        getProductOptions(accountId),
+        getCustomerOptions(accountId),
+        supabase.from('accounts').select('settings').eq('id', accountId).single(),
+      ]);
       setProducts(p);
       setCustomers(c);
+      setMultiUnitEnabled(!!acct.data?.settings?.extra_settings?.multi_unit_enabled);
       if (sourceId) {
         const s = await getScheme(accountId, sourceId);
         if (!s) {
@@ -150,6 +159,7 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
         setSlabMode(s.slab_mode);
         setRewardType(s.scheme_type === "free_goods" ? "free_goods" : (s.slabs[0]?.reward_type ?? rewardTypesFor(s.scheme_type)[0]));
         setTargetType(s.target_type);
+        setQtyUnitBasis(s.qty_unit_basis === "entered" ? "entered" : "base");
         setProductIds(s.productIds);
         setCustomerIds(s.customerIds);
         setPriority(String(s.priority));
@@ -175,7 +185,7 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
     } finally {
       setLoading(false);
     }
-  }, [accountId, sourceId, cloneFromId, onClose]);
+  }, [accountId, sourceId, cloneFromId, onClose, supabase]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -249,6 +259,7 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
       schemeType,
       slabMode: useValue ? "step_up" : slabMode,
       targetType,
+      qtyUnitBasis,
       maxFreeUnitsPerOrder: isFreeGoods ? toNum(maxFree) : null,
       priority: toNum(priority) ?? 0,
       startsOn,
@@ -463,6 +474,25 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
           the other is ignored. If your schemes never overlap, leave this at 0.
         </p>
       </div>
+
+      {/* Multi Unit: measure qty thresholds in base or entered units */}
+      {multiUnitEnabled && schemeType !== "value_slab" && (
+        <div className="space-y-1.5 border-t border-border pt-5">
+          <Label>Quantity is measured in</Label>
+          <Select value={qtyUnitBasis} onValueChange={(v) => setQtyUnitBasis(v as "base" | "entered")}>
+            <SelectTrigger className="sm:max-w-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="base">Base unit (e.g. 24 PCS)</SelectItem>
+              <SelectItem value="entered">Entered unit (e.g. 2 BOX)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            With Multi Unit on, choose whether this scheme&apos;s quantity slabs are counted in the
+            product&apos;s <strong>base unit</strong> (a line of 2 BOX counts as 24) or the
+            <strong> entered unit</strong> (counts as 2).
+          </p>
+        </div>
+      )}
 
       {/* Active (edit only — new schemes start active) */}
       {isEdit && (

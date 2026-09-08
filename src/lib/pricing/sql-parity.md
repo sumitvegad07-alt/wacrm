@@ -180,3 +180,22 @@ change, and re-confirm zero fixture rows remain afterward.
 - The SQL side is not wired into CI. If a test database ever becomes
   available (Supabase Pro branching, or a local Supabase CLI stack), automate
   it — a manual check is only as good as the person remembering to run it.
+
+## Multi Unit v1 (engine_version 4, migration 20260908130000, 2026-09-08)
+
+`conversion_factor` per line (base units per entered unit; 1 = single-unit).
+Pricing runs in BASE units: gross = base_unit_price × (quantity × factor).
+`amount` line discount multiplies by base or entered qty per
+`order_settings.amount_discount_basis` (default 'entered' = pre-multi-unit).
+
+**Verified live (production, rolled-back transactions):**
+- Backward-compat: all 38 existing orders re-priced with v4; 37 identical to
+  stored, the 38th (ORD-0001) a pre-pricing-engine legacy order (NULL
+  price_list_price/tax) explained by current product price/tax, not the engine.
+- Multi-unit pricing: qty 2 × factor 12 → base 24, line ₹3,600, engine v4.
+- SQL↔TS parity on the new paths (product @ ₹100, no tax):
+  amount disc ₹5 base-basis → 2280 (both) · entered-basis → 2390 (both) ·
+  decimal factor 0.5 × qty 3 → 150 (both). See fixtures.ts "multi-unit:" cases.
+- detect_eligible_schemes v4 honours schemes.qty_unit_basis: base 24 ≥ 20
+  qualifies (₹360 = 100... i.e. 150×24×10%); switched to 'entered', entered 2 < 20
+  correctly does not qualify.

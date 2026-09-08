@@ -21,7 +21,7 @@ import type {
 } from './types';
 
 const SCHEME_COLS =
-  'id, account_id, name, scheme_type, slab_mode, target_type, max_free_units_per_order, priority, starts_on, ends_on, active, created_at, updated_at';
+  'id, account_id, name, scheme_type, slab_mode, target_type, qty_unit_basis, max_free_units_per_order, priority, starts_on, ends_on, active, created_at, updated_at';
 
 const SLAB_COLS =
   'id, scheme_id, min_qty, max_qty, min_value, max_value, reward_type, reward_value, free_product_id, free_qty';
@@ -128,6 +128,7 @@ function schemePayload(accountId: string, form: SchemeFormValues) {
     scheme_type: form.schemeType,
     slab_mode: form.slabMode,
     target_type: form.targetType,
+    qty_unit_basis: form.qtyUnitBasis ?? 'base',
     max_free_units_per_order: form.maxFreeUnitsPerOrder,
     priority: form.priority,
     starts_on: form.startsOn,

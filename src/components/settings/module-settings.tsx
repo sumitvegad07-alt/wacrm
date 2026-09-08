@@ -181,6 +181,9 @@ export function ModuleSettingsPanel() {
   const [hierarchyEnabled, setHierarchyEnabled] = useState(false);
   const [gstEnabled, setGstEnabled] = useState(false);
   const [hsnEnabled, setHsnEnabled] = useState(false);
+  // Multi Unit: base + conversion units per product; pricing/stock in base units.
+  const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
+  const [amountDiscountBasis, setAmountDiscountBasis] = useState<'entered' | 'base'>('entered');
   const [levels, setLevels] = useState<HierarchyLevel[]>([]);
   const [originalSettings, setOriginalSettings] = useState<any>({});
 
@@ -212,6 +215,8 @@ export function ModuleSettingsPanel() {
         setHierarchyEnabled(!!os.hierarchy_enabled);
         setGstEnabled(!!s.gst_enabled);
         setHsnEnabled(!!s.hsn_enabled);
+        setMultiUnitEnabled(!!s.extra_settings?.multi_unit_enabled);
+        setAmountDiscountBasis(os.amount_discount_basis === 'base' ? 'base' : 'entered');
 
         const ts = normalizeTrackingSettings(s.tracking_settings);
             setTrackingStart(ts.start_time);
@@ -284,6 +289,11 @@ export function ModuleSettingsPanel() {
           ...originalSettings?.order_settings,
           hierarchy_enabled: hierarchyEnabled,
           levels: cleanLevels,
+          amount_discount_basis: amountDiscountBasis,
+        },
+        extra_settings: {
+          ...(originalSettings?.extra_settings || {}),
+          multi_unit_enabled: multiUnitEnabled,
         },
         // Ensure company profile also receives GST and HSN flags
         company_profile: {
@@ -319,7 +329,7 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, amountDiscountBasis, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
@@ -327,6 +337,8 @@ export function ModuleSettingsPanel() {
     setHierarchyEnabled(!!originalSettings.order_settings?.hierarchy_enabled);
     setGstEnabled(!!originalSettings.gst_enabled);
     setHsnEnabled(!!originalSettings.hsn_enabled);
+    setMultiUnitEnabled(!!originalSettings.extra_settings?.multi_unit_enabled);
+    setAmountDiscountBasis(originalSettings.order_settings?.amount_discount_basis === 'base' ? 'base' : 'entered');
     const ts = normalizeTrackingSettings(originalSettings.tracking_settings);
     setTrackingStart(ts.start_time);
     setTrackingEnd(ts.end_time);
@@ -626,6 +638,45 @@ export function ModuleSettingsPanel() {
                 onChange={setHsnEnabled}
                 disabled={!canEditSettings}
               />
+            </div>
+
+            {/* Enable Multi Unit */}
+            <div>
+              <div className="mb-2">
+                <p className="text-sm font-medium text-foreground">
+                  Enable Multi Unit
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Off: each product has one unit. On: give a product a base unit plus conversion
+                  units (e.g. 1 BOX = 12 PCS). Reps can order in any unit; price and stock stay in
+                  the base unit. Existing products keep their current unit as the base — nothing
+                  changes until you add conversions.
+                </p>
+              </div>
+              <KoopsRadioToggle
+                enabled={multiUnitEnabled}
+                onChange={setMultiUnitEnabled}
+                disabled={!canEditSettings}
+              />
+
+              {multiUnitEnabled && (
+                <div className="mt-4 max-w-xl space-y-2 p-4 border border-border rounded-lg bg-background">
+                  <p className="text-sm font-medium text-foreground">Amount discount is per…</p>
+                  <p className="text-xs text-muted-foreground">
+                    When a rep gives a fixed “₹ off per unit” discount on a line entered in a bigger
+                    unit, count it per entered unit (₹ off each BOX) or per base unit (₹ off each PCS).
+                  </p>
+                  <KoopsOptionToggle
+                    options={[
+                      { label: "Entered unit (per BOX)", value: "entered" },
+                      { label: "Base unit (per PCS)", value: "base" },
+                    ]}
+                    value={amountDiscountBasis}
+                    onChange={setAmountDiscountBasis}
+                    disabled={!canEditSettings}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Enable Customer Hierarchy */}

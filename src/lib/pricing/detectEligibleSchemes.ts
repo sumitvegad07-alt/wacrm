@@ -41,9 +41,13 @@ import type {
  * engine_version is 3, matching calculateOrderPricing and the SQL twin.
  */
 
-const ENGINE_VERSION = 3;
+const ENGINE_VERSION = 4;
 
 type ProductLookup = Map<string, PricingProduct> | Record<string, PricingProduct>;
+
+/** Round to 6 dp, matching the SQL ROUND(qty * factor, 6) for base quantity. */
+const round6 = (n: number): number =>
+  Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1e6) / 1e6 : 0;
 
 function lookupProduct(products: ProductLookup, id: string): PricingProduct | undefined {
   return products instanceof Map ? products.get(id) : products[id];
@@ -158,6 +162,9 @@ export function detectEligibleSchemes(
     const position = index + 1;
     const qty = Math.max(Number(line.quantity) || 0, 0);
     if (qty <= 0) return;
+    // Multi Unit (v4): base units per entered unit (1 = single-unit).
+    const factor = Math.max(Number(line.conversionFactor) || 1, 0.000001);
+    const baseQty = round6(qty * factor);
     const product = lookupProduct(products, line.productId);
     const cataloguePrice = Number(product?.price ?? 0);
 
@@ -165,8 +172,13 @@ export function detectEligibleSchemes(
       if (scheme.schemeType === 'value_slab') continue;
       if (!coversProduct(scheme, line.productId)) continue;
 
+      // Threshold quantity per the scheme's admin-chosen basis. Discount MONEY,
+      // however, is always computed on base quantity (catalogue price is per
+      // base unit), so a reward stays proportional to the real line value.
+      const thrQty = scheme.qtyUnitBasis === 'entered' ? qty : baseQty;
+
       const slabs = qtySlabs(scheme);
-      const slab = matchQtySlab(slabs, qty);
+      const slab = matchQtySlab(slabs, thrQty);
       if (!slab) continue;
 
       const freeProduct = slab.freeProductId ? lookupProduct(products, slab.freeProductId) : undefined;
@@ -179,27 +191,29 @@ export function detectEligibleSchemes(
 
       switch (slab.rewardType) {
         case 'free_goods': {
-          freeQty = rawFreeUnits(slab, qty, scheme.slabMode);
+          freeQty = rawFreeUnits(slab, thrQty, scheme.slabMode);
           if (freeQty <= 0) continue;
           customerValue = round2(freeQty * Number(freeProduct?.price ?? 0));
           defaultSelected = false; // free goods are opt-in
           break;
         }
         case 'discount_percent': {
-          schemeDiscountAmount = round2((cataloguePrice * qty * (slab.rewardValue ?? 0)) / 100);
+          // money on base quantity (catalogue price is per base unit)
+          schemeDiscountAmount = round2((cataloguePrice * baseQty * (slab.rewardValue ?? 0)) / 100);
           customerValue = schemeDiscountAmount;
           break;
         }
         case 'discount_amount': {
-          // Per unit, consistent with the salesman amount discount (mig. 084).
-          schemeDiscountAmount = round2((slab.rewardValue ?? 0) * qty);
+          // per-unit amount reward: per unit of the chosen basis (thrQty).
+          schemeDiscountAmount = round2((slab.rewardValue ?? 0) * thrQty);
           customerValue = schemeDiscountAmount;
           break;
         }
         case 'special_price': {
+          // special price is a per-base-unit price; applied to base quantity.
           schemeDiscountAmount = Math.max(
             0,
-            round2((cataloguePrice - (slab.rewardValue ?? 0)) * qty),
+            round2((cataloguePrice - (slab.rewardValue ?? 0)) * baseQty),
           );
           customerValue = schemeDiscountAmount;
           break;
@@ -207,11 +221,11 @@ export function detectEligibleSchemes(
       }
       if (customerValue <= 0 && freeQty <= 0) continue;
 
-      // "Add N more" nudge from the next slab up.
+      // "Add N more" nudge from the next slab up (in the threshold basis).
       let nudge: SchemeNudge | null = null;
       if (scheme.slabMode === 'repeat') {
         const setSize = slab.minQty ?? 0;
-        const remainder = setSize > 0 ? qty % setSize : 0;
+        const remainder = setSize > 0 ? thrQty % setSize : 0;
         if (setSize > 0 && remainder > 0) {
           nudge = {
             unitsToNext: setSize - remainder,
@@ -219,10 +233,10 @@ export function detectEligibleSchemes(
           };
         }
       } else {
-        const next = nextQtySlab(slabs, qty);
+        const next = nextQtySlab(slabs, thrQty);
         if (next) {
           nudge = {
-            unitsToNext: (next.minQty ?? 0) - qty,
+            unitsToNext: (next.minQty ?? 0) - thrQty,
             nextRewardLabel: rewardLabel(next, freeProductName),
           };
         }
@@ -289,9 +303,12 @@ export function detectEligibleSchemes(
       if (!coversProduct(scheme, line.productId)) return;
       const qty = Math.max(Number(line.quantity) || 0, 0);
       if (qty <= 0) return;
+      // value subtotal uses base quantity (catalogue price is per base unit)
+      const factor = Math.max(Number(line.conversionFactor) || 1, 0.000001);
+      const baseQty = round6(qty * factor);
       const product = lookupProduct(products, line.productId);
       positions.push(index + 1);
-      qualifyingSubtotal += round2(Number(product?.price ?? 0) * qty);
+      qualifyingSubtotal += round2(Number(product?.price ?? 0) * baseQty);
     });
     qualifyingSubtotal = round2(qualifyingSubtotal);
     if (positions.length === 0) continue;

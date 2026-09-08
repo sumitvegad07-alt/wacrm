@@ -24,6 +24,14 @@ export interface PricingProduct {
 export interface PricingLineInput {
   productId: string;
   quantity: number;
+  /**
+   * Multi Unit (v4): how many BASE units one ENTERED unit equals. Absent/1 =
+   * single-unit (the base unit itself), which makes every downstream number
+   * identical to the pre-multi-unit engine. base_quantity = quantity × factor.
+   */
+  conversionFactor?: number;
+  /** The product_units row the rep picked (snapshotted onto the order line). */
+  enteredUnitId?: string | null;
   discountType?: 'percent' | 'amount' | null;
   discountValue?: number;
   /**
@@ -87,6 +95,12 @@ export interface PricingContext {
   enforcePriceFloor: boolean;
   /** contacts.hierarchy_level, or null when unknown / no customer selected. */
   customerLevel: number | null;
+  /**
+   * Multi Unit (v4): whether an 'amount' line discount multiplies by the base
+   * quantity or the entered quantity (accounts.settings.order_settings.
+   * amount_discount_basis). Defaults to 'entered' — the pre-multi-unit behaviour.
+   */
+  amountDiscountBasis?: 'base' | 'entered';
 }
 
 export interface PricingLineResult {
@@ -94,7 +108,15 @@ export interface PricingLineResult {
   product_id: string | null;
   product_name: string;
   unit: string | null;
+  /** Multi Unit (v4): the product_units id the rep picked (snapshot). */
+  entered_unit_id: string | null;
+  /** Multi Unit (v4): base units per entered unit (1 = single-unit). */
+  conversion_factor: number;
   quantity: number;
+  /** Multi Unit (v4): quantity × conversion_factor. Stock and pricing use this. */
+  base_quantity: number;
+  /** Multi Unit (v4): the base-unit price used (= price_list_price). */
+  base_unit_price: number;
   /** The line's tax basis, echoed back so it can be stored on order_items. */
   tax_mode: 'inclusive' | 'exclusive';
   catalogue_price: number;
@@ -169,6 +191,12 @@ export interface SchemeDefinition {
   schemeType: SchemeType;
   slabMode: SlabMode;
   targetType: 'all' | 'specific_customers';
+  /**
+   * Multi Unit (v4): whether qty slab thresholds compare the base quantity
+   * (entered × factor) or the entered quantity. Absent/'base' = base (default),
+   * so pre-multi-unit scheme fixtures need no change.
+   */
+  qtyUnitBasis?: 'base' | 'entered';
   /** Cap on total free units per order for this scheme. null = uncapped. */
   maxFreeUnitsPerOrder: number | null;
   /** Deterministic tie-break: higher wins when more than one scheme matches. */
@@ -188,6 +216,8 @@ export interface SchemeDefinition {
 export interface SchemeDetectionLine {
   productId: string;
   quantity: number;
+  /** Multi Unit (v4): base units per entered unit (1 = single-unit). */
+  conversionFactor?: number;
 }
 
 export interface SchemeNudge {

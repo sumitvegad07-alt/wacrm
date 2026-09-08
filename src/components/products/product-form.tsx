@@ -94,6 +94,11 @@ export function ProductForm({
   const [unitId, setUnitId] = useState('');
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [units, setUnits] = useState<ProductUnit[]>([]);
+  // Multi Unit: base unit = unitId (factor 1); these are the ALTERNATE units with
+  // their decimal factor to the base. Base unit locks once the product is used.
+  const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
+  const [conversions, setConversions] = useState<{ unit_id: string; factor: string }[]>([]);
+  const [baseUnitLocked, setBaseUnitLocked] = useState(false);
   const [levelsCount, setLevelsCount] = useState<1 | 2 | 3>(3);
   const [levelNames, setLevelNames] = useState({ l1: 'Category', l2: 'Sub-Category', l3: 'Brand' });
 
@@ -148,10 +153,29 @@ export function ProductForm({
       l2: ps.level_2_name || 'Sub-Category',
       l3: ps.level_3_name || 'Brand'
     });
-    
+    const muEnabled = !!acctRes.data?.settings?.extra_settings?.multi_unit_enabled;
+    setMultiUnitEnabled(muEnabled);
+
     const cats = (catRes.data as ProductCategory[]) ?? [];
     setCategories(cats);
     setUnits((unitRes.data as ProductUnit[]) ?? []);
+
+    // Multi Unit: load this product's conversion units, and lock the base unit
+    // once the product has been used on an order or has a stock movement
+    // (changing the base afterward would silently rewrite historical base qty).
+    if (muEnabled && product?.id) {
+      const [{ data: convRows }, { count: oiCount }, { count: slCount }] = await Promise.all([
+        supabase.from('product_unit_conversions').select('unit_id, conversion_factor').eq('product_id', product.id),
+        supabase.from('order_items').select('id', { count: 'exact', head: true }).eq('product_id', product.id),
+        supabase.from('stock_ledger').select('id', { count: 'exact', head: true }).eq('product_id', product.id),
+      ]);
+      setConversions(((convRows ?? []) as { unit_id: string; conversion_factor: number }[])
+        .map((r) => ({ unit_id: r.unit_id, factor: String(r.conversion_factor) })));
+      setBaseUnitLocked((oiCount ?? 0) > 0 || (slCount ?? 0) > 0);
+    } else {
+      setConversions([]);
+      setBaseUnitLocked(false);
+    }
     
     // Backtrack category hierarchy for existing product
     if (product?.category_id && cats.length > 0) {
@@ -417,6 +441,33 @@ export function ProductForm({
         });
       }
 
+      // Save Multi Unit conversion units (base unit = unit_id, factor 1, not stored
+      // here). Replace-all: delete removed rows, upsert the current set. Only when
+      // the feature is on; otherwise the product's existing conversions are left
+      // untouched (turning the feature off never destroys data).
+      if (multiUnitEnabled && savedProductId) {
+        const clean = conversions
+          .filter((c) => c.unit_id && c.unit_id !== unitId && Number(c.factor) > 0)
+          .map((c) => ({
+            account_id: accountId,
+            product_id: savedProductId,
+            unit_id: c.unit_id,
+            conversion_factor: Number(c.factor),
+            active: true,
+          }));
+        // Drop conversions the user removed, or that collide with the base unit.
+        const keepUnitIds = clean.map((c) => c.unit_id);
+        let del = supabase.from('product_unit_conversions').delete().eq('product_id', savedProductId);
+        if (keepUnitIds.length > 0) del = del.not('unit_id', 'in', `(${keepUnitIds.join(',')})`);
+        await del;
+        if (clean.length > 0) {
+          const { error: convErr } = await supabase
+            .from('product_unit_conversions')
+            .upsert(clean, { onConflict: 'product_id,unit_id' });
+          if (convErr) throw convErr;
+        }
+      }
+
       // Save custom fields
       if (savedProductId) {
         const cfUpserts = customFields
@@ -593,18 +644,63 @@ export function ProductForm({
                   );
                 }
                 if (fld.system_key === 'unit') {
+                  const usedUnitIds = new Set([unitId, ...conversions.map((c) => c.unit_id)].filter(Boolean));
                   return (
                     <div className="grid gap-1">
+                      {multiUnitEnabled && <span className="text-[11px] font-medium text-muted-foreground">Base unit</span>}
                       <select
                         value={unitId}
                         onChange={(e) => setUnitId(e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        disabled={baseUnitLocked}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <option value="">Select Unit</option>
                         {units.map(u => (
                           <option key={u.id} value={u.id}>{u.name} {u.short_name ? `(${u.short_name})` : ''}</option>
                         ))}
                       </select>
+                      {baseUnitLocked && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                          Base unit is locked because this product already has orders or stock. You can still add or remove conversion units below.
+                        </p>
+                      )}
+                      {multiUnitEnabled && unitId && (
+                        <div className="mt-2 rounded-md border border-border bg-muted/20 p-2 space-y-2">
+                          <p className="text-[11px] font-medium text-foreground">Conversion units (1 of this = N base units)</p>
+                          {conversions.map((c, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <select
+                                value={c.unit_id}
+                                onChange={(e) => setConversions((prev) => prev.map((x, ix) => ix === i ? { ...x, unit_id: e.target.value } : x))}
+                                className="h-8 flex-1 min-w-0 rounded-md border border-input bg-background px-2 text-sm"
+                              >
+                                <option value="">Select unit</option>
+                                {units.filter((u) => u.id === c.unit_id || !usedUnitIds.has(u.id)).map((u) => (
+                                  <option key={u.id} value={u.id}>{u.name}{u.short_name ? ` (${u.short_name})` : ''}</option>
+                                ))}
+                              </select>
+                              <span className="text-xs text-muted-foreground">=</span>
+                              <Input
+                                type="number" min="0" step="0.000001" value={c.factor}
+                                onChange={(e) => setConversions((prev) => prev.map((x, ix) => ix === i ? { ...x, factor: e.target.value } : x))}
+                                placeholder="e.g. 12"
+                                className="h-8 w-24 text-sm"
+                              />
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                {units.find((u) => u.id === unitId)?.short_name || units.find((u) => u.id === unitId)?.name || 'base'}
+                              </span>
+                              <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0"
+                                onClick={() => setConversions((prev) => prev.filter((_, ix) => ix !== i))}>
+                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                            </div>
+                          ))}
+                          <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                            onClick={() => setConversions((prev) => [...prev, { unit_id: '', factor: '' }])}>
+                            <Plus className="h-3 w-3 mr-1" /> Add conversion unit
+                          </Button>
+                        </div>
+                      )}
                       {!newUnitOpen ? (
                         <button
                           type="button"
