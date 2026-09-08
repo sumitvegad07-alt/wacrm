@@ -267,7 +267,7 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
       onBack={() => router.back()}
       card={false}
       actions={
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
+        <Button onClick={handleSave} data-shortcut="save" disabled={saving} className="gap-2">
           {saving ? <Loader2 className="size-4 animate-spin" /> : null} Save
         </Button>
       }
@@ -309,6 +309,7 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
         <CustomFieldsSectionRenderer
           accountId={accountId}
           moduleName="dispatch"
+          fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
           customFields={customFields}
           customValues={customValues}
           onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}

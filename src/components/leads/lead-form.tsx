@@ -281,9 +281,13 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       : customFields;
   }, [customFields, territoryEnabled]);
 
+  const fieldGrid = asPage
+    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
+    : undefined;
+
   const formContent = (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid gap-6 py-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="grid gap-4 py-2">
         {!fieldsLoaded ? (
           <div className="space-y-6" aria-hidden="true">
             <div className="h-4 w-32 rounded bg-muted animate-pulse" />
@@ -301,6 +305,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         <CustomFieldsSectionRenderer
           accountId={accountId}
           moduleName="lead"
+          fieldGridClassName={fieldGrid}
           customFields={renderedCustomFields}
           customValues={customValues}
           onChange={(fieldId, val) =>
@@ -451,7 +456,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" data-shortcut="save" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Save Lead
         </Button>
@@ -466,6 +471,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         title={lead ? 'Edit Lead' : 'Add New Lead'}
         subtitle={lead ? 'Update lead details below.' : 'Create a new lead in your CRM.'}
         onBack={() => onOpenChange(false)}
+        width="none"
       >
         {formContent}
       </FormPageShell>

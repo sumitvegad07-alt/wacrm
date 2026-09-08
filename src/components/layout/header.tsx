@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User, ArrowLeft, KeyRound } from "lucide-react";
+import { LogOut, Menu, ArrowLeft, KeyRound, Keyboard, Search } from "lucide-react";
+import { useAppShortcuts } from "@/components/layout/keyboard-shortcuts-provider";
 import {
   Avatar,
   AvatarFallback,
@@ -82,6 +83,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { profile, signOut, account } = useAuth();
+  const { openHelp, openPalette } = useAppShortcuts();
   const title = getPageTitle(pathname);
 
   const now = new Date();
@@ -111,6 +113,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
         {/* Go back icon on every single page */}
         <button
           type="button"
+          data-shortcut="back"
           onClick={() => router.back()}
           aria-label="Go back"
           className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -132,6 +135,29 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       )}
 
       <div className="flex items-center gap-1 sm:gap-2">
+        {/* Global search (Alt+F / Ctrl+F). Opens the command palette. */}
+        <button
+          type="button"
+          onClick={openPalette}
+          aria-label="Search the app"
+          className="hidden h-8 w-48 items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted lg:flex xl:w-64"
+        >
+          <Search className="size-3.5 shrink-0" />
+          <span className="truncate">Search…</span>
+          <kbd className="ml-auto shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium">
+            Alt F
+          </kbd>
+        </button>
+        {/* Compact search trigger on small screens. */}
+        <button
+          type="button"
+          onClick={openPalette}
+          aria-label="Search the app"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+        >
+          <Search className="size-4" />
+        </button>
+
         <ModeToggle />
 
         <DropdownMenu>
@@ -180,15 +206,11 @@ export function Header({ onOpenSidebar }: HeaderProps) {
             Change password
           </DropdownMenuItem>
           <DropdownMenuItem
-            render={
-              <Link
-                href="/settings?tab=whatsapp"
-                className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
-              />
-            }
+            onClick={openHelp}
+            className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
           >
-            <SettingsIcon className="size-4" />
-            Settings
+            <Keyboard className="size-4" />
+            Keyboard shortcuts
           </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-border" />
           <DropdownMenuItem

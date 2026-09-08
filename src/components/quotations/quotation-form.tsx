@@ -493,6 +493,7 @@ export function QuotationForm({
         <CustomFieldsSectionRenderer
           accountId={accountId}
           moduleName="quotation"
+          fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
           customFields={customFields}
           customValues={customValues}
           onChange={(fieldId, val) =>
@@ -541,7 +542,7 @@ export function QuotationForm({
               >
                 Cancel
               </Button>
-              <Button onClick={handleSave} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2">
+              <Button onClick={handleSave} data-shortcut="save" disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2">
                 {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 {versionId ? 'SAVE NEW VERSION' : quotationId ? 'Update Quotation' : 'Create Quotation'}
               </Button>

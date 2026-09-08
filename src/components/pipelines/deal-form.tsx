@@ -360,16 +360,21 @@ export function DealForm({
     onSaved();
   }
 
+  const fieldGrid = asPage
+    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
+    : undefined;
+
   const formContent = (
     <>
         <div className="flex items-center justify-between border-b border-border pb-4 mb-4 pr-6">
           <h2 className="text-xl font-light text-foreground">{deal ? "Edit Deal" : "New Deal"}</h2>
         </div>
 
-        <div className="space-y-6 mt-4">
+        <div className="space-y-5 mt-2">
           <CustomFieldsSectionRenderer
             accountId={accountId}
             moduleName="deal"
+            fieldGridClassName={fieldGrid}
             customFields={customFields}
             customValues={customValues}
             onChange={(fieldId, val) =>
@@ -572,6 +577,7 @@ export function DealForm({
             </Button>
             <Button
               onClick={handleSave}
+              data-shortcut="save"
               disabled={saving || !title.trim() || !contactId || !stageId}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
@@ -589,6 +595,7 @@ export function DealForm({
         title={deal ? "Edit Deal" : "Create New Deal"}
         subtitle={deal ? "Update the deal details below." : "Create a new deal to track in your sales pipeline."}
         onBack={() => onOpenChange(false)}
+        width="none"
       >
         {formContent}
       </FormPageShell>

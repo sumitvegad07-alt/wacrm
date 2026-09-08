@@ -455,7 +455,7 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" data-shortcut="save" disabled={loading}>
               {loading ? "Submitting..." : "Submit Expense"}
             </Button>
           </div>

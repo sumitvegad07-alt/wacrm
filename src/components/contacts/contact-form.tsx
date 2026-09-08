@@ -383,12 +383,18 @@ export function ContactForm({
     }
   }
 
+  // Full-page forms use the horizontal space (up to 4 columns) like the
+  // reference SFA product; the dialog form keeps a safe 2-column grid.
+  const fieldGrid = asPage
+    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
+    : undefined;
+
   const formContent = (
-    <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+    <form onSubmit={handleSubmit} className="space-y-5 mt-2">
           {!fieldsLoaded ? (
-            <div className="space-y-6" aria-hidden="true">
+            <div className="space-y-4" aria-hidden="true">
               <div className="h-4 w-32 rounded bg-muted animate-pulse" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className={fieldGrid ?? "grid grid-cols-1 md:grid-cols-2 gap-4"}>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="space-y-2">
                     <div className="h-3 w-24 rounded bg-muted animate-pulse" />
@@ -402,6 +408,7 @@ export function ContactForm({
           <CustomFieldsSectionRenderer
             accountId={accountId}
             moduleName="contact"
+            fieldGridClassName={fieldGrid}
             customFields={renderedCustomFields}
             customValues={customValues}
             onChange={(fieldId, val) =>
@@ -649,6 +656,7 @@ export function ContactForm({
               </Button>
               <Button
                 type="submit"
+                data-shortcut="save"
                 disabled={saving || checkingDup || (!isEdit && !!dupMatch?.exact)}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
               >
@@ -668,6 +676,7 @@ export function ContactForm({
               </Button>
               <Button
                 type="submit"
+                data-shortcut="save"
                 disabled={saving || checkingDup || (!isEdit && !!dupMatch?.exact)}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
               >
@@ -686,6 +695,7 @@ export function ContactForm({
         title={isEdit ? 'Edit Customer' : 'Add New Customer'}
         subtitle={isEdit ? 'Update the contact details below.' : 'Capture a new customer and fill in their details.'}
         onBack={() => onOpenChange(false)}
+        width="none"
       >
         {formContent}
       </FormPageShell>

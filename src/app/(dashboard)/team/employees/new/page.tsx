@@ -275,7 +275,7 @@ export default function NewEmployeePage() {
   }
 
   return (
-    <div className="p-8 w-full max-w-none space-y-8">
+    <div className="p-4 sm:p-5 w-full max-w-none space-y-4">
       <div className="flex items-center justify-between pb-6 border-b border-border">
         <div className="flex items-center gap-4">
           <Link href="/team/employees">
@@ -295,7 +295,7 @@ export default function NewEmployeePage() {
         </div>
       </div>
 
-      <form onSubmit={handleCreateEmployee} className="space-y-8">
+      <form onSubmit={handleCreateEmployee} className="space-y-4">
         <Card className="p-6 border-border shadow-sm space-y-6">
           <div className="flex flex-col gap-4">
             <Label className="text-base font-semibold">Profile Picture</Label>
@@ -343,6 +343,7 @@ export default function NewEmployeePage() {
           <CustomFieldsSectionRenderer
             accountId={accountId || ""}
             moduleName="user"
+            fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
             customFields={customFields}
             customValues={customValues}
             onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
@@ -355,7 +356,7 @@ export default function NewEmployeePage() {
           <Link href="/team/employees">
             <Button variant="outline" type="button">Cancel</Button>
           </Link>
-          <Button type="submit" disabled={creating} className="min-w-[150px]">
+          <Button type="submit" data-shortcut="save" disabled={creating} className="min-w-[150px]">
             {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Create Employee
           </Button>

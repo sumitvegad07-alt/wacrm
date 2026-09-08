@@ -16,7 +16,16 @@ interface CustomFieldsSectionRendererProps {
   onFormDataChange?: (key: string, value: any) => void;
   renderCustomSystemField?: (field: CustomField) => React.ReactNode | null | undefined;
   isEditing?: boolean;
+  /**
+   * Tailwind grid classes for the field grid inside each section. Defaults to a
+   * 2-column layout that stays safe inside narrow dialogs. Full-page ("as page")
+   * forms pass a wider grid (e.g. up to 4 columns) to use the horizontal space
+   * like the reference SFA product and cut down on scrolling.
+   */
+  fieldGridClassName?: string;
 }
+
+const DEFAULT_FIELD_GRID = "grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3";
 
 export function CustomFieldsSectionRenderer({
   accountId,
@@ -28,6 +37,7 @@ export function CustomFieldsSectionRenderer({
   onFormDataChange,
   renderCustomSystemField,
   isEditing = true,
+  fieldGridClassName = DEFAULT_FIELD_GRID,
 }: CustomFieldsSectionRendererProps) {
   const [sections, setSections] = useState<CustomFieldSection[]>([]);
   const [sectionsLoaded, setSectionsLoaded] = useState(false);
@@ -72,9 +82,9 @@ export function CustomFieldsSectionRenderer({
   // sections arrive. Render a stable-height skeleton meanwhile to avoid a jump.
   if (!sectionsLoaded) {
     return (
-      <div className="space-y-6" aria-hidden="true">
+      <div className="space-y-4" aria-hidden="true">
         <div className="h-4 w-32 rounded bg-muted animate-pulse" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={fieldGridClassName}>
           {Array.from({ length: Math.min(activeFields.length, 6) }).map((_, i) => (
             <div key={i} className="space-y-2">
               <div className="h-3 w-24 rounded bg-muted animate-pulse" />
@@ -111,17 +121,17 @@ export function CustomFieldsSectionRenderer({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {displaySections.map((sec) => {
         const sectionFields = fieldsBySectionId.get(sec.id) || [];
         if (sectionFields.length === 0) return null;
 
         return (
-          <div key={sec.id} className="space-y-4">
-            <h4 className="text-sm font-medium text-foreground border-b border-border pb-2">
+          <div key={sec.id} className="space-y-3">
+            <h4 className="text-sm font-medium text-foreground border-b border-border pb-1.5">
               {sec.name}
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={fieldGridClassName}>
               {sectionFields.map((field) => {
                 const customNode = renderCustomSystemField ? renderCustomSystemField(field) : undefined;
                 if (customNode === null) return null; // Component explicitly requested to be hidden
@@ -140,7 +150,7 @@ export function CustomFieldsSectionRenderer({
                 };
 
                 return (
-                  <div key={field.id} className="space-y-2">
+                  <div key={field.id} className="space-y-1.5">
                     <Label className="text-muted-foreground capitalize flex items-center gap-1">
                       {field.field_name}
                       {field.is_required && (

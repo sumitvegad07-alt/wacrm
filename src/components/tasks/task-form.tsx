@@ -755,6 +755,7 @@ export function TaskForm({
           <div className="flex gap-2 justify-end shrink-0">
             <Button
               onClick={handleSave}
+              data-shortcut="save"
               disabled={saving || (isNote && !description.trim())}
               className="bg-blue-500 text-white hover:bg-blue-600 px-6 font-semibold"
             >

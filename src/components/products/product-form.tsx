@@ -487,13 +487,17 @@ export function ProductForm({
       </button>
     );
 
+  const fieldGrid = asPage
+    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
+    : undefined;
+
   const formContent = (
     <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-5">
             {!fieldsLoaded ? (
-              <div className="space-y-6" aria-hidden="true">
+              <div className="space-y-4" aria-hidden="true">
                 <div className="h-4 w-32 rounded bg-muted animate-pulse" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={fieldGrid ?? "grid grid-cols-1 md:grid-cols-2 gap-4"}>
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="space-y-2">
                       <div className="h-3 w-24 rounded bg-muted animate-pulse" />
@@ -507,6 +511,7 @@ export function ProductForm({
             <CustomFieldsSectionRenderer
               accountId={accountId}
               moduleName="product"
+              fieldGridClassName={fieldGrid}
               customFields={customFields}
               customValues={customValues}
               onChange={(fieldId, val) =>
@@ -864,6 +869,7 @@ export function ProductForm({
               </Button>
               <Button
                 type="submit"
+                data-shortcut="save"
                 disabled={saving || !name.trim()}
                 className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
               >
@@ -915,6 +921,7 @@ export function ProductForm({
         title={isEdit ? 'Edit Product' : 'Add New Product'}
         subtitle={isEdit ? 'Update the product details below.' : 'Create a new product in your catalog.'}
         onBack={() => onOpenChange(false)}
+        width="none"
       >
         {formContent}
       </FormPageShell>

@@ -168,6 +168,7 @@ export function ModuleSettingsPanel() {
     !canEditSettings || !planModules.has(key as never);
 
   const [draft, setDraft] = useState<ModuleSettings>({ ...moduleSettings });
+  const [moduleFilter, setModuleFilter] = useState("");
   const [saving, setSaving] = useState(false);
   const [toastMsg, setToastMsg] = useState<{
     type: "success" | "error";
@@ -413,19 +414,29 @@ export function ModuleSettingsPanel() {
 
       {/* ── SECTION 1: KOOPS UI MODULES / SYSTEM CONFIG ── */}
       <div className="rounded-xl border border-border bg-card p-6 shadow-xs">
-        <div className="border-b border-border/80 pb-3 mb-6">
-          <h3 className="text-base font-semibold text-foreground">
-            Modules / System config
-          </h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Turn the features included in your plan on or off for your organization.
-          </p>
+        <div className="border-b border-border/80 pb-3 mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">
+              Modules / System config
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Turn the features included in your plan on or off for your organization.
+            </p>
+          </div>
+          <Input
+            value={moduleFilter}
+            onChange={(e) => setModuleFilter(e.target.value)}
+            placeholder="Find a setting…"
+            className="h-8 w-full sm:max-w-56"
+          />
         </div>
 
         {/* 4-column grid. Only modules the plan includes are shown — off-plan
             modules are hidden rather than greyed out. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-6">
-          {MODULE_TOGGLES.filter((m) => planModules.has(m.key as never)).map((m) => (
+          {MODULE_TOGGLES.filter((m) => planModules.has(m.key as never))
+            .filter((m) => m.label.toLowerCase().includes(moduleFilter.trim().toLowerCase()))
+            .map((m) => (
             <div key={m.key}>
               <p className="text-xs font-medium text-foreground">{m.label}</p>
               <KoopsRadioToggle

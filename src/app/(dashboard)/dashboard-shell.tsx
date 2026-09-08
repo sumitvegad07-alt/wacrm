@@ -11,6 +11,7 @@ import { useImportNotifications } from "@/hooks/use-import-notifications";
 import { Button } from "@/components/ui/button";
 import { AskOzzo } from "@/components/ozzo/ask-ozzo";
 import { BrandSplash } from "@/components/shared/brand";
+import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcuts-provider";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -229,6 +230,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     : null;
 
   return (
+    <KeyboardShortcutsProvider>
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Reports this tab's online/away presence once we know a user is
           signed in. Headless — renders nothing. */}
@@ -239,9 +241,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         {/* Thinner horizontal padding on mobile so cards have room to breathe.
             Extra bottom padding reserves space for the fixed "Ask Ozzo" launcher
             (bottom-right) so it never covers page controls like table pagination. */}
-        <main className="flex-1 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-28">
+        <main className="flex-1 overflow-y-auto p-3 pb-24 sm:p-4 sm:pb-24">
           {account?.subscription_status === 'trialing' && (
-            <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-2">
+            <div className="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in slide-in-from-top-2">
               <div>
                 <span className="font-bold text-destructive">
                   {trialDaysLeft === null
@@ -263,6 +265,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       {/* ASK OZZO — read-only support/implementation copilot, available app-wide. */}
       <AskOzzo />
     </div>
+    </KeyboardShortcutsProvider>
   );
 }
 

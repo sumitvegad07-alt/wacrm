@@ -373,7 +373,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   if (!employee) return null;
 
   return (
-    <div className="p-8 w-full max-w-none space-y-8">
+    <div className="p-4 sm:p-5 w-full max-w-none space-y-4">
       {/* Top Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
         <div className="flex items-center gap-4">
@@ -398,7 +398,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           ) : (
             <>
               <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
-              <Button onClick={handleSaveEmployee} disabled={saving} className="gap-2">
+              <Button onClick={handleSaveEmployee} data-shortcut="save" disabled={saving} className="gap-2">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                 <Save className="w-4 h-4" /> Save Changes
               </Button>

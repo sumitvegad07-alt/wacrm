@@ -707,6 +707,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
               <CustomFieldsSectionRenderer
                 accountId={accountId}
                 moduleName="order"
+                fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
                 customFields={customFields}
                 customValues={customValues}
                 onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
@@ -1036,7 +1037,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
           ) : (
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={saving || loading || (pricing != null && !pricing.valid)}>
+              <Button onClick={handleSave} data-shortcut="save" disabled={saving || loading || (pricing != null && !pricing.valid)}>
                 {saving && <Loader2 className="size-4 mr-1 animate-spin" />} {isEdit ? 'Save Changes' : 'Create Order'}
               </Button>
             </>
@@ -1076,7 +1077,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
           ) : (
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={saving || loading || (pricing != null && !pricing.valid)}>
+              <Button onClick={handleSave} data-shortcut="save" disabled={saving || loading || (pricing != null && !pricing.valid)}>
                 {saving && <Loader2 className="size-4 mr-1 animate-spin" />} {isEdit ? 'Save Changes' : 'Create Order'}
               </Button>
             </>

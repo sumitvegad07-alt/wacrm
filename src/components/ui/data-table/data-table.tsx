@@ -218,9 +218,9 @@ export function DataTable<T>({
               </TableRow>
             ) : (
               paginatedData.map((row) => (
-                <TableRow 
+                <TableRow
                   key={rowKey(row)}
-                  className={`h-12 hover:bg-muted/50 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
+                  className={`h-9 hover:bg-muted/50 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
                   onClick={() => onRowClick?.(row)}
                 >
                   {selection && (
@@ -234,7 +234,7 @@ export function DataTable<T>({
                     </TableCell>
                   )}
                   {visibleColumns.map(col => (
-                    <TableCell key={col.id} className="py-3">
+                    <TableCell key={col.id} className="py-1.5">
                       {col.render ? col.render(row) : (row as any)[col.id] || "-"}
                     </TableCell>
                   ))}

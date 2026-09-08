@@ -47,23 +47,24 @@ export function FormPageShell({
   children,
 }: FormPageShellProps) {
   const header = (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-4 min-w-0">
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
+          data-shortcut="back"
           onClick={onBack}
           aria-label="Go back"
-          className="inline-flex items-center justify-center rounded-md h-9 w-9 border border-border hover:bg-accent shrink-0"
+          className="inline-flex items-center justify-center rounded-md h-8 w-8 border border-border hover:bg-accent shrink-0"
         >
           <ArrowLeft className="h-4 w-4 text-foreground" />
         </button>
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Icon className="w-6 h-6 text-primary shrink-0" />
+          <h1 className="text-lg sm:text-xl font-bold text-foreground flex items-center gap-2">
+            <Icon className="w-5 h-5 text-primary shrink-0" />
             {title}
           </h1>
           {subtitle && (
-            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
           )}
         </div>
       </div>
@@ -72,18 +73,18 @@ export function FormPageShell({
   );
 
   return (
-    <div className="p-8 w-full max-w-none space-y-8">
+    <div className="p-4 sm:p-5 w-full max-w-none space-y-4">
       {header}
       {card ? (
         <div
           className={cn(
-            "bg-card border border-border rounded-xl p-6 shadow-sm",
+            "bg-card border border-border rounded-xl p-4 sm:p-5 shadow-sm",
             width === "default" && "max-w-4xl"
           )}
         >
           {children}
           {footer && (
-            <div className="pt-6 mt-6 border-t border-border">{footer}</div>
+            <div className="pt-4 mt-4 border-t border-border">{footer}</div>
           )}
         </div>
       ) : (
