@@ -746,9 +746,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
                 />
               </div>
               {data.length > 0 && (
-                // sm:pr-40 keeps the pagination clear of the fixed Ask Ozzo launcher
-                // (bottom-right), which otherwise overlaps it.
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-3 pb-1 sm:pr-40 border-t mt-2 print:hidden bg-background gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-3 pb-1 border-t mt-2 print:hidden bg-background gap-3">
                   {/* Left: Show X Rows per page | Manage Columns */}
                   <div className="flex items-center space-x-3 text-xs text-muted-foreground">
                     <div className="flex items-center space-x-1.5">

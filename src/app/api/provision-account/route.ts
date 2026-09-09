@@ -144,6 +144,39 @@ export async function POST(req: Request) {
       { account_id, name: 'Disqualified', color: '#6b7280', position: 4 },
     ]);
 
+    // Seed default lead sources + industries so the Lead form's Source/Industry
+    // pickers are usable out of the box. The admin can add/remove from Settings.
+    await supabase.from('lead_sources').insert([
+      { account_id, name: 'Facebook', color: '#1877f2', position: 0 },
+      { account_id, name: 'Instagram', color: '#e1306c', position: 1 },
+      { account_id, name: 'Google Ads', color: '#34a853', position: 2 },
+      { account_id, name: 'Cold Call', color: '#f59e0b', position: 3 },
+      { account_id, name: 'IndiaMart', color: '#ef4444', position: 4 },
+    ]);
+    await supabase.from('lead_industries').insert([
+      { account_id, name: 'Agriculture', color: '#22c55e', position: 0 },
+      { account_id, name: 'Garment', color: '#8b5cf6', position: 1 },
+      { account_id, name: 'Manufacturing', color: '#3b82f6', position: 2 },
+      { account_id, name: 'Pharma', color: '#06b6d4', position: 3 },
+    ]);
+
+    // Seed default leave types + one default holiday list (Sunday off). Leaves &
+    // attendance are on every plan, so these are seeded regardless of line. The
+    // holiday list is marked default so Sales Executives inherit it automatically
+    // and the admin does not have to create one before attendance works.
+    await supabase.from('leave_types').insert([
+      { account_id, name: 'Casual Leave', status: 'Active', created_by: userId },
+      { account_id, name: 'Medical Leave', status: 'Active', created_by: userId },
+      { account_id, name: 'Maternity Leave', status: 'Active', created_by: userId },
+    ]);
+    await supabase.from('holiday_lists').insert({
+      account_id,
+      name: 'Default Holiday List',
+      weekly_offs: [0],
+      is_default: true,
+      created_by: userId,
+    });
+
     // Seed the standard default expense types. These are the out-of-the-box
     // allowances every new account starts with; the admin can add/remove more
     // from Settings. Only seeded for plans that include the Workforce (WFA)
@@ -293,8 +326,15 @@ export async function POST(req: Request) {
         .select('settings')
         .eq('id', account_id)
         .single();
+      const prevSettings = (acctSettings?.settings as Record<string, any>) || {};
       const mergedSettings = {
-        ...((acctSettings?.settings as Record<string, unknown>) || {}),
+        ...prevSettings,
+        // Price floor ships OFF by default for new accounts (admins opt in from
+        // Pricing settings). Merged so any other order_settings survive.
+        order_settings: {
+          ...(prevSettings.order_settings || {}),
+          enforce_price_floor: false,
+        },
         territory_settings: {
           levels: [
             { position: 1, name: 'Country', enabled: true },

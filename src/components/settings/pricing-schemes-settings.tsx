@@ -127,7 +127,7 @@ export function PricingSchemesSettings() {
   const [discountMode, setDiscountMode] = useState<DiscountMode>("off");
   const [discountValueType, setDiscountValueType] = useState<DiscountValueType>("both");
   const [taxMode, setTaxMode] = useState<"exclusive" | "inclusive">("exclusive");
-  const [enforceFloor, setEnforceFloor] = useState(true);
+  const [enforceFloor, setEnforceFloor] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Stock behaviour (accounts.settings.stock_settings). Saved with the main
@@ -161,7 +161,7 @@ export function PricingSchemesSettings() {
     setDiscountMode((os.discount_mode as DiscountMode) ?? "off");
     setDiscountValueType((os.discount_value_type as DiscountValueType) ?? "both");
     setTaxMode((os.tax_mode as "exclusive" | "inclusive") ?? "exclusive");
-    setEnforceFloor(os.enforce_price_floor !== false); // default on
+    setEnforceFloor(os.enforce_price_floor === true); // default off
 
     const ss = acctRes.data?.settings?.stock_settings ?? {};
     setStockOutEvent((ss.stock_out_event as StockOutEvent) ?? "order_closed");

@@ -9,7 +9,11 @@ import { Header } from "@/components/layout/header";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { useImportNotifications } from "@/hooks/use-import-notifications";
 import { Button } from "@/components/ui/button";
-import { AskOzzo } from "@/components/ozzo/ask-ozzo";
+// Ask Ozzo (support/implementation copilot) is temporarily disabled in the live
+// app until it's productised + billed. The component, API route and DB corpus are
+// left intact so it can be switched back on by restoring this import + the <AskOzzo/>
+// mount below (and the sm:pr-40 pagination gutter in report-viewer).
+// import { AskOzzo } from "@/components/ozzo/ask-ozzo";
 import { BrandSplash } from "@/components/shared/brand";
 import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcuts-provider";
 
@@ -238,10 +242,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
-        {/* Thinner horizontal padding on mobile so cards have room to breathe.
-            Extra bottom padding reserves space for the fixed "Ask Ozzo" launcher
-            (bottom-right) so it never covers page controls like table pagination. */}
-        <main className="flex-1 overflow-y-auto p-3 pb-24 sm:p-4 sm:pb-24">
+        {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
+        <main className="flex-1 overflow-y-auto p-3 pb-6 sm:p-4 sm:pb-6">
           {account?.subscription_status === 'trialing' && (
             <div className="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in slide-in-from-top-2">
               <div>
@@ -262,8 +264,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-      {/* ASK OZZO — read-only support/implementation copilot, available app-wide. */}
-      <AskOzzo />
+      {/* ASK OZZO — temporarily disabled (see import note above). Restore <AskOzzo/> here to re-enable. */}
     </div>
     </KeyboardShortcutsProvider>
   );
