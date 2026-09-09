@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Save, FileText } from 'lucide-react';
-import { FormPageShell, EntityTypeToggle } from '@/components/shared';
+import { FormPageShell, EntityTypeToggle, FormSection } from '@/components/shared';
 import { ProductDetailsTable, type PartialQuotationItem } from './product-details-table';
 import { TermsEditor } from './terms-editor';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -501,24 +501,23 @@ export function QuotationForm({
         />
       </div>
 
-      <div className="pt-4 border-t border-border">
-        <ProductDetailsTable 
-          items={items} 
-          onChange={setItems} 
-          products={products} 
+      <FormSection title="Product Details">
+        <ProductDetailsTable
+          items={items}
+          onChange={setItems}
+          products={products}
           lockExistingProducts={!!quotationId}
         />
-      </div>
+      </FormSection>
 
-      <div className="pt-4 border-t border-border">
-        <h3 className="text-lg font-medium text-foreground mb-4">Terms & Conditions</h3>
-        <TermsEditor 
-          value={terms} 
-          onChange={setTerms} 
-          templates={templates} 
+      <FormSection title="Terms & Conditions">
+        <TermsEditor
+          value={terms}
+          onChange={setTerms}
+          templates={templates}
           onTemplateAdded={(newT) => setTemplates(prev => [...prev, newT])}
         />
-      </div>
+      </FormSection>
           </div>
         )}
         

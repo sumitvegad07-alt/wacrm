@@ -82,21 +82,17 @@ export function ProductDetailsTable({ items, onChange, products, lockExistingPro
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-foreground">Product Details</h3>
-      </div>
-
       <div className="rounded-lg border border-border overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/50">
-              <th className="h-10 px-4 text-left font-medium text-muted-foreground w-1/4 min-w-[200px]">Product</th>
-              <th className="h-10 px-4 text-left font-medium text-muted-foreground w-32">Unit</th>
-              <th className="h-10 px-4 text-left font-medium text-muted-foreground w-32">Quantity</th>
-              <th className="h-10 px-4 text-left font-medium text-muted-foreground w-32">Price (₹)</th>
-              <th className="h-10 px-4 text-left font-medium text-muted-foreground w-32">Tax (%)</th>
-              <th className="h-10 px-4 text-right font-medium text-muted-foreground w-32">Sub Total (₹)</th>
-              <th className="h-10 px-4 text-center font-medium text-muted-foreground w-14"></th>
+          <thead className="bg-muted text-muted-foreground border-b border-border">
+            <tr>
+              <th className="py-2.5 px-4 text-left font-medium w-1/3 min-w-[200px]">PRODUCT</th>
+              <th className="py-2.5 px-4 text-left font-medium w-20">UNIT</th>
+              <th className="py-2.5 px-4 text-right font-medium w-24">QTY</th>
+              <th className="py-2.5 px-4 text-right font-medium w-32">PRICE (₹)</th>
+              <th className="py-2.5 px-4 text-right font-medium w-24">TAX %</th>
+              <th className="py-2.5 px-4 text-right font-medium w-32">TOTAL (₹)</th>
+              <th className="py-2.5 px-4 text-center font-medium w-16"></th>
             </tr>
           </thead>
           <tbody>
@@ -235,15 +231,8 @@ export function ProductDetailsTable({ items, onChange, products, lockExistingPro
         </table>
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={addItem}
-        className="gap-2 border-dashed border-border"
-      >
-        <Plus className="h-4 w-4" />
-        Add Line Item
+      <Button type="button" variant="outline" size="sm" onClick={addItem}>
+        <Plus className="mr-1.5 h-4 w-4" /> Add Product
       </Button>
     </div>
   );

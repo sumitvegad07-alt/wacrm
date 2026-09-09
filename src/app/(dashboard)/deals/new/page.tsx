@@ -272,7 +272,7 @@ export default function NewDealPage() {
           </div>
         </FormSection>
 
-        <FormSection title="Product Line Items">
+        <FormSection title="Product Details">
           <DealItemsTable items={items} onChange={setItems} products={products} />
         </FormSection>
 

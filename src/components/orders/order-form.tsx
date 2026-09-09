@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Loader2, Plus, Trash2, AlertTriangle, ShoppingCart, Tag } from 'lucide-react';
-import { FormPageShell } from '@/components/shared';
+import { FormPageShell, FormSection } from '@/components/shared';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -773,12 +773,10 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
             </div>
 
             {/* Line items */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Products</Label>
-                {pricingBusy && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> pricing…</span>}
-              </div>
-
+            <FormSection
+              title="Product Details"
+              action={pricingBusy ? <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> pricing…</span> : undefined}
+            >
               <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-sm border-collapse">
                   <thead>
@@ -951,10 +949,10 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
                 </table>
               </div>
 
-              <Button variant="outline" size="sm" onClick={() => setLines((p) => [...p, newLine()])} className="gap-1">
-                <Plus className="size-4" /> Add product
+              <Button type="button" variant="outline" size="sm" onClick={() => setLines((p) => [...p, newLine()])}>
+                <Plus className="mr-1.5 h-4 w-4" /> Add Product
               </Button>
-            </div>
+            </FormSection>
 
             {/* Scheme suggestions (Phase 4) — suggest → confirm */}
             {schemeDetection && (schemeDetection.line_schemes.length > 0 || schemeDetection.order_schemes.length > 0) && (

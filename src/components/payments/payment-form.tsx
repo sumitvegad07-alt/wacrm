@@ -10,8 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, UploadCloud, X, Banknote } from 'lucide-react';
-import { FormPageShell, FormActions } from '@/components/shared';
+import { Loader2, Banknote } from 'lucide-react';
+import { FormPageShell, FormActions, MediaUpload } from '@/components/shared';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -537,31 +537,19 @@ export function PaymentForm({
               'Attachment (Optional)'
             )}
           </Label>
-          {requirements.attachment && !proofFile && (
-            <p className="text-xs text-muted-foreground">
-              A photo of the receipt or cheque is required before this payment can be approved.
-            </p>
-          )}
-          {proofFile ? (
-            <div className="flex items-center justify-between p-3 border rounded-md">
-              <span className="text-sm truncate mr-4">{proofFile.name}</span>
-              <Button type="button" variant="ghost" size="icon" onClick={() => setProofFile(null)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center w-full">
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-bray-800 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <UploadCloud className="w-8 h-8 mb-4 text-gray-500 dark:text-gray-400" />
-                  <p className="mb-2 text-sm text-gray-500 dark:text-gray-400"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                </div>
-                <input type="file" className="hidden" onChange={(e) => {
-                  if (e.target.files?.[0]) setProofFile(e.target.files[0]);
-                }} />
-              </label>
-            </div>
-          )}
+          <MediaUpload
+            accept="image/*,application/pdf"
+            items={proofFile ? [{
+              key: 'proof',
+              url: proofFile.type.startsWith('image/') ? URL.createObjectURL(proofFile) : undefined,
+              label: proofFile.type.startsWith('image/') ? undefined : proofFile.name,
+            }] : []}
+            onPick={(files) => setProofFile(files[0] ?? null)}
+            onRemove={() => setProofFile(null)}
+            hint={requirements.attachment
+              ? 'A photo of the receipt or cheque is required before this payment can be approved.'
+              : 'Attach a receipt or cheque photo (image or PDF). Optional.'}
+          />
         </div>
       </div>
 
@@ -620,6 +608,7 @@ export function PaymentForm({
         title="New Payment"
         subtitle="Record a customer payment collection with reference and proof."
         onBack={() => onOpenChange(false)}
+        width="none"
       >
         {content}
       </FormPageShell>

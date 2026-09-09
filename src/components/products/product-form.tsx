@@ -19,8 +19,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Upload, X, Package, Plus } from 'lucide-react';
-import { FormPageShell, FormActions, FormSection } from '@/components/shared';
+import { Trash2, Package, Plus } from 'lucide-react';
+import { FormPageShell, FormActions, FormSection, MediaUpload } from '@/components/shared';
 import { logModuleActivity } from '@/lib/activities';
 
 interface ProductFormProps {
@@ -561,60 +561,28 @@ export function ProductForm({
             <>
             {/* Image is always the FIRST field, matching every other module. */}
             <FormSection title="Product Image">
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Already-uploaded images */}
-                {images.map((url, idx) => (
-                  <div key={`img-${idx}`} className="relative size-24 rounded-xl border border-border bg-muted overflow-hidden shrink-0 shadow-sm">
-                    <img src={url} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" />
-                    {idx === 0 && (
-                      <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] text-center py-0.5">Primary</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
-                      className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full p-0.5"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
-                ))}
-
-                {/* Newly picked (not yet uploaded) files */}
-                {newImageFiles.map((file, idx) => (
-                  <div key={`new-${idx}`} className="relative size-24 rounded-xl border border-primary/40 bg-muted overflow-hidden shrink-0 shadow-sm">
-                    <img src={URL.createObjectURL(file)} alt={`New ${idx + 1}`} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setNewImageFiles((prev) => prev.filter((_, i) => i !== idx))}
-                      className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full p-0.5"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
-                ))}
-
-                {/* Add tile — accepts multiple files at once */}
-                <label className="size-24 rounded-xl border border-dashed border-border flex flex-col items-center justify-center gap-1 bg-muted shrink-0 cursor-pointer hover:bg-muted/80 hover:border-primary/50 transition-colors">
-                  <Upload className="size-5 text-muted-foreground" />
-                  <span className="text-[10px] text-muted-foreground">Upload</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => {
-                      const picked = e.target.files ? Array.from(e.target.files) : [];
-                      e.target.value = '';
-                      if (picked.length > 0) {
-                        setNewImageFiles((prev) => [...prev, ...picked]);
-                      }
-                    }}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Add one or more images. The first is the primary image shown in lists. Recommended 500×500px, max 10 MB.
-              </p>
+              <MediaUpload
+                multiple
+                items={[
+                  ...images.map((url, idx) => ({
+                    key: `img-${idx}`,
+                    url,
+                    badge: idx === 0 ? 'Primary' : undefined,
+                  })),
+                  ...newImageFiles.map((file, idx) => ({
+                    key: `new-${idx}`,
+                    url: URL.createObjectURL(file),
+                  })),
+                ]}
+                onPick={(files) => setNewImageFiles((prev) => [...prev, ...files])}
+                onRemove={(key) => {
+                  const [kind, i] = key.split('-');
+                  const idx = Number(i);
+                  if (kind === 'img') setImages((prev) => prev.filter((_, x) => x !== idx));
+                  else setNewImageFiles((prev) => prev.filter((_, x) => x !== idx));
+                }}
+                hint="Add one or more images. The first is the primary image shown in lists. Recommended 500×500px, max 10 MB."
+              />
             </FormSection>
 
             <CustomFieldsSectionRenderer

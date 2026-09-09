@@ -236,6 +236,7 @@ export default function NewEmployeePage() {
       title="Add New Employee"
       subtitle="Create login credentials and assign an employee role."
       onBack={() => router.push("/team/employees")}
+      width="none"
       footer={
         <FormActions
           onCancel={() => router.push("/team/employees")}
@@ -252,8 +253,6 @@ export default function NewEmployeePage() {
           value={form.avatar_url}
           onChange={(url) => setForm({ ...form, avatar_url: url })}
           bucket="profile_avatars"
-          fallback={form.full_name || "U"}
-          shape="circle"
         />
 
         <CustomFieldsSectionRenderer

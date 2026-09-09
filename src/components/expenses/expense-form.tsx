@@ -5,8 +5,8 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
-import { CalendarIcon, UploadCloud, X, Receipt } from "lucide-react";
-import { FormPageShell, FormActions } from "@/components/shared";
+import { Receipt } from "lucide-react";
+import { FormPageShell, FormActions, MediaUpload } from "@/components/shared";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
@@ -309,11 +309,7 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
 
   const formContent = (
     <>
-          <div className="flex items-center justify-between border-b border-border pb-4 mb-4 pr-6">
-            <h2 className="text-xl font-light text-foreground">{expense ? "Edit Expense" : "Submit Expense"}</h2>
-          </div>
-
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="expense_type">Expense Type <span className="text-destructive">*</span></Label>
               <Controller
@@ -430,24 +426,28 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
               />
             </div>
 
-            {selectedType && (
-              <div className="grid gap-2">
-                <Label>Proof Attachment {selectedType.proof_required && <span className="text-destructive">*</span>}</Label>
-                <div className="flex items-center gap-4">
-                  <Input 
-                    type="file" 
-                    accept="image/*,.pdf"
-                    onChange={(e) => setProofFile(e.target.files?.[0] || null)}
-                    className="flex-1 text-sm file:text-sm file:font-medium"
-                  />
-                </div>
-                {expense?.proof_file && !proofFile && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Current proof file is attached. Uploading a new one will replace it.
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="grid gap-2">
+              <Label>Proof Attachment {selectedType?.proof_required && <span className="text-destructive">*</span>}</Label>
+              <MediaUpload
+                accept="image/*,application/pdf"
+                items={
+                  proofFile
+                    ? [{
+                        key: 'proof',
+                        url: proofFile.type.startsWith('image/') ? URL.createObjectURL(proofFile) : undefined,
+                        label: proofFile.type.startsWith('image/') ? undefined : proofFile.name,
+                      }]
+                    : expense?.proof_file
+                      ? [{ key: 'existing', url: expense.proof_file }]
+                      : []
+                }
+                onPick={(files) => setProofFile(files[0] ?? null)}
+                onRemove={() => setProofFile(null)}
+                hint={selectedType?.proof_required
+                  ? 'A receipt photo or PDF is required for this expense type.'
+                  : 'Attach a receipt photo or PDF. Optional.'}
+              />
+            </div>
 
           </div>
           <FormActions
@@ -466,6 +466,7 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
         title={expense ? "Edit Expense" : "Submit New Expense"}
         subtitle={expense ? "Update the expense details below." : "Submit an expense claim with receipts and remarks."}
         onBack={() => onOpenChange(false)}
+        width="none"
       >
         <form onSubmit={form.handleSubmit(onSubmit)}>
           {formContent}

@@ -768,6 +768,7 @@ export function TaskForm({
         title={`${task ? "Edit" : "Add"} ${isNote ? "Note" : "Task / Activity"}`}
         subtitle={task ? "Update the activity details below." : "Create a new task, meeting, call, or note."}
         onBack={() => onOpenChange(false)}
+        width="none"
       >
         {formContent}
       </FormPageShell>
