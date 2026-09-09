@@ -24,6 +24,11 @@ export const PERMISSIONS = {
     DELETE_LEADS: 'delete_leads',
     CONVERT_LEADS: 'convert_leads',
     ASSIGN_LEADS: 'assign_leads',
+    // Inline lead-detail actions (mobile parity with web): manage the collaborator
+    // list, and reassign the lead owner. Distinct rights so a rep can be allowed one
+    // without the other; owner/admin bypass both.
+    MANAGE_LEAD_COLLABORATORS: 'manage_lead_collaborators',
+    CHANGE_LEAD_OWNER: 'change_lead_owner',
     IMPORT_LEADS: 'import_leads',
     EXPORT_LEADS: 'export_leads',
     VIEW_CONTACTS: 'view_contacts',
@@ -55,6 +60,9 @@ export const PERMISSIONS = {
     MOVE_STAGE: 'move_deal_stage',
     CONVERT_TO_QUOTATION: 'convert_deal_to_quotation',
     EXPORT: 'export_deals',
+    // Inline deal-detail actions (parity with leads): manage collaborators + reassign owner.
+    MANAGE_COLLABORATORS: 'manage_deal_collaborators',
+    CHANGE_OWNER: 'change_deal_owner',
   },
 
   // Catalogue (Products, Units, Categories)

@@ -47,6 +47,8 @@ export const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.CRM.DELETE_LEADS, label: "Delete Leads" },
       { id: PERMISSIONS.CRM.CONVERT_LEADS, label: "Convert Lead to Customer" },
       { id: PERMISSIONS.CRM.ASSIGN_LEADS, label: "Assign Leads to Others" },
+      { id: PERMISSIONS.CRM.CHANGE_LEAD_OWNER, label: "Change Lead Owner" },
+      { id: PERMISSIONS.CRM.MANAGE_LEAD_COLLABORATORS, label: "Add / Remove Lead Collaborators" },
       { id: PERMISSIONS.CRM.IMPORT_LEADS, label: "Import Leads" },
       { id: PERMISSIONS.CRM.EXPORT_LEADS, label: "Export Leads" },
     ]
@@ -60,6 +62,8 @@ export const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.DEALS.DELETE, label: "Delete Deals" },
       { id: PERMISSIONS.DEALS.MOVE_STAGE, label: "Move Deal Between Stages" },
       { id: PERMISSIONS.DEALS.CONVERT_TO_QUOTATION, label: "Convert Deal to Quotation" },
+      { id: PERMISSIONS.DEALS.CHANGE_OWNER, label: "Change Deal Owner" },
+      { id: PERMISSIONS.DEALS.MANAGE_COLLABORATORS, label: "Add / Remove Deal Collaborators" },
       { id: PERMISSIONS.DEALS.EXPORT, label: "Export Deals" },
     ]
   },
