@@ -276,9 +276,12 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
 
   const GEO_SYSTEM_KEYS = ['country', 'state', 'city', 'area'];
   const renderedCustomFields = useMemo(() => {
+    // Business / Lead Name IS the company for a lead, so the separate "Company" field is
+    // dropped from the form (a DB trigger keeps leads.company mirrored to leads.name).
+    const base = customFields.filter((f) => f.system_key !== 'company');
     return territoryEnabled
-      ? customFields.filter((f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)))
-      : customFields;
+      ? base.filter((f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)))
+      : base;
   }, [customFields, territoryEnabled]);
 
   const fieldGrid = asPage
