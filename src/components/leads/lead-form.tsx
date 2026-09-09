@@ -10,15 +10,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TerritoryPicker } from "@/components/territories/territory-picker";
 import { getTerritoryRows, getAccountTerritorySettings } from "@/lib/territories/api";
 import { DEFAULT_TERRITORY_SETTINGS, enabledLevels } from "@/lib/territories/settings";
 import type { Territory, TerritorySettings } from "@/lib/territories/types";
-import { Loader2, UserPlus } from "lucide-react";
-import { FormPageShell } from "@/components/shared";
+import { UserPlus } from "lucide-react";
+import { FormPageShell, FormActions } from "@/components/shared";
 import { logModuleActivity } from "@/lib/activities";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
@@ -455,15 +454,12 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         </>
         )}
       </div>
-      <div className="flex items-center justify-end gap-2 pt-4 border-t border-border mt-6">
-        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-          Cancel
-        </Button>
-        <Button type="submit" data-shortcut="save" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save Lead
-        </Button>
-      </div>
+      <FormActions
+        submit
+        onCancel={() => onOpenChange(false)}
+        saving={isSubmitting}
+        saveLabel={lead ? 'Save Changes' : 'Create Lead'}
+      />
     </form>
   );
 

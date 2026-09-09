@@ -40,7 +40,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
-import { FormPageShell } from "@/components/shared";
+import { FormPageShell, FormActions } from "@/components/shared";
 import { TaskListEmbedded } from "@/components/tasks/task-list-embedded";
 import { logModuleActivity } from "@/lib/activities";
 
@@ -531,10 +531,15 @@ export function DealForm({
             )}
           </div>
 
-        <div className="sm:justify-between items-center w-full mt-6 flex-row gap-4 flex border-t border-border pt-4">
-          <div className="flex-1">
-            {deal &&
-              (confirmDelete ? (
+        <FormActions
+          onCancel={() => onOpenChange(false)}
+          onSave={handleSave}
+          saving={saving}
+          saveDisabled={!title.trim() || !contactId || !stageId}
+          saveLabel={deal ? "Save Changes" : "Create Deal"}
+          leftSlot={
+            deal ? (
+              confirmDelete ? (
                 <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs w-max">
                   <span className="text-red-300">Delete this deal?</span>
                   <div className="flex gap-1">
@@ -565,26 +570,10 @@ export function DealForm({
                   <Trash2 className="h-3 w-3" />
                   Delete Deal
                 </button>
-              ))}
-          </div>
-          <div className="flex gap-2 justify-end shrink-0">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="border-border bg-transparent text-muted-foreground hover:bg-muted"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              data-shortcut="save"
-              disabled={saving || !title.trim() || !contactId || !stageId}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {saving ? "Saving..." : deal ? "Save Changes" : "Create Deal"}
-            </Button>
-          </div>
-        </div>
+              )
+            ) : undefined
+          }
+        />
     </>
   );
 

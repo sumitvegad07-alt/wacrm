@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
 import { CalendarIcon, UploadCloud, X, Receipt } from "lucide-react";
-import { FormPageShell } from "@/components/shared";
+import { FormPageShell, FormActions } from "@/components/shared";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
@@ -18,7 +18,6 @@ import { CustomFieldInput } from "@/components/ui/custom-field-input";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
@@ -451,14 +450,12 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
             )}
 
           </div>
-          <div className="flex justify-end gap-2 pt-4 border-t border-border mt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" data-shortcut="save" disabled={loading}>
-              {loading ? "Submitting..." : "Submit Expense"}
-            </Button>
-          </div>
+          <FormActions
+            submit
+            onCancel={() => onOpenChange(false)}
+            saving={loading}
+            saveLabel={expense ? "Save Changes" : "Submit Expense"}
+          />
     </>
   );
 

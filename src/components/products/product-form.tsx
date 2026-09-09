@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Upload, X, Package, Plus } from 'lucide-react';
-import { FormPageShell } from '@/components/shared';
+import { FormPageShell, FormActions } from '@/components/shared';
 import { logModuleActivity } from '@/lib/activities';
 
 interface ProductFormProps {
@@ -954,24 +954,14 @@ export function ProductForm({
           </div>
 
           <div className="border-t border-border/50 bg-popover/80 p-4 shrink-0 mt-auto">
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                className="flex-1 border-border bg-transparent text-muted-foreground hover:bg-muted"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                data-shortcut="save"
-                disabled={saving || !name.trim()}
-                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Product'}
-              </Button>
-            </div>
+            <FormActions
+              bare
+              submit
+              onCancel={() => onOpenChange(false)}
+              saving={saving}
+              saveDisabled={!name.trim()}
+              saveLabel={isEdit ? 'Save Changes' : 'Create Product'}
+            />
 
             {isEdit &&
               (confirmDelete ? (

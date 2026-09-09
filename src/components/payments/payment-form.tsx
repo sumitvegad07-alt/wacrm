@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, UploadCloud, X, Banknote } from 'lucide-react';
-import { FormPageShell } from '@/components/shared';
+import { FormPageShell, FormActions } from '@/components/shared';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -604,17 +604,12 @@ export function PaymentForm({
         </div>
       )}
 
-      <div className="flex justify-end gap-3 pt-4 border-t mt-6">
-        {!asPage && (
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" data-shortcut="save" disabled={saving}>
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save Payment
-        </Button>
-      </div>
+      <FormActions
+        submit
+        onCancel={() => onOpenChange(false)}
+        saving={saving}
+        saveLabel="Save Payment"
+      />
     </form>
   );
 

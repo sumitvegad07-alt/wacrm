@@ -15,14 +15,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { logModuleActivity } from "@/lib/activities";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Loader2, X, CheckSquare } from "lucide-react";
-import { FormPageShell } from "@/components/shared";
+import { Trash2, X, CheckSquare } from "lucide-react";
+import { FormPageShell, FormActions } from "@/components/shared";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -717,10 +716,15 @@ export function TaskForm({
         )}
 
         {/* Footer Area */}
-        <div className="flex justify-between items-center w-full mt-6 pt-4 border-t border-border">
-          <div className="flex-1">
-            {task && !isNote &&
-              (confirmDelete ? (
+        <FormActions
+          onCancel={() => onOpenChange(false)}
+          onSave={handleSave}
+          saving={saving}
+          saveDisabled={isNote && !description.trim()}
+          saveLabel={task ? "Save Changes" : isNote ? "Create Note" : "Create Task"}
+          leftSlot={
+            task && !isNote ? (
+              confirmDelete ? (
                 <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs w-max">
                   <span className="text-red-300">Delete this?</span>
                   <div className="flex gap-1">
@@ -750,19 +754,10 @@ export function TaskForm({
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
-              ))}
-          </div>
-          <div className="flex gap-2 justify-end shrink-0">
-            <Button
-              onClick={handleSave}
-              data-shortcut="save"
-              disabled={saving || (isNote && !description.trim())}
-              className="bg-blue-500 text-white hover:bg-blue-600 px-6 font-semibold"
-            >
-              {saving ? "SAVING..." : "SAVE"}
-            </Button>
-          </div>
-        </div>
+              )
+            ) : undefined
+          }
+        />
     </>
   );
 

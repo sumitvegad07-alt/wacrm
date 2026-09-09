@@ -1,21 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, UserPlus, Loader2, Upload, Trash2 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserPlus, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
+import { FormPageShell, FormActions, PhotoUpload } from "@/components/shared";
 import type { EmployeeRole, CustomField } from "@/types";
 import { TerritoryPicker } from "@/components/territories/territory-picker";
 import { getTerritoryRows, getAccountTerritorySettings, assignEmployeeAreas } from "@/lib/territories/api";
@@ -26,7 +23,7 @@ export default function NewEmployeePage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const { accountId, user, isSuperadmin, accountRole: authRole } = useAuth();
+  const { accountId, user } = useAuth();
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [creating, setCreating] = useState(false);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -50,8 +47,6 @@ export default function NewEmployeePage() {
     avatar_url: "",
   });
   const [loading, setLoading] = useState(true);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -89,8 +84,7 @@ export default function NewEmployeePage() {
     loadData();
   }, [supabase, accountId, user?.id]);
 
-  const handleCreateEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateEmployee = async () => {
     if (!form.full_name.trim() || !form.email.trim() || !form.password.trim()) {
       toast.error("Please fill in all required fields (Name, Email, Password)");
       return;
@@ -183,18 +177,12 @@ export default function NewEmployeePage() {
     if (!field.system_key) return null;
     const key = field.system_key as keyof typeof form;
 
-    // The predefined "area" field becomes the Territory Master cascade picker
-    // (selecting a city auto-selects its state + country), matching Company
-    // Profile. The chosen leaf is assigned as the employee's area on save.
-    if (field.system_key === 'area') {
-      return (
-        <TerritoryPicker
-          rows={territoryRows}
-          settings={territorySettings}
-          value={areaTerritoryId}
-          onChange={(id) => setAreaTerritoryId(id)}
-        />
-      );
+    // Geography (area + country/state/city) is captured once by the full-width
+    // Territory cascade rendered below the grid — hide the crammed per-cell
+    // versions here so the form isn't a row of squished dropdowns and duplicate
+    // plain text fields (which were never even saved).
+    if (['area', 'country', 'state', 'city'].includes(field.system_key)) {
+      return null;
     }
 
     if (key === 'employee_role_id') {
@@ -238,130 +226,61 @@ export default function NewEmployeePage() {
     );
   };
 
-  const handleUploadImage = async (event: any) => {
-    try {
-      setUploadingImage(true);
-      const file = event.target.files?.[0];
-      if (!file) return;
-
-      if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
-        toast.error('Unsupported image type. Use PNG, JPG, WebP, or GIF.');
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('Image is too large. Maximum 10 MB.');
-        return;
-      }
-
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from('profile_avatars').upload(filePath, file);
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('profile_avatars').getPublicUrl(filePath);
-      setForm({ ...form, avatar_url: data.publicUrl });
-    } catch (error: any) {
-      toast.error(error.message || "Error uploading image");
-    } finally {
-      setUploadingImage(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
   if (loading) {
     return <div className="flex items-center justify-center h-full min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
 
   return (
-    <div className="p-4 sm:p-5 w-full max-w-none space-y-4">
-      <div className="flex items-center justify-between pb-6 border-b border-border">
-        <div className="flex items-center gap-4">
-          <Link href="/team/employees">
-            <Button variant="outline" size="icon" className="shrink-0">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3">
-              <UserPlus className="w-6 h-6 text-primary" />
-              Add New Employee
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Create login credentials and assign an employee role.
-            </p>
-          </div>
+    <FormPageShell
+      icon={UserPlus}
+      title="Add New Employee"
+      subtitle="Create login credentials and assign an employee role."
+      onBack={() => router.push("/team/employees")}
+      footer={
+        <FormActions
+          onCancel={() => router.push("/team/employees")}
+          onSave={handleCreateEmployee}
+          saving={creating}
+          saveLabel="Create Employee"
+        />
+      }
+    >
+      <div className="space-y-8">
+        {/* Image is always the first field of the form. */}
+        <PhotoUpload
+          label="Profile Picture"
+          value={form.avatar_url}
+          onChange={(url) => setForm({ ...form, avatar_url: url })}
+          bucket="profile_avatars"
+          fallback={form.full_name || "U"}
+          shape="circle"
+        />
+
+        <CustomFieldsSectionRenderer
+          accountId={accountId || ""}
+          moduleName="user"
+          fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
+          customFields={customFields}
+          customValues={customValues}
+          onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
+          renderCustomSystemField={renderCustomSystemField}
+          isEditing={true}
+        />
+
+        {/* Geography, once, full-width — the Country → State → City cascade that
+            also gets assigned as the employee's territory on save. */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium text-foreground border-b border-border pb-1.5">
+            Assigned Area
+          </h4>
+          <TerritoryPicker
+            rows={territoryRows}
+            settings={territorySettings}
+            value={areaTerritoryId}
+            onChange={(id) => setAreaTerritoryId(id)}
+          />
         </div>
       </div>
-
-      <form onSubmit={handleCreateEmployee} className="space-y-4">
-        <Card className="p-6 border-border shadow-sm space-y-6">
-          <div className="flex flex-col gap-4">
-            <Label className="text-base font-semibold">Profile Picture</Label>
-            <div className="flex flex-col sm:flex-row sm:items-start gap-6">
-              <Avatar className="h-24 w-24 rounded-lg border border-border shadow-sm">
-                {form.avatar_url ? (
-                  <AvatarImage src={form.avatar_url} className="object-cover" />
-                ) : (
-                  <AvatarFallback className="rounded-lg text-3xl font-medium bg-muted text-muted-foreground">
-                    {form.full_name ? form.full_name.charAt(0).toUpperCase() : 'U'}
-                  </AvatarFallback>
-                )}
-              </Avatar>
-              <div className="flex flex-col gap-2 pt-1">
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploadingImage}>
-                    {uploadingImage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                    Upload Photo
-                  </Button>
-                  {form.avatar_url && (
-                    <Button type="button" variant="destructive" size="sm" onClick={() => setForm({...form, avatar_url: ""})} disabled={uploadingImage}>
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Remove
-                    </Button>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Recommended size: 256x256px.<br />
-                  Max file size: 10MB.
-                </p>
-              </div>
-            </div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              onChange={handleUploadImage}
-              disabled={uploadingImage}
-            />
-          </div>
-        </Card>
-
-        <Card className="p-6 border-border shadow-sm">
-          <CustomFieldsSectionRenderer
-            accountId={accountId || ""}
-            moduleName="user"
-            fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
-            customFields={customFields}
-            customValues={customValues}
-            onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
-            renderCustomSystemField={renderCustomSystemField}
-            isEditing={true}
-          />
-        </Card>
-
-        <div className="flex items-center justify-end gap-4 pt-4">
-          <Link href="/team/employees">
-            <Button variant="outline" type="button">Cancel</Button>
-          </Link>
-          <Button type="submit" data-shortcut="save" disabled={creating} className="min-w-[150px]">
-            {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Create Employee
-          </Button>
-        </div>
-      </form>
-    </div>
+    </FormPageShell>
   );
 }

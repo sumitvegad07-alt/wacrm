@@ -17,3 +17,5 @@ export * from "./loading-state";
 export * from "./confirm-dialog";
 export * from "./bulk-action-bar";
 export * from "./form-page-shell";
+export * from "./form-actions";
+export * from "./photo-upload";
