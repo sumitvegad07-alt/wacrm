@@ -48,11 +48,15 @@ export const DEFAULT_MODULE_SECTIONS_AND_FIELDS: Record<string, DefaultSectionDe
     {
       name: 'Primary Details',
       position: 0,
+      // Mirror of the customer Primary Details order (name, contact, phone,
+      // whatsapp, email) so the two forms lay out identically — only the first
+      // field's label differs (Business/Lead Name vs Company Name).
       fields: [
         { system_key: 'name', field_name: 'Business / Lead Name', field_type: 'text', is_required: true, show_in_table: true, position: 0 },
         { system_key: 'contact_person', field_name: 'Contact Person', field_type: 'text', is_required: true, show_in_table: true, position: 1 },
-        { system_key: 'whatsapp', field_name: 'WhatsApp Number', field_type: 'phone', is_required: false, show_in_table: true, position: 2 },
-        { system_key: 'email', field_name: 'Email Address', field_type: 'email', is_required: false, show_in_table: true, position: 3 },
+        { system_key: 'phone', field_name: 'Phone Number', field_type: 'phone', is_required: false, show_in_table: true, position: 2 },
+        { system_key: 'whatsapp', field_name: 'WhatsApp Number', field_type: 'phone', is_required: false, show_in_table: true, position: 3 },
+        { system_key: 'email', field_name: 'Email Address', field_type: 'email', is_required: false, show_in_table: true, position: 4 },
       ],
     },
     {

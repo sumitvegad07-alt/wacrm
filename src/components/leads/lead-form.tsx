@@ -48,9 +48,10 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
   const showTerritoryCascade = enabledLevels(territorySettings).length > 0 && territoryRows.length > 0;
 
   const [formData, setFormData] = useState({
-    name: "", contact_person: "", whatsapp: "", email: "", source: "", industry: "", status: "",
+    name: "", contact_person: "", phone: "", whatsapp: "", email: "", source: "", industry: "", status: "",
     address: "", area: "", city: "", state: "", country: "", pincode: "", latitude: "", longitude: ""
   });
+  const [sameAsPhone, setSameAsPhone] = useState(false);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
@@ -66,14 +67,14 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
     if (open && accountId) {
       if (lead) {
         setFormData({
-          name: lead.name || "", contact_person: lead.contact_person || "", whatsapp: lead.whatsapp || "", email: lead.email || "",
+          name: lead.name || "", contact_person: lead.contact_person || "", phone: (lead as any).phone || "", whatsapp: lead.whatsapp || "", email: lead.email || "",
           source: lead.source || "", industry: lead.industry || "", status: lead.status || "", address: lead.address || "",
           area: (lead as any).area || "", city: lead.city || "", state: lead.state || "", country: lead.country || "", pincode: (lead as any).pincode || "",
           latitude: lead.latitude || "", longitude: lead.longitude || ""
         });
       } else {
         setFormData({
-          name: "", contact_person: "", whatsapp: "+91", email: "", source: "", industry: "", status: "",
+          name: "", contact_person: "", phone: "", whatsapp: "+91", email: "", source: "", industry: "", status: "",
           address: "", area: "", city: "", state: "", country: "", pincode: "", latitude: "", longitude: ""
         });
       }
@@ -207,6 +208,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       account_id: accountId,
       name: formData.name.trim(),
       contact_person: formData.contact_person.trim() || null,
+      phone: formData.phone.trim() || null,
       whatsapp: formData.whatsapp.trim() || null,
       email: formData.email.trim() || null,
       source: formData.source.trim() || null,
@@ -397,6 +399,16 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                 />
               );
             }
+            if (k === 'phone') {
+              return (
+                <Input
+                  value={formData.phone}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                  className="bg-muted border-border"
+                  placeholder="+1 234 567 8900"
+                />
+              );
+            }
             if (k === 'whatsapp') {
               if (!isModuleEnabled('whatsapp')) return null;
               fld.is_required = true;
@@ -404,10 +416,25 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                 <div className="space-y-1">
                   <Input
                     value={formData.whatsapp}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, whatsapp: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData((prev) => ({ ...prev, whatsapp: e.target.value }));
+                      setSameAsPhone(false);
+                    }}
                     className="bg-muted border-border"
                     placeholder="+91..."
                   />
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="checkbox"
+                      id="lead-sameAsPhone"
+                      checked={sameAsPhone}
+                      onChange={(e) => {
+                        setSameAsPhone(e.target.checked);
+                        if (e.target.checked) setFormData((prev) => ({ ...prev, whatsapp: prev.phone }));
+                      }}
+                    />
+                    <Label htmlFor="lead-sameAsPhone" className="text-xs text-muted-foreground">Same as Phone Number</Label>
+                  </div>
                 </div>
               );
             }
