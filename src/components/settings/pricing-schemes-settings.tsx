@@ -55,7 +55,7 @@ const DISCOUNT_VALUE_TYPES: { value: DiscountValueType; label: string; help: str
 
 export function PricingSchemesSettings() {
   const supabase = createClient();
-  const { accountId, account, canEditSettings, moduleSettings, refreshModuleSettings } = useAuth();
+  const { accountId, account, canEditSettings, moduleSettings, refreshModuleSettings, hasSFA } = useAuth();
 
   // Scheme Management is an opt-in module gated from here. The main-menu link
   // and the /schemes route both key off module_settings.scheme.
@@ -391,6 +391,10 @@ export function PricingSchemesSettings() {
           </div>
         </div>
 
+        {/* Salesman discounts, price floor, Scheme and Stock are SFA-line
+            features — hidden entirely on CRM/WFA plans (per pricing & packaging).
+            Tax slabs and price-entry mode above stay for every plan. */}
+        {hasSFA && (
         <div className="space-y-8">
           {/* ---------------- Discounts ---------------- */}
           <div className="space-y-3">
@@ -584,6 +588,7 @@ export function PricingSchemesSettings() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       <ProductCategoriesSettings

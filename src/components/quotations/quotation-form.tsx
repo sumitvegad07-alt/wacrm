@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Save, FileText } from 'lucide-react';
-import { FormPageShell } from '@/components/shared';
+import { FormPageShell, EntityTypeToggle } from '@/components/shared';
 import { ProductDetailsTable, type PartialQuotationItem } from './product-details-table';
 import { TermsEditor } from './terms-editor';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -437,35 +437,26 @@ export function QuotationForm({
           <div className="space-y-8 mt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="space-y-2">
-          <Label className="text-muted-foreground flex items-center justify-between">
+          <Label className="text-muted-foreground flex items-center gap-1">
             Quotation For <span className="text-red-400">*</span>
-            <div className="flex items-center space-x-2 bg-muted rounded-md p-0.5">
-              <button
-                type="button"
-                disabled={!!quotationId}
-                className={`px-2 py-1 text-xs rounded-sm transition-colors ${targetType === 'contact' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'} ${!!quotationId ? 'opacity-50 cursor-not-allowed' : ''}`}
-                onClick={() => setTargetType('contact')}
-              >
-                Customer
-              </button>
-              <button
-                type="button"
-                disabled={!!quotationId}
-                className={`px-2 py-1 text-xs rounded-sm transition-colors ${targetType === 'lead' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'} ${!!quotationId ? 'opacity-50 cursor-not-allowed' : ''}`}
-                onClick={() => setTargetType('lead')}
-              >
-                Lead
-              </button>
-            </div>
           </Label>
+          <EntityTypeToggle
+            value={targetType}
+            onChange={setTargetType}
+            disabled={!!quotationId}
+            options={[
+              { value: 'contact', label: 'Customer' },
+              { value: 'lead', label: 'Lead' },
+            ]}
+          />
           {targetType === 'contact' ? (
             <SearchableSelect
               value={contactId}
               onChange={setContactId}
               disabled={!!quotationId}
-              placeholder="Select a contact"
-              searchPlaceholder="Search contacts..."
-              emptyMessage="No contacts found."
+              placeholder="Select a customer"
+              searchPlaceholder="Search customers..."
+              emptyMessage="No customers found."
               options={contacts.map((c) => ({
                 value: c.id,
                 label: c.name,

@@ -19,3 +19,5 @@ export * from "./bulk-action-bar";
 export * from "./form-page-shell";
 export * from "./form-actions";
 export * from "./photo-upload";
+export * from "./form-section";
+export * from "./entity-type-toggle";

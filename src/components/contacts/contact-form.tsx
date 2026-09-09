@@ -67,7 +67,10 @@ export function ContactForm({
   const canEditCreditTerms = !isEditingExisting || hasPermission(PERMISSIONS.CUSTOMERS.MANAGE_CREDIT);
   const canEditOpeningBalance = !isEditingExisting || hasPermission(PERMISSIONS.CUSTOMERS.EDIT_OPENING_BALANCE);
   const isEdit = !!contact;
-  const territoryEnabled = isModuleEnabled('territory');
+  // The geography cascade (Country → State → City) is shown on EVERY plan, not
+  // just when the WFA "Territory Master" module is on — the hierarchy is seeded
+  // for every account, so customers/leads get the same dropdowns instead of
+  // plain placeholder text (see `showTerritoryCascade` below).
 
   const [name, setName] = useState('');          // contact person
   const [phone, setPhone] = useState('');
@@ -122,13 +125,15 @@ export function ContactForm({
   const [territoryRows, setTerritoryRows] = useState<Territory[]>([]);
   const [territoryId, setTerritoryId] = useState<string | null>(null);
   const [needsTerritoryReview, setNeedsTerritoryReview] = useState(false);
+  // Data-driven: show the cascade once the hierarchy has levels + rows, on any plan.
+  const showTerritoryCascade = enabledLevels(territorySettings).length > 0 && territoryRows.length > 0;
 
   // When Territory Master is enabled, the flat country/state/city/area system
   // fields are replaced by the Territory picker — hide them from the shared
   // custom-fields renderer (Customer form only; the shared renderer is untouched).
   const GEO_SYSTEM_KEYS = ['country', 'state', 'city', 'area'];
   const renderedCustomFields = useMemo(() => {
-    let fields = territoryEnabled
+    let fields = showTerritoryCascade
       ? customFields.filter((f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)))
       : customFields;
 
@@ -152,7 +157,7 @@ export function ContactForm({
     }
     return fields;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customFields, territoryEnabled, assignmentMode, accountId]);
+  }, [customFields, showTerritoryCascade, assignmentMode, accountId]);
 
   useEffect(() => {
     if (open && accountId) {
@@ -180,7 +185,7 @@ export function ContactForm({
       setFieldsLoaded(false);
       fetchCustomFields().finally(() => setFieldsLoaded(true));
       fetchSettingsConfig();
-      if (territoryEnabled) fetchTerritoryData();
+      fetchTerritoryData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, contact, accountId]);
@@ -336,7 +341,7 @@ export function ContactForm({
         employee_id: assignmentMode === 'direct' ? (employeeId || null) : null,
         // Territory Master (authoritative geography). Clearing the review flag
         // once a territory is chosen resolves any "needs migration" state.
-        ...(territoryEnabled
+        ...(showTerritoryCascade
           ? { territory_id: territoryId, needs_territory_review: territoryId ? false : needsTerritoryReview }
           : {}),
         ...(isModuleEnabled('payment') ? {
@@ -553,7 +558,7 @@ export function ContactForm({
             }}
           />
 
-          {territoryEnabled && enabledLevels(territorySettings).length > 0 && (
+          {showTerritoryCascade && (
             <div className="space-y-3 pt-2 border-t border-border/50">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-muted-foreground">Territory (Geography)</span>

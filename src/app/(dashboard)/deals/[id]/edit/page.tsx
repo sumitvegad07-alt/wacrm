@@ -2,21 +2,19 @@
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Pencil, Loader2, Users, ShoppingBag } from "lucide-react";
+import { Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Profile, Contact, Lead, PipelineStage, Deal } from "@/types";
 import { DealItemsTable, type PartialDealItem } from "@/components/deals/deal-items-table";
 import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
 import { useAuth } from "@/hooks/use-auth";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormPageShell, FormActions, FormSection, EntityTypeToggle } from "@/components/shared";
 
 export default function EditDealPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -112,8 +110,7 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
     loadData();
   }, [dealId, supabase, router]);
 
-  const handleSaveDeal = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveDeal = async () => {
     if (dealFor === "customer" && !form.contact_id) {
       toast.error("Please select a Customer / Contact");
       return;
@@ -193,67 +190,52 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="p-8 w-full max-w-none space-y-8">
-      {/* Top Header */}
-      <div className="flex items-center justify-between pb-6 border-b border-border">
-        <div className="flex items-center gap-4">
-          <Link href={`/deals/${dealId}`}>
-            <Button variant="outline" size="icon" className="shrink-0">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3">
-              <Pencil className="w-6 h-6 text-primary" />
-              Edit Deal
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Update deal details, stage, collaborators, and product line items.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <form onSubmit={handleSaveDeal} className="space-y-8">
-        <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Opportunity Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <FormPageShell
+      icon={Pencil}
+      title="Edit Deal"
+      subtitle="Update deal details, stage, collaborators, and product line items."
+      onBack={() => router.push(`/deals/${dealId}`)}
+      width="none"
+      footer={
+        <FormActions
+          onCancel={() => router.push(`/deals/${dealId}`)}
+          onSave={handleSaveDeal}
+          saving={saving}
+          saveLabel="Save Changes"
+        />
+      }
+    >
+      <div className="space-y-8">
+        <FormSection title="Opportunity Details">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-4">
             <div className="space-y-2">
-              <Label className="block">Deal For *</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={dealFor === "customer" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => {
-                    setDealFor("customer");
-                    setForm(prev => ({ ...prev, lead_id: "" }));
-                  }}
-                >
-                  Customer
-                </Button>
-                <Button
-                  type="button"
-                  variant={dealFor === "lead" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => {
-                    setDealFor("lead");
-                    setForm(prev => ({ ...prev, contact_id: "" }));
-                  }}
-                >
-                  Lead
-                </Button>
-              </div>
+              <Label className="text-muted-foreground flex items-center gap-1">
+                Deal For <span className="text-red-400">*</span>
+              </Label>
+              <EntityTypeToggle
+                value={dealFor}
+                onChange={(v) => {
+                  setDealFor(v);
+                  setForm(prev => ({ ...prev, ...(v === "customer" ? { lead_id: "" } : { contact_id: "" }) }));
+                }}
+                options={[
+                  { value: "customer", label: "Customer" },
+                  { value: "lead", label: "Lead" },
+                ]}
+              />
             </div>
 
             {dealFor === "customer" ? (
               <div className="space-y-2">
-                <Label>Customer / Contact *</Label>
+                <Label className="text-muted-foreground flex items-center gap-1">
+                  Customer <span className="text-red-400">*</span>
+                </Label>
                 <SearchableSelect
                   value={form.contact_id}
                   onChange={v => setForm({ ...form, contact_id: v })}
-                  placeholder="Select Customer..."
-                  searchPlaceholder="Search customer by name..."
+                  placeholder="Select a customer"
+                  searchPlaceholder="Search customers..."
+                  emptyMessage="No customers found."
                   options={contacts.map(c => ({
                     value: c.id,
                     label: c.name || c.phone || "Unnamed Contact"
@@ -262,12 +244,15 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
               </div>
             ) : (
               <div className="space-y-2">
-                <Label>Lead *</Label>
+                <Label className="text-muted-foreground flex items-center gap-1">
+                  Lead <span className="text-red-400">*</span>
+                </Label>
                 <SearchableSelect
                   value={form.lead_id}
                   onChange={v => setForm({ ...form, lead_id: v })}
-                  placeholder="Select Lead..."
-                  searchPlaceholder="Search lead..."
+                  placeholder="Select a lead"
+                  searchPlaceholder="Search leads..."
+                  emptyMessage="No leads found."
                   options={leads.map(l => ({
                     value: l.id,
                     label: `${l.name} ${l.whatsapp ? `(${l.whatsapp})` : ""}`
@@ -277,12 +262,12 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
             )}
 
             <div className="space-y-2">
-              <Label>Pipeline Stage</Label>
+              <Label className="text-muted-foreground">Pipeline Stage</Label>
               <SearchableSelect
                 value={form.stage_id}
                 onChange={v => setForm({ ...form, stage_id: v })}
-                placeholder="Select Stage..."
-                searchPlaceholder="Search stage..."
+                placeholder="Select a stage"
+                searchPlaceholder="Search stages..."
                 options={stages.map(s => ({
                   value: s.id,
                   label: s.name
@@ -291,7 +276,7 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div className="space-y-2">
-              <Label>Status</Label>
+              <Label className="text-muted-foreground">Status</Label>
               <Select value={form.status} onValueChange={v => setForm({ ...form, status: v || "open" })}>
                 <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
@@ -302,17 +287,12 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
               </Select>
             </div>
           </div>
-        </Card>
+        </FormSection>
 
-        {/* Ownership & Collaboration */}
-        <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Collaboration
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <FormSection title="Collaboration">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
             <div className="space-y-2">
-              <Label>Collaborators</Label>
+              <Label className="text-muted-foreground">Collaborators</Label>
               <CollaboratorsSelect
                 profiles={profiles}
                 selectedIds={collaboratorIds}
@@ -320,34 +300,27 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
               />
             </div>
           </div>
-        </Card>
+        </FormSection>
 
-        {/* Product Line Items */}
-        <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3 flex items-center gap-2">
-            <ShoppingBag className="h-5 w-5 text-primary" />
-            Product Line Items
-          </h2>
+        <FormSection title="Product Line Items">
           <DealItemsTable items={items} onChange={setItems} products={products} />
-        </Card>
+        </FormSection>
 
-        {/* Notes & Requirements */}
-        <Card className="p-6 border-border shadow-sm space-y-6">
-          <h2 className="text-lg font-semibold text-foreground border-b border-border pb-3">Additional Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <FormSection title="Additional Details">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
             <div className="space-y-2">
-              <Label htmlFor="expected_close_date">Expected Close Date</Label>
+              <Label htmlFor="expected_close_date" className="text-muted-foreground">Expected Close Date</Label>
               <Input
                 id="expected_close_date"
                 type="date"
-                className="[color-scheme:dark] bg-background text-foreground"
+                className="bg-background text-foreground"
                 value={form.expected_close_date}
                 onChange={e => setForm({ ...form, expected_close_date: e.target.value })}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="notes">Notes & Requirements</Label>
+              <Label htmlFor="notes" className="text-muted-foreground">Notes &amp; Requirements</Label>
               <Textarea
                 id="notes"
                 value={form.notes}
@@ -357,18 +330,8 @@ export default function EditDealPage({ params }: { params: Promise<{ id: string 
               />
             </div>
           </div>
-        </Card>
-
-        <div className="flex items-center justify-end gap-4 pt-4">
-          <Link href={`/deals/${dealId}`}>
-            <Button variant="outline" type="button">Cancel</Button>
-          </Link>
-          <Button type="submit" disabled={saving} className="min-w-[150px]">
-            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Save Changes
-          </Button>
-        </div>
-      </form>
-    </div>
+        </FormSection>
+      </div>
+    </FormPageShell>
   );
 }

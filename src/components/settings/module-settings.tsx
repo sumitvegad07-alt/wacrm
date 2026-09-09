@@ -158,7 +158,7 @@ function KoopsOptionToggle<T extends string>({
 // ── Main Component ────────────────────────────────────────────
 export function ModuleSettingsPanel() {
   const supabase = createClient();
-  const { accountId, account, moduleSettings, canEditSettings, refreshModuleSettings } = useAuth();
+  const { accountId, account, moduleSettings, canEditSettings, refreshModuleSettings, hasSFA } = useAuth();
 
   // Modules the account's plan includes. Legacy plans return the full set, so
   // those tenants keep every toggle. A module outside the plan is locked: the
@@ -640,7 +640,9 @@ export function ModuleSettingsPanel() {
               />
             </div>
 
-            {/* Enable Multi Unit */}
+            {/* Enable Multi Unit — SFA-line feature (multi-unit ordering);
+                hidden on CRM/WFA plans per pricing & packaging. */}
+            {hasSFA && (
             <div>
               <div className="mb-2">
                 <p className="text-sm font-medium text-foreground">
@@ -678,6 +680,7 @@ export function ModuleSettingsPanel() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Enable Customer Hierarchy */}
             <div>

@@ -34,7 +34,6 @@ interface LeadFormProps {
 
 export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: LeadFormProps) {
   const { accountId, user, isModuleEnabled } = useAuth();
-  const territoryEnabled = isModuleEnabled('territory');
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Holds the whole form body until the custom-field definitions are loaded, so
   // the async CustomFieldsSectionRenderer (Primary Details / Status / Address)
@@ -44,6 +43,9 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
   const [territorySettings, setTerritorySettings] = useState<TerritorySettings>(DEFAULT_TERRITORY_SETTINGS);
   const [territoryRows, setTerritoryRows] = useState<Territory[]>([]);
   const [territoryId, setTerritoryId] = useState<string | null>(null);
+  // Geography cascade shows on every plan once the hierarchy has levels + rows,
+  // not only when the WFA Territory module is on — see contact-form for rationale.
+  const showTerritoryCascade = enabledLevels(territorySettings).length > 0 && territoryRows.length > 0;
 
   const [formData, setFormData] = useState({
     name: "", contact_person: "", whatsapp: "", email: "", source: "", industry: "", status: "",
@@ -78,7 +80,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       setTerritoryId((lead as (typeof lead) & { territory_id?: string | null })?.territory_id ?? null);
       setFieldsLoaded(false);
       fetchLookups().finally(() => setFieldsLoaded(true));
-      if (territoryEnabled) fetchTerritoryData();
+      fetchTerritoryData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lead, accountId]);
@@ -216,7 +218,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       pincode: formData.pincode.trim() || null,
       latitude: formData.latitude.trim() || null,
       longitude: formData.longitude.trim() || null,
-      ...(territoryEnabled ? { territory_id: territoryId } : {}),
+      ...(showTerritoryCascade ? { territory_id: territoryId } : {}),
     };
 
     let savedId = lead?.id;
@@ -278,10 +280,10 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
     // Business / Lead Name IS the company for a lead, so the separate "Company" field is
     // dropped from the form (a DB trigger keeps leads.company mirrored to leads.name).
     const base = customFields.filter((f) => f.system_key !== 'company');
-    return territoryEnabled
+    return showTerritoryCascade
       ? base.filter((f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)))
       : base;
-  }, [customFields, territoryEnabled]);
+  }, [customFields, showTerritoryCascade]);
 
   const fieldGrid = asPage
     ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
@@ -412,7 +414,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
           }}
         />
 
-        {territoryEnabled && enabledLevels(territorySettings).length > 0 && (
+        {showTerritoryCascade && (
           <div className="space-y-3 pt-2 border-t border-border/50">
             <span className="text-xs font-medium text-muted-foreground">Territory (Area) — controls which field employee sees this lead</span>
               <TerritoryPicker
