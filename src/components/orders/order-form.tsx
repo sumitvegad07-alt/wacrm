@@ -759,7 +759,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
               <CustomFieldsSectionRenderer
                 accountId={accountId}
                 moduleName="order"
-                fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
+                fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
                 customFields={customFields}
                 customValues={customValues}
                 onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}

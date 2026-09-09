@@ -25,7 +25,23 @@ interface CustomFieldsSectionRendererProps {
   fieldGridClassName?: string;
 }
 
-const DEFAULT_FIELD_GRID = "grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3";
+const DEFAULT_FIELD_GRID = "grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4";
+
+/**
+ * The canonical field grid for full-page create/edit forms. Every "as page"
+ * form uses this exact grid so field widths, columns and row spacing are
+ * identical across modules. Dialogs fall back to DEFAULT_FIELD_GRID (2-col) so
+ * they don't cram 4 columns into a narrow popup.
+ */
+export const PAGE_FIELD_GRID =
+  "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4";
+
+/**
+ * The one section-header style shared by the renderer, FormSection and every
+ * hand-built section, so a form never mixes three different header looks.
+ */
+export const SECTION_HEADER_CLASS =
+  "text-sm font-semibold text-foreground border-b border-border pb-1.5";
 
 export function CustomFieldsSectionRenderer({
   accountId,
@@ -128,7 +144,7 @@ export function CustomFieldsSectionRenderer({
 
         return (
           <div key={sec.id} className="space-y-3">
-            <h4 className="text-sm font-medium text-foreground border-b border-border pb-1.5">
+            <h4 className={SECTION_HEADER_CLASS}>
               {sec.name}
             </h4>
             <div className={fieldGridClassName}>

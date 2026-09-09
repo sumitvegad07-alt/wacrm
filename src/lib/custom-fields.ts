@@ -65,14 +65,18 @@ export const DEFAULT_MODULE_SECTIONS_AND_FIELDS: Record<string, DefaultSectionDe
       ],
     },
     {
+      // Mirror of the customer Address Details section (same field set + order,
+      // incl. Area) so the customer and lead forms lay their address block out
+      // identically. `area` is seeded into existing accounts additively on load.
       name: 'Address Details',
       position: 20,
       fields: [
-        { system_key: 'address', field_name: 'Address', field_type: 'text', is_required: false, show_in_table: false, position: 0 },
-        { system_key: 'city', field_name: 'City', field_type: 'text', is_required: false, show_in_table: false, position: 1 },
-        { system_key: 'state', field_name: 'State', field_type: 'text', is_required: false, show_in_table: false, position: 2 },
-        { system_key: 'country', field_name: 'Country', field_type: 'text', is_required: false, show_in_table: false, position: 3 },
-        { system_key: 'pincode', field_name: 'Pincode / ZIP', field_type: 'text', is_required: false, show_in_table: false, position: 4 },
+        { system_key: 'address', field_name: 'Street Address', field_type: 'text', is_required: false, show_in_table: false, position: 0 },
+        { system_key: 'area', field_name: 'Area / Locality', field_type: 'text', is_required: false, show_in_table: false, position: 1 },
+        { system_key: 'city', field_name: 'City', field_type: 'text', is_required: false, show_in_table: true, position: 2 },
+        { system_key: 'state', field_name: 'State', field_type: 'text', is_required: false, show_in_table: false, position: 3 },
+        { system_key: 'country', field_name: 'Country', field_type: 'text', is_required: false, show_in_table: false, position: 4 },
+        { system_key: 'pincode', field_name: 'Pincode / ZIP', field_type: 'text', is_required: false, show_in_table: false, position: 5 },
       ],
     },
   ],

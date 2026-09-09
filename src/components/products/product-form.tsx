@@ -539,7 +539,7 @@ export function ProductForm({
     );
 
   const fieldGrid = asPage
-    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
+    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
     : undefined;
 
   const formContent = (

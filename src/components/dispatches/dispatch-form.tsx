@@ -309,7 +309,7 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
         <CustomFieldsSectionRenderer
           accountId={accountId}
           moduleName="dispatch"
-          fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
+          fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
           customFields={customFields}
           customValues={customValues}
           onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}

@@ -34,7 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Users } from 'lucide-react';
-import { FormPageShell, FormActions } from '@/components/shared';
+import { FormPageShell, FormActions, FormSection } from '@/components/shared';
 
 interface ContactFormProps {
   open: boolean;
@@ -390,7 +390,7 @@ export function ContactForm({
   // Full-page forms use the horizontal space (up to 4 columns) like the
   // reference SFA product; the dialog form keeps a safe 2-column grid.
   const fieldGrid = asPage
-    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
+    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
     : undefined;
 
   const formContent = (
@@ -559,15 +559,14 @@ export function ContactForm({
           />
 
           {showTerritoryCascade && (
-            <div className="space-y-3 pt-2 border-t border-border/50">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">Territory (Geography)</span>
-                {needsTerritoryReview && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/15 text-amber-600 dark:text-amber-500 gap-1">
-                    <AlertTriangle className="size-2.5" /> needs review
-                  </Badge>
-                )}
-              </div>
+            <FormSection
+              title="Territory (Geography)"
+              action={needsTerritoryReview ? (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/15 text-amber-600 dark:text-amber-500 gap-1">
+                  <AlertTriangle className="size-2.5" /> needs review
+                </Badge>
+              ) : undefined}
+            >
               <TerritoryPicker
                 rows={territoryRows}
                 settings={territorySettings}
@@ -587,11 +586,10 @@ export function ContactForm({
                   if (a) setArea(a);
                 }}
               />
-            </div>
+            </FormSection>
           )}
 
-          <div className="space-y-3 pt-2 border-t border-border/50">
-            <span className="text-xs font-medium text-muted-foreground">GPS Coordinates (Optional)</span>
+          <FormSection title="GPS Coordinates (Optional)">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-muted-foreground text-xs">Latitude</Label>
@@ -602,15 +600,15 @@ export function ContactForm({
                  <Input value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="e.g. 72.8464" className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs" />
               </div>
             </div>
-          </div>
+          </FormSection>
 
           {/* Financial Settings (credit limit / days / opening balance) are an
               SFA-line concept. Only show them on plans that include the SFA line
               (SFA, CRM+SFA, and legacy full-access) AND have the payment module on.
               CRM / WFA / CRM+WFA plans never see these fields. */}
           {hasSFA && isModuleEnabled('payment') && (
-            <div className="space-y-3 pt-4 border-t border-border/50">
-              <h4 className="text-sm font-semibold text-foreground">Financial Settings</h4>
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold text-foreground border-b border-border pb-1.5">Financial Settings</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Two of these are money and one is a day count. They were three
                     identical number boxes, which invited typing a rupee value into

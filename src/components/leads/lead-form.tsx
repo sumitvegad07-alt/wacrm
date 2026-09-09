@@ -17,7 +17,7 @@ import { getTerritoryRows, getAccountTerritorySettings } from "@/lib/territories
 import { DEFAULT_TERRITORY_SETTINGS, enabledLevels } from "@/lib/territories/settings";
 import type { Territory, TerritorySettings } from "@/lib/territories/types";
 import { UserPlus } from "lucide-react";
-import { FormPageShell, FormActions } from "@/components/shared";
+import { FormPageShell, FormActions, FormSection } from "@/components/shared";
 import { logModuleActivity } from "@/lib/activities";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
@@ -49,7 +49,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
 
   const [formData, setFormData] = useState({
     name: "", contact_person: "", whatsapp: "", email: "", source: "", industry: "", status: "",
-    address: "", city: "", state: "", country: "", pincode: "", latitude: "", longitude: ""
+    address: "", area: "", city: "", state: "", country: "", pincode: "", latitude: "", longitude: ""
   });
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -68,13 +68,13 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         setFormData({
           name: lead.name || "", contact_person: lead.contact_person || "", whatsapp: lead.whatsapp || "", email: lead.email || "",
           source: lead.source || "", industry: lead.industry || "", status: lead.status || "", address: lead.address || "",
-          city: lead.city || "", state: lead.state || "", country: lead.country || "", pincode: (lead as any).pincode || "",
+          area: (lead as any).area || "", city: lead.city || "", state: lead.state || "", country: lead.country || "", pincode: (lead as any).pincode || "",
           latitude: lead.latitude || "", longitude: lead.longitude || ""
         });
       } else {
         setFormData({
           name: "", contact_person: "", whatsapp: "+91", email: "", source: "", industry: "", status: "",
-          address: "", city: "", state: "", country: "", pincode: "", latitude: "", longitude: ""
+          address: "", area: "", city: "", state: "", country: "", pincode: "", latitude: "", longitude: ""
         });
       }
       setTerritoryId((lead as (typeof lead) & { territory_id?: string | null })?.territory_id ?? null);
@@ -212,6 +212,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       source: formData.source.trim() || null,
       industry: formData.industry.trim() || null,
       address: formData.address.trim() || null,
+      area: formData.area.trim() || null,
       city: formData.city.trim() || null,
       state: formData.state.trim() || null,
       country: formData.country.trim() || null,
@@ -286,7 +287,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
   }, [customFields, showTerritoryCascade]);
 
   const fieldGrid = asPage
-    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-3"
+    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
     : undefined;
 
   const formContent = (
@@ -415,33 +416,33 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         />
 
         {showTerritoryCascade && (
-          <div className="space-y-3 pt-2 border-t border-border/50">
-            <span className="text-xs font-medium text-muted-foreground">Territory (Area) — controls which field employee sees this lead</span>
+          <FormSection title="Territory (Geography)">
               <TerritoryPicker
                 rows={territoryRows}
                 settings={territorySettings}
                 value={territoryId}
                 onChange={setTerritoryId}
                 onPathResolve={(pathTerritories) => {
-                  let c = '', s = '', t = '';
+                  let c = '', s = '', t = '', a = '';
                   pathTerritories.forEach(terr => {
                     if (terr.level === 1) c = terr.name;
                     else if (terr.level === 2) s = terr.name;
                     else if (terr.level === 3) t = terr.name;
+                    else if (terr.level === 4) a = terr.name;
                   });
                   setFormData((prev) => ({
                     ...prev,
                     country: c || prev.country,
                     state: s || prev.state,
-                    city: t || prev.city
+                    city: t || prev.city,
+                    area: a || prev.area
                   }));
                 }}
               />
-            </div>
+            </FormSection>
         )}
 
-        <div className="space-y-3 pt-2 border-t border-border/50">
-          <span className="text-xs font-medium text-muted-foreground">GPS Coordinates (Optional)</span>
+        <FormSection title="GPS Coordinates (Optional)">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-muted-foreground text-xs">Latitude</Label>
@@ -452,7 +453,7 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
               <Input value={formData.longitude} onChange={(e) => setFormData((prev) => ({ ...prev, longitude: e.target.value }))} placeholder="e.g. 72.8777" className="h-8 text-xs" />
             </div>
           </div>
-        </div>
+        </FormSection>
         </>
         )}
       </div>
