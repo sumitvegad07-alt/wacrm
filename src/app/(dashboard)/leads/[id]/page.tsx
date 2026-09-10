@@ -330,7 +330,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* Contact + location details */}
-      {(lead.contact_person || lead.whatsapp || lead.email || lead.address) && (
+      {(lead.contact_person || lead.whatsapp || lead.email || lead.address || (lead.latitude != null && lead.longitude != null)) && (
         <div className="grid grid-cols-1 gap-6 border-t border-border px-4 py-6 sm:grid-cols-3">
           {lead.contact_person && (
             <div><p className="text-sm text-muted-foreground">Contact Person</p><p className="mt-1 font-medium text-foreground">{lead.contact_person}</p></div>
@@ -343,6 +343,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           )}
           {lead.address && (
             <div className="sm:col-span-3"><p className="text-sm text-muted-foreground">Address</p><p className="mt-1 font-medium text-foreground">{lead.address}</p></div>
+          )}
+          {lead.latitude != null && lead.longitude != null && (
+            <div><p className="text-sm text-muted-foreground">Coordinates (geo-tagged)</p><p className="mt-1 font-medium font-mono text-sm text-foreground">{lead.latitude}, {lead.longitude}</p></div>
           )}
         </div>
       )}

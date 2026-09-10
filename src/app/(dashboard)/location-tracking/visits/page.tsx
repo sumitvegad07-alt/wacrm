@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useDataScope } from "@/hooks/use-data-scope";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export default function CustomerVisitsPage() {
 
   const supabase = createClient();
   const scope = useDataScope();
+  const router = useRouter();
 
   useEffect(() => {
     if (!scope.ready) return; // wait for the scoped id set
@@ -318,6 +320,7 @@ export default function CustomerVisitsPage() {
         storageKey="wacrm_visits_table_columns_v2"
         isLoading={isLoading}
         rowKey={(row) => row.id}
+        onRowClick={(row) => router.push(`/location-tracking/visits/${row.id}`)}
       />
 
       <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />
