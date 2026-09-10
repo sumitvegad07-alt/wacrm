@@ -678,7 +678,7 @@ export function ContactForm({
                 </select>
                 <p className="text-xs text-muted-foreground">
                   {priceLists.length === 0
-                    ? "No active price lists yet. Create one in Settings → Pricing & Schemes → Manage price lists."
+                    ? "No active price lists yet. Create one in Settings → Catalogue Settings → Manage price lists."
                     : "This customer's orders use this list's prices automatically, on web and mobile."}
                 </p>
               </div>
