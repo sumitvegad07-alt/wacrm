@@ -15,7 +15,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
-import { PageLayout, PageHeader, PageToolbar, EmptyState, StatusBadge, ConfirmDialog } from "@/components/shared";
+import { PageLayout, PageHeader, EmptyState, StatusBadge, ConfirmDialog } from "@/components/shared";
 import {
   getPriceLists, getPriceListWithItems, createPriceList, updatePriceList, deletePriceList, setPriceListActive,
 } from "@/lib/price-lists/api";
@@ -168,14 +168,12 @@ export function PriceListManager() {
       <PageHeader
         title="Price Lists"
         subtitle="Customer-specific pricing. Assign a list to a customer on their page; its prices apply automatically on web and mobile orders."
-      />
-      <PageToolbar>
-        {canEditSettings && (
+        actions={canEditSettings ? (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" /> New price list
           </Button>
-        )}
-      </PageToolbar>
+        ) : undefined}
+      />
 
       {loading ? (
         <div className="p-10 flex items-center justify-center text-sm text-muted-foreground gap-2">
@@ -186,6 +184,11 @@ export function PriceListManager() {
           icon={<ListChecks className="h-8 w-8" />}
           title="No price lists yet"
           description="Create a price list to give a set of customers a blanket discount and/or per-product rates."
+          action={canEditSettings ? (
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" /> New price list
+            </Button>
+          ) : undefined}
         />
       ) : (
         <div className="rounded-lg border border-border overflow-x-auto">
