@@ -91,6 +91,9 @@ export function ContactForm({
   const [creditLimit, setCreditLimit] = useState('');
   const [creditDays, setCreditDays] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
+  // Price Lists (v5): the customer's assigned list (SFA line only). null = catalogue price.
+  const [priceListId, setPriceListId] = useState<string | null>(null);
+  const [priceLists, setPriceLists] = useState<{ id: string; name: string }[]>([]);
   
   const [saving, setSaving] = useState(false);
 
@@ -178,6 +181,7 @@ export function ContactForm({
       setCreditDays((contact as any)?.credit_days != null ? String((contact as any).credit_days) : '');
       setOpeningBalance((contact as any)?.opening_balance != null ? String((contact as any).opening_balance) : '');
       setHierarchyLevel(contact?.hierarchy_level ?? null);
+      setPriceListId((contact as any)?.price_list_id ?? null);
       setEmployeeId(contact?.employee_id ?? '');
       setDupMatch(null);
       setTerritoryId((contact as Contact & { territory_id?: string | null })?.territory_id ?? null);
@@ -214,6 +218,16 @@ export function ContactForm({
     setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? os.levels : [] });
     setAssignmentMode(acctRes.data?.settings?.assignment_mode || 'area');
     setProfiles((profRes.data || []) as Profile[]);
+    // Price Lists (v5) are an SFA-line feature; only load them there.
+    if (hasSFA) {
+      const { data: pls } = await supabase
+        .from('price_lists')
+        .select('id, name')
+        .eq('account_id', accountId)
+        .eq('active', true)
+        .order('name');
+      setPriceLists((pls ?? []) as { id: string; name: string }[]);
+    }
   }
 
   // Look up an existing contact with this number (new contacts only).
@@ -338,6 +352,7 @@ export function ContactForm({
         latitude: latitude.trim() !== '' ? parseFloat(latitude) : null,
         longitude: longitude.trim() !== '' ? parseFloat(longitude) : null,
         hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
+        ...(hasSFA ? { price_list_id: priceListId } : {}),
         employee_id: assignmentMode === 'direct' ? (employeeId || null) : null,
         // Territory Master (authoritative geography). Clearing the review flag
         // once a territory is chosen resolves any "needs migration" state.
@@ -640,6 +655,32 @@ export function ContactForm({
                     opening balance needs a finance permission.
                   </p>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Price List (v5) — customer-specific pricing, SFA line only. The
+              chosen list's prices apply automatically on web and mobile orders. */}
+          {hasSFA && (
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold text-foreground border-b border-border pb-1.5">Pricing</h4>
+              <div className="space-y-2 max-w-md">
+                <Label className="text-muted-foreground text-xs">Price List</Label>
+                <select
+                  value={priceListId ?? ''}
+                  onChange={(e) => setPriceListId(e.target.value || null)}
+                  className="w-full h-8 rounded-md border border-border bg-muted px-2 text-xs text-foreground"
+                >
+                  <option value="">Catalogue price (no price list)</option>
+                  {priceLists.map((pl) => (
+                    <option key={pl.id} value={pl.id}>{pl.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  {priceLists.length === 0
+                    ? "No active price lists yet. Create one in Settings → Pricing & Schemes → Manage price lists."
+                    : "This customer's orders use this list's prices automatically, on web and mobile."}
+                </p>
               </div>
             </div>
           )}

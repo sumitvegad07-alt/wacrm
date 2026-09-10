@@ -35,8 +35,17 @@ import type {
  * asks for exactly the centralisation this file is a controlled exception to.
  *
  * PRICING SEQUENCE (fixed, not configurable — matches SQL):
- *   catalogue -> price list [Phase 3] -> scheme [Phase 4]
+ *   catalogue -> price list (v5) -> scheme [Phase 4]
  *     -> salesman discount -> pro-rata order discount -> price floor
+ *
+ * PRICE LIST (v5). When the customer is on a price list (ctx.priceList), each
+ * line's price_list_price is the catalogue price less the resolved discount
+ * (per-product override → blanket → 0). It is DISCOUNT-based, never a stored
+ * final price, so a catalogue rise flows through. A locked price (edit) still
+ * wins over the resolved rate. When the account's
+ * allowDiscountOverPriceList is false (default), a customer on a price list
+ * takes NO further manual discount — line and whole-order salesman discounts are
+ * dropped here regardless of the rep's apply_order_discount right.
  *
  * SCHEMES (Phase 4, engine_version 3). This function does NOT resolve slabs.
  * It receives, per line, the CONFIRMED scheme effects a salesman accepted:
@@ -102,6 +111,22 @@ export function calculateOrderPricing(
   const amountDiscountBasis: 'base' | 'entered' =
     ctx.amountDiscountBasis === 'base' ? 'base' : 'entered';
 
+  // Price list (v5): resolve a product's discount % — a per-product override
+  // wins over the blanket, and no list means 0% (catalogue price).
+  const priceList = ctx.priceList ?? null;
+  const resolvePriceListPct = (productId: string): number => {
+    if (!priceList) return 0;
+    const override = priceList.itemDiscountPercents?.[productId];
+    if (override !== undefined && override !== null) return Number(override) || 0;
+    return Number(priceList.blanketDiscountPercent ?? 0) || 0;
+  };
+  // When the customer is on a price list and the account has not opted in to
+  // allowing discount on top, every manual (salesman) discount — line AND
+  // whole-order — is dropped. The rep's apply_order_discount right does not
+  // override this; it is a pricing policy, enforced in the shared engine.
+  const blockManualDiscount = priceList !== null && ctx.allowDiscountOverPriceList !== true;
+  const effectiveOrderDiscount = blockManualDiscount ? null : orderDiscount;
+
   // ---- pass 1: resolve, apply scheme + salesman line discounts ----
   const scratch = (lines ?? []).map((line, index) => {
     const product = lookup(line.productId);
@@ -112,12 +137,18 @@ export function calculateOrderPricing(
     const baseQuantity = round(quantity * conversionFactor, 6);
     const enteredUnitId = line.enteredUnitId ?? null;
     const cataloguePrice = Number(product?.price ?? 0);
-    // Phase 3 resolves the customer's price list here. Until then the admin
-    // price is the catalogue price, or the locked price when an existing line
-    // is being re-priced during an edit.
-    const priceListPrice = Number(line.lockedPrice ?? product?.price ?? 0);
-    const discountValue = Math.max(Number(line.discountValue) || 0, 0);
-    const discountType = line.discountType ?? null;
+    // Price list (v5): the admin price is the catalogue price less the price
+    // list's resolved discount, or the locked price when an existing line is
+    // being re-priced during an edit (the agreed price always wins). No list =>
+    // 0% => catalogue price, byte-identical to the pre-v5 engine.
+    const priceListPrice =
+      line.lockedPrice !== null && line.lockedPrice !== undefined
+        ? Number(line.lockedPrice)
+        : round2(cataloguePrice * (1 - resolvePriceListPct(line.productId) / 100));
+    // When a price list blocks manual discounting, drop the salesman line
+    // discount before it is applied.
+    const discountValue = blockManualDiscount ? 0 : Math.max(Number(line.discountValue) || 0, 0);
+    const discountType = blockManualDiscount ? null : line.discountType ?? null;
     // Per-line tax basis, defaulting to exclusive exactly like the SQL's
     // COALESCE(q.tax_mode, 'exclusive').
     const taxMode: 'inclusive' | 'exclusive' = line.taxMode === 'inclusive' ? 'inclusive' : 'exclusive';
@@ -191,11 +222,12 @@ export function calculateOrderPricing(
   const baseSum = scratch.reduce((sum, s) => sum + s.afterItem, 0);
 
   // ---- whole-order discount ----
+  // effectiveOrderDiscount is null when a price list blocks manual discounting.
   let orderDiscountTotal = 0;
-  if (orderDiscount?.type === 'percent') {
-    orderDiscountTotal = round2((baseSum * (Number(orderDiscount.value) || 0)) / 100);
-  } else if (orderDiscount?.type === 'amount') {
-    orderDiscountTotal = Math.min(round2(Number(orderDiscount.value) || 0), baseSum);
+  if (effectiveOrderDiscount?.type === 'percent') {
+    orderDiscountTotal = round2((baseSum * (Number(effectiveOrderDiscount.value) || 0)) / 100);
+  } else if (effectiveOrderDiscount?.type === 'amount') {
+    orderDiscountTotal = Math.min(round2(Number(effectiveOrderDiscount.value) || 0), baseSum);
   }
 
   // ---- value_slab (whole-order scheme) discounts ----
@@ -322,6 +354,6 @@ export function calculateOrderPricing(
     floor_violations: floorViolations,
     enforce_floor: ctx.enforcePriceFloor,
     valid: !(ctx.enforcePriceFloor && floorViolations.length > 0),
-    engine_version: 4,
+    engine_version: 5,
   };
 }

@@ -669,6 +669,144 @@ export const PRICING_FIXTURES: PricingFixture[] = [
       effective_unit_prices: [99.5833],
     },
   },
+  // ── Price list (v5) ─────────────────────────────────────────────────────────
+  {
+    name: 'price list: blanket discount lowers the base price',
+    proves: 'a 10% blanket list prices the line at 90, and it is NOT counted as a discount',
+    lines: [{ productId: 'aaaaaaaa-0000-4000-8000-000000000001', quantity: 10 }],
+    context: {
+      ...CTX_PLAIN,
+      priceList: { blanketDiscountPercent: 10, itemDiscountPercents: {} },
+    },
+    expect: {
+      sub_total: 900,
+      tax_total: 0,
+      total_amount: 900,
+      discount_total: 0, // the price list is a lower price, not a salesman discount
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [90],
+    },
+  },
+  {
+    name: 'price list: a per-product override beats the blanket',
+    proves: 'the product override (25%) is used instead of the blanket (10%) → price 75',
+    lines: [{ productId: 'aaaaaaaa-0000-4000-8000-000000000001', quantity: 10 }],
+    context: {
+      ...CTX_PLAIN,
+      priceList: {
+        blanketDiscountPercent: 10,
+        itemDiscountPercents: { 'aaaaaaaa-0000-4000-8000-000000000001': 25 },
+      },
+    },
+    expect: {
+      sub_total: 750,
+      tax_total: 0,
+      total_amount: 750,
+      discount_total: 0,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [75],
+    },
+  },
+  {
+    name: 'price list blocks the salesman line discount by default',
+    proves: 'with a price list and allowDiscountOverPriceList off, the manual 50% is dropped',
+    lines: [
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000001',
+        quantity: 10,
+        discountType: 'percent',
+        discountValue: 50,
+      },
+    ],
+    context: {
+      ...CTX_PLAIN,
+      priceList: { blanketDiscountPercent: 10, itemDiscountPercents: {} },
+    },
+    expect: {
+      sub_total: 900, // price-list 90/unit; the 50% salesman discount is ignored
+      tax_total: 0,
+      total_amount: 900,
+      discount_total: 0,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [90],
+    },
+  },
+  {
+    name: 'price list allows salesman discount on top when opted in',
+    proves: 'allowDiscountOverPriceList lets the 50% apply to the 90 price-list rate → 45',
+    lines: [
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000001',
+        quantity: 10,
+        discountType: 'percent',
+        discountValue: 50,
+      },
+    ],
+    context: {
+      ...CTX_PLAIN,
+      priceList: { blanketDiscountPercent: 10, itemDiscountPercents: {} },
+      allowDiscountOverPriceList: true,
+    },
+    expect: {
+      sub_total: 450, // 90 → 50% off → 45/unit × 10
+      tax_total: 0,
+      total_amount: 450,
+      discount_total: 450,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [45],
+    },
+  },
+  {
+    name: 'price list blocks the whole-order discount too',
+    proves: 'a blocked price list drops the order-level discount as well as line discounts',
+    lines: [
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000001', quantity: 10 },
+      { productId: 'aaaaaaaa-0000-4000-8000-000000000002', quantity: 10 },
+    ],
+    context: {
+      ...CTX_PLAIN,
+      priceList: { blanketDiscountPercent: 10, itemDiscountPercents: {} },
+    },
+    orderDiscount: { type: 'percent', value: 10 },
+    expect: {
+      // both lines at 90/unit; the 10% order discount is ignored
+      sub_total: 1800,
+      tax_total: 162, // taxed line 900 × 18%
+      total_amount: 1962,
+      discount_total: 0,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [90, 90],
+    },
+  },
+  {
+    name: 'price list: locked price on an edited line beats the resolved rate',
+    proves: 'an edited line keeps its agreed price even when the customer is on a price list',
+    lines: [
+      {
+        productId: 'aaaaaaaa-0000-4000-8000-000000000001',
+        quantity: 10,
+        lockedPrice: 82,
+      },
+    ],
+    context: {
+      ...CTX_PLAIN,
+      priceList: { blanketDiscountPercent: 10, itemDiscountPercents: {} },
+    },
+    expect: {
+      sub_total: 820, // 82 locked, not the 90 the list would resolve
+      tax_total: 0,
+      total_amount: 820,
+      discount_total: 0,
+      classification: 'direct',
+      valid: true,
+      effective_unit_prices: [82],
+    },
+  },
   {
     name: 'multi-unit: amount discount, base basis',
     proves: '₹5/unit amount discount × BASE qty 24 = ₹120 off a ₹2400 line',

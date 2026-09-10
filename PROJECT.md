@@ -1226,13 +1226,19 @@ current baseline rather than trusting this number blindly.
   your rate ₹90, ₹10 more from me" rather than one opaque number.
 - `orders` gained `order_discount_type/value`, `discount_total`, `pricing_status`
   (`provisional|confirmed|review`), `expected_total`, `pricing_variance`, `locked_at`.
-- **`price_lists`, `price_list_items`, `schemes`, `scheme_slabs`, `scheme_products`,
-  `scheme_customers` exist but NOTHING reads them yet** (Phases 3 and 4). Do not assume behaviour
-  behind them.
+- **`price_lists` / `price_list_items` are LIVE (engine v5, migration
+  `20260910160000_price_list_engine_v5.sql`).** A customer's `contacts.price_list_id` (an active
+  list) makes each order line resolve as override → blanket → catalogue, in both web and mobile
+  order entry. Admin UI: `/price-lists` (linked from Settings → Pricing & Schemes). New setting
+  `order_settings.allow_discount_over_price_list` (default false) — a customer on a price list
+  takes NO manual salesman discount unless this is on; the engine drops line and order discounts
+  itself, regardless of the rep's `apply_order_discount` right.
+- **`schemes`, `scheme_slabs`, `scheme_products`, `scheme_customers`** are read by Phase 4 (schemes).
 - **`calculate_order_pricing(account, contact, lines, order_discount, as_of)`** is the single
   source of truth for order money. Sequence is FIXED, not configurable: catalogue → price list →
-  scheme → salesman discount → price floor. Price-list and scheme steps currently pass through
-  unchanged and are labelled as such in the SQL.
+  scheme → salesman discount → price floor. Price list (v5) and scheme (Phase 4) steps are now
+  both live; a customer with no active price list resolves 0% (catalogue) so the path is
+  byte-identical to v4.
 - **Quoted price wins.** When the server recalculates and disagrees with what a salesman
   promised, it stores its own figure in `expected_total`/`pricing_variance` and flags
   `pricing_status='review'`. It must NEVER overwrite the price the customer was given.

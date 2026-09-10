@@ -199,3 +199,23 @@ Pricing runs in BASE units: gross = base_unit_price × (quantity × factor).
 - detect_eligible_schemes v4 honours schemes.qty_unit_basis: base 24 ≥ 20
   qualifies (₹360 = 100... i.e. 150×24×10%); switched to 'entered', entered 2 < 20
   correctly does not qualify.
+
+## Price Lists (engine_version 5, migration 20260910160000, 2026-09-11)
+
+A customer's `contacts.price_list_id` (an active `price_lists` row) resolves each
+line's `price_list_price` as: per-product override (`price_list_items`) → list
+`blanket_discount_percent` → catalogue (0%), i.e.
+`ROUND(catalogue * (1 - pct/100), 2)`. A `locked_price` (edited line) still wins.
+New setting `order_settings.allow_discount_over_price_list` (default false): when
+a customer is on a price list, line AND whole-order manual discounts are dropped
+by the engine unless this is on.
+
+**Verified live (production, real account 30501611…, throwaway rows deleted):**
+- Blanket 10% + a 25% per-product override, customer on the list, default
+  (allow off): overridden product ₹550 → 412.50, blanket product ₹105.86 → 95.27,
+  a 50% salesman line discount DROPPED (discount_total 0), engine v5.
+- Same lines with NO price list (control): catalogue prices intact, the 50%
+  discount applies (discount_total 550) — byte-identical to v4.
+- TS↔SQL parity on these paths is pinned by the "price list:" cases in
+  fixtures.ts (blanket, override-beats-blanket, block-by-default,
+  allow-on-top → 45, order-discount blocked, locked-price wins).

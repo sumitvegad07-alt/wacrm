@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2, Boxes } from "lucide-react";
+import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2, Boxes, ListChecks } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { allowedModules } from "@/lib/plans/catalog";
@@ -128,6 +128,9 @@ export function PricingSchemesSettings() {
   const [discountValueType, setDiscountValueType] = useState<DiscountValueType>("both");
   const [taxMode, setTaxMode] = useState<"exclusive" | "inclusive">("exclusive");
   const [enforceFloor, setEnforceFloor] = useState(false);
+  // Price Lists (v5): whether a salesman may still discount on top of a customer's
+  // price-list pricing. Default off — negotiated pricing gets no extra discount.
+  const [allowDiscOverPL, setAllowDiscOverPL] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Stock behaviour (accounts.settings.stock_settings). Saved with the main
@@ -162,6 +165,7 @@ export function PricingSchemesSettings() {
     setDiscountValueType((os.discount_value_type as DiscountValueType) ?? "both");
     setTaxMode((os.tax_mode as "exclusive" | "inclusive") ?? "exclusive");
     setEnforceFloor(os.enforce_price_floor === true); // default off
+    setAllowDiscOverPL(os.allow_discount_over_price_list === true); // default off
 
     const ss = acctRes.data?.settings?.stock_settings ?? {};
     setStockOutEvent((ss.stock_out_event as StockOutEvent) ?? "order_closed");
@@ -193,6 +197,7 @@ export function PricingSchemesSettings() {
         discount_mode: discountMode,
         tax_mode: taxMode,
         enforce_price_floor: enforceFloor,
+        allow_discount_over_price_list: allowDiscOverPL,
       },
       stock_settings: {
         ...(settings.stock_settings ?? {}),
@@ -469,6 +474,42 @@ export function PricingSchemesSettings() {
                 With this off, stacked discounts can take a price below cost and the order will still save.
               </p>
             )}
+          </div>
+
+          {/* ---------------- Price Lists ---------------- */}
+          <div className="space-y-3 pt-6 border-t border-border">
+            <div className="flex items-start gap-2">
+              <ListChecks className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div>
+                <h3 className="text-sm font-semibold">Price Lists</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Customer-specific pricing. A price list gives a blanket discount off every
+                  product plus optional per-product overrides, then is assigned to a customer on
+                  their own page. Its prices apply automatically on both web and mobile order entry.
+                </p>
+              </div>
+            </div>
+            <div className="pl-6 space-y-4">
+              <Link href="/price-lists" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                <ListChecks className="h-4 w-4 mr-1" /> Manage price lists
+              </Link>
+
+              <div className="flex items-center justify-between border-l-2 border-primary/20 pl-4">
+                <div className="pr-4">
+                  <p className="text-sm font-medium">Allow salesman discount on top of a price list</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    When off (recommended), a customer on a price list gets no further manual
+                    discount — the discount field is hidden on their orders even for reps who hold
+                    the discount right. Turn on to let reps discount on top of price-list pricing.
+                  </p>
+                </div>
+                <Switch
+                  checked={allowDiscOverPL}
+                  disabled={!canEditSettings || saving}
+                  onCheckedChange={(on) => { setAllowDiscOverPL(on); setHasChanges(true); }}
+                />
+              </div>
+            </div>
           </div>
 
           {/* ---------------- Scheme Management ---------------- */}

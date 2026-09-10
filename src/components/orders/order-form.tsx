@@ -211,6 +211,11 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const [discountMode, setDiscountMode] = useState<DiscountMode>('off');
   const [discountValueType, setDiscountValueType] = useState<DiscountValueType>('both');
   const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive');
+  // Price Lists (v5): the account setting + whether the selected customer is on
+  // an active price list. When on a list and the setting is off, salesman
+  // discounts are hidden and stripped (the engine enforces the same).
+  const [allowDiscOverPL, setAllowDiscOverPL] = useState(false);
+  const [customerHasPriceList, setCustomerHasPriceList] = useState(false);
   const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
   const [gstEnabled, setGstEnabled] = useState(false);
   const [companyState, setCompanyState] = useState('');
@@ -244,8 +249,11 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const [creditLimitAction, setCreditLimitAction] = useState<'ignore' | 'warn' | 'block'>('warn');
   const [creditDaysAction, setCreditDaysAction] = useState<'ignore' | 'warn' | 'block'>('warn');
 
-  const itemDiscountAllowed = canDiscount && (discountMode === 'item' || discountMode === 'both');
-  const orderDiscountAllowed = canDiscount && (discountMode === 'order' || discountMode === 'both');
+  // A customer on a price list gets no manual discount unless the account opted
+  // in — this hides the fields; the pricing engine enforces the same on save.
+  const discountBlockedByPriceList = customerHasPriceList && !allowDiscOverPL;
+  const itemDiscountAllowed = canDiscount && (discountMode === 'item' || discountMode === 'both') && !discountBlockedByPriceList;
+  const orderDiscountAllowed = canDiscount && (discountMode === 'order' || discountMode === 'both') && !discountBlockedByPriceList;
 
   // Discount TYPE: when the admin restricts to percent- or amount-only, the
   // discount is forced to that type and the %/₹ toggle is hidden. 'both' keeps
@@ -308,6 +316,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       setDiscountMode(((acct?.settings?.order_settings?.discount_mode as DiscountMode) ?? 'off'));
       setDiscountValueType(((acct?.settings?.order_settings?.discount_value_type as DiscountValueType) ?? 'both'));
       setTaxMode(((acct?.settings?.order_settings?.tax_mode as 'exclusive' | 'inclusive') ?? 'exclusive'));
+      setAllowDiscOverPL(acct?.settings?.order_settings?.allow_discount_over_price_list === true);
       setGstEnabled(!!acct?.settings?.gst_enabled);
       setCompanyState((acct?.settings?.company_profile?.state || '').trim().toLowerCase());
       setCreditLimitAction((acct?.settings?.payments?.creditLimitAction as 'ignore' | 'warn' | 'block') ?? 'warn');
@@ -510,6 +519,25 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
     }, 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [accountId, contactId, pricingInputs, supabase]);
+
+  // ---- Price Lists (v5): does the selected customer have an ACTIVE price list? ----
+  // Only used to gate the discount fields; the engine resolves prices itself.
+  useEffect(() => {
+    if (!contactId || !accountId) { setCustomerHasPriceList(false); return; }
+    let alive = true;
+    supabase
+      .from('contacts')
+      .select('price_list_id, price_lists(active)')
+      .eq('id', contactId)
+      .single()
+      .then(({ data }) => {
+        if (!alive) return;
+        const hasId = !!(data as { price_list_id?: string | null } | null)?.price_list_id;
+        const active = (data as { price_lists?: { active?: boolean } | null } | null)?.price_lists?.active === true;
+        setCustomerHasPriceList(hasId && active);
+      });
+    return () => { alive = false; };
+  }, [contactId, accountId, supabase]);
 
   // ---- Auto-compute GST type based on company vs customer state ----
   // When contactId changes, load that contact's state and compare with company's state.
@@ -746,6 +774,12 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
                 {isEdit && !originalContactId && (
                   <p className="text-xs text-amber-600 dark:text-amber-400">
                     The original customer was removed — pick a replacement to fix this order.
+                  </p>
+                )}
+                {customerHasPriceList && (
+                  <p className="text-xs text-muted-foreground">
+                    This customer is on a price list — its prices are applied automatically.
+                    {discountBlockedByPriceList ? ' Manual discounts are turned off for price-list customers.' : ''}
                   </p>
                 )}
               </div>

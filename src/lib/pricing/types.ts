@@ -89,6 +89,23 @@ export interface OrderDiscountInput {
   value: number;
 }
 
+/**
+ * The customer's assigned price list (Phase 3 / engine v5), resolved from
+ * contacts.price_list_id. null when the customer has none (or the list is
+ * inactive) — the pre-price-list behaviour (catalogue price for every product).
+ *
+ * A product's resolved rate is: a specific per-product override if one exists,
+ * else the blanket discount if set, else catalogue (0% off). All figures are
+ * DISCOUNT PERCENTAGES off the catalogue price, never stored final prices, so a
+ * catalogue price rise flows through to price-listed customers automatically.
+ */
+export interface PricingPriceList {
+  /** price_lists.blanket_discount_percent — a % off EVERY product. null = none. */
+  blanketDiscountPercent: number | null;
+  /** price_list_items keyed by product_id → its own discount %. Overrides blanket. */
+  itemDiscountPercents: Record<string, number>;
+}
+
 /** Account and customer state the engine needs. */
 export interface PricingContext {
   hierarchyEnabled: boolean;
@@ -101,6 +118,21 @@ export interface PricingContext {
    * amount_discount_basis). Defaults to 'entered' — the pre-multi-unit behaviour.
    */
   amountDiscountBasis?: 'base' | 'entered';
+  /**
+   * Price list (v5) the selected customer is on, or null/absent when none. When
+   * present, each line's price_list_price is resolved from it (override → blanket
+   * → catalogue) instead of using the catalogue price directly.
+   */
+  priceList?: PricingPriceList | null;
+  /**
+   * Price list (v5): whether a salesman may STILL apply their own manual discount
+   * (line or whole-order) when the customer is on a price list. Mirrors
+   * accounts.settings.order_settings.allow_discount_over_price_list. Defaults to
+   * false — a customer on negotiated pricing gets no extra ad-hoc discount, even
+   * from a rep who otherwise holds the apply_order_discount right. Has no effect
+   * when the customer has no price list.
+   */
+  allowDiscountOverPriceList?: boolean;
 }
 
 export interface PricingLineResult {
