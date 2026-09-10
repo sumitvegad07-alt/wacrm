@@ -497,7 +497,152 @@ export function ModuleSettingsPanel() {
             <Loader2 className="size-4 animate-spin" /> Loading extra settings...
           </div>
         ) : (
-          <div className="space-y-10">
+          <div className="space-y-8">
+            {/* Feature toggles — compact grid like the Modules / System config box.
+                Simple on/off switches live here; the ones that carry extra options
+                reveal a config panel directly below the grid when turned on. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-6">
+              <div>
+                <p className="text-xs font-medium text-foreground">Enable GST</p>
+                <KoopsRadioToggle enabled={gstEnabled} onChange={setGstEnabled} disabled={!canEditSettings} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-foreground">Enable HSN Code</p>
+                <KoopsRadioToggle enabled={hsnEnabled} onChange={setHsnEnabled} disabled={!canEditSettings} />
+              </div>
+              {hasSFA && (
+                <div>
+                  <p className="text-xs font-medium text-foreground">Enable Multi Unit</p>
+                  <KoopsRadioToggle enabled={multiUnitEnabled} onChange={setMultiUnitEnabled} disabled={!canEditSettings} />
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-medium text-foreground">Enable customer hierarchy</p>
+                <KoopsRadioToggle enabled={hierarchyEnabled} onChange={setHierarchyEnabled} disabled={!canEditSettings} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-foreground">Enable Geo-Fencing</p>
+                <KoopsRadioToggle enabled={geoFencingEnabled} onChange={setGeoFencingEnabled} disabled={!canEditSettings} />
+              </div>
+            </div>
+
+            {/* Config panels for the toggles above that carry extra options — shown
+                only when the matching toggle is on. */}
+            {((hasSFA && multiUnitEnabled) || hierarchyEnabled || geoFencingEnabled) && (
+              <div className="space-y-4">
+                {hasSFA && multiUnitEnabled && (
+                  <div className="max-w-xl space-y-2 p-4 border border-border rounded-lg bg-background">
+                    <p className="text-sm font-semibold text-foreground">Multi Unit</p>
+                    <p className="text-sm font-medium text-foreground">Amount discount is per…</p>
+                    <p className="text-xs text-muted-foreground">
+                      When a rep gives a fixed “₹ off per unit” discount on a line entered in a bigger
+                      unit, count it per entered unit (₹ off each BOX) or per base unit (₹ off each PCS).
+                    </p>
+                    <KoopsOptionToggle
+                      options={[
+                        { label: "Entered unit (per BOX)", value: "entered" },
+                        { label: "Base unit (per PCS)", value: "base" },
+                      ]}
+                      value={amountDiscountBasis}
+                      onChange={setAmountDiscountBasis}
+                      disabled={!canEditSettings}
+                    />
+                  </div>
+                )}
+
+                {hierarchyEnabled && (
+                  <div className="max-w-xl space-y-3 p-4 border border-border rounded-lg bg-background">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Layers className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm font-medium">Customer hierarchy — levels (Level 1 = top of chain)</p>
+                    </div>
+                    {levels.map((lvl, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-muted/30 p-1 pr-2 border border-border rounded-md">
+                        <div className="p-2 text-muted-foreground/50"><GripVertical className="size-4" /></div>
+                        <span className="text-xs text-muted-foreground w-14">Level {i + 1}</span>
+                        <Input
+                          type="color"
+                          value={lvl.color || LEVEL_COLORS[i % LEVEL_COLORS.length]}
+                          onChange={(e) => updateLevelColor(i, e.target.value)}
+                          disabled={!canEditSettings}
+                          className="h-8 w-10 p-1 shrink-0 bg-transparent border-0"
+                          title="Badge color"
+                        />
+                        <Input
+                          value={lvl.name}
+                          onChange={(e) => updateLevel(i, e.target.value)}
+                          placeholder="e.g. Super Stockist"
+                          disabled={!canEditSettings}
+                          className="h-8 flex-1 bg-background"
+                        />
+                        {canEditSettings && (
+                          <Button variant="ghost" size="sm" onClick={() => removeLevel(i)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    {canEditSettings && levels.length < 5 && (
+                      <Button variant="outline" size="sm" onClick={addLevel} className="mt-2 text-xs h-8">
+                        <Plus className="size-3 mr-1" /> Add level
+                      </Button>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Orders from a Level 1 customer are tagged Primary; all others Secondary.
+                    </p>
+                  </div>
+                )}
+
+                {geoFencingEnabled && (
+                  <div className="max-w-xl space-y-5 p-4 border border-border rounded-lg bg-background">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Geo-Fencing</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Reps see “You are not in customer Range” when they try to check in/out too far
+                        from the customer&apos;s saved location. Tag your customers before turning this on.
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Fence check-in</p>
+                      <KoopsRadioToggle enabled={geoEnforceCheckIn} onChange={setGeoEnforceCheckIn} disabled={!canEditSettings} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Fence check-out</p>
+                      <KoopsRadioToggle enabled={geoEnforceCheckOut} onChange={setGeoEnforceCheckOut} disabled={!canEditSettings} />
+                    </div>
+                    {!geoEnforceCheckIn && !geoEnforceCheckOut && (
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                        Geo-fencing is on but neither check-in nor check-out is enforced — turn on at
+                        least one, otherwise nothing is blocked.
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Allowed radius</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        The phone&apos;s GPS accuracy is added automatically (up to 100 m) so honest reps
+                        aren&apos;t wrongly blocked.
+                      </p>
+                      <select
+                        value={geoRadius}
+                        onChange={(e) => setGeoRadius(Number(e.target.value))}
+                        disabled={!canEditSettings}
+                        aria-label="Geo-fence radius"
+                        className="mt-2 h-9 w-full max-w-xs rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                      >
+                        {[50, 100, 250, 500, 1000].map((r) => (
+                          <option key={r} value={r}>
+                            {r >= 1000 ? `${r / 1000} km (${r} m)` : `${r} m`}
+                            {r === 50 ? " — default" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Operational settings (kept as compact rows, with guidance) ── */}
             {/* Customer & Lead Assignment to Employee */}
             <div>
               <div className="mb-2">
@@ -629,220 +774,6 @@ export function ModuleSettingsPanel() {
               </div>
             </div>
 
-            {/* Enable GST */}
-            <div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">
-                  Enable GST
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  When enabled, GST and HSN code fields will be shown on invoices, quotations and product catalog.
-                </p>
-              </div>
-              <KoopsRadioToggle
-                enabled={gstEnabled}
-                onChange={setGstEnabled}
-                disabled={!canEditSettings}
-              />
-            </div>
-
-            {/* Enable HSN Code */}
-            <div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">
-                  Enable HSN Code
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  When enabled, HSN/SAC codes will be required on products and shown on invoices and quotations.
-                </p>
-              </div>
-              <KoopsRadioToggle
-                enabled={hsnEnabled}
-                onChange={setHsnEnabled}
-                disabled={!canEditSettings}
-              />
-            </div>
-
-            {/* Enable Multi Unit — SFA-line feature (multi-unit ordering);
-                hidden on CRM/WFA plans per pricing & packaging. */}
-            {hasSFA && (
-            <div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">
-                  Enable Multi Unit
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Off: each product has one unit. On: give a product a base unit plus conversion
-                  units (e.g. 1 BOX = 12 PCS). Reps can order in any unit; price and stock stay in
-                  the base unit. Existing products keep their current unit as the base — nothing
-                  changes until you add conversions.
-                </p>
-              </div>
-              <KoopsRadioToggle
-                enabled={multiUnitEnabled}
-                onChange={setMultiUnitEnabled}
-                disabled={!canEditSettings}
-              />
-
-              {multiUnitEnabled && (
-                <div className="mt-4 max-w-xl space-y-2 p-4 border border-border rounded-lg bg-background">
-                  <p className="text-sm font-medium text-foreground">Amount discount is per…</p>
-                  <p className="text-xs text-muted-foreground">
-                    When a rep gives a fixed “₹ off per unit” discount on a line entered in a bigger
-                    unit, count it per entered unit (₹ off each BOX) or per base unit (₹ off each PCS).
-                  </p>
-                  <KoopsOptionToggle
-                    options={[
-                      { label: "Entered unit (per BOX)", value: "entered" },
-                      { label: "Base unit (per PCS)", value: "base" },
-                    ]}
-                    value={amountDiscountBasis}
-                    onChange={setAmountDiscountBasis}
-                    disabled={!canEditSettings}
-                  />
-                </div>
-              )}
-            </div>
-            )}
-
-            {/* Enable Customer Hierarchy */}
-            <div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">
-                  Enable customer hierarchy
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Off: every order is a simple direct order. On: orders are classified primary/secondary from the customer&apos;s level.
-                </p>
-              </div>
-              <KoopsRadioToggle
-                enabled={hierarchyEnabled}
-                onChange={setHierarchyEnabled}
-                disabled={!canEditSettings}
-              />
-
-              {hierarchyEnabled && (
-                <div className="mt-4 max-w-xl space-y-3 p-4 border border-border rounded-lg bg-background">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Layers className="h-4 w-4 text-muted-foreground" />
-                    <p className="text-sm font-medium">Levels (Level 1 = top of chain)</p>
-                  </div>
-                  {levels.map((lvl, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-muted/30 p-1 pr-2 border border-border rounded-md">
-                      <div className="p-2 text-muted-foreground/50"><GripVertical className="size-4" /></div>
-                      <span className="text-xs text-muted-foreground w-14">Level {i + 1}</span>
-                      <Input
-                        type="color"
-                        value={lvl.color || LEVEL_COLORS[i % LEVEL_COLORS.length]}
-                        onChange={(e) => updateLevelColor(i, e.target.value)}
-                        disabled={!canEditSettings}
-                        className="h-8 w-10 p-1 shrink-0 bg-transparent border-0"
-                        title="Badge color"
-                      />
-                      <Input
-                        value={lvl.name}
-                        onChange={(e) => updateLevel(i, e.target.value)}
-                        placeholder="e.g. Super Stockist"
-                        disabled={!canEditSettings}
-                        className="h-8 flex-1 bg-background"
-                      />
-                      {canEditSettings && (
-                        <Button variant="ghost" size="sm" onClick={() => removeLevel(i)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
-                          <Trash2 className="size-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                  {canEditSettings && levels.length < 5 && (
-                    <Button variant="outline" size="sm" onClick={addLevel} className="mt-2 text-xs h-8">
-                      <Plus className="size-3 mr-1" /> Add level
-                    </Button>
-                  )}
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Orders from a Level 1 customer are tagged Primary; all others Secondary.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Enable Geo-Fencing — block a visit check-in/out unless the rep is
-                physically at the customer's saved location. Enforced in the app
-                and re-checked at the database. */}
-            <div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">
-                  Enable Geo-Fencing
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Off: a rep can start/finish a visit from anywhere. On: the mobile app blocks
-                  check-in/out unless the rep is within the chosen distance of the customer&apos;s
-                  saved location — otherwise they see &quot;You are not in customer Range&quot;.
-                  Tag your customers&apos; locations before turning this on.
-                </p>
-              </div>
-              <KoopsRadioToggle
-                enabled={geoFencingEnabled}
-                onChange={setGeoFencingEnabled}
-                disabled={!canEditSettings}
-              />
-
-              {geoFencingEnabled && (
-                <div className="mt-4 max-w-xl space-y-5 p-4 border border-border rounded-lg bg-background">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Fence check-in</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Block starting a visit unless the rep is within range of the customer.
-                    </p>
-                    <KoopsRadioToggle
-                      enabled={geoEnforceCheckIn}
-                      onChange={setGeoEnforceCheckIn}
-                      disabled={!canEditSettings}
-                    />
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Fence check-out</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Block finishing a visit unless the rep is still within range of the customer.
-                    </p>
-                    <KoopsRadioToggle
-                      enabled={geoEnforceCheckOut}
-                      onChange={setGeoEnforceCheckOut}
-                      disabled={!canEditSettings}
-                    />
-                  </div>
-
-                  {!geoEnforceCheckIn && !geoEnforceCheckOut && (
-                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-                      Geo-fencing is on but neither check-in nor check-out is enforced — turn on at
-                      least one, otherwise nothing is blocked.
-                    </div>
-                  )}
-
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Allowed radius</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      How close the rep must be to the customer. The phone&apos;s GPS accuracy is
-                      added automatically (up to 100 m) so honest reps aren&apos;t wrongly blocked.
-                    </p>
-                    <select
-                      value={geoRadius}
-                      onChange={(e) => setGeoRadius(Number(e.target.value))}
-                      disabled={!canEditSettings}
-                      aria-label="Geo-fence radius"
-                      className="mt-2 h-9 w-full max-w-xs rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
-                    >
-                      {[50, 100, 250, 500, 1000].map((r) => (
-                        <option key={r} value={r}>
-                          {r >= 1000 ? `${r / 1000} km (${r} m)` : `${r} m`}
-                          {r === 50 ? " — default" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         )}
       </div>
