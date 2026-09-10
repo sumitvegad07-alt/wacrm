@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
   Banknote,
   CalendarOff,
+  LocateFixed,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -53,6 +54,7 @@ export const SETTINGS_SECTIONS = [
   'leave_types',
   'territories',
   'route',
+  'geofencing',
   'module_settings',
 ] as const;
 
@@ -88,6 +90,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   leave_types: { id: 'leave_types', label: 'Leave Settings', icon: CalendarOff, group: 'workspace' },
   territories: { id: 'territories', label: 'Territory', icon: Map, group: 'workspace' },
   route: { id: 'route', label: 'Route Settings', icon: Route, group: 'workspace' },
+  geofencing: { id: 'geofencing', label: 'Geo-Fencing', icon: LocateFixed, group: 'workspace' },
   members: { id: 'members', label: 'Team', icon: UsersRound, group: 'hidden' },
   api: { id: 'api', label: 'API Settings', icon: KeyRound, group: 'workspace' },
   module_settings: { id: 'module_settings', label: 'Organization Settings', icon: ToggleRight, group: 'workspace' },
