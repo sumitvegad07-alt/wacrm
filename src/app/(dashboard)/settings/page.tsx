@@ -23,7 +23,6 @@ import { ModuleSettingsPanel } from '@/components/settings/module-settings';
 import { DealPipelinesSettings } from '@/components/settings/deal-pipelines-settings';
 import { TerritoryManager } from '@/components/territories/territory-manager';
 import { RouteSettings } from '@/components/settings/route-settings';
-import { GeoFencingSettings } from '@/components/settings/geo-fencing-settings';
 import { PaymentSettings } from '@/components/settings/payments-settings';
 import {
   resolveSection,
@@ -97,7 +96,6 @@ function SettingsContent() {
     leave_types: <LeaveTypesSettings />,
     territories: <TerritoryManager />,
     route: <RouteSettings />,
-    geofencing: <GeoFencingSettings />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,
     module_settings: <ModuleSettingsPanel />,

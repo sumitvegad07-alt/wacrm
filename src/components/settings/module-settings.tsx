@@ -184,6 +184,12 @@ export function ModuleSettingsPanel() {
   // Multi Unit: base + conversion units per product; pricing/stock in base units.
   const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
   const [amountDiscountBasis, setAmountDiscountBasis] = useState<'entered' | 'base'>('entered');
+  // Geo-Fencing: block visit check-in/out unless the rep is within `radius_m`
+  // of the customer's saved location. Read by the DB trigger + mobile app.
+  const [geoFencingEnabled, setGeoFencingEnabled] = useState(false);
+  const [geoEnforceCheckIn, setGeoEnforceCheckIn] = useState(true);
+  const [geoEnforceCheckOut, setGeoEnforceCheckOut] = useState(false);
+  const [geoRadius, setGeoRadius] = useState<number>(50);
   const [levels, setLevels] = useState<HierarchyLevel[]>([]);
   const [originalSettings, setOriginalSettings] = useState<any>({});
 
@@ -217,6 +223,12 @@ export function ModuleSettingsPanel() {
         setHsnEnabled(!!s.hsn_enabled);
         setMultiUnitEnabled(!!s.extra_settings?.multi_unit_enabled);
         setAmountDiscountBasis(os.amount_discount_basis === 'base' ? 'base' : 'entered');
+
+        const gf = s.geo_fencing || {};
+        setGeoFencingEnabled(!!gf.enabled);
+        setGeoEnforceCheckIn(gf.enforce_check_in !== false); // default ON
+        setGeoEnforceCheckOut(!!gf.enforce_check_out);
+        setGeoRadius([50, 100, 250, 500, 1000].includes(Number(gf.radius_m)) ? Number(gf.radius_m) : 50);
 
         const ts = normalizeTrackingSettings(s.tracking_settings);
             setTrackingStart(ts.start_time);
@@ -295,6 +307,12 @@ export function ModuleSettingsPanel() {
           ...(originalSettings?.extra_settings || {}),
           multi_unit_enabled: multiUnitEnabled,
         },
+        geo_fencing: {
+          enabled: geoFencingEnabled,
+          enforce_check_in: geoEnforceCheckIn,
+          enforce_check_out: geoEnforceCheckOut,
+          radius_m: geoRadius,
+        },
         // Ensure company profile also receives GST and HSN flags
         company_profile: {
           ...(originalSettings?.company_profile || {}),
@@ -329,7 +347,7 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, amountDiscountBasis, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, amountDiscountBasis, geoFencingEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
@@ -339,6 +357,11 @@ export function ModuleSettingsPanel() {
     setHsnEnabled(!!originalSettings.hsn_enabled);
     setMultiUnitEnabled(!!originalSettings.extra_settings?.multi_unit_enabled);
     setAmountDiscountBasis(originalSettings.order_settings?.amount_discount_basis === 'base' ? 'base' : 'entered');
+    const gf = originalSettings.geo_fencing || {};
+    setGeoFencingEnabled(!!gf.enabled);
+    setGeoEnforceCheckIn(gf.enforce_check_in !== false);
+    setGeoEnforceCheckOut(!!gf.enforce_check_out);
+    setGeoRadius([50, 100, 250, 500, 1000].includes(Number(gf.radius_m)) ? Number(gf.radius_m) : 50);
     const ts = normalizeTrackingSettings(originalSettings.tracking_settings);
     setTrackingStart(ts.start_time);
     setTrackingEnd(ts.end_time);
@@ -738,6 +761,85 @@ export function ModuleSettingsPanel() {
                   <p className="text-xs text-muted-foreground mt-2">
                     Orders from a Level 1 customer are tagged Primary; all others Secondary.
                   </p>
+                </div>
+              )}
+            </div>
+
+            {/* Enable Geo-Fencing — block a visit check-in/out unless the rep is
+                physically at the customer's saved location. Enforced in the app
+                and re-checked at the database. */}
+            <div>
+              <div className="mb-2">
+                <p className="text-sm font-medium text-foreground">
+                  Enable Geo-Fencing
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Off: a rep can start/finish a visit from anywhere. On: the mobile app blocks
+                  check-in/out unless the rep is within the chosen distance of the customer&apos;s
+                  saved location — otherwise they see &quot;You are not in customer Range&quot;.
+                  Tag your customers&apos; locations before turning this on.
+                </p>
+              </div>
+              <KoopsRadioToggle
+                enabled={geoFencingEnabled}
+                onChange={setGeoFencingEnabled}
+                disabled={!canEditSettings}
+              />
+
+              {geoFencingEnabled && (
+                <div className="mt-4 max-w-xl space-y-5 p-4 border border-border rounded-lg bg-background">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Fence check-in</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Block starting a visit unless the rep is within range of the customer.
+                    </p>
+                    <KoopsRadioToggle
+                      enabled={geoEnforceCheckIn}
+                      onChange={setGeoEnforceCheckIn}
+                      disabled={!canEditSettings}
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Fence check-out</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Block finishing a visit unless the rep is still within range of the customer.
+                    </p>
+                    <KoopsRadioToggle
+                      enabled={geoEnforceCheckOut}
+                      onChange={setGeoEnforceCheckOut}
+                      disabled={!canEditSettings}
+                    />
+                  </div>
+
+                  {!geoEnforceCheckIn && !geoEnforceCheckOut && (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                      Geo-fencing is on but neither check-in nor check-out is enforced — turn on at
+                      least one, otherwise nothing is blocked.
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Allowed radius</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      How close the rep must be to the customer. The phone&apos;s GPS accuracy is
+                      added automatically (up to 100 m) so honest reps aren&apos;t wrongly blocked.
+                    </p>
+                    <select
+                      value={geoRadius}
+                      onChange={(e) => setGeoRadius(Number(e.target.value))}
+                      disabled={!canEditSettings}
+                      aria-label="Geo-fence radius"
+                      className="mt-2 h-9 w-full max-w-xs rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                    >
+                      {[50, 100, 250, 500, 1000].map((r) => (
+                        <option key={r} value={r}>
+                          {r >= 1000 ? `${r / 1000} km (${r} m)` : `${r} m`}
+                          {r === 50 ? " — default" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               )}
             </div>
