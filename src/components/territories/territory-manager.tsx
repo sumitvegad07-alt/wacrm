@@ -320,7 +320,7 @@ export function TerritoryManager() {
         ))}
       </div>
 
-      {tab === "config" && <TerritoryConfigPanel />}
+      {tab === "config" && <TerritoryConfigPanel onSaved={load} />}
       {tab === "tree" && (
       <>{/* ── tree tab ── */}
 

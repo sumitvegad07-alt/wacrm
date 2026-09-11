@@ -22,7 +22,7 @@ import type { AssignmentMode, TerritoryLevel } from "@/lib/territories/types";
 
 interface AffectedLevel { position: number; name: string; count: number }
 
-export function TerritorySettings() {
+export function TerritorySettings({ onSaved }: { onSaved?: () => void } = {}) {
   const { accountId, canEditSettings } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,6 +79,10 @@ export function TerritorySettings() {
       const archived = res.archived ?? 0;
       toast.success(archived > 0 ? `Saved. Archived ${archived} territories at disabled levels.` : "Territory settings saved");
       await load();
+      // Let a host (Territory Master) refresh its own copy of the settings so a
+      // newly-enabled level (e.g. Area) is immediately usable in the Add dialog —
+      // otherwise it keeps stale levels until a full page reload.
+      onSaved?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save");
     } finally {
