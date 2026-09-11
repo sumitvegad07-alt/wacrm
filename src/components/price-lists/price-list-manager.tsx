@@ -169,6 +169,7 @@ export function PriceListManager() {
         title={editingId ? "Edit Price List" : "New Price List"}
         subtitle="A blanket discount applies to every product. Per-product overrides beat the blanket; everything else stays at catalogue price."
         onBack={() => setEditorOpen(false)}
+        width="none"
         footer={
           <FormActions
             onCancel={() => setEditorOpen(false)}
