@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { CustomerFinancialCard, type FinancialData } from '@/components/payments/customer-financial-card';
 import { formatCurrency } from '@/lib/currency';
 import { fetchClosingStock, exceedsAvailable } from '@/lib/stock/financials';
+import { gstStateCode, gstStateCodeFromGstin, determineGstType } from '@/lib/gst/states';
 
 /**
  * Web order creation. The ONE pricing authority is the SQL function
@@ -218,8 +219,11 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
   const [customerHasPriceList, setCustomerHasPriceList] = useState(false);
   const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
   const [gstEnabled, setGstEnabled] = useState(false);
-  const [companyState, setCompanyState] = useState('');
-  const [customerState, setCustomerState] = useState('');
+  // GST place-of-supply preview. Compared as 2-digit GST STATE CODES, mirroring
+  // the server (create_order): supplier code from the company profile, place of
+  // supply from the customer's GSTIN (authoritative) or state-name fallback.
+  const [companyStateCode, setCompanyStateCode] = useState('');
+  const [placeOfSupplyCode, setPlaceOfSupplyCode] = useState('');
 
   const [contactId, setContactId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -318,7 +322,12 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       setTaxMode(((acct?.settings?.order_settings?.tax_mode as 'exclusive' | 'inclusive') ?? 'exclusive'));
       setAllowDiscOverPL(acct?.settings?.order_settings?.allow_discount_over_price_list === true);
       setGstEnabled(!!acct?.settings?.gst_enabled);
-      setCompanyState((acct?.settings?.company_profile?.state || '').trim().toLowerCase());
+      // Supplier state code for the live preview — GSTIN-first, matching the
+      // exporter (which derives it from supplier_gstin); state dropdown fallback.
+      setCompanyStateCode(
+        gstStateCodeFromGstin(acct?.settings?.company_profile?.gst_number) ??
+        (acct?.settings?.company_profile?.gst_state_code || '').trim(),
+      );
       setCreditLimitAction((acct?.settings?.payments?.creditLimitAction as 'ignore' | 'warn' | 'block') ?? 'warn');
       setCreditDaysAction((acct?.settings?.payments?.creditDaysAction as 'ignore' | 'warn' | 'block') ?? 'warn');
 
@@ -539,31 +548,36 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
     return () => { alive = false; };
   }, [contactId, accountId, supabase]);
 
-  // ---- Auto-compute GST type based on company vs customer state ----
-  // When contactId changes, load that contact's state and compare with company's state.
+  // ---- Auto-compute GST place of supply (preview) ----
+  // Load the customer's GSTIN + state and resolve a GST state code the same way
+  // the server does: a registered party's code is its GSTIN's first two digits;
+  // otherwise fall back to mapping the state name.
   useEffect(() => {
     if (!gstEnabled || !contactId || !accountId) {
-      setCustomerState('');
+      setPlaceOfSupplyCode('');
       return;
     }
     let alive = true;
     supabase
       .from('contacts')
-      .select('state')
+      .select('state, gst_number')
       .eq('id', contactId)
       .single()
       .then(({ data }) => {
         if (!alive) return;
-        setCustomerState((data?.state || '').trim().toLowerCase());
+        const code =
+          gstStateCodeFromGstin((data as { gst_number?: string | null } | null)?.gst_number) ??
+          gstStateCode(data?.state) ??
+          '';
+        setPlaceOfSupplyCode(code);
       });
     return () => { alive = false; };
   }, [contactId, gstEnabled, accountId, supabase]);
 
-  // Derived: IGST when states differ (or either is empty); SGST+CGST when same non-empty state
-  const gstType: 'igst' | 'sgst_cgst' =
-    gstEnabled && companyState && customerState && companyState === customerState
-      ? 'sgst_cgst'
-      : 'igst';
+  // Derived, mirroring the server: intrastate (SGST+CGST) when the two state
+  // codes match, interstate (IGST) when they differ, and 'unknown' when either
+  // is missing — NEVER a silent IGST.
+  const gstType = determineGstType(companyStateCode, placeOfSupplyCode);
   const pricedByKey = useMemo(() => {
     const map = new Map<string, PricedLine>();
     if (!pricing) return map;
@@ -1098,25 +1112,20 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
             )}
 
 
-            {/* GST Type selector — shown only when GST is enabled for this account */}
+            {/* GST Type — a READ-ONLY indicator of what the server will determine
+                and freeze on the order (auto from company state vs place of
+                supply). Not user-editable; correct it by fixing the states. */}
             {gstEnabled && (
-              <div className="flex items-center gap-3 text-sm">
+              <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground font-medium">GST Type:</span>
-                <div className="flex gap-3">
-                  {(['igst', 'sgst_cgst'] as const).map((type) => (
-                    <label key={type} className="flex items-center gap-1.5 cursor-pointer select-none">
-                      <span className={cn(
-                        'flex h-4 w-4 items-center justify-center rounded-full border transition-colors',
-                        gstType === type ? 'border-primary bg-primary/10' : 'border-muted-foreground/40 bg-background'
-                      )}>
-                        {gstType === type && <span className="h-2 w-2 rounded-full bg-primary" />}
-                      </span>
-                      <span className={cn('text-xs font-medium', gstType === type ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
-                        {type === 'igst' ? 'IGST (Interstate)' : 'SGST + CGST (Intrastate)'}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                {gstType === 'interstate' && <span className="text-xs font-semibold text-foreground">IGST (Interstate)</span>}
+                {gstType === 'intrastate' && <span className="text-xs font-semibold text-foreground">SGST + CGST (Intrastate)</span>}
+                {gstType === 'unknown' && (
+                  <span className="text-xs font-medium text-amber-600">
+                    Not determined — set your company State (Settings → Company Profile)
+                    {contactId ? ' and the customer’s State/GSTIN' : ''}.
+                  </span>
+                )}
               </div>
             )}
 
@@ -1126,16 +1135,16 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
               {pricing && pricing.discount_total > 0 && (
                 <Row label="Discount" value={`− ${money(pricing.discount_total)}`} accent />
               )}
-              {/* GST breakdown */}
-              {gstEnabled && pricing && pricing.tax_total > 0 ? (
-                gstType === 'igst' ? (
-                  <Row label="IGST" value={money(pricing.tax_total)} />
-                ) : (
-                  <>
-                    <Row label="SGST" value={money(pricing.tax_total / 2)} />
-                    <Row label="CGST" value={money(pricing.tax_total / 2)} />
-                  </>
-                )
+              {/* GST breakdown. intrastate → SGST+CGST (half each); interstate →
+                  IGST; unknown/off → a single Tax row. Preview only — the split
+                  amounts are derived at export time, never stored. */}
+              {gstEnabled && pricing && pricing.tax_total > 0 && gstType === 'interstate' ? (
+                <Row label="IGST" value={money(pricing.tax_total)} />
+              ) : gstEnabled && pricing && pricing.tax_total > 0 && gstType === 'intrastate' ? (
+                <>
+                  <Row label="SGST" value={money(pricing.tax_total / 2)} />
+                  <Row label="CGST" value={money(pricing.tax_total / 2)} />
+                </>
               ) : (
                 <Row label="Tax" value={pricing ? money(pricing.tax_total) : '—'} />
               )}

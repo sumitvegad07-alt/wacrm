@@ -113,6 +113,10 @@ export interface Contact {
   pincode?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  /** Customer GSTIN (migration 20260911120000). Its first two chars are the
+   *  GST state code, used as the authoritative place-of-supply for a
+   *  registered (B2B) party and snapshotted onto each order as party_gstin. */
+  gst_number?: string | null;
   /** Distribution-chain level (1 = top), used for order primary/secondary
    *  classification when the account enables order hierarchy. */
   hierarchy_level?: number | null;
@@ -833,6 +837,31 @@ export interface QuotationCustomValue {
   quotation_id: string;
   custom_field_id: string;
   value?: string;
+}
+
+// ============================================================
+// Order GST determinants (migration 20260911120000)
+// ============================================================
+
+/**
+ * GST fields on an order. The three determinants are immutable snapshots the
+ * order RPCs write; `gst_type` is a DB-GENERATED (STORED) projection of them,
+ * read-only from the app. Still derived and never stored: supplier state code =
+ * left(supplier_gstin,2); place-of-supply name = canonical map of
+ * place_of_supply_code; CGST/SGST/IGST amounts = order_items.tax_amount split
+ * by gst_type at export. All nullable — pre-migration orders and
+ * unregistered/stateless parties carry NULLs (gst_type then = 'unknown').
+ * `hsn_code` is snapshotted per line on order_items.
+ */
+export interface OrderGstDeterminants {
+  /** Our GSTIN on this sale. Supplier state = its first two digits. */
+  supplier_gstin?: string | null;
+  /** Customer GSTIN. NULL for B2C / unregistered. */
+  party_gstin?: string | null;
+  /** 2-digit GST state code where the supply is taxed (B2B: party GSTIN state; B2C: customer state). */
+  place_of_supply_code?: string | null;
+  /** DB-generated from the determinants above. Read-only — never written by the app. */
+  readonly gst_type?: 'intrastate' | 'interstate' | 'unknown' | null;
 }
 
 // ============================================================

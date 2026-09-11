@@ -84,6 +84,7 @@ export function ContactForm({
   const [stateField, setStateField] = useState('');
   const [country, setCountry] = useState('');
   const [pincode, setPincode] = useState('');
+  const [gstNumber, setGstNumber] = useState('');   // customer GSTIN (party_gstin source for orders)
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   
@@ -175,6 +176,7 @@ export function ContactForm({
       setStateField(contact?.state ?? '');
       setCountry(contact?.country ?? '');
       setPincode(contact?.pincode ?? '');
+      setGstNumber((contact as any)?.gst_number ?? '');
       setLatitude(contact?.latitude != null ? String(contact.latitude) : '');
       setLongitude(contact?.longitude != null ? String(contact.longitude) : '');
       setCreditLimit((contact as any)?.credit_limit != null ? String((contact as any).credit_limit) : '');
@@ -349,6 +351,7 @@ export function ContactForm({
         state: stateField.trim() || null,
         country: country.trim() || null,
         pincode: pincode.trim() || null,
+        gst_number: gstNumber.trim() || null,
         latitude: latitude.trim() !== '' ? parseFloat(latitude) : null,
         longitude: longitude.trim() !== '' ? parseFloat(longitude) : null,
         hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
@@ -616,6 +619,20 @@ export function ContactForm({
               </div>
             </div>
           </FormSection>
+
+          {/* GST Number (customer GSTIN). Its first two digits are the GST state
+              code, used as the authoritative place of supply for a registered
+              (B2B) customer and snapshotted onto each order as party_gstin. */}
+          <div className="space-y-2">
+            <Label className="text-muted-foreground text-xs">GST Number</Label>
+            <Input
+              value={gstNumber}
+              onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+              placeholder="24AAACX0000X1Z5"
+              maxLength={15}
+              className="bg-muted border-border text-foreground h-8 text-xs uppercase"
+            />
+          </div>
 
           {/* Financial Settings (credit limit / days / opening balance) are an
               SFA-line concept. Only show them on plans that include the SFA line

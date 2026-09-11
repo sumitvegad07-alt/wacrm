@@ -16,6 +16,7 @@ import { TerritoryPicker } from '@/components/territories/territory-picker';
 import { getTerritoryRows, getAccountTerritorySettings } from '@/lib/territories/api';
 import type { Territory, TerritorySettings } from '@/lib/territories/types';
 import { DEFAULT_TERRITORY_SETTINGS } from '@/lib/territories/settings';
+import { GST_STATES } from '@/lib/gst/states';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -36,6 +37,16 @@ interface CompanyProfileData {
    * field existed to hold one, so every document printed "GST No :" and nothing after it.
    */
   gst_number: string;
+  /**
+   * Supplier state, the origin for GST place-of-supply determination. `state` is
+   * the display name; `gst_state_code` is the 2-digit code that create_order
+   * reads to decide intrastate (CGST+SGST) vs interstate (IGST) and snapshot on
+   * the order. Both are set together from the canonical picker (migration
+   * 20260911120000). Empty until an admin selects a state → orders fall back to
+   * gst_type 'unknown', never a silent 'interstate'.
+   */
+  state: string;
+  gst_state_code: string;
 }
 
 const DEFAULT_PROFILE: CompanyProfileData = {
@@ -48,6 +59,8 @@ const DEFAULT_PROFILE: CompanyProfileData = {
   pincode: '',
   territory_id: null,
   gst_number: '',
+  state: '',
+  gst_state_code: '',
 };
 
 export function CompanyProfilePanel() {
@@ -351,6 +364,31 @@ export function CompanyProfilePanel() {
                   disabled={!canEdit}
                   placeholder="Pincode"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>State</Label>
+                <select
+                  value={data.gst_state_code}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    const name = GST_STATES.find((s) => s.code === code)?.name ?? '';
+                    // Set name + code together — create_order reads gst_state_code
+                    // to decide intrastate vs interstate and freezes it on the order.
+                    setData((prev) => ({ ...prev, gst_state_code: code, state: name }));
+                  }}
+                  disabled={!canEdit}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm disabled:opacity-60"
+                >
+                  <option value="">Select state…</option>
+                  {GST_STATES.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.name} ({s.code})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Your place of business. Used to auto-decide CGST+SGST vs IGST on orders.
+                </p>
               </div>
             </div>
 
