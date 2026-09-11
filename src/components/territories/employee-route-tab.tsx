@@ -636,15 +636,38 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
   const fetchAvailableContacts = useCallback(async () => {
     setLoadingContacts(true);
     try {
+      const term = contactSearch.trim();
+
+      // Also match customers by the TERRITORY (area) they belong to, so a route can
+      // pull in everyone from an area (e.g. "Kalawad Road"). A customer's area lives
+      // in territory_id, not in the name/company/address text — without this, an area
+      // name search returns nothing even though the area has customers.
+      let territoryIds: string[] = [];
+      if (term) {
+        const { data: terrs } = await supabase
+          .from("territories")
+          .select("id")
+          .eq("account_id", accountId)
+          .is("deleted_at", null)
+          .ilike("name", `%${term}%`);
+        territoryIds = (terrs ?? []).map((t: { id: string }) => t.id);
+      }
+
       let q = supabase
         .from("contacts")
         .select("id, name, company, address")
         .eq("account_id", accountId)
         .is("archived_at", null)
-        .limit(30);
+        .limit(100);
 
-      if (contactSearch.trim()) {
-        q = q.or(`name.ilike.%${contactSearch.trim()}%,company.ilike.%${contactSearch.trim()}%,address.ilike.%${contactSearch.trim()}%`);
+      if (term) {
+        const clauses = [
+          `name.ilike.%${term}%`,
+          `company.ilike.%${term}%`,
+          `address.ilike.%${term}%`,
+        ];
+        if (territoryIds.length) clauses.push(`territory_id.in.(${territoryIds.join(",")})`);
+        q = q.or(clauses.join(","));
       }
 
       const { data } = await q;
@@ -1682,14 +1705,14 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">Add Customers to {selectedRoute?.name}</DialogTitle>
-            <p className="text-xs text-muted-foreground">Search and assign territory customers to this area.</p>
+            <p className="text-xs text-muted-foreground">Search by company, name, address, or area (territory) — then add customers to this route.</p>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search by company, name, or address..."
+                placeholder="Search by company, name, address, or area…"
                 value={contactSearch}
                 onChange={(e) => setContactSearch(e.target.value)}
                 className="pl-9 h-10 text-sm font-medium"
