@@ -644,7 +644,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                                 />
                                 {g.requireParent && !sel.parentId && (
                                   <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                                    Choose which existing {singular} this sits under — a customer&apos;s {singular} can&apos;t be created at the top level.
+                                    {`Choose which existing ${singular} this sits under — a customer's ${singular} can't be created at the top level.`}
                                   </p>
                                 )}
                               </div>
