@@ -12,10 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
-} from "@/components/ui/dialog";
-import { PageLayout, PageHeader, EmptyState, StatusBadge, ConfirmDialog } from "@/components/shared";
+import { PageLayout, PageHeader, EmptyState, StatusBadge, ConfirmDialog, FormPageShell, FormActions } from "@/components/shared";
 import {
   getPriceLists, getPriceListWithItems, createPriceList, updatePriceList, deletePriceList, setPriceListActive,
 } from "@/lib/price-lists/api";
@@ -163,6 +160,103 @@ export function PriceListManager() {
 
   const availableProducts = products.filter((p) => !items.some((i) => i.product_id === p.id));
 
+  // Full-page create/edit — same shell (FormPageShell) and width as every other
+  // master's create/edit screen, replacing the old dialog.
+  if (editorOpen) {
+    return (
+      <FormPageShell
+        icon={ListChecks}
+        title={editingId ? "Edit Price List" : "New Price List"}
+        subtitle="A blanket discount applies to every product. Per-product overrides beat the blanket; everything else stays at catalogue price."
+        onBack={() => setEditorOpen(false)}
+        footer={
+          <FormActions
+            onCancel={() => setEditorOpen(false)}
+            onSave={save}
+            saving={saving}
+            saveDisabled={!canEditSettings}
+            saveLabel={editingId ? "Save Changes" : "Create Price List"}
+          />
+        }
+      >
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="pl-name">Name</Label>
+              <Input id="pl-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Wholesale, Key Accounts" disabled={!canEditSettings} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border px-3 h-10">
+              <span className="text-sm font-medium">Active</span>
+              <Switch checked={active} onCheckedChange={setActive} disabled={!canEditSettings} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="pl-blanket">Blanket discount %</Label>
+              <Input id="pl-blanket" type="number" min="0" max="100" step="0.01" value={blanket}
+                onChange={(e) => setBlanket(e.target.value)} placeholder="e.g. 10 (blank = none)" disabled={!canEditSettings} />
+              <p className="text-xs text-muted-foreground">Applied to every product unless overridden below.</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2 border-t border-border">
+            <div>
+              <Label>Per-product overrides</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Optional. These products get their own discount instead of the blanket. Everything not listed stays at catalogue price.
+              </p>
+            </div>
+            {items.length > 0 && (
+              <div className="rounded-lg border border-border divide-y max-w-2xl">
+                {items.map((it) => (
+                  <div key={it.product_id} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span>{it.product_name || productName(it.product_id)}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="tabular-nums font-medium">{it.discount_percent}%</span>
+                      {canEditSettings && (
+                        <button type="button" onClick={() => removeOverride(it.product_id)} className="text-muted-foreground hover:text-destructive">
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {canEditSettings && (
+              <div className="flex items-end gap-2 max-w-2xl">
+                <div className="grid gap-1 flex-1">
+                  <span className="text-xs text-muted-foreground">Product</span>
+                  <select
+                    value={addProductId}
+                    onChange={(e) => setAddProductId(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="">Select a product…</option>
+                    {availableProducts.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-1 w-28">
+                  <span className="text-xs text-muted-foreground">Discount %</span>
+                  <Input type="number" min="0" max="100" step="0.01" value={addPct} onChange={(e) => setAddPct(e.target.value)} placeholder="%" />
+                </div>
+                <Button type="button" variant="outline" onClick={addOverride}>
+                  <Plus className="h-4 w-4 mr-1" /> Add
+                </Button>
+              </div>
+            )}
+            {products.length === 0 && (
+              <p className="text-xs text-muted-foreground">No active products to override yet.</p>
+            )}
+          </div>
+        </div>
+      </FormPageShell>
+    );
+  }
+
   return (
     <PageLayout>
       <PageHeader
@@ -236,95 +330,6 @@ export function PriceListManager() {
           </Table>
         </div>
       )}
-
-      {/* ---- Editor ---- */}
-      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Edit price list" : "New price list"}</DialogTitle>
-            <DialogDescription>
-              A blanket discount applies to every product. Per-product overrides beat the blanket for those products. Everything else stays at catalogue price.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5 py-2">
-            <div className="grid gap-2">
-              <Label htmlFor="pl-name">Name</Label>
-              <Input id="pl-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Wholesale, Key Accounts" disabled={!canEditSettings} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 items-end">
-              <div className="grid gap-2">
-                <Label htmlFor="pl-blanket">Blanket discount %</Label>
-                <Input id="pl-blanket" type="number" min="0" max="100" step="0.01" value={blanket}
-                  onChange={(e) => setBlanket(e.target.value)} placeholder="e.g. 10 (leave blank for none)" disabled={!canEditSettings} />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-                <span className="text-sm font-medium">Active</span>
-                <Switch checked={active} onCheckedChange={setActive} disabled={!canEditSettings} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Per-product overrides</Label>
-              {items.length > 0 && (
-                <div className="rounded-lg border border-border divide-y">
-                  {items.map((it) => (
-                    <div key={it.product_id} className="flex items-center justify-between px-3 py-2 text-sm">
-                      <span>{it.product_name || productName(it.product_id)}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="tabular-nums font-medium">{it.discount_percent}%</span>
-                        {canEditSettings && (
-                          <button type="button" onClick={() => removeOverride(it.product_id)} className="text-muted-foreground hover:text-destructive">
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {canEditSettings && (
-                <div className="flex items-end gap-2">
-                  <div className="grid gap-1 flex-1">
-                    <span className="text-xs text-muted-foreground">Product</span>
-                    <select
-                      value={addProductId}
-                      onChange={(e) => setAddProductId(e.target.value)}
-                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                    >
-                      <option value="">Select a product…</option>
-                      {availableProducts.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid gap-1 w-28">
-                    <span className="text-xs text-muted-foreground">Discount %</span>
-                    <Input type="number" min="0" max="100" step="0.01" value={addPct} onChange={(e) => setAddPct(e.target.value)} placeholder="%" />
-                  </div>
-                  <Button type="button" variant="outline" onClick={addOverride}>
-                    <Plus className="h-4 w-4 mr-1" /> Add
-                  </Button>
-                </div>
-              )}
-              {products.length === 0 && (
-                <p className="text-xs text-muted-foreground">No active products to override yet.</p>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditorOpen(false)} disabled={saving}>Cancel</Button>
-            {canEditSettings && (
-              <Button onClick={save} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
-                {editingId ? "Save changes" : "Create"}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ConfirmDialog
         open={!!deleteTarget}
