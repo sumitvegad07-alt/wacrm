@@ -550,6 +550,15 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     return items;
   }, [routes, areas]);
 
+  // The territory area (if any) whose name matches the open route — enables the
+  // one-click "add all customers from this area" action.
+  const selectedRouteArea = useMemo(() => {
+    if (!selectedRoute) return undefined;
+    return areas.find(
+      (a) => a.name.trim().toLowerCase() === selectedRoute.name.trim().toLowerCase()
+    );
+  }, [selectedRoute, areas]);
+
   // Filtered schedulable items inside Add Route Modal
   const filteredRoutes = useMemo(() => {
     if (!routeSearch.trim()) return schedulableItems;
@@ -647,6 +656,22 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     }
     setCreatingRoute(true);
     try {
+      // If the typed name matches a territory area, pre-fill the new route with that
+      // area's customers — same behaviour as picking the area from the list above.
+      const match = areas.find(
+        (a) => a.name.trim().toLowerCase() === newRouteName.trim().toLowerCase()
+      );
+      let areaCustomerIds: string[] = [];
+      if (match) {
+        const { data: cids } = await supabase
+          .from("contacts")
+          .select("id")
+          .eq("account_id", accountId)
+          .eq("territory_id", match.id)
+          .is("archived_at", null);
+        areaCustomerIds = (cids ?? []).map((c: { id: string }) => c.id);
+      }
+
       // route_upsert inserts p_route_id straight into routes.id, so passing null overrides the
       // column's gen_random_uuid() default and trips its NOT NULL constraint — creating an area
       // failed every time. The id must be client-generated (also the idempotency convention used
@@ -656,7 +681,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         p_name: newRouteName.trim(),
         p_description: null,
         p_primary_assignee_id: employeeId,
-        p_customer_ids: null,
+        p_customer_ids: areaCustomerIds.length ? areaCustomerIds : null,
         p_expected_version: null,
       });
 
@@ -773,6 +798,44 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       fetchRouteCustomers(selectedRoute.id);
     } catch (err: any) {
       toast.error(err.message || "Failed to add customer");
+    }
+  };
+
+  // Bulk-add every customer of the territory area whose name matches this route,
+  // so an area-named route can be filled in one click (existing routes created empty,
+  // or before auto-fill existed, still work).
+  const addAllAreaCustomers = async () => {
+    if (!selectedRoute) return;
+    const match = areas.find(
+      (a) => a.name.trim().toLowerCase() === selectedRoute.name.trim().toLowerCase()
+    );
+    if (!match) return;
+    try {
+      const { data: cids } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("account_id", accountId)
+        .eq("territory_id", match.id)
+        .is("archived_at", null);
+      const already = new Set(routeCustomers.map((rc) => rc.contact_id));
+      const ids = (cids ?? []).map((c: { id: string }) => c.id).filter((id: string) => !already.has(id));
+      if (!ids.length) {
+        toast.info("No new customers to add from this area.");
+        return;
+      }
+      const base = routeCustomers.length;
+      const rows = ids.map((cid: string, i: number) => ({
+        account_id: accountId,
+        route_id: selectedRoute.id,
+        contact_id: cid,
+        sequence: base + i + 1,
+      }));
+      const { error } = await supabase.from("route_customers").insert(rows);
+      if (error) throw error;
+      toast.success(`Added ${ids.length} customer${ids.length === 1 ? "" : "s"} from ${match.name}`);
+      fetchRouteCustomers(selectedRoute.id);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add area customers");
     }
   };
 
@@ -1568,7 +1631,8 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                 </div>
               </div>
 
-              {/* Repeat Route Assignment Section right inside Customer Screen (ALWAYS VISIBLE ON EVERY ROUTE!) */}
+              {/* Repeat & Schedule — hidden on the Customers tab so the customer list gets full height */}
+              {activeSheetTab !== "customers" && (
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
                 <div className="flex items-center gap-3">
                   <Repeat className="h-5 w-5 text-purple-400 shrink-0" />
@@ -1631,6 +1695,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   </Button>
                 </div>
               </div>
+              )}
 
               {/* Sub-Navigation Tabs */}
               <div className="flex items-center gap-8 border-b border-border text-sm font-semibold">
@@ -1660,6 +1725,17 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                       {routeCustomers.length} customers. Visited top to bottom. Drag or click arrows to order.
                     </p>
                     <div className="flex items-center gap-3">
+                      {selectedRouteArea && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={addAllAreaCustomers}
+                          className="h-9 px-4 font-semibold"
+                          title={`Add every customer in the ${selectedRouteArea.name} area`}
+                        >
+                          <Plus className="h-4 w-4 mr-1.5" /> Add all from {selectedRouteArea.name}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         onClick={() => setAddCustomerModalOpen(true)}
@@ -1680,8 +1756,18 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                       <MapPin className="h-10 w-10 text-muted-foreground mb-3" />
                       <p className="text-base font-bold text-foreground">No customers assigned to this area yet</p>
                       <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                        Click &apos;+ Add customers&apos; above to search and assign customers from your territory.
+                        {selectedRouteArea
+                          ? `This route matches the "${selectedRouteArea.name}" area — pull in its customers in one click, or add them manually.`
+                          : "Click '+ Add customers' above to search and assign customers from your territory."}
                       </p>
+                      {selectedRouteArea && (
+                        <Button
+                          onClick={addAllAreaCustomers}
+                          className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold"
+                        >
+                          <Plus className="h-4 w-4 mr-1.5" /> Add all customers from {selectedRouteArea.name}
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <div className="flex-1 overflow-y-auto divide-y divide-border rounded-xl border border-border bg-card">
