@@ -526,6 +526,11 @@ export default function ContactsPage() {
         } else if (["address", "area", "city", "state", "country", "pincode"].includes(colId)) {
           const field = (contact as Record<string, unknown>)[colId];
           if (typeof field !== "string" || !field.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "territory") {
+          // Territory is a lookup column: its displayed value lives on _territoryName
+          // (resolved from territory_id), not a plain contact field — filter on that.
+          const territoryName = (contact as { _territoryName?: string | null })._territoryName;
+          if (!territoryName?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "created_at") {
           if (!isDateInFilter(contact.created_at, val as string | string[])) return false;
         } else if (colId.startsWith("cf_")) {
