@@ -38,6 +38,7 @@ import {
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { normalizeTerritorySettings, leafLevel } from "@/lib/territories/settings";
 
 interface EmployeeRouteTabProps {
   employeeId: string;
@@ -231,6 +232,8 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
   const [loading, setLoading] = useState(true);
   const [routes, setRoutes] = useState<RouteItem[]>([]);
+  // Leaf-level territory areas — schedulable directly, even before a route exists for them.
+  const [areas, setAreas] = useState<{ id: string; name: string }[]>([]);
   const [assignments, setAssignments] = useState<RouteAssignment[]>([]);
   const [employeeName, setEmployeeName] = useState<string>("Employee");
 
@@ -293,6 +296,28 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         .order("name", { ascending: true });
       const activeRoutes = (routeRows ?? []) as RouteItem[];
       setRoutes(activeRoutes);
+
+      // Territory areas (deepest enabled level) — so the Assign dialog can schedule
+      // an area directly, even if no route has been created for it yet.
+      try {
+        const { data: acct } = await supabase.from("accounts").select("settings").eq("id", accountId).single();
+        const tset = normalizeTerritorySettings((acct?.settings as { territory_settings?: unknown } | null)?.territory_settings);
+        const leaf = leafLevel(tset);
+        if (leaf) {
+          const { data: terrs } = await supabase
+            .from("territories")
+            .select("id, name")
+            .eq("account_id", accountId)
+            .eq("level", leaf.position)
+            .is("deleted_at", null)
+            .order("name", { ascending: true });
+          setAreas((terrs ?? []) as { id: string; name: string }[]);
+        } else {
+          setAreas([]);
+        }
+      } catch {
+        setAreas([]);
+      }
 
       const routeMap = new Map(activeRoutes.map((r) => [r.id, r]));
 
@@ -508,12 +533,29 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     }
   };
 
-  // Filtered routes list inside Add Route Modal
+  // Schedulable items in the Assign dialog = existing routes + territory areas that
+  // don't yet have a route. Selecting a territory area creates its route on save
+  // (pre-filled with that area's customers). Areas whose name already matches a route
+  // are shown once (as the route), so re-scheduling reuses that route.
+  const schedulableItems = useMemo(() => {
+    const routeNames = new Set(routes.map((r) => r.name.trim().toLowerCase()));
+    const items: { key: string; name: string; routeId?: string; territoryId?: string }[] =
+      routes.map((r) => ({ key: r.id, name: r.name, routeId: r.id }));
+    for (const a of areas) {
+      if (!routeNames.has(a.name.trim().toLowerCase())) {
+        items.push({ key: `terr:${a.id}`, name: a.name, territoryId: a.id });
+      }
+    }
+    items.sort((x, y) => x.name.localeCompare(y.name));
+    return items;
+  }, [routes, areas]);
+
+  // Filtered schedulable items inside Add Route Modal
   const filteredRoutes = useMemo(() => {
-    if (!routeSearch.trim()) return routes;
+    if (!routeSearch.trim()) return schedulableItems;
     const q = routeSearch.toLowerCase().trim();
-    return routes.filter((r) => r.name.toLowerCase().includes(q));
-  }, [routes, routeSearch]);
+    return schedulableItems.filter((i) => i.name.toLowerCase().includes(q));
+  }, [schedulableItems, routeSearch]);
 
   // Open "Assign Route to [Date]" Modal
   const openAddRouteModal = (dateStr: string, dow: number) => {
@@ -540,28 +582,57 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         }
       }
 
-      // Add checked assignments that don't already exist on this day
-      for (const rId of selectedRouteIds) {
-        if (!existingRouteIds.has(rId)) {
-          await supabase.from("route_plan_assignments").insert({
-            account_id: accountId,
-            route_id: rId,
-            assignee_id: employeeId,
-            day_of_week: targetDow,
-            start_date: targetDateStr,
-            end_date: targetDateStr,
-            is_active: false, // Starts as PENDING APPROVAL so manager can review & click Approve
+      const areaById = new Map(areas.map((a) => [a.id, a.name]));
+      let lastRouteId: string | null = null;
+
+      // Add checked assignments that don't already exist on this day.
+      for (const key of selectedRouteIds) {
+        let routeId = key;
+
+        // A territory-area selection ("terr:<id>") has no route yet — create one for
+        // the area (pre-filled with that area's customers), then schedule it.
+        if (key.startsWith("terr:")) {
+          const territoryId = key.slice(5);
+          const { data: cids } = await supabase
+            .from("contacts")
+            .select("id")
+            .eq("account_id", accountId)
+            .eq("territory_id", territoryId)
+            .is("archived_at", null);
+          const customerIds = (cids ?? []).map((c: { id: string }) => c.id);
+          const { data: routeRes, error: createErr } = await supabase.rpc("route_upsert", {
+            p_route_id: crypto.randomUUID(),
+            p_name: areaById.get(territoryId) ?? "Area",
+            p_description: null,
+            p_primary_assignee_id: employeeId,
+            p_customer_ids: customerIds.length ? customerIds : null,
+            p_expected_version: null,
           });
+          if (createErr || !routeRes) throw createErr || new Error("Failed to create area route");
+          routeId = routeRes.id;
+        } else if (existingRouteIds.has(routeId)) {
+          lastRouteId = routeId;
+          continue; // already scheduled on this day
         }
+
+        await supabase.from("route_plan_assignments").insert({
+          account_id: accountId,
+          route_id: routeId,
+          assignee_id: employeeId,
+          day_of_week: targetDow,
+          start_date: targetDateStr,
+          end_date: targetDateStr,
+          is_active: false, // Starts as PENDING APPROVAL so manager can review & click Approve
+        });
+        lastRouteId = routeId;
       }
 
       toast.success(`✓ Assigned areas to ${targetDateStr} (Pending Approval)`);
       setAddRouteModalOpen(false);
       await fetchData();
 
-      if (selectedRouteIds.length > 0) {
-        const firstId = selectedRouteIds[selectedRouteIds.length - 1];
-        openRouteSheet(firstId, targetDateStr);
+      if (lastRouteId) {
+        openRouteSheet(lastRouteId, targetDateStr);
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to save route assignments");
@@ -1383,13 +1454,13 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
               </div>
             ) : (
               filteredRoutes.map((r) => {
-                const checked = selectedRouteIds.includes(r.id);
+                const checked = selectedRouteIds.includes(r.key);
                 return (
                   <div
-                    key={r.id}
+                    key={r.key}
                     onClick={() => {
                       setSelectedRouteIds((prev) =>
-                        checked ? prev.filter((id) => id !== r.id) : [...prev, r.id]
+                        checked ? prev.filter((id) => id !== r.key) : [...prev, r.key]
                       );
                     }}
                     className={cn(
