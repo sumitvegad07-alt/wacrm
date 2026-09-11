@@ -606,8 +606,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
             .from("contacts")
             .select("id")
             .eq("account_id", accountId)
-            .eq("territory_id", territoryId)
-            .is("archived_at", null);
+            .eq("territory_id", territoryId);
           const customerIds = (cids ?? []).map((c: { id: string }) => c.id);
           const { data: routeRes, error: createErr } = await supabase.rpc("route_upsert", {
             p_route_id: crypto.randomUUID(),
@@ -667,8 +666,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
           .from("contacts")
           .select("id")
           .eq("account_id", accountId)
-          .eq("territory_id", match.id)
-          .is("archived_at", null);
+          .eq("territory_id", match.id);
         areaCustomerIds = (cids ?? []).map((c: { id: string }) => c.id);
       }
 
@@ -753,7 +751,6 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         .from("contacts")
         .select("id, name, company, address")
         .eq("account_id", accountId)
-        .is("archived_at", null)
         .limit(100);
 
       if (term) {
@@ -815,8 +812,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         .from("contacts")
         .select("id")
         .eq("account_id", accountId)
-        .eq("territory_id", match.id)
-        .is("archived_at", null);
+        .eq("territory_id", match.id);
       const already = new Set(routeCustomers.map((rc) => rc.contact_id));
       const ids = (cids ?? []).map((c: { id: string }) => c.id).filter((id: string) => !already.has(id));
       if (!ids.length) {
