@@ -201,9 +201,12 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
       const defaults: ResolveSelections = {};
       for (const g of groups) {
         defaults[g.field] = {};
+        // When a parent is required (a customer's territory below the root level),
+        // default to "skip" — never mass-create at the top level (which would mint
+        // Countries). The admin explicitly picks a parent to create.
+        const canCreate = g.createable === "admin" && canManage && !g.requireParent;
         for (const u of g.unknowns) {
-          defaults[g.field][u.value.toLowerCase()] =
-            g.createable === "admin" && canManage ? { type: "create" } : { type: "blank" };
+          defaults[g.field][u.value.toLowerCase()] = canCreate ? { type: "create" } : { type: "blank" };
         }
       }
       setResolveSel(defaults);
@@ -247,6 +250,21 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
   }
 
   const importableCount = summary ? summary.valid + (mode === "update" ? summary.duplicate : 0) : 0;
+
+  // A "create" in a parent-required group (a customer's territory below the root
+  // level) can't proceed until a parent is chosen — otherwise the value would be
+  // silently dropped. Block Import and prompt the admin to pick one (or Skip).
+  const unresolvedCreates = resolveGroups.reduce((n, g) => {
+    if (!g.requireParent) return n;
+    const sel = resolveSel[g.field] ?? {};
+    return (
+      n +
+      g.unknowns.filter((u) => {
+        const a = sel[u.value.toLowerCase()];
+        return a?.type === "create" && !a.parentId;
+      }).length
+    );
+  }, 0);
 
   function downloadErrorReport() {
     if (!summary || !descriptor) return;
@@ -573,8 +591,11 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                         const opts = g.existing;
                         const singular = g.label.toLowerCase();
                         const canCreateHere = g.createable === "admin" && canManage;
+                        // A territory below the root level must be created under a
+                        // parent — omit the "top level" option so we can't mint a
+                        // Country from a customer's area.
                         const parentOptions = [
-                          { label: "Top level (no parent)", value: "__top__" },
+                          ...(g.requireParent ? [] : [{ label: "Top level (no parent)", value: "__top__" }]),
                           ...opts.map((e) => ({ label: e.path ?? e.name, value: e.id })),
                         ];
                         const existingOptions = opts.map((e) => ({ label: e.path ?? e.name, value: e.id }));
@@ -608,18 +629,24 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                             {sel.type === "create" && g.hierarchical && canCreateHere && (
                               <div className="mt-3 space-y-1.5">
                                 <p className="text-xs text-muted-foreground">
-                                  Create <span className="font-medium text-foreground">{u.value}</span> under:
+                                  Create <span className="font-medium text-foreground">{u.value}</span> under
+                                  {g.requireParent && <span className="text-destructive"> *</span>}:
                                 </p>
                                 <SearchableSelect
                                   className="max-w-xl"
                                   options={parentOptions}
-                                  value={sel.parentId ?? "__top__"}
+                                  value={sel.parentId ?? (g.requireParent ? "" : "__top__")}
                                   onChange={(v) =>
                                     setAction(g.field, keyL, { type: "create", parentId: v && v !== "__top__" ? v : undefined })
                                   }
-                                  placeholder="Top level (no parent)"
+                                  placeholder={g.requireParent ? `Pick the parent ${singular}…` : "Top level (no parent)"}
                                   searchPlaceholder={`Search ${singular}…`}
                                 />
+                                {g.requireParent && !sel.parentId && (
+                                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                                    Choose which existing {singular} this sits under — a customer&apos;s {singular} can&apos;t be created at the top level.
+                                  </p>
+                                )}
                               </div>
                             )}
                             {sel.type === "create" && !g.hierarchical && canCreateHere && (
@@ -662,10 +689,17 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                 <Button variant="outline" onClick={() => setStep("preview")} disabled={busy}>
                   <ArrowLeft className="mr-1 size-4" /> Back
                 </Button>
-                <Button onClick={applyResolveAndImport} disabled={busy}>
-                  {busy ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
-                  Import {importableCount}
-                </Button>
+                <div className="flex flex-col items-end gap-1">
+                  <Button onClick={applyResolveAndImport} disabled={busy || unresolvedCreates > 0}>
+                    {busy ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
+                    Import {importableCount}
+                  </Button>
+                  {unresolvedCreates > 0 && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      Pick a parent for {unresolvedCreates} value{unresolvedCreates === 1 ? "" : "s"} above, or set {unresolvedCreates === 1 ? "it" : "them"} to Skip.
+                    </p>
+                  )}
+                </div>
               </div>
             </>
           )}

@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getAccountTerritorySettings } from "@/lib/territories/api";
+import { leafLevel } from "@/lib/territories/settings";
 import type {
   ExistingMaster,
   ImportDescriptor,
@@ -92,12 +94,34 @@ export async function detectUnknownLookups(
       .sort((a, b) => b.count - a.count);
     if (unknowns.length === 0) continue;
 
+    // For the territory lookup, a customer's value is the LEAF of the geography
+    // tree. If the account's hierarchy runs deeper than the root level (e.g. a
+    // City/Area below Country), a created value must sit under a parent — creating
+    // it at the top level would wrongly mint a Country (the reported bug). When the
+    // hierarchy is a single level, top-level creation is correct.
+    let requireParent = false;
+    let createLevel = 1;
+    if (lk.table === "territories" && lk.hierarchical) {
+      try {
+        const settings = await getAccountTerritorySettings(accountId);
+        const leaf = leafLevel(settings);
+        createLevel = leaf?.position ?? 1;
+        requireParent = (leaf?.position ?? 1) > 1;
+      } catch {
+        // If settings can't be read, be safe: require a parent for territories so
+        // we never silently create top-level countries from a customer import.
+        requireParent = true;
+      }
+    }
+
     groups.push({
       field: lk.field,
       label: field.label,
       table: lk.table,
       createable: lk.createable,
       hierarchical: !!lk.hierarchical,
+      requireParent,
+      createLevel,
       existing,
       unknowns,
     });
@@ -133,16 +157,27 @@ export async function applyResolutions(
       if (sel.type === "map") {
         rewrite[g.field][key] = sel.toName;
       } else if (sel.type === "create" && g.createable === "admin" && canCreate) {
-        rewrite[g.field][key] = u.value; // stays the same; exists after insert
         if (g.hierarchical) {
           const parent = sel.parentId ? byId.get(sel.parentId) : undefined;
+          // Guard (bug fix): a hierarchical value that must sit under a parent is
+          // NEVER created at the top level. Without a chosen parent we leave the
+          // value blank rather than mint a bogus root-level row (e.g. an "Area"
+          // becoming a "Country" during a customer import).
+          if (g.requireParent && !parent) {
+            rewrite[g.field][key] = "";
+            continue;
+          }
+          rewrite[g.field][key] = u.value; // stays the same; exists after insert
           inserts.push({
             account_id: accountId,
             name: u.value,
             parent_id: parent?.id ?? null,
-            level: (parent?.level ?? 0) + 1,
+            // Under a chosen parent → parent.level + 1. With no parent (only allowed
+            // when a parent isn't required) → the configured leaf/top level.
+            level: parent ? (parent.level ?? 0) + 1 : (g.createLevel ?? 1),
           });
         } else {
+          rewrite[g.field][key] = u.value;
           inserts.push({ account_id: accountId, name: u.value });
         }
       } else {
@@ -164,6 +199,10 @@ export async function applyResolutions(
 }
 
 function defaultAction(g: LookupResolveGroup, canCreate: boolean) {
+  // When a parent is required (a customer's territory below the root level), don't
+  // default to "create" — a create with no chosen parent would be dropped, so the
+  // safe, predictable default is to leave it blank until the admin decides.
+  if (g.requireParent) return { type: "blank" } as const;
   return g.createable === "admin" && canCreate ? ({ type: "create" } as const) : ({ type: "blank" } as const);
 }
 

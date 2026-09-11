@@ -200,6 +200,15 @@ export interface LookupResolveGroup {
   table: string;
   createable: "never" | "admin";
   hierarchical: boolean;
+  /** A created value MUST be placed under a parent — no "top level" option. Set for
+   *  hierarchical lookups whose leaf sits below the root level (e.g. a customer's
+   *  territory when the hierarchy has City/Area below Country): creating such a value
+   *  at the top level would wrongly mint a Country. Undefined/false = top level allowed
+   *  (e.g. product categories, or a single-level territory hierarchy). */
+  requireParent?: boolean;
+  /** Level a newly-created value should land at when NO parent is chosen and one is
+   *  not required (single-level hierarchy). Defaults to 1. */
+  createLevel?: number;
   /** Existing master values, for the "map to existing" (and parent) dropdowns. */
   existing: ExistingMaster[];
   unknowns: UnknownValue[];
