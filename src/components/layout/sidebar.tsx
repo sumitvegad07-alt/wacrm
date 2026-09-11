@@ -49,6 +49,9 @@ import {
   Wallet,
   Palette,
   LayoutGrid,
+  Layers,
+  Ruler,
+  ListChecks,
   Route as RouteIcon,
   CalendarRange,
   Activity,
@@ -246,11 +249,27 @@ export function getMenuStructure(
 
     { type: "spacer" },
 
-    // ── Sales: Product, Quotation, Scheme, Stock, Order, Dispatch, Pending Dispatch, Payment ──
-    { type: "link", href: "/products", label: "Product", icon: Package, module: "products" },
+    // ── Catalog (collapsed) — the single home for products and everything that
+    // prices/organises them: categories, units, price lists, schemes, and the
+    // catalogue settings (tax slabs, discounts, price floor, tax mode). ──
+    {
+      type: "group",
+      label: "Catalog",
+      icon: LayoutGrid,
+      items: [
+        { href: "/products", label: "Product", icon: Package, module: "products" },
+        { href: "/catalog/categories", label: "Category", icon: Layers, module: "products" },
+        { href: "/catalog/units", label: "Unit", icon: Ruler, module: "products" },
+        { href: "/price-lists", label: "Price List", icon: ListChecks, module: "products", line: "sfa" },
+        // Scheme is an opt-in module (Catalogue Settings toggle).
+        { href: "/schemes", label: "Scheme", icon: Percent, module: "orders", configModule: "scheme" as const, line: "sfa" },
+        { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: SlidersHorizontal, permission: "edit_tax_slabs" },
+      ],
+    },
+
+    // ── Sales: Quotation, Stock, Order, Dispatch, Pending Dispatch, Payment ──
     { type: "link", href: "/quotations", label: "Quotation", icon: FileText, module: "orders", configModule: "quotation" as const },
-    // Opt-in modules (Scheme, Stock): hidden until enabled in Catalogue Settings.
-    { type: "link", href: "/schemes", label: "Scheme", icon: Percent, module: "orders", configModule: "scheme" as const, line: "sfa" },
+    // Opt-in module (Stock): hidden until enabled in Catalogue Settings.
     { type: "link", href: "/stock", label: "Stock", icon: Boxes, module: "products", configModule: "stock" as const, line: "sfa" },
     { type: "link", href: "/orders", label: "Order", icon: ShoppingCart, module: "orders", line: "sfa" },
     { type: "link", href: "/dispatches", label: "Dispatch", icon: Truck, module: "orders", configModule: "dispatch" as const },
@@ -401,7 +420,7 @@ export function getMenuStructure(
         { href: "/settings?tab=deal_pipelines", label: "Deals", icon: Briefcase, permission: "edit_pipelines", line: "crm" },
         { href: "/settings?tab=leads", label: "Leads Settings", icon: Filter, permission: "edit_lead_sources", line: "crm" },
         { href: "/settings?tab=tasks", label: "Task Settings", icon: CheckSquare, permission: "edit_task_types" },
-        { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: Percent, permission: "edit_tax_slabs" },
+        // Catalogue Settings now lives under the Catalog group (see above).
         ...(!moduleSettings || moduleSettings.expense === true
           ? [{ href: "/settings?tab=expense_types", label: "Expense Settings", icon: Wallet, permission: "edit_expense_types" }]
           : []),
@@ -453,6 +472,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     WhatsApp: false,
+    Catalog: false,
     "Location Tracking": false,
     Report: false,
     User: false,

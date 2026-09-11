@@ -11,8 +11,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ProductCategoriesSettings } from "./product-categories-settings";
-import { ProductUnitsSettings } from "./product-units-settings";
 
 /**
  * Settings -> Pricing & Schemes.
@@ -139,12 +137,6 @@ export function PricingSchemesSettings() {
   const [stockOutEvent, setStockOutEvent] = useState<StockOutEvent>("order_closed");
   const [restrictInsufficient, setRestrictInsufficient] = useState(false);
   
-  // Lifted from ProductCategoriesSettings
-  const [levelsCount, setLevelsCount] = useState<1 | 2 | 3>(1);
-  const [level1Name, setLevel1Name] = useState("Category");
-  const [level2Name, setLevel2Name] = useState("Sub-Category");
-  const [level3Name, setLevel3Name] = useState("Brand");
-  
   const [hasChanges, setHasChanges] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -171,12 +163,6 @@ export function PricingSchemesSettings() {
     setStockOutEvent((ss.stock_out_event as StockOutEvent) ?? "order_closed");
     setRestrictInsufficient(ss.restrict_on_insufficient === true);
 
-    const ps = acctRes.data?.settings?.product_settings ?? {};
-    setLevelsCount(ps.levels_count || 1);
-    setLevel1Name(ps.level_1_name || "Category");
-    setLevel2Name(ps.level_2_name || "Sub-Category");
-    setLevel3Name(ps.level_3_name || "Brand");
-    
     setHasChanges(false);
     setLoading(false);
   }, [accountId, supabase]);
@@ -204,13 +190,6 @@ export function PricingSchemesSettings() {
         stock_out_event: stockOutEvent,
         restrict_on_insufficient: restrictInsufficient,
       },
-      product_settings: {
-        ...(settings.product_settings ?? {}),
-        levels_count: levelsCount,
-        level_1_name: level1Name,
-        level_2_name: level2Name,
-        level_3_name: level3Name,
-      }
     };
     
     const { error } = await supabase
@@ -631,18 +610,6 @@ export function PricingSchemesSettings() {
         </div>
         )}
       </div>
-
-      <ProductCategoriesSettings
-        levelsCount={levelsCount}
-        setLevelsCount={(val) => { setLevelsCount(val); setHasChanges(true); }}
-        level1Name={level1Name}
-        setLevel1Name={(val) => { setLevel1Name(val); setHasChanges(true); }}
-        level2Name={level2Name}
-        setLevel2Name={(val) => { setLevel2Name(val); setHasChanges(true); }}
-        level3Name={level3Name}
-        setLevel3Name={(val) => { setLevel3Name(val); setHasChanges(true); }}
-      />
-      <ProductUnitsSettings />
     </section>
   );
 }

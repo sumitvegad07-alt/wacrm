@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -227,18 +228,16 @@ export function PriceListManager() {
             )}
             {canEditSettings && (
               <div className="flex items-end gap-2 max-w-2xl">
-                <div className="grid gap-1 flex-1">
+                <div className="grid gap-1 flex-1 min-w-0">
                   <span className="text-xs text-muted-foreground">Product</span>
-                  <select
+                  <SearchableSelect
+                    options={availableProducts.map((p) => ({ value: p.id, label: p.name }))}
                     value={addProductId}
-                    onChange={(e) => setAddProductId(e.target.value)}
-                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                  >
-                    <option value="">Select a product…</option>
-                    {availableProducts.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                    onChange={setAddProductId}
+                    placeholder="Select a product…"
+                    searchPlaceholder="Search products…"
+                    emptyMessage="No matching products."
+                  />
                 </div>
                 <div className="grid gap-1 w-28">
                   <span className="text-xs text-muted-foreground">Discount %</span>
