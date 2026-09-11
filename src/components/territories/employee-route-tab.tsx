@@ -72,6 +72,14 @@ interface RouteCustomerItem {
   contacts?: any;
 }
 
+interface RouteExecItem {
+  id: string;
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
 interface ContactItem {
   id: string;
   name: string | null;
@@ -241,6 +249,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
   const [selectedRoute, setSelectedRoute] = useState<RouteItem | null>(null);
   const [selectedRouteDate, setSelectedRouteDate] = useState<string | null>(null);
   const [routeCustomers, setRouteCustomers] = useState<RouteCustomerItem[]>([]);
+  const [routeExecutions, setRouteExecutions] = useState<RouteExecItem[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [savingSequence, setSavingSequence] = useState(false);
   const [activeSheetTab, setActiveSheetTab] = useState<"overview" | "customers" | "planning" | "history">("customers");
@@ -382,16 +391,35 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     [supabase]
   );
 
+  const fetchRouteExecutions = useCallback(
+    async (routeId: string) => {
+      try {
+        const { data } = await supabase
+          .from("route_executions")
+          .select("id, status, started_at, completed_at, created_at")
+          .eq("route_id", routeId)
+          .order("created_at", { ascending: false })
+          .limit(50);
+        setRouteExecutions((data ?? []) as RouteExecItem[]);
+      } catch {
+        setRouteExecutions([]);
+      }
+    },
+    [supabase]
+  );
+
   const openRouteSheet = useCallback(
     (routeId: string, dateStr?: string) => {
       const found = routes.find((r) => r.id === routeId);
       if (found) {
         setSelectedRoute(found);
         setSelectedRouteDate(dateStr || null);
+        setActiveSheetTab("customers");
         fetchRouteCustomers(routeId);
+        fetchRouteExecutions(routeId);
       }
     },
-    [routes, fetchRouteCustomers]
+    [routes, fetchRouteCustomers, fetchRouteExecutions]
   );
 
   // Month navigation
@@ -437,6 +465,17 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       await fetchData();
     } catch (err: any) {
       toast.error(err.message || "Failed to approve assignment");
+    }
+  };
+
+  // Remove a single scheduled date (assignment) for this route — used by the Planning tab.
+  const removeAssignmentById = async (assignmentId: string) => {
+    try {
+      await supabase.from("route_plan_assignments").delete().eq("id", assignmentId);
+      toast.success("Removed from schedule");
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to remove from schedule");
     }
   };
 
@@ -558,6 +597,15 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       (a) => a.name.trim().toLowerCase() === selectedRoute.name.trim().toLowerCase()
     );
   }, [selectedRoute, areas]);
+
+  // This route's scheduled dates (assignments), earliest first — drives Planning/Overview.
+  const routeAssignments = useMemo(() => {
+    if (!selectedRoute) return [] as RouteAssignment[];
+    return assignments
+      .filter((a) => a.route_id === selectedRoute.id)
+      .slice()
+      .sort((a, b) => (a.start_date || "").localeCompare(b.start_date || ""));
+  }, [assignments, selectedRoute]);
 
   // Filtered schedulable items inside Add Route Modal
   const filteredRoutes = useMemo(() => {
@@ -1843,9 +1891,125 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                 </div>
               )}
 
-              {activeSheetTab !== "customers" && (
-                <div className="flex-1 flex items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 p-12 text-center text-sm font-medium text-muted-foreground">
-                  {activeSheetTab} details view.
+              {/* Overview tab — route summary */}
+              {activeSheetTab === "overview" && (
+                <div className="flex-1 overflow-y-auto space-y-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      { label: "Customers", value: routeCustomers.length },
+                      { label: "Scheduled dates", value: routeAssignments.length },
+                      { label: "Approved", value: routeAssignments.filter((a) => a.is_active).length },
+                      { label: "Pending approval", value: routeAssignments.filter((a) => !a.is_active).length },
+                    ].map((s) => (
+                      <div key={s.label} className="rounded-xl border border-border bg-card px-4 py-4">
+                        <p className="text-2xl font-extrabold tabular-nums text-foreground">{s.value}</p>
+                        <p className="mt-1 text-xs font-medium text-muted-foreground">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded-xl border border-border bg-card divide-y divide-border text-sm">
+                    {[
+                      { label: "Route name", value: selectedRoute.name },
+                      { label: "Primary assignee", value: employeeName },
+                      ...(selectedRouteArea ? [{ label: "Territory area", value: selectedRouteArea.name }] : []),
+                      {
+                        label: "Next visit date",
+                        value:
+                          routeAssignments.find((a) => (a.start_date || "") >= new Date().toISOString().slice(0, 10))?.start_date ??
+                          "Not scheduled",
+                      },
+                    ].map((row) => (
+                      <div key={row.label} className="flex items-center justify-between px-5 py-3">
+                        <span className="text-muted-foreground">{row.label}</span>
+                        <span className="font-semibold text-foreground">{row.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Planning tab — the dates this route is scheduled on */}
+              {activeSheetTab === "planning" && (
+                <div className="flex-1 overflow-y-auto">
+                  {routeAssignments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 py-16 text-center">
+                      <CalendarIcon className="h-10 w-10 text-muted-foreground mb-3" />
+                      <p className="text-base font-bold text-foreground">Not scheduled on any date yet</p>
+                      <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                        Use the calendar (Back to Calendar) to assign this route to a day, or the Repeat &amp; Schedule bar on the Overview tab.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border rounded-xl border border-border bg-card">
+                      {routeAssignments.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between px-5 py-3.5">
+                          <div>
+                            <p className="text-sm font-bold text-foreground">{a.start_date || "—"}</p>
+                            <p className="text-xs text-muted-foreground">{getWeekdayName(a.start_date, a.day_of_week)}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {a.is_active ? (
+                              <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-semibold">✓ Approved</Badge>
+                            ) : (
+                              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 font-semibold">⏳ Pending</Badge>
+                            )}
+                            {!a.is_active && (
+                              <Button size="sm" onClick={() => handleApproveAssignment(a.id)} className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+                                <Check className="h-3 w-3 mr-1" /> Approve
+                              </Button>
+                            )}
+                            <Button size="sm" variant="ghost" onClick={() => removeAssignmentById(a.id)} className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" title="Remove from this date">
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* History tab — past executions of this route on the mobile app */}
+              {activeSheetTab === "history" && (
+                <div className="flex-1 overflow-y-auto">
+                  {routeExecutions.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 py-16 text-center">
+                      <Clock className="h-10 w-10 text-muted-foreground mb-3" />
+                      <p className="text-base font-bold text-foreground">No visit history yet</p>
+                      <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                        Runs appear here once the rep starts this route on the mobile app.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border rounded-xl border border-border bg-card">
+                      {routeExecutions.map((ex) => (
+                        <div key={ex.id} className="flex items-center justify-between px-5 py-3.5">
+                          <div>
+                            <p className="text-sm font-bold text-foreground">{(ex.started_at || ex.created_at || "").slice(0, 10)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {ex.completed_at
+                                ? `Completed ${new Date(ex.completed_at).toLocaleString()}`
+                                : ex.started_at
+                                  ? `Started ${new Date(ex.started_at).toLocaleString()}`
+                                  : "Not started"}
+                            </p>
+                          </div>
+                          <Badge
+                            className={cn(
+                              "font-semibold capitalize",
+                              ex.status === "completed"
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                : ex.status === "abandoned"
+                                  ? "bg-red-500/20 text-red-300 border-red-500/40"
+                                  : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                            )}
+                          >
+                            {ex.status.replace("_", " ")}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
