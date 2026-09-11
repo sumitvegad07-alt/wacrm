@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, UserCircle2, ExternalLink, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Search, UserCircle2, ExternalLink, ShieldCheck, ShieldAlert, KeyRound, X } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -21,6 +21,44 @@ export default function GlobalUsersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Password reset modal state
+  const [pwUser, setPwUser] = useState<UserRow | null>(null);
+  const [pwValue, setPwValue] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const submitPassword = async () => {
+    if (!pwUser) return;
+    if (pwValue.length < 6) {
+      setPwMsg({ ok: false, text: "Password must be at least 6 characters." });
+      return;
+    }
+    setPwSaving(true);
+    setPwMsg(null);
+    try {
+      const res = await fetch("/api/admin/users/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_id: pwUser.id, password: pwValue }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (res.ok && !payload.error) {
+        setPwMsg({ ok: true, text: `Password updated for ${pwUser.email}.` });
+        setPwValue("");
+        setTimeout(() => {
+          setPwUser(null);
+          setPwMsg(null);
+        }, 1500);
+      } else {
+        setPwMsg({ ok: false, text: payload.error || "Failed to update password." });
+      }
+    } catch (e: any) {
+      setPwMsg({ ok: false, text: e.message || "Request failed." });
+    } finally {
+      setPwSaving(false);
+    }
+  };
 
   useEffect(() => {
     async function load() {
@@ -153,7 +191,7 @@ export default function GlobalUsersPage() {
                 <th className="px-4 py-3 font-medium text-foreground">User</th>
                 <th className="px-4 py-3 font-medium text-foreground">Company</th>
                 <th className="px-4 py-3 font-medium text-foreground">Role</th>
-                <th className="px-4 py-3 font-medium text-foreground text-right">Superadmin Control</th>
+                <th className="px-4 py-3 font-medium text-foreground text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -186,29 +224,44 @@ export default function GlobalUsersPage() {
                   <td className="px-4 py-3">
                     {roleBadge(u.account_role, u.is_superadmin)}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    {u.is_superadmin ? (
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={updatingId === u.id}
-                        onClick={() => toggleSuperadmin(u.id, true)}
-                        className="gap-1.5 text-xs border-red-500/40 text-red-600 hover:bg-red-500/10"
+                        onClick={() => {
+                          setPwUser(u);
+                          setPwValue("");
+                          setPwMsg(null);
+                        }}
+                        className="gap-1.5 text-xs"
                       >
-                        <ShieldAlert className="size-3.5" />
-                        Revoke Superadmin
+                        <KeyRound className="size-3.5" />
+                        Set Password
                       </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        disabled={updatingId === u.id}
-                        onClick={() => toggleSuperadmin(u.id, false)}
-                        className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                      >
-                        <ShieldCheck className="size-3.5" />
-                        Grant Superadmin
-                      </Button>
-                    )}
+                      {u.is_superadmin ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={updatingId === u.id}
+                          onClick={() => toggleSuperadmin(u.id, true)}
+                          className="gap-1.5 text-xs border-red-500/40 text-red-600 hover:bg-red-500/10"
+                        >
+                          <ShieldAlert className="size-3.5" />
+                          Revoke Superadmin
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          disabled={updatingId === u.id}
+                          onClick={() => toggleSuperadmin(u.id, false)}
+                          className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                        >
+                          <ShieldCheck className="size-3.5" />
+                          Grant Superadmin
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -224,6 +277,87 @@ export default function GlobalUsersPage() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Password reset modal */}
+      {pwUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !pwSaving && setPwUser(null)}
+        >
+          <div
+            className="w-full max-w-md bg-card border border-border rounded-xl shadow-xl p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-5 w-5 text-primary" />
+                <h2 className="text-base font-semibold">Set new password</h2>
+              </div>
+              <button
+                onClick={() => !pwSaving && setPwUser(null)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">
+                {pwUser.full_name || "(no name)"}
+              </p>
+              <p className="text-xs">{pwUser.email}</p>
+              {pwUser.account_name && (
+                <p className="text-xs mt-1">Company: {pwUser.account_name}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">New password</label>
+              <input
+                type="text"
+                autoFocus
+                value={pwValue}
+                onChange={(e) => setPwValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !pwSaving) submitPassword();
+                }}
+                placeholder="At least 6 characters"
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring text-foreground"
+              />
+              <p className="text-xs text-muted-foreground">
+                The user&apos;s password is replaced immediately. Existing passwords
+                are one-way encrypted and can never be shown — resetting is the only
+                secure way to give them a known password. Share it with the user over
+                a trusted channel; they can change it after logging in.
+              </p>
+            </div>
+
+            {pwMsg && (
+              <p
+                className={`text-sm ${
+                  pwMsg.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
+                }`}
+              >
+                {pwMsg.text}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                variant="outline"
+                onClick={() => setPwUser(null)}
+                disabled={pwSaving}
+              >
+                Cancel
+              </Button>
+              <Button onClick={submitPassword} disabled={pwSaving} className="gap-1.5">
+                <KeyRound className="h-4 w-4" />
+                {pwSaving ? "Saving…" : "Update Password"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

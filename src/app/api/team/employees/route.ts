@@ -86,12 +86,19 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Create the user in Supabase Auth
+    //
+    // `member_of_account` tells the handle_new_user trigger this login is a team
+    // member of an existing account, so it must NOT mint a fresh account +
+    // Customer ID. Without this signal the trigger created a phantom account
+    // that we then abandoned (the profile is re-parented below), which is what
+    // showed up as duplicate Customer IDs in the superadmin panel.
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: {
         full_name,
+        member_of_account: account_id,
       }
     });
 
