@@ -18,10 +18,26 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { ForbiddenError, UnauthorizedError } from "./account";
+import { isFounderEmail } from "./founder";
+
+export { FOUNDER_EMAIL, isFounderEmail } from "./founder";
 
 export interface SuperadminContext {
   userId: string;
   email: string | null;
+}
+
+/**
+ * Like `requireSuperadmin()`, but additionally requires the caller to be the
+ * platform founder. Guards the grant/revoke-superadmin route so no other
+ * superadmin (and no compromised superadmin session) can mint new superadmins.
+ */
+export async function requireFounder(): Promise<SuperadminContext> {
+  const ctx = await requireSuperadmin();
+  if (!isFounderEmail(ctx.email)) {
+    throw new ForbiddenError("Only the platform owner can change superadmin access");
+  }
+  return ctx;
 }
 
 /**

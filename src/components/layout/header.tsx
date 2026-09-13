@@ -91,7 +91,8 @@ export function Header({ onOpenSidebar }: HeaderProps) {
   const isTimeExpired = expiryDate ? expiryDate < now : false;
   const isExpired = account && (account.subscription_status === 'expired' || account.subscription_status === 'deactivated' || isTimeExpired);
   const daysUntilExpiry = expiryDate ? Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
-  const showExpiryWarning = !isExpired && daysUntilExpiry !== null && daysUntilExpiry <= 7 && daysUntilExpiry >= 0;
+  // Only warn in the final stretch before expiry — within 15 days, never earlier.
+  const showExpiryWarning = !isExpired && daysUntilExpiry !== null && daysUntilExpiry <= 15 && daysUntilExpiry >= 0;
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??

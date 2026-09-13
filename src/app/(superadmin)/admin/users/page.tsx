@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, UserCircle2, ExternalLink, ShieldCheck, ShieldAlert, KeyRound, X } from "lucide-react";
+import { Search, UserCircle2, ExternalLink, KeyRound, X } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -20,7 +20,6 @@ export default function GlobalUsersPage() {
   const [filtered, setFiltered] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Password reset modal state
   const [pwUser, setPwUser] = useState<UserRow | null>(null);
@@ -99,29 +98,6 @@ export default function GlobalUsersPage() {
         : users
     );
   }, [search, users]);
-
-  const toggleSuperadmin = async (userId: string, currentStatus: boolean) => {
-    setUpdatingId(userId);
-    const nextStatus = !currentStatus;
-    // `is_superadmin` is not writable by `authenticated` any more, so this
-    // has to go through the guarded service-role route.
-    const res = await fetch("/api/admin/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: userId, is_superadmin: nextStatus }),
-    });
-    const payload = await res.json().catch(() => ({}));
-    const error = res.ok && !payload.error ? null : { message: payload.error || "Request failed" };
-
-    if (!error) {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, is_superadmin: nextStatus } : u))
-      );
-    } else {
-      alert("Failed to update superadmin status: " + error.message);
-    }
-    setUpdatingId(null);
-  };
 
   const roleBadge = (role: string | null, isSuperadmin: boolean) => {
     if (isSuperadmin)
@@ -239,28 +215,10 @@ export default function GlobalUsersPage() {
                         <KeyRound className="size-3.5" />
                         Set Password
                       </Button>
-                      {u.is_superadmin ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={updatingId === u.id}
-                          onClick={() => toggleSuperadmin(u.id, true)}
-                          className="gap-1.5 text-xs border-red-500/40 text-red-600 hover:bg-red-500/10"
-                        >
-                          <ShieldAlert className="size-3.5" />
-                          Revoke Superadmin
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          disabled={updatingId === u.id}
-                          onClick={() => toggleSuperadmin(u.id, false)}
-                          className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                        >
-                          <ShieldCheck className="size-3.5" />
-                          Grant Superadmin
-                        </Button>
-                      )}
+                      {/* Grant / Revoke Superadmin has been removed from this
+                          list to prevent accidental privilege changes. It now
+                          lives on the hidden, founder-only page at
+                          /admin/access-control (not linked in the sidebar). */}
                     </div>
                   </td>
                 </tr>

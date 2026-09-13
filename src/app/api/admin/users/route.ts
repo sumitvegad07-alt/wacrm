@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse } from "@/lib/auth/account";
-import { requireSuperadmin, serviceClient } from "@/lib/auth/superadmin";
+import { requireSuperadmin, requireFounder, serviceClient } from "@/lib/auth/superadmin";
 
 /**
  * Cross-tenant user list for the superadmin panel.
@@ -32,11 +32,11 @@ export async function GET() {
 /**
  * Grant or revoke platform superadmin. The `is_superadmin` column is no longer
  * writable by `authenticated` (see migration 20260818200000), so this is the
- * only path that can change it.
+ * only path that can change it — and now only the platform founder may call it.
  */
 export async function PATCH(req: NextRequest) {
   try {
-    const ctx = await requireSuperadmin();
+    const ctx = await requireFounder();
     const { id, is_superadmin } = await req.json();
 
     if (!id || typeof is_superadmin !== "boolean") {

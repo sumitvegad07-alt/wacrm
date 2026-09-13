@@ -244,7 +244,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
         {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
         <main className="flex-1 overflow-y-auto p-3 pb-6 sm:p-4 sm:pb-6">
-          {account?.subscription_status === 'trialing' && (
+          {/* Only nudge in the final 15 days of the trial — not for the whole
+              trial window. `trialDaysLeft === null` means no expiry date is set,
+              so we still show the generic "trial is active" message then. */}
+          {account?.subscription_status === 'trialing' &&
+            (trialDaysLeft === null || trialDaysLeft <= 15) && (
             <div className="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in slide-in-from-top-2">
               <div>
                 <span className="font-bold text-destructive">
