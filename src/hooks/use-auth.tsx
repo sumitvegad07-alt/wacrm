@@ -279,7 +279,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .from("accounts")
             // default_currency added in migration 021; narrowed to the
             // USD fallback below for older schemas where it reads null.
-            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned, subscription_expires_at")
+            // `module_settings` is selected here too (added in migration 090)
+            // so we don't pay a second round-trip to the same row. Older
+            // schemas without the column would error, so it's tolerated below.
+            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned, subscription_expires_at, module_settings")
             .eq("id", data.account_id)
             .maybeSingle();
           if (accountErr) {
@@ -302,25 +305,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               subscription_expires_at: (account as any).subscription_expires_at ?? null,
             };
 
-            // Fetch module_settings separately — added in migration 090.
-            // If the migration hasn't been applied yet, this query may error;
-            // we silently fall back to all-enabled defaults so the rest of
-            // the app continues to work normally pre-migration.
-            const { data: modData, error: modErr } = await supabase
-              .from("accounts")
-              .select("module_settings")
-              .eq("id", data.account_id)
-              .maybeSingle();
-            if (!modErr && modData) {
-              // Clamp to the plan so a stale off-plan `true` (e.g. left in the
-              // JSONB after a downgrade) can never light a module up client-side.
-              setModuleSettings(
-                clampModuleSettings(
-                  account.subscription_plan,
-                  normalizeModuleSettings((modData as any).module_settings),
-                ) as ModuleSettings,
-              );
-            }
+            // module_settings came back on the same accounts row above, so no
+            // second round-trip is needed. Clamp to the plan so a stale
+            // off-plan `true` (e.g. left in the JSONB after a downgrade) can
+            // never light a module up client-side.
+            setModuleSettings(
+              clampModuleSettings(
+                account.subscription_plan,
+                normalizeModuleSettings((account as any).module_settings),
+              ) as ModuleSettings,
+            );
             setModuleSettingsLoaded(true);
           }
         }
