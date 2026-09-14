@@ -124,6 +124,9 @@ export interface Contact {
   credit_limit?: number | null;
   credit_days?: number | null;
   outstanding_amount?: number | null;
+  /** Soft-delete flag. false = moved to Inactive (hidden from the default
+   *  list, re-activatable). Defaults true. */
+  is_active?: boolean;
   created_at: string;
   updated_at: string;
 }

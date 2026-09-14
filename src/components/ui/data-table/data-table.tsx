@@ -124,11 +124,20 @@ export function DataTable<T>({
 
   if (!isMounted) return null; // Avoid hydration mismatch
 
+  // The row-actions column is pinned to the 2nd position (right after the
+  // selection checkbox) on every table — checkbox → Action → data — rather
+  // than floating at the end. It's excluded from the manageable/visible set
+  // so it can't be hidden or reordered away.
+  const actionsColumn = safeColumns.find(c => c.id === "actions") || null;
+
   // Determine the ordered visible columns
   const visibleColumns = activeColumnIds
-    .filter(id => visibleColumnIds.includes(id))
+    .filter(id => id !== "actions" && visibleColumnIds.includes(id))
     .map(id => safeColumns.find(c => c.id === id))
     .filter(Boolean) as ColumnDef<T>[];
+
+  // Total leading (non-data) columns: selection + pinned actions.
+  const leadingColSpan = (selection ? 1 : 0) + (actionsColumn ? 1 : 0);
 
   const allOnPageSelected = paginatedData.length > 0 && paginatedData.every(row => selection?.selectedIds.has(rowKey(row)));
   const someOnPageSelected = paginatedData.some(row => selection?.selectedIds.has(rowKey(row)));
@@ -189,6 +198,11 @@ export function DataTable<T>({
                   />
                 </TableHead>
               )}
+              {actionsColumn && (
+                <TableHead className="w-24 whitespace-nowrap text-xs font-semibold text-muted-foreground">
+                  {actionsColumn.label || "Action"}
+                </TableHead>
+              )}
               {visibleColumns.map(col => (
                 <DataTableHeader
                   key={col.id}
@@ -202,13 +216,13 @@ export function DataTable<T>({
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length + (selection ? 1 : 0)} className="p-0">
-                  <TableSkeleton columns={visibleColumns.length + (selection ? 1 : 0)} rows={5} />
+                <TableCell colSpan={visibleColumns.length + leadingColSpan} className="p-0">
+                  <TableSkeleton columns={visibleColumns.length + leadingColSpan} rows={5} />
                 </TableCell>
               </TableRow>
             ) : paginatedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length + (selection ? 1 : 0)} className="p-0">
+                <TableCell colSpan={visibleColumns.length + leadingColSpan} className="p-0">
                   {typeof emptyMessage === "string" ? (
                     <EmptyState title={emptyMessage} className="border-0 rounded-none bg-transparent my-4" />
                   ) : (
@@ -231,6 +245,11 @@ export function DataTable<T>({
                         checked={selection.selectedIds.has(rowKey(row))}
                         onChange={(e) => selection.onSelect(rowKey(row), e.target.checked)}
                       />
+                    </TableCell>
+                  )}
+                  {actionsColumn && (
+                    <TableCell className="py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      {actionsColumn.render ? actionsColumn.render(row) : null}
                     </TableCell>
                   )}
                   {visibleColumns.map(col => (

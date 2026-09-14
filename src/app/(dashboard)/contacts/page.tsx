@@ -23,9 +23,9 @@ import {
   Upload,
   SlidersHorizontal,
   Loader2,
-  MoreHorizontal,
-  Pencil,
   Trash2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ImportWizard } from '@/components/import/import-wizard';
@@ -34,14 +34,12 @@ import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { GatedButton } from '@/components/ui/gated-button';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
+import { Badge } from '@/components/ui/badge';
 import { isDateInFilter } from "@/lib/date-filters";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, ConfirmDialog } from '@/components/shared';
 import { MapPin } from 'lucide-react';
@@ -68,6 +66,9 @@ export default function ContactsPage() {
   const territoryEnabled = isModuleEnabled('territory');
 
   const [contacts, setContacts] = useState<ContactWithData[]>([]);
+  // When on, the list also loads soft-deleted (Inactive) customers so they can
+  // be reviewed and re-activated.
+  const [showInactive, setShowInactive] = useState(false);
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string; color?: string }[] }>({ enabled: false, levels: [] });
   const [loading, setLoading] = useState(true);
   
@@ -95,8 +96,11 @@ export default function ContactsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    let contactsQuery = supabase.from('contacts').select('*').order('created_at', { ascending: false });
+    // Default view hides soft-deleted customers; the "Show Inactive" toggle loads them too.
+    if (!showInactive) contactsQuery = contactsQuery.eq('is_active', true);
     const [{ data: contactsData }, { data: tagsData }, { data: fieldsData }] = await Promise.all([
-      supabase.from('contacts').select('*').order('created_at', { ascending: false }),
+      contactsQuery,
       supabase.from('tags').select('*').order('name'),
       supabase.from('custom_fields').select('*').eq('module_name', 'contact')
     ]);
@@ -160,7 +164,7 @@ export default function ContactsPage() {
 
     setContacts(enhancedContacts);
     setLoading(false);
-  }, [supabase, accountId]);
+  }, [supabase, accountId, showInactive]);
 
   useEffect(() => {
     fetchData();
@@ -196,15 +200,16 @@ export default function ContactsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
 
+    // Soft delete: mark Inactive rather than hard-delete, so it can be re-activated.
     const { error } = await supabase
       .from('contacts')
-      .delete()
+      .update({ is_active: false })
       .eq('id', deleteTarget.id);
 
     if (error) {
-      toast.error('Failed to delete contact');
+      toast.error('Failed to deactivate customer');
     } else {
-      toast.success('Customer deleted');
+      toast.success('Customer moved to Inactive');
       fetchData();
     }
 
@@ -213,17 +218,30 @@ export default function ContactsPage() {
     setDeleteTarget(null);
   }
 
+  async function handleReactivate(contact: Contact) {
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_active: true })
+      .eq('id', contact.id);
+    if (error) {
+      toast.error('Failed to re-activate customer');
+    } else {
+      toast.success('Customer re-activated');
+      fetchData();
+    }
+  }
+
   async function handleBulkDelete() {
     const ids = Array.from(selectedContacts);
     if (ids.length === 0) return;
     setDeleting(true);
 
-    const { error } = await supabase.from('contacts').delete().in('id', ids);
+    const { error } = await supabase.from('contacts').update({ is_active: false }).in('id', ids);
 
     if (error) {
-      toast.error('Failed to delete contacts');
+      toast.error('Failed to deactivate customers');
     } else {
-      toast.success(`${ids.length} contact${ids.length === 1 ? '' : 's'} deleted`);
+      toast.success(`${ids.length} customer${ids.length === 1 ? '' : 's'} moved to Inactive`);
       setSelectedContacts(new Set());
       fetchData();
     }
@@ -364,28 +382,41 @@ export default function ContactsPage() {
       )
     },
     {
-      id: "actions",
-      label: "",
+      id: "status",
+      label: "Status",
+      type: "select",
       visibleByDefault: true,
-      render: (contact) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger 
-            render={<Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" />}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-popover border-border">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditForm(contact); }} className="text-popover-foreground">
-              <Pencil className="size-4 mr-2" /> Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem variant="destructive" onClick={(e) => { e.stopPropagation(); confirmDelete(contact); }}>
-              <Trash2 className="size-4 mr-2" /> Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )
+      options: [
+        { label: "Active", value: "active" },
+        { label: "Inactive", value: "inactive" },
+      ],
+      render: (contact) => {
+        const active = (contact as any).is_active !== false;
+        return (
+          <Badge className={active
+            ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
+            : 'bg-muted text-muted-foreground border-border text-[10px] px-1.5 font-semibold'}>
+            {active ? 'Active' : 'Inactive'}
+          </Badge>
+        );
+      }
+    },
+    {
+      id: "actions",
+      label: "Action",
+      visibleByDefault: true,
+      render: (contact) => {
+        const inactive = (contact as any).is_active === false;
+        return (
+          <RowActions
+            isInactive={inactive}
+            onEdit={() => openEditForm(contact)}
+            onDelete={() => confirmDelete(contact)}
+            onReactivate={() => handleReactivate(contact)}
+            deleteTitle="Move to Inactive"
+          />
+        );
+      }
     }
   ];
 
@@ -534,6 +565,12 @@ export default function ContactsPage() {
           if (!territoryName?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "created_at") {
           if (!isDateInFilter(contact.created_at, val as string | string[])) return false;
+        } else if (colId === "status") {
+          const want = val as string[];
+          if (Array.isArray(want) && want.length) {
+            const state = (contact as any).is_active !== false ? "active" : "inactive";
+            if (!want.includes(state)) return false;
+          }
         } else if (colId.startsWith("cf_")) {
           const cfVal = contact[colId];
           const typeOfCf = customFields.find(f => `cf_${f.id}` === colId)?.field_type;
@@ -558,7 +595,7 @@ export default function ContactsPage() {
         onClear={() => setSelectedContacts(new Set())}
         actions={[
           {
-            label: "Delete Selected",
+            label: "Move to Inactive",
             icon: <Trash2 className="size-3.5" />,
             variant: "destructive",
             onClick: () => setBulkDeleteOpen(true),
@@ -578,6 +615,12 @@ export default function ContactsPage() {
               <Plus className="size-3 mr-1" /> Add Customer
             </GatedButton>
           </div>
+        }
+        menuActions={
+          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
+            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+          </DropdownMenuItem>
         }
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
@@ -603,14 +646,14 @@ export default function ContactsPage() {
       <ConfirmDialog
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}
-        title="Delete Customer"
+        title="Move Customer to Inactive"
         description={
           <>
-            Are you sure you want to delete <span className="font-medium text-foreground">{deleteTarget?.name || deleteTarget?.phone}</span>? This action cannot be undone.
+            Move <span className="font-medium text-foreground">{deleteTarget?.company || deleteTarget?.name || deleteTarget?.phone}</span> to Inactive? It will be hidden from the default list but you can re-activate it anytime via “Show Inactive”.
           </>
         }
         variant="danger"
-        confirmLabel="Delete"
+        confirmLabel="Move to Inactive"
         loading={deleting}
         onConfirm={handleDelete}
       />
@@ -618,10 +661,10 @@ export default function ContactsPage() {
       <ConfirmDialog
         open={bulkDeleteOpen}
         onOpenChange={setBulkDeleteOpen}
-        title={`Delete ${selectedContacts.size} Customers`}
-        description={`Are you sure you want to delete ${selectedContacts.size} contacts? This action cannot be undone.`}
+        title={`Move ${selectedContacts.size} Customers to Inactive`}
+        description={`Move ${selectedContacts.size} customer${selectedContacts.size === 1 ? '' : 's'} to Inactive? They can be re-activated anytime via “Show Inactive”.`}
         variant="danger"
-        confirmLabel="Delete"
+        confirmLabel="Move to Inactive"
         loading={deleting}
         onConfirm={handleBulkDelete}
       />
