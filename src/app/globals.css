@@ -254,8 +254,17 @@ html[data-theme="rose"] {
   .dark {
     color-scheme: dark;
   }
-  input[type="date"], input[type="time"], input[type="datetime-local"] {
+  /* The native calendar/clock picker indicator inherits its color from
+     color-scheme. This must follow the active theme — forcing `dark`
+     unconditionally rendered a near-white icon that vanished on the light
+     theme's white input background. */
+  .dark input[type="date"],
+  .dark input[type="time"],
+  .dark input[type="datetime-local"] {
     color-scheme: dark;
+  }
+  input[type="date"], input[type="time"], input[type="datetime-local"] {
+    color-scheme: light;
   }
 }
 

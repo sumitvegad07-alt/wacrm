@@ -24,7 +24,9 @@ import {
 export default function CustomerVisitsPage() {
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  // No default date: the page opens showing recent visits across all days.
+  // Picking a date narrows to that day; clearing it returns to "all".
+  const [selectedDate, setSelectedDate] = useState('');
   const [visitsData, setVisitsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [filterState, setFilterState] = useState<FilterState>({});
@@ -41,15 +43,10 @@ export default function CustomerVisitsPage() {
 
   const fetchVisits = async () => {
     setIsLoading(true);
-    const startOfDay = new Date(selectedDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(selectedDate);
-    endOfDay.setHours(23, 59, 59, 999);
 
     // Directional data-scoping (app-level; RLS is the real boundary). No-op unless the account
     // has Reporting Hierarchy on and the role isn't a bypass — see useDataScope.
-    const { data, error } = await scope.apply(
-      supabase
+    let query = supabase
       .from('site_visits')
       .select(`
         id,
@@ -67,11 +64,21 @@ export default function CustomerVisitsPage() {
         contacts ( name ),
         profiles ( full_name )
       `)
-      .gte('check_in_at', startOfDay.toISOString())
-      .lte('check_in_at', endOfDay.toISOString())
-      .order('check_in_at', { ascending: false }),
-      'user_id',
-    );
+      .order('check_in_at', { ascending: false })
+      .limit(500);
+
+    // Date is an optional filter now — empty means "all recent visits".
+    if (selectedDate) {
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      query = query
+        .gte('check_in_at', startOfDay.toISOString())
+        .lte('check_in_at', endOfDay.toISOString());
+    }
+
+    const { data, error } = await scope.apply(query, 'user_id');
 
     if (data) {
       // Visits are polymorphic (target_type 'Customer' | 'Lead'). The
@@ -294,12 +301,20 @@ export default function CustomerVisitsPage() {
         title="Customer Visits"
         subtitle="Track field visits, feedback, and check-in times."
         actions={
-          <Input 
-            type="date" 
-            value={selectedDate} 
-            onChange={(e) => setSelectedDate(e.target.value)} 
-            className="w-auto h-9"
-          />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Filter by date</span>
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-auto h-9"
+            />
+            {selectedDate && (
+              <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSelectedDate('')}>
+                All dates
+              </Button>
+            )}
+          </div>
         }
       />
 

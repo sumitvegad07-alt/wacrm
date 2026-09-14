@@ -245,7 +245,8 @@ export default function ContactsPage() {
       id: "contact_person",
       label: "Contact Person",
       type: "text",
-      visibleByDefault: false,
+      // Shown by default: FMCG list scans as "Company → Contact Person".
+      visibleByDefault: true,
       render: (contact) => <span>{contact.name || "-"}</span>
     },
     {

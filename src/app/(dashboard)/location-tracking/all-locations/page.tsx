@@ -37,9 +37,9 @@ export default function AllLocationsPage() {
   const [mapRow, setMapRow] = useState<any | null>(null);
   const [issueRow, setIssueRow] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  // No default date: opens on recent activity across days. Picking a date
+  // narrows to that day; clearing returns to the recent window.
+  const [selectedDate, setSelectedDate] = useState('');
   const [pingsData, setPingsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterState, setFilterState] = useState<FilterState>({});
@@ -57,19 +57,31 @@ export default function AllLocationsPage() {
     if (!accountId) return;
     setIsLoading(true);
 
-    const startOfDay = new Date(selectedDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(selectedDate);
-    endOfDay.setHours(23, 59, 59, 999);
-    const isoStart = startOfDay.toISOString();
-    const isoEnd = endOfDay.toISOString();
+    // Date is an optional filter. When set, bound to that day. When empty, load a
+    // rolling recent window instead of the whole ping history — pings are the highest-
+    // volume table in the product and this view auto-refreshes every 30s, so an
+    // unbounded load would be a genuine performance problem. (Proper server-side
+    // pagination is the follow-up that lets this show truly "all" cheaply.)
+    const hasDate = !!selectedDate;
+    let isoStart = '';
+    let isoEnd = '';
+    if (hasDate) {
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      isoStart = startOfDay.toISOString();
+      isoEnd = endOfDay.toISOString();
+    }
+    const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const applyWindow = (q: any): any =>
+      hasDate ? q.gte('recorded_at', isoStart).lte('recorded_at', isoEnd) : q.gte('recorded_at', recentSince);
 
-    const [{ data: pings }, { data: events }, { data: snaps }, { data: acct }] =
-      await Promise.all([
-        supabase
-          .from('location_pings')
-          .select(
-            `
+    let pingsQuery = supabase
+      .from('location_pings')
+      .select(
+        `
         id,
         user_id,
         lat,
@@ -79,27 +91,27 @@ export default function AllLocationsPage() {
         source,
         profiles ( full_name, employee_roles ( name ) )
       `
-          )
-          // Trace rows exist only to make distance accurate — one every 15 seconds. They are
-          // machine data, not something an admin should scroll through, so this stays the
-          // human-readable set.
-          .neq('source', 'trace')
-          .gte('recorded_at', isoStart)
-          .lte('recorded_at', isoEnd)
-          .order('recorded_at', { ascending: false }),
+      )
+      // Trace rows exist only to make distance accurate — one every 15 seconds. They are
+      // machine data, not something an admin should scroll through, so this stays the
+      // human-readable set.
+      .neq('source', 'trace')
+      .order('recorded_at', { ascending: false });
+    pingsQuery = applyWindow(pingsQuery);
+    if (!hasDate) pingsQuery = pingsQuery.limit(500);
+
+    const [{ data: pings }, { data: events }, { data: snaps }, { data: acct }] =
+      await Promise.all([
+        pingsQuery,
         // Both feed the "why was there no ping" explanation on each row.
-        supabase
-          .from('tracking_events')
-          .select('user_id, event_type, recorded_at')
-          .gte('recorded_at', isoStart)
-          .lte('recorded_at', isoEnd),
-        supabase
-          .from('device_health_snapshots')
-          .select(
-            'user_id, recorded_at, bg_location_permission, battery_optimization_on, low_power_mode, location_services_on, app_version',
-          )
-          .gte('recorded_at', isoStart)
-          .lte('recorded_at', isoEnd),
+        applyWindow(supabase.from('tracking_events').select('user_id, event_type, recorded_at')),
+        applyWindow(
+          supabase
+            .from('device_health_snapshots')
+            .select(
+              'user_id, recorded_at, bg_location_permission, battery_optimization_on, low_power_mode, location_services_on, app_version',
+            ),
+        ),
         supabase.from('accounts').select('settings').eq('id', accountId).maybeSingle(),
       ]);
 
@@ -388,12 +400,18 @@ export default function AllLocationsPage() {
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <h1 className="text-2xl font-bold tracking-tight">All Locations</h1>
         <div className="flex items-center gap-2">
+          <span className="text-muted-foreground whitespace-nowrap text-xs">Filter by date</span>
           <Input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             className="h-9 w-auto"
           />
+          {selectedDate && (
+            <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSelectedDate('')}>
+              Recent
+            </Button>
+          )}
         </div>
       </div>
 
