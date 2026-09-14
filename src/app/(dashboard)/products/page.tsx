@@ -22,8 +22,6 @@ import {
 import {
   Search,
   Plus,
-  MoreHorizontal,
-  Pencil,
   Trash2,
   Loader2,
   Upload,
@@ -37,14 +35,11 @@ import { ImportWizard } from '@/components/import/import-wizard';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
 import { useCan } from '@/hooks/use-can';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 export default function ProductsPage() {
@@ -69,7 +64,8 @@ export default function ProductsPage() {
   
   // DataTable state
   const [globalSearch, setGlobalSearch] = useState('');
-  const [hideInactive, setHideInactive] = useState(false);
+  // Default hides Inactive (soft-deleted) products; toggle to reveal them.
+  const [hideInactive, setHideInactive] = useState(true);
   const [filterState, setFilterState] = useState<FilterState>({});
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   
@@ -131,26 +127,10 @@ export default function ProductsPage() {
     }
   }, [searchParams, router]);
 
-  async function handleBulkDelete() {
-    if (selectedProductIds.size === 0) return;
-    
-    if (!confirm(`Are you sure you want to delete ${selectedProductIds.size} products? This cannot be undone.`)) {
-      return;
-    }
-
-    setBulkActionLoading(true);
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .in('id', Array.from(selectedProductIds));
-
-    setBulkActionLoading(false);
-    if (error) {
-      toast.error('Failed to delete products');
-    } else {
-      toast.success(`${selectedProductIds.size} products deleted`);
-      fetchProducts();
-    }
+  async function handleReactivate(product: Product) {
+    const { error } = await supabase.from('products').update({ active: true }).eq('id', product.id);
+    if (error) toast.error('Failed to re-activate product');
+    else { toast.success('Product re-activated'); fetchProducts(); }
   }
 
   async function handleBulkToggleActive(active: boolean) {
@@ -247,35 +227,24 @@ export default function ProductsPage() {
     },
     {
       id: "actions",
-      label: "",
+      label: "Action",
       visibleByDefault: true,
-      render: (product) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger 
-            render={<Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" />}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40 border-border bg-popover">
-            <DropdownMenuItem onClick={(e) => {
-              e.stopPropagation();
+      render: (product) => {
+        const inactive = product.active === false;
+        return (
+          <RowActions
+            editTitle={canEditProducts ? 'Edit' : 'View'}
+            onEdit={() => {
               if (canEditProducts) { setEditProduct(product); setFormOpen(true); }
               else { router.push(`/products/${product.id}`); }
-            }}>
-              <Pencil className="mr-2 h-4 w-4" /> {canEditProducts ? 'Edit' : 'View'}
-            </DropdownMenuItem>
-            {canDeleteProducts && (
-              <>
-                <DropdownMenuSeparator className="bg-border" />
-                <DropdownMenuItem className="text-red-500 focus:text-red-600 focus:bg-red-500/10" onClick={(e) => { e.stopPropagation(); setDeleteTarget(product); setDeleteConfirmOpen(true); }}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )
+            }}
+            onDelete={canDeleteProducts ? () => { setDeleteTarget(product); setDeleteConfirmOpen(true); } : undefined}
+            onReactivate={canDeleteProducts ? () => handleReactivate(product) : undefined}
+            isInactive={inactive}
+            deleteTitle="Move to Inactive"
+          />
+        );
+      }
     }
   ];
 
@@ -352,10 +321,10 @@ export default function ProductsPage() {
             disabled: bulkActionLoading,
           },
           {
-            label: "Delete",
+            label: "Move to Inactive",
             icon: <Trash2 className="size-4" />,
             variant: "destructive",
-            onClick: handleBulkDelete,
+            onClick: () => handleBulkToggleActive(false),
             disabled: bulkActionLoading,
           },
         ]}
@@ -423,11 +392,11 @@ export default function ProductsPage() {
         <DialogContent className="border-border bg-popover text-popover-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-red-500 flex items-center gap-2">
-              <Trash2 className="size-5" /> Delete Product
+              <Trash2 className="size-5" /> Move Product to Inactive
             </DialogTitle>
             <DialogDescription className="text-muted-foreground pt-2">
-              Are you sure you want to delete <span className="font-medium text-foreground">{deleteTarget?.name}</span>? 
-              This will remove the product and all associated custom values. This action cannot be undone.
+              Move <span className="font-medium text-foreground">{deleteTarget?.name}</span> to Inactive?
+              It will be hidden from the default list but you can re-activate it anytime.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 gap-2 sm:gap-0">
@@ -435,12 +404,12 @@ export default function ProductsPage() {
             <Button variant="destructive" onClick={async () => {
               if (!deleteTarget) return;
               setDeleting(true);
-              const { error } = await supabase.from('products').delete().eq('id', deleteTarget.id);
+              const { error } = await supabase.from('products').update({ active: false }).eq('id', deleteTarget.id);
               setDeleting(false);
-              if (error) toast.error('Failed to delete product');
-              else { toast.success('Product deleted'); setDeleteConfirmOpen(false); fetchProducts(); }
+              if (error) toast.error('Failed to deactivate product');
+              else { toast.success('Product moved to Inactive'); setDeleteConfirmOpen(false); fetchProducts(); }
             }} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white">
-              {deleting ? <Loader2 className="size-4 animate-spin" /> : 'Delete Product'}
+              {deleting ? <Loader2 className="size-4 animate-spin" /> : 'Move to Inactive'}
             </Button>
           </DialogFooter>
         </DialogContent>
