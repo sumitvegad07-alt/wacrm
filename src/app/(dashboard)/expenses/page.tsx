@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
-import { Plus, Search, Filter, CheckCircle, XCircle, FileText, Download } from "lucide-react";
+import { Plus, Search, Filter, CheckCircle, XCircle, FileText, Download, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDataScope } from "@/hooks/use-data-scope";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { RowActions } from "@/components/ui/data-table/row-actions";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { isDateInFilter } from "@/lib/date-filters";
 import { ExpenseForm } from "@/components/expenses/expense-form";
@@ -35,6 +37,7 @@ export default function ExpensesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
+  const [showInactive, setShowInactive] = useState(false);
   
   const [filterState, setFilterState] = useState<FilterState>({});
 
@@ -47,15 +50,13 @@ export default function ExpensesPage() {
     // Directional data-scoping on employee_id (profiles.id). No-op unless the account has
     // Reporting Hierarchy on and the role isn't a bypass; otherwise RLS still caps non-admins at
     // their own rows (expenses_select = admin OR own OR extends). See useDataScope.
-    const query = scope.apply(
-      supabase
-        .from("expenses")
-        .select("*, expense_type:expense_types(*), employee:profiles!expenses_employee_id_fkey(*)")
-        .eq("account_id", accountId)
-        .order("created_at", { ascending: false }),
-      "employee_id",
-      "profile",
-    );
+    let expensesBase = supabase
+      .from("expenses")
+      .select("*, expense_type:expense_types(*), employee:profiles!expenses_employee_id_fkey(*)")
+      .eq("account_id", accountId)
+      .order("created_at", { ascending: false });
+    if (!showInactive) expensesBase = expensesBase.eq("is_active", true);
+    const query = scope.apply(expensesBase, "employee_id", "profile");
 
     const { data, error } = await query;
     
@@ -98,7 +99,7 @@ export default function ExpensesPage() {
   useEffect(() => {
     loadExpenses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId, profile, scope.ready, scope.key]);
+  }, [accountId, profile, scope.ready, scope.key, showInactive]);
   useRealtimeRefresh('expenses', loadExpenses);
 
   useEffect(() => {
@@ -145,14 +146,20 @@ export default function ExpensesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this expense? This action cannot be undone.")) return;
-    const { error } = await supabase.from("expenses").delete().eq("id", id);
+    if (!confirm("Move this expense to Inactive? It can be re-activated later.")) return;
+    const { error } = await supabase.from("expenses").update({ is_active: false }).eq("id", id);
     if (error) {
-      toast.error("Failed to delete expense");
+      toast.error("Failed to deactivate expense");
     } else {
-      toast.success("Expense deleted successfully");
+      toast.success("Expense moved to Inactive");
       loadExpenses();
     }
+  };
+
+  const handleReactivate = async (id: string) => {
+    const { error } = await supabase.from("expenses").update({ is_active: true }).eq("id", id);
+    if (error) toast.error("Failed to re-activate expense");
+    else { toast.success("Expense re-activated"); loadExpenses(); }
   };
 
   const handleBulkApprove = async () => {
@@ -255,22 +262,22 @@ export default function ExpensesPage() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to permanently delete ${pendingIds.length} pending expense(s)?`)) return;
+    if (!confirm(`Move ${pendingIds.length} pending expense(s) to Inactive? They can be re-activated later.`)) return;
 
     setLoading(true);
     let successCount = 0;
     
     for (const id of pendingIds) {
-      const { error } = await supabase.from("expenses").delete().eq("id", id);
+      const { error } = await supabase.from("expenses").update({ is_active: false }).eq("id", id);
       if (!error) successCount++;
     }
 
     if (successCount > 0) {
-      toast.success(`Successfully deleted ${successCount} expense(s)`);
+      toast.success(`${successCount} expense(s) moved to Inactive`);
       setSelectedExpenseIds(new Set());
       loadExpenses();
     } else {
-      toast.error("Failed to delete expenses");
+      toast.error("Failed to update expenses");
       setLoading(false);
     }
   };
@@ -336,36 +343,41 @@ export default function ExpensesPage() {
           <span className="text-muted-foreground text-xs">No file</span>
         )
       )
+    },
+    {
+      id: "record_status",
+      label: "Record Status",
+      type: "select",
+      visibleByDefault: true,
+      options: [ { label: "Active", value: "active" }, { label: "Inactive", value: "inactive" } ],
+      render: (expense) => {
+        const active = (expense as any).is_active !== false;
+        return (
+          <Badge className={active
+            ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
+            : 'bg-muted text-muted-foreground border-border text-[10px] px-1.5 font-semibold'}>
+            {active ? 'Active' : 'Inactive'}
+          </Badge>
+        );
+      }
     }
   ];
 
   if (isAdmin) {
     columns.push({
       id: "actions",
-      label: "Actions",
+      label: "Action",
       type: "text",
       render: (expense) => {
+        const inactive = (expense as any).is_active === false;
         return (
-          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2.5 text-xs font-medium"
-              onClick={() => { setSelectedExpense(expense); setFormOpen(true); }}
-            >
-              Edit
-            </Button>
-            {expense.status === "Pending" && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10"
-                onClick={() => handleDelete(expense.id)}
-              >
-                Delete
-              </Button>
-            )}
-          </div>
+          <RowActions
+            onEdit={() => { setSelectedExpense(expense); setFormOpen(true); }}
+            onDelete={!inactive && expense.status === "Pending" ? () => handleDelete(expense.id) : undefined}
+            onReactivate={inactive ? () => handleReactivate(expense.id) : undefined}
+            isInactive={inactive}
+            deleteTitle="Move to Inactive"
+          />
         );
       }
     });
@@ -404,6 +416,12 @@ export default function ExpensesPage() {
           if (!(val as string[]).includes(expense.expense_type?.expense_name || "")) return false;
         } else if (colId === "status") {
           if (!(val as string[]).includes(expense.status)) return false;
+        } else if (colId === "record_status") {
+          const want = val as string[];
+          if (Array.isArray(want) && want.length) {
+            const state = (expense as any).is_active !== false ? "active" : "inactive";
+            if (!want.includes(state)) return false;
+          }
         }
       }
 
@@ -482,6 +500,12 @@ export default function ExpensesPage() {
         }
         filterState={filterState}
         onFilterChange={handleFilterChange}
+        menuActions={isAdmin ? (
+          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
+            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+          </DropdownMenuItem>
+        ) : undefined}
         storageKey="wacrm_expenses_table_columns"
         isLoading={loading}
         rowKey={(expense) => expense.id}

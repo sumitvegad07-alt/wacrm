@@ -39,12 +39,16 @@ import {
   CheckSquare,
   Upload,
   SlidersHorizontal,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { TaskForm } from '@/components/tasks/task-form';
 import { ImportWizard } from '@/components/import/import-wizard';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
+import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { isDateInFilter } from "@/lib/date-filters";
@@ -99,12 +103,15 @@ export default function TasksPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
-    
+
+    let tasksBase = supabase.from('tasks').select('*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), contact:contacts!tasks_contact_id_fkey(name, phone), deal:deals!tasks_deal_id_fkey(title)').order('created_at', { ascending: false });
+    if (!showInactive) tasksBase = tasksBase.eq('is_active', true);
     const [{ data: tasksData }, { data: fieldsData }] = await Promise.all([
-      supabase.from('tasks').select('*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), contact:contacts!tasks_contact_id_fkey(name, phone), deal:deals!tasks_deal_id_fkey(title)').order('created_at', { ascending: false }),
+      tasksBase,
       supabase.from('custom_fields').select('*').eq('module_name', 'task')
     ]);
 
@@ -133,7 +140,7 @@ export default function TasksPage() {
     setTasks(enhancedTasks);
     setLoading(false);
     setSelectedTaskIds(new Set());
-  }, [supabase]);
+  }, [supabase, showInactive]);
 
   useEffect(() => {
     fetchTasks();
@@ -150,14 +157,20 @@ export default function TasksPage() {
     if (!deleteTarget) return;
     setDeleting(true);
 
-    const { error } = await supabase.from('tasks').delete().eq('id', deleteTarget.id);
+    const { error } = await supabase.from('tasks').update({ is_active: false }).eq('id', deleteTarget.id);
 
-    if (error) toast.error('Failed to delete task');
-    else { toast.success('Task deleted'); fetchTasks(); }
+    if (error) toast.error('Failed to deactivate task');
+    else { toast.success('Task moved to Inactive'); fetchTasks(); }
 
     setDeleting(false);
     setDeleteConfirmOpen(false);
     setDeleteTarget(null);
+  }
+
+  async function handleReactivate(task: Task) {
+    const { error } = await supabase.from('tasks').update({ is_active: true }).eq('id', task.id);
+    if (error) toast.error('Failed to re-activate task');
+    else { toast.success('Task re-activated'); fetchTasks(); }
   }
 
   async function handleQuickComplete(task: any, e: React.MouseEvent) {
@@ -190,12 +203,12 @@ export default function TasksPage() {
     if (selectedTaskIds.size === 0) return;
     setBulkActionLoading(true);
     const ids = Array.from(selectedTaskIds);
-    const { error } = await supabase.from('tasks').delete().in('id', ids);
+    const { error } = await supabase.from('tasks').update({ is_active: false }).in('id', ids);
     if (!error) {
-      toast.success(`Deleted ${ids.length} tasks`);
+      toast.success(`${ids.length} task(s) moved to Inactive`);
       fetchTasks();
     } else {
-      toast.error('Failed to delete tasks');
+      toast.error('Failed to update tasks');
     }
     setBulkActionLoading(false);
   }
@@ -281,28 +294,38 @@ export default function TasksPage() {
       )
     },
     {
-      id: "actions",
-      label: "",
+      id: "record_status",
+      label: "Record Status",
+      type: "select",
       visibleByDefault: true,
-      render: (task) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger 
-            render={<Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" />}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40 border-border bg-popover">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditTask(task); setFormOpen(true); }}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem className="text-red-500 focus:text-red-600 focus:bg-red-500/10" onClick={(e) => { e.stopPropagation(); setDeleteTarget(task); setDeleteConfirmOpen(true); }}>
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )
+      options: [ { label: "Active", value: "active" }, { label: "Inactive", value: "inactive" } ],
+      render: (task) => {
+        const active = (task as any).is_active !== false;
+        return (
+          <Badge className={active
+            ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
+            : 'bg-muted text-muted-foreground border-border text-[10px] px-1.5 font-semibold'}>
+            {active ? 'Active' : 'Inactive'}
+          </Badge>
+        );
+      }
+    },
+    {
+      id: "actions",
+      label: "Action",
+      visibleByDefault: true,
+      render: (task) => {
+        const inactive = (task as any).is_active === false;
+        return (
+          <RowActions
+            isInactive={inactive}
+            onEdit={() => { setEditTask(task); setFormOpen(true); }}
+            onDelete={() => { setDeleteTarget(task); setDeleteConfirmOpen(true); }}
+            onReactivate={() => handleReactivate(task)}
+            deleteTitle="Move to Inactive"
+          />
+        );
+      }
     }
   ];
 
@@ -333,6 +356,12 @@ export default function TasksPage() {
           if (!task.title?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "status") {
           if (!(val as string[]).includes(task.status)) return false;
+        } else if (colId === "record_status") {
+          const want = val as string[];
+          if (Array.isArray(want) && want.length) {
+            const state = (task as any).is_active !== false ? "active" : "inactive";
+            if (!want.includes(state)) return false;
+          }
         } else if (colId === "priority") {
           if (!(val as string[]).includes(task.priority)) return false;
         } else if (colId === "assignee") {
@@ -399,7 +428,7 @@ export default function TasksPage() {
         onClear={() => setSelectedTaskIds(new Set())}
         actions={[
           {
-            label: "Delete",
+            label: "Move to Inactive",
             icon: <Trash2 className="size-4" />,
             variant: "destructive",
             onClick: handleBulkDelete,
@@ -429,6 +458,12 @@ export default function TasksPage() {
         data={filteredTasks}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
+        menuActions={
+          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
+            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+          </DropdownMenuItem>
+        }
         storageKey="wacrm_tasks_table_columns"
         isLoading={loading}
         rowKey={(task) => task.id}
@@ -451,17 +486,17 @@ export default function TasksPage() {
         <DialogContent className="border-border bg-popover text-popover-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-red-500 flex items-center gap-2">
-              <Trash2 className="size-5" /> Delete Task
+              <Trash2 className="size-5" /> Move Task to Inactive
             </DialogTitle>
             <DialogDescription className="text-muted-foreground pt-2">
-              Are you sure you want to delete <span className="font-medium text-foreground">{deleteTarget?.title}</span>? 
-              This action cannot be undone.
+              Move <span className="font-medium text-foreground">{deleteTarget?.title}</span> to Inactive?
+              It will be hidden from the default list but you can re-activate it anytime via “Show Inactive”.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} disabled={deleting} className="border-border">Cancel</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white">
-              {deleting ? <Loader2 className="size-4 animate-spin" /> : 'Delete Task'}
+              {deleting ? <Loader2 className="size-4 animate-spin" /> : 'Move to Inactive'}
             </Button>
           </DialogFooter>
         </DialogContent>

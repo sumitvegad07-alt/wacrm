@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Plus, Pencil, Eye, Search, Trash2, Link as LinkIcon } from "lucide-react";
+import { Plus, Eye, EyeOff, Search, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -12,6 +12,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { RowActions } from "@/components/ui/data-table/row-actions";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { isDateInFilter } from "@/lib/date-filters";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -27,48 +29,52 @@ export default function AnnouncementsPage() {
   const [filterState, setFilterState] = useState<FilterState>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
   const loadAnnouncements = useCallback(async () => {
     if (!accountId) return;
     setLoading(true);
-    
-    const { data, error } = await supabase
+
+    let q = supabase
       .from("tenant_announcements")
       .select("*")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false });
-      
+    if (!showInactive) q = q.eq("is_active", true);
+    const { data, error } = await q;
+
     if (error) {
       toast.error("Failed to load announcements");
     } else {
       setAnnouncements(data || []);
     }
     setLoading(false);
-  }, [accountId, supabase]);
+  }, [accountId, supabase, showInactive]);
 
   useEffect(() => {
     loadAnnouncements();
   }, [loadAnnouncements]);
 
-  const requestDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDeleteId(id);
-  };
-
   const confirmDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
-    const { error } = await supabase.from("tenant_announcements").delete().eq("id", deleteId);
+    const { error } = await supabase.from("tenant_announcements").update({ is_active: false }).eq("id", deleteId);
     setDeleting(false);
     if (error) {
-      toast.error("Failed to delete announcement");
+      toast.error("Failed to deactivate announcement");
     } else {
-      toast.success("Announcement deleted successfully");
+      toast.success("Announcement moved to Inactive");
       setDeleteId(null);
       loadAnnouncements();
     }
+  };
+
+  const handleReactivate = async (id: string) => {
+    const { error } = await supabase.from("tenant_announcements").update({ is_active: true }).eq("id", id);
+    if (error) toast.error("Failed to re-activate announcement");
+    else { toast.success("Announcement re-activated"); loadAnnouncements(); }
   };
 
   const columns: ColumnDef<any>[] = useMemo(() => {
@@ -137,40 +143,45 @@ export default function AnnouncementsPage() {
             </div>
           );
         }
+      },
+      {
+        id: "record_status",
+        label: "Status",
+        type: "select",
+        visibleByDefault: true,
+        options: [ { label: "Active", value: "active" }, { label: "Inactive", value: "inactive" } ],
+        render: (row) => {
+          const active = row.is_active !== false;
+          return (
+            <Badge className={active
+              ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
+              : 'bg-muted text-muted-foreground border-border text-[10px] px-1.5 font-semibold'}>
+              {active ? 'Active' : 'Inactive'}
+            </Badge>
+          );
+        }
       }
     ];
 
     if (isAdmin) {
       cols.push({
         id: "actions",
-        label: "Actions",
+        label: "Action",
         type: "text",
         render: (row) => (
-          <div className="flex items-center gap-1">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={(e) => { e.stopPropagation(); router.push(`/announcements/${row.id}/edit`); }} 
-              className="h-8 w-8"
-              title="Edit"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={(e) => requestDelete(row.id, e)}
-              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+          <RowActions
+            isInactive={row.is_active === false}
+            onEdit={() => router.push(`/announcements/${row.id}/edit`)}
+            onDelete={() => setDeleteId(row.id)}
+            onReactivate={() => handleReactivate(row.id)}
+            deleteTitle="Move to Inactive"
+          />
         )
       });
     }
 
     return cols;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, router]);
 
   const filteredData = useMemo(() => {
@@ -189,6 +200,12 @@ export default function AnnouncementsPage() {
         
         if (colId === 'title') {
           if (!item.title?.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === 'record_status') {
+          const want = val as string[];
+          if (Array.isArray(want) && want.length) {
+            const state = item.is_active !== false ? 'active' : 'inactive';
+            if (!want.includes(state)) return false;
+          }
         } else if (colId === 'created_at') {
           if (!isDateInFilter(item.created_at, val as string | string[])) return false;
         } else if (colId === 'expiry_date') {
@@ -237,15 +254,21 @@ export default function AnnouncementsPage() {
           storageKey="announcements-table"
           rowKey={(row) => row.id}
           onRowClick={(row) => router.push(`/announcements/${row.id}`)}
+          menuActions={isAdmin ? (
+            <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
+              {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+              {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+            </DropdownMenuItem>
+          ) : undefined}
         />
       </div>
 
       <ConfirmDialog
         open={deleteId !== null}
         onOpenChange={(o) => { if (!o) setDeleteId(null); }}
-        title="Delete announcement"
-        description="Are you sure you want to delete this announcement? This cannot be undone."
-        confirmLabel="Delete"
+        title="Move announcement to Inactive"
+        description="Move this announcement to Inactive? It will be hidden from the default list but you can re-activate it anytime via “Show Inactive”."
+        confirmLabel="Move to Inactive"
         variant="danger"
         loading={deleting}
         onConfirm={confirmDelete}

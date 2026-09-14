@@ -27,6 +27,9 @@ import {
   Check,
   X,
   SlidersHorizontal,
+  Eye,
+  EyeOff,
+  RotateCcw,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { logQuotationActivity } from '@/lib/quotations';
@@ -77,6 +80,7 @@ export default function QuotationsPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   // Form State
   const [formOpen, setFormOpen] = useState(false);
@@ -93,8 +97,10 @@ export default function QuotationsPage() {
   const fetchQuotations = useCallback(async () => {
     setLoading(true);
 
+    let quotationsBase = supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), lead:leads!quotations_lead_id_fkey(name, contact_person)').eq('is_latest_version', true).order('created_at', { ascending: false });
+    if (!showInactive) quotationsBase = quotationsBase.eq('is_active', true);
     const [{ data: quotationsData, error: quotationsError }, { data: fieldsData }] = await Promise.all([
-      supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), lead:leads!quotations_lead_id_fkey(name, contact_person)').eq('is_latest_version', true).order('created_at', { ascending: false }),
+      quotationsBase,
       supabase.from('custom_fields').select('*').eq('module_name', 'quotation')
     ]);
 
@@ -144,7 +150,7 @@ export default function QuotationsPage() {
     setQuotations(enhancedQuotations);
     setLoading(false);
     setSelectedIds(new Set());
-  }, [supabase]);
+  }, [supabase, showInactive]);
 
   useEffect(() => {
     fetchQuotations();
@@ -165,26 +171,32 @@ export default function QuotationsPage() {
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
-    const { error } = await supabase.from('quotations').delete().eq('id', deleteTarget.id);
-    if (error) toast.error('Failed to delete quotation');
-    else { toast.success('Quotation deleted'); fetchQuotations(); }
+    const { error } = await supabase.from('quotations').update({ is_active: false }).eq('id', deleteTarget.id);
+    if (error) toast.error('Failed to deactivate quotation');
+    else { toast.success('Quotation moved to Inactive'); fetchQuotations(); }
     setDeleting(false);
     setDeleteConfirmOpen(false);
     setDeleteTarget(null);
   }
 
+  async function handleReactivate(id: string) {
+    const { error } = await supabase.from('quotations').update({ is_active: true }).eq('id', id);
+    if (error) toast.error('Failed to re-activate quotation');
+    else { toast.success('Quotation re-activated'); fetchQuotations(); }
+  }
+
   async function handleBulkDelete() {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} selected quotation(s)? This action cannot be undone.`)) return;
-    
+    if (!window.confirm(`Move ${selectedIds.size} selected quotation(s) to Inactive? They can be re-activated later.`)) return;
+
     setBulkActionLoading(true);
     const ids = Array.from(selectedIds);
-    const { error } = await supabase.from('quotations').delete().in('id', ids);
+    const { error } = await supabase.from('quotations').update({ is_active: false }).in('id', ids);
     if (!error) {
-      toast.success(`Deleted ${ids.length} quotations`);
+      toast.success(`${ids.length} quotation(s) moved to Inactive`);
       fetchQuotations();
     } else {
-      toast.error('Failed to delete quotations');
+      toast.error('Failed to update quotations');
     }
     setBulkActionLoading(false);
   }
@@ -268,8 +280,25 @@ export default function QuotationsPage() {
       render: (quotation) => <span className="text-muted-foreground text-sm">{quotation.creator?.full_name || quotation.creator?.email || '-'}</span>
     },
     {
+      id: "record_status",
+      label: "Record Status",
+      type: "select",
+      visibleByDefault: true,
+      options: [ { label: "Active", value: "active" }, { label: "Inactive", value: "inactive" } ],
+      render: (quotation) => {
+        const active = quotation.is_active !== false;
+        return (
+          <Badge className={active
+            ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
+            : 'bg-muted text-muted-foreground border-border text-[10px] px-1.5 font-semibold'}>
+            {active ? 'Active' : 'Inactive'}
+          </Badge>
+        );
+      }
+    },
+    {
       id: "actions",
-      label: "",
+      label: "Action",
       visibleByDefault: true,
       render: (quotation) => (
         <DropdownMenu>
@@ -340,16 +369,25 @@ export default function QuotationsPage() {
               </>
             )}
             <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeleteTarget(quotation);
-                setDeleteConfirmOpen(true);
-              }}
-            >
-              <Trash2 className="size-4 mr-2" /> Delete
-            </DropdownMenuItem>
+            {quotation.is_active === false ? (
+              <DropdownMenuItem
+                className="text-emerald-600 focus:bg-emerald-500/10 cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); handleReactivate(quotation.id); }}
+              >
+                <RotateCcw className="size-4 mr-2" /> Re-activate
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteTarget(quotation);
+                  setDeleteConfirmOpen(true);
+                }}
+              >
+                <Trash2 className="size-4 mr-2" /> Move to Inactive
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )
@@ -382,6 +420,12 @@ export default function QuotationsPage() {
           if (!quotation.quotation_number?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "status") {
           if (!(val as string[]).includes(quotation.status)) return false;
+        } else if (colId === "record_status") {
+          const want = val as string[];
+          if (Array.isArray(want) && want.length) {
+            const state = quotation.is_active !== false ? "active" : "inactive";
+            if (!want.includes(state)) return false;
+          }
         } else if (colId === "contact") {
           const matchC = quotation.contact?.name?.toLowerCase().includes((val as string).toLowerCase());
           const matchL = quotation.lead?.name?.toLowerCase().includes((val as string).toLowerCase());
@@ -483,7 +527,7 @@ export default function QuotationsPage() {
         onClear={() => setSelectedIds(new Set())}
         actions={[
           {
-            label: "Delete",
+            label: "Move to Inactive",
             icon: <Trash2 className="size-4" />,
             variant: "destructive",
             onClick: handleBulkDelete,
@@ -497,6 +541,12 @@ export default function QuotationsPage() {
         data={filteredQuotations}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
+        menuActions={
+          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
+            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+          </DropdownMenuItem>
+        }
         storageKey="wacrm_quotations_table_columns"
         isLoading={loading}
         rowKey={(quotation) => quotation.id}
@@ -515,13 +565,13 @@ export default function QuotationsPage() {
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-popover-foreground">Delete Quotation</DialogTitle>
+            <DialogTitle className="text-popover-foreground">Move Quotation to Inactive</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Are you sure you want to delete{' '}
+              Move{' '}
               <span className="text-popover-foreground font-medium">
                 {deleteTarget?.quotation_number}
               </span>
-              ? This action cannot be undone.
+              {' '}to Inactive? It will be hidden from the default list but you can re-activate it anytime via “Show Inactive”.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="bg-popover border-border">
@@ -534,7 +584,7 @@ export default function QuotationsPage() {
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
               {deleting && <Loader2 className="size-4 animate-spin mr-2" />}
-              Delete
+              Move to Inactive
             </Button>
           </DialogFooter>
         </DialogContent>
