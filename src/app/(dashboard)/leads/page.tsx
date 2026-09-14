@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, Filter, Upload, MapPin } from "lucide-react";
+import { Plus, Search, Filter, Upload, MapPin, Eye, EyeOff, Trash2 } from "lucide-react";
 import {
   PointMapDialog,
   formatLatLng,
@@ -19,11 +19,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LeadForm } from "@/components/leads/lead-form";
 import { ImportWizard } from "@/components/import/import-wizard";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
 import { isDateInFilter } from "@/lib/date-filters";
 import { CustomField } from "@/types";
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
 
 interface Lead {
   id: string;
@@ -56,8 +59,16 @@ export default function LeadsPage() {
   const [globalSearch, setGlobalSearch] = useState("");
 
   const [formOpen, setFormOpen] = useState(false);
+  const [editLead, setEditLead] = useState<Lead | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+  const [showInactive, setShowInactive] = useState(false);
+
+  // Soft-delete dialogs
+  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [filterState, setFilterState] = useState<FilterState>({});
 
@@ -71,12 +82,14 @@ export default function LeadsPage() {
     if (!account) return;
     const supabase = createClient();
     
-    // Fetch leads
-    const { data: leadsData } = await supabase
+    // Fetch leads (default view hides soft-deleted / Inactive rows)
+    let leadsQuery = supabase
       .from("leads")
       .select("*")
       .eq("account_id", account.id)
       .order("created_at", { ascending: false });
+    if (!showInactive) leadsQuery = leadsQuery.eq("is_active", true);
+    const { data: leadsData } = await leadsQuery;
 
     // Fetch custom field definitions for leads
     const { data: fieldsData } = await supabase
@@ -123,8 +136,49 @@ export default function LeadsPage() {
 
   useEffect(() => {
     loadLeads();
-  }, [account]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, showInactive]);
   useRealtimeRefresh('leads', loadLeads);
+
+  function confirmDelete(lead: Lead) {
+    setDeleteTarget(lead);
+    setDeleteConfirmOpen(true);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget || !account) return;
+    setDeleting(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("leads").update({ is_active: false }).eq("id", deleteTarget.id);
+    if (error) toast.error("Failed to deactivate lead");
+    else { toast.success("Lead moved to Inactive"); loadLeads(); }
+    setDeleting(false);
+    setDeleteConfirmOpen(false);
+    setDeleteTarget(null);
+  }
+
+  async function handleReactivate(lead: Lead) {
+    const supabase = createClient();
+    const { error } = await supabase.from("leads").update({ is_active: true }).eq("id", lead.id);
+    if (error) toast.error("Failed to re-activate lead");
+    else { toast.success("Lead re-activated"); loadLeads(); }
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selectedLeads);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("leads").update({ is_active: false }).in("id", ids);
+    if (error) toast.error("Failed to deactivate leads");
+    else {
+      toast.success(`${ids.length} lead${ids.length === 1 ? "" : "s"} moved to Inactive`);
+      setSelectedLeads(new Set());
+      loadLeads();
+    }
+    setDeleting(false);
+    setBulkDeleteOpen(false);
+  }
 
   // Removed dynamic extraction in favor of fetched lookups
 
@@ -185,6 +239,37 @@ export default function LeadsPage() {
       options: leadIndustries.map(s => ({ label: s.name, value: s.name })),
       render: (lead) => <span>{lead.industry || "-"}</span>
     },
+    // All remaining lead fields are exposed here so an admin can add any of them
+    // from Manage Columns (hidden by default to keep the initial view compact).
+    { id: "company", label: "Company", type: "text", visibleByDefault: false, render: (l) => <span>{(l as any).company || "-"}</span> },
+    { id: "contact_person", label: "Contact Person", type: "text", visibleByDefault: false, render: (l) => <span>{(l as any).contact_person || "-"}</span> },
+    { id: "phone", label: "Phone", type: "text", visibleByDefault: false, render: (l) => <span className="font-mono text-xs">{(l as any).phone || "-"}</span> },
+    { id: "email", label: "Email", type: "text", visibleByDefault: false, render: (l) => <span>{(l as any).email || "-"}</span> },
+    { id: "estimated_value", label: "Estimated Value", type: "text", visibleByDefault: false, render: (l) => { const v = (l as any).estimated_value; return <span className="text-sm font-medium">{v == null ? "-" : v}</span>; } },
+    { id: "address", label: "Address", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).address || "-"}</span> },
+    { id: "area", label: "Area", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).area || "-"}</span> },
+    { id: "city", label: "City", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).city || "-"}</span> },
+    { id: "state", label: "State", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).state || "-"}</span> },
+    { id: "country", label: "Country", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).country || "-"}</span> },
+    { id: "pincode", label: "Pincode", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).pincode || "-"}</span> },
+    {
+      // Soft-delete status (Active / Inactive), distinct from the workflow "Lead Status".
+      id: "record_status",
+      label: "Record Status",
+      type: "select",
+      visibleByDefault: true,
+      options: [ { label: "Active", value: "active" }, { label: "Inactive", value: "inactive" } ],
+      render: (lead) => {
+        const active = (lead as any).is_active !== false;
+        return (
+          <Badge className={active
+            ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
+            : 'bg-muted text-muted-foreground border-border text-[10px] px-1.5 font-semibold'}>
+            {active ? 'Active' : 'Inactive'}
+          </Badge>
+        );
+      }
+    },
     {
       // The geo-tag captured when a rep tagged this lead on site.
       id: "latLng",
@@ -218,6 +303,23 @@ export default function LeadsPage() {
           <MapPin className="h-3 w-3" /> MAP
         </Button>
       )
+    },
+    {
+      id: "actions",
+      label: "Action",
+      visibleByDefault: true,
+      render: (lead) => {
+        const inactive = (lead as any).is_active === false;
+        return (
+          <RowActions
+            isInactive={inactive}
+            onEdit={() => { setEditLead(lead); setFormOpen(true); }}
+            onDelete={() => confirmDelete(lead)}
+            onReactivate={() => handleReactivate(lead)}
+            deleteTitle="Move to Inactive"
+          />
+        );
+      }
     }
   ];
 
@@ -256,6 +358,15 @@ export default function LeadsPage() {
           if (!lead.whatsapp?.includes(val as string)) return false;
         } else if (colId === "status" || colId === "source" || colId === "industry") {
           if (!(val as string[]).includes((lead as any)[colId])) return false;
+        } else if (colId === "record_status") {
+          const want = val as string[];
+          if (Array.isArray(want) && want.length) {
+            const state = (lead as any).is_active !== false ? "active" : "inactive";
+            if (!want.includes(state)) return false;
+          }
+        } else if (["company","contact_person","phone","email","address","area","city","state","country","pincode","estimated_value"].includes(colId)) {
+          const field = (lead as any)[colId];
+          if (field == null || !String(field).toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "created_at") {
           if (!isDateInFilter(lead.created_at, val as string | string[])) return false;
         } else if (colId.startsWith("cf_")) {
@@ -299,7 +410,14 @@ export default function LeadsPage() {
       <BulkActionBar
         selectedCount={selectedLeads.size}
         onClear={() => setSelectedLeads(new Set())}
-        actions={[]}
+        actions={[
+          {
+            label: "Move to Inactive",
+            icon: <Trash2 className="size-3.5" />,
+            variant: "destructive",
+            onClick: () => setBulkDeleteOpen(true),
+          },
+        ]}
       />
 
       <DataTable
@@ -315,6 +433,12 @@ export default function LeadsPage() {
             </Button>
           </div>
         }
+        menuActions={
+          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
+            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+          </DropdownMenuItem>
+        }
         filterState={filterState}
         onFilterChange={handleFilterChange}
         // _v2: saved column layouts would otherwise hide the new geo-tag columns.
@@ -329,17 +453,43 @@ export default function LeadsPage() {
         }}
       />
 
-      <LeadForm 
-        open={formOpen} 
-        onOpenChange={setFormOpen} 
-        lead={null} 
-        onSaved={loadLeads} 
+      <LeadForm
+        open={formOpen}
+        onOpenChange={(o) => { setFormOpen(o); if (!o) setEditLead(null); }}
+        lead={editLead as any}
+        onSaved={loadLeads}
       />
       <ImportWizard
         open={importOpen}
         onOpenChange={setImportOpen}
         module="leads"
         onImported={loadLeads}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Move Lead to Inactive"
+        description={
+          <>
+            Move <span className="font-medium text-foreground">{deleteTarget?.name}</span> to Inactive? It will be hidden from the default list but you can re-activate it anytime via “Show Inactive”.
+          </>
+        }
+        variant="danger"
+        confirmLabel="Move to Inactive"
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title={`Move ${selectedLeads.size} Leads to Inactive`}
+        description={`Move ${selectedLeads.size} lead${selectedLeads.size === 1 ? '' : 's'} to Inactive? They can be re-activated anytime via “Show Inactive”.`}
+        variant="danger"
+        confirmLabel="Move to Inactive"
+        loading={deleting}
+        onConfirm={handleBulkDelete}
       />
 
       <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />

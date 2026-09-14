@@ -26,7 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { GitBranch, Plus, ChevronDown, Settings, Upload, CheckCircle, XCircle, MoreHorizontal } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, Upload, CheckCircle, XCircle, MoreHorizontal, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -34,6 +34,7 @@ import { useDataScope } from "@/hooks/use-data-scope";
 import { GatedButton } from "@/components/ui/gated-button";
 
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, EmptyState, StatusBadge } from "@/components/shared";
@@ -73,26 +74,42 @@ export default function PipelinesPage() {
   const [importDealsOpen, setImportDealsOpen] = useState(false);
   
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
+  // When on, the list also loads soft-deleted (Inactive) deals so they can be re-activated.
+  const [showInactive, setShowInactive] = useState(false);
 
   const handleBulkDelete = async () => {
     if (!canCreateDeals) return;
     if (selectedDealIds.size === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedDealIds.size} deal(s)?`)) return;
+    if (!confirm(`Move ${selectedDealIds.size} deal(s) to Inactive? They can be re-activated later.`)) return;
 
     setLoading(true);
     let successCount = 0;
     for (const id of Array.from(selectedDealIds)) {
-      const { error } = await supabase.from("deals").delete().eq("id", id);
+      // Soft delete — mark Inactive rather than hard-delete.
+      const { error } = await supabase.from("deals").update({ is_active: false }).eq("id", id);
       if (!error) successCount++;
     }
     if (successCount > 0) {
-      toast.success(`Successfully deleted ${successCount} deal(s)`);
+      toast.success(`${successCount} deal(s) moved to Inactive`);
       setSelectedDealIds(new Set());
       refreshDeals();
     } else {
-      toast.error("Failed to delete deals");
+      toast.error("Failed to update deals");
       setLoading(false);
     }
+  };
+
+  const handleDeleteDeal = async (deal: any) => {
+    if (!confirm(`Move "${deal.title}" to Inactive? It can be re-activated later.`)) return;
+    const { error } = await supabase.from("deals").update({ is_active: false }).eq("id", deal.id);
+    if (error) toast.error("Failed to deactivate deal");
+    else { toast.success("Deal moved to Inactive"); refreshDeals(); }
+  };
+
+  const handleReactivateDeal = async (deal: any) => {
+    const { error } = await supabase.from("deals").update({ is_active: true }).eq("id", deal.id);
+    if (error) toast.error("Failed to re-activate deal");
+    else { toast.success("Deal re-activated"); refreshDeals(); }
   };
 
   const handleBulkStatus = async (status: string) => {
@@ -165,14 +182,14 @@ export default function PipelinesPage() {
     async (pipelineId: string) => {
       // Directional data-scoping (app-level; RLS is the real boundary). No-op unless the account
       // has Reporting Hierarchy on and the role isn't a bypass — see useDataScope.
-      const { data: dealsData } = await scope.apply(
-        supabase
-          .from("deals")
-          .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
-          .eq("pipeline_id", pipelineId)
-          .order("created_at", { ascending: false }),
-        "user_id",
-      );
+      let dealsBase = supabase
+        .from("deals")
+        .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
+        .eq("pipeline_id", pipelineId)
+        .order("created_at", { ascending: false });
+      // Default view hides soft-deleted / Inactive deals.
+      if (!showInactive) dealsBase = dealsBase.eq("is_active", true);
+      const { data: dealsData } = await scope.apply(dealsBase, "user_id");
 
       const { data: fieldsData } = await supabase
         .from("custom_fields")
@@ -202,7 +219,8 @@ export default function PipelinesPage() {
       }
       return enhancedDeals as Deal[];
     },
-    [supabase, scope.apply, scope.key],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [supabase, scope.apply, scope.key, showInactive],
   );
 
   const seedDefaultPipeline = useCallback(async (): Promise<Pipeline | null> => {
@@ -439,6 +457,58 @@ export default function PipelinesPage() {
         </span>
       )
     },
+    // Remaining deal fields — available from Manage Columns (hidden by default).
+    {
+      id: "deal_status",
+      label: "Deal Status",
+      type: "select",
+      visibleByDefault: false,
+      options: [
+        { label: "Open", value: "open" },
+        { label: "Won", value: "won" },
+        { label: "Lost", value: "lost" },
+      ],
+      render: (deal) => <span className="capitalize">{deal.status || "open"}</span>,
+    },
+    { id: "expected_close_date", label: "Expected Close", type: "date", visibleByDefault: false, render: (d) => <span className="text-sm text-muted-foreground">{d.expected_close_date ? new Date(d.expected_close_date).toLocaleDateString() : "-"}</span> },
+    { id: "deal_for", label: "Deal For", type: "text", visibleByDefault: false, render: (d) => <span className="text-sm">{d.deal_for || "-"}</span> },
+    { id: "currency", label: "Currency", type: "text", visibleByDefault: false, render: (d) => <span className="text-sm">{d.currency || "-"}</span> },
+    { id: "notes", label: "Notes", type: "text", visibleByDefault: false, render: (d) => <span className="max-w-[180px] truncate block text-sm">{d.notes || "-"}</span> },
+    {
+      // Soft-delete status (Active / Inactive), distinct from the won/lost Deal Status.
+      id: "record_status",
+      label: "Record Status",
+      type: "select",
+      visibleByDefault: true,
+      options: [ { label: "Active", value: "active" }, { label: "Inactive", value: "inactive" } ],
+      render: (deal) => {
+        const active = deal.is_active !== false;
+        return (
+          <Badge className={active
+            ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
+            : 'bg-muted text-muted-foreground border-border text-[10px] px-1.5 font-semibold'}>
+            {active ? 'Active' : 'Inactive'}
+          </Badge>
+        );
+      }
+    },
+    {
+      id: "actions",
+      label: "Action",
+      visibleByDefault: true,
+      render: (deal) => {
+        const inactive = deal.is_active === false;
+        return (
+          <RowActions
+            isInactive={inactive}
+            onEdit={() => handleEditDeal(deal)}
+            onDelete={() => handleDeleteDeal(deal)}
+            onReactivate={() => handleReactivateDeal(deal)}
+            deleteTitle="Move to Inactive"
+          />
+        );
+      }
+    },
   ];
 
   // Transform base columns and append custom fields (controlled by admin show_in_table, sortable, filterable flags)
@@ -459,8 +529,21 @@ export default function PipelinesPage() {
           if (!deal.assignee?.full_name?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "stage_id") {
           if (!(val as string[]).includes(deal.stage_id)) return false;
-        } else if (colId === "created_at") {
-          const leadDate = new Date(deal.created_at);
+        } else if (colId === "deal_status") {
+          if (!(val as string[]).includes(deal.status || "open")) return false;
+        } else if (colId === "record_status") {
+          const want = val as string[];
+          if (Array.isArray(want) && want.length) {
+            const state = deal.is_active !== false ? "active" : "inactive";
+            if (!want.includes(state)) return false;
+          }
+        } else if (["deal_for", "currency", "notes"].includes(colId)) {
+          const f = (deal as any)[colId];
+          if (f == null || !String(f).toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "created_at" || colId === "expected_close_date") {
+          const rawDate = colId === "expected_close_date" ? deal.expected_close_date : deal.created_at;
+          if (!rawDate) return false;
+          const leadDate = new Date(rawDate);
           const now = new Date();
           
           if (Array.isArray(val)) {
@@ -626,7 +709,7 @@ export default function PipelinesPage() {
                 onClear={() => setSelectedDealIds(new Set())}
                 actions={[
                   {
-                    label: "Delete",
+                    label: "Move to Inactive",
                     icon: <XCircle className="size-4" />,
                     variant: "destructive",
                     onClick: handleBulkDelete,
@@ -669,6 +752,12 @@ export default function PipelinesPage() {
               data={filteredDeals}
               filterState={filterState}
               onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
+              menuActions={
+                <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
+                  {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                  {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+                </DropdownMenuItem>
+              }
               storageKey={`wacrm_deals_table_${selectedPipelineId}`}
               onRowClick={(deal) => router.push(`/deals/${deal.id}`)}
               rowKey={(deal) => deal.id}
