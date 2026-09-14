@@ -62,7 +62,6 @@ export default function LeadsPage() {
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
-  const [showInactive, setShowInactive] = useState(false);
 
   // Soft-delete dialogs
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
@@ -70,7 +69,8 @@ export default function LeadsPage() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // Default filter: show Active records only (Inactive/all reachable via the Status column filter).
+  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {
@@ -82,14 +82,13 @@ export default function LeadsPage() {
     if (!account) return;
     const supabase = createClient();
     
-    // Fetch leads (default view hides soft-deleted / Inactive rows)
-    let leadsQuery = supabase
+    // Fetch all leads (active + inactive); the Record Status column filter
+    // (defaulting to Active) controls what shows.
+    const { data: leadsData } = await supabase
       .from("leads")
       .select("*")
       .eq("account_id", account.id)
       .order("created_at", { ascending: false });
-    if (!showInactive) leadsQuery = leadsQuery.eq("is_active", true);
-    const { data: leadsData } = await leadsQuery;
 
     // Fetch custom field definitions for leads
     const { data: fieldsData } = await supabase
@@ -137,7 +136,7 @@ export default function LeadsPage() {
   useEffect(() => {
     loadLeads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account, showInactive]);
+  }, [account]);
   useRealtimeRefresh('leads', loadLeads);
 
   function confirmDelete(lead: Lead) {
@@ -432,12 +431,6 @@ export default function LeadsPage() {
               <Plus className="size-3 mr-1" /> Add Lead
             </Button>
           </div>
-        }
-        menuActions={
-          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
-            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
-          </DropdownMenuItem>
         }
         filterState={filterState}
         onFilterChange={handleFilterChange}

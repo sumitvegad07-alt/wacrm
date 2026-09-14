@@ -66,9 +66,6 @@ export default function ContactsPage() {
   const territoryEnabled = isModuleEnabled('territory');
 
   const [contacts, setContacts] = useState<ContactWithData[]>([]);
-  // When on, the list also loads soft-deleted (Inactive) customers so they can
-  // be reviewed and re-activated.
-  const [showInactive, setShowInactive] = useState(false);
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string; color?: string }[] }>({ enabled: false, levels: [] });
   const [loading, setLoading] = useState(true);
   
@@ -85,7 +82,8 @@ export default function ContactsPage() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   // DataTable state
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // Default filter: show Active customers only (Inactive/all via the Status column filter).
+  const [filterState, setFilterState] = useState<FilterState>({ status: ['active'] });
   const [globalSearch, setGlobalSearch] = useState("");
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
@@ -96,11 +94,9 @@ export default function ContactsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    let contactsQuery = supabase.from('contacts').select('*').order('created_at', { ascending: false });
-    // Default view hides soft-deleted customers; the "Show Inactive" toggle loads them too.
-    if (!showInactive) contactsQuery = contactsQuery.eq('is_active', true);
+    // Fetch all customers (active + inactive); the Status column filter (default Active) decides what shows.
     const [{ data: contactsData }, { data: tagsData }, { data: fieldsData }] = await Promise.all([
-      contactsQuery,
+      supabase.from('contacts').select('*').order('created_at', { ascending: false }),
       supabase.from('tags').select('*').order('name'),
       supabase.from('custom_fields').select('*').eq('module_name', 'contact')
     ]);
@@ -164,7 +160,7 @@ export default function ContactsPage() {
 
     setContacts(enhancedContacts);
     setLoading(false);
-  }, [supabase, accountId, showInactive]);
+  }, [supabase, accountId]);
 
   useEffect(() => {
     fetchData();
@@ -615,12 +611,6 @@ export default function ContactsPage() {
               <Plus className="size-3 mr-1" /> Add Customer
             </GatedButton>
           </div>
-        }
-        menuActions={
-          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
-            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
-          </DropdownMenuItem>
         }
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}

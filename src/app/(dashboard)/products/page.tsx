@@ -62,11 +62,9 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // DataTable state
+  // DataTable state — default filter shows Active products (Inactive/all via the Status column filter).
   const [globalSearch, setGlobalSearch] = useState('');
-  // Default hides Inactive (soft-deleted) products; toggle to reveal them.
-  const [hideInactive, setHideInactive] = useState(true);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const [filterState, setFilterState] = useState<FilterState>({ active: ['true'] });
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   
   // Lookups
@@ -255,9 +253,6 @@ export default function ProductsPage() {
 
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
-      // Inactive toggle
-      if (hideInactive && !product.active) return false;
-
       // Global search (name, sku, and searchable custom fields)
       if (
         globalSearch &&
@@ -298,7 +293,7 @@ export default function ProductsPage() {
       }
       return true;
     });
-  }, [products, filterState, globalSearch, hideInactive, customFields]);
+  }, [products, filterState, globalSearch, customFields]);
 
   return (
     <PageLayout>
@@ -351,28 +346,12 @@ export default function ProductsPage() {
           ) : null
         }
         menuActions={
-          <>
-            {canImportProducts && (
-              <DropdownMenuItem onClick={() => setImportOpen(true)} className="cursor-pointer gap-2">
-                <Upload className="size-3.5" />
-                Import Products
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem 
-              onClick={(e) => {
-                e.preventDefault();
-                setHideInactive(!hideInactive);
-              }}
-              className="cursor-pointer gap-2 justify-between"
-            >
-              <span>Hide inactive</span>
-              <Checkbox 
-                checked={hideInactive} 
-                onCheckedChange={(checked) => setHideInactive(checked === true)}
-                className="size-3.5 pointer-events-none" 
-              />
+          canImportProducts ? (
+            <DropdownMenuItem onClick={() => setImportOpen(true)} className="cursor-pointer gap-2">
+              <Upload className="size-3.5" />
+              Import Products
             </DropdownMenuItem>
-          </>
+          ) : undefined
         }
         selection={{
           selectedIds: selectedProductIds,

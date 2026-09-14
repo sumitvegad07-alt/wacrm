@@ -37,9 +37,9 @@ export default function ExpensesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
-  const [showInactive, setShowInactive] = useState(false);
   
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // Default filter shows Active expenses (Inactive/all via the Status column filter).
+  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
 
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
@@ -50,12 +50,11 @@ export default function ExpensesPage() {
     // Directional data-scoping on employee_id (profiles.id). No-op unless the account has
     // Reporting Hierarchy on and the role isn't a bypass; otherwise RLS still caps non-admins at
     // their own rows (expenses_select = admin OR own OR extends). See useDataScope.
-    let expensesBase = supabase
+    const expensesBase = supabase
       .from("expenses")
       .select("*, expense_type:expense_types(*), employee:profiles!expenses_employee_id_fkey(*)")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false });
-    if (!showInactive) expensesBase = expensesBase.eq("is_active", true);
     const query = scope.apply(expensesBase, "employee_id", "profile");
 
     const { data, error } = await query;
@@ -99,7 +98,7 @@ export default function ExpensesPage() {
   useEffect(() => {
     loadExpenses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId, profile, scope.ready, scope.key, showInactive]);
+  }, [accountId, profile, scope.ready, scope.key]);
   useRealtimeRefresh('expenses', loadExpenses);
 
   useEffect(() => {
@@ -500,12 +499,6 @@ export default function ExpensesPage() {
         }
         filterState={filterState}
         onFilterChange={handleFilterChange}
-        menuActions={isAdmin ? (
-          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
-            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
-          </DropdownMenuItem>
-        ) : undefined}
         storageKey="wacrm_expenses_table_columns"
         isLoading={loading}
         rowKey={(expense) => expense.id}

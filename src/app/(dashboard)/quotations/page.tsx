@@ -69,7 +69,8 @@ export default function QuotationsPage() {
   
   // DataTable state
   const [globalSearch, setGlobalSearch] = useState('');
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // Default filter shows Active quotations (Inactive/all via the Status column filter).
+  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   // Lookups
@@ -80,7 +81,6 @@ export default function QuotationsPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
 
   // Form State
   const [formOpen, setFormOpen] = useState(false);
@@ -97,8 +97,7 @@ export default function QuotationsPage() {
   const fetchQuotations = useCallback(async () => {
     setLoading(true);
 
-    let quotationsBase = supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), lead:leads!quotations_lead_id_fkey(name, contact_person)').eq('is_latest_version', true).order('created_at', { ascending: false });
-    if (!showInactive) quotationsBase = quotationsBase.eq('is_active', true);
+    const quotationsBase = supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), lead:leads!quotations_lead_id_fkey(name, contact_person)').eq('is_latest_version', true).order('created_at', { ascending: false });
     const [{ data: quotationsData, error: quotationsError }, { data: fieldsData }] = await Promise.all([
       quotationsBase,
       supabase.from('custom_fields').select('*').eq('module_name', 'quotation')
@@ -150,7 +149,7 @@ export default function QuotationsPage() {
     setQuotations(enhancedQuotations);
     setLoading(false);
     setSelectedIds(new Set());
-  }, [supabase, showInactive]);
+  }, [supabase]);
 
   useEffect(() => {
     fetchQuotations();
@@ -541,12 +540,6 @@ export default function QuotationsPage() {
         data={filteredQuotations}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        menuActions={
-          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
-            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
-          </DropdownMenuItem>
-        }
         storageKey="wacrm_quotations_table_columns"
         isLoading={loading}
         rowKey={(quotation) => quotation.id}

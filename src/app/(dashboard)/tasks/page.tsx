@@ -87,7 +87,8 @@ export default function TasksPage() {
   // DataTable state
   const [globalSearch, setGlobalSearch] = useState('');
   const [hideCompleted, setHideCompleted] = useState(true);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // Default filter shows Active tasks (Inactive/all via the Status column filter).
+  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   // Lookups
@@ -103,13 +104,11 @@ export default function TasksPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
 
-    let tasksBase = supabase.from('tasks').select('*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), contact:contacts!tasks_contact_id_fkey(name, phone), deal:deals!tasks_deal_id_fkey(title)').order('created_at', { ascending: false });
-    if (!showInactive) tasksBase = tasksBase.eq('is_active', true);
+    const tasksBase = supabase.from('tasks').select('*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), contact:contacts!tasks_contact_id_fkey(name, phone), deal:deals!tasks_deal_id_fkey(title)').order('created_at', { ascending: false });
     const [{ data: tasksData }, { data: fieldsData }] = await Promise.all([
       tasksBase,
       supabase.from('custom_fields').select('*').eq('module_name', 'task')
@@ -140,7 +139,7 @@ export default function TasksPage() {
     setTasks(enhancedTasks);
     setLoading(false);
     setSelectedTaskIds(new Set());
-  }, [supabase, showInactive]);
+  }, [supabase]);
 
   useEffect(() => {
     fetchTasks();
@@ -458,12 +457,6 @@ export default function TasksPage() {
         data={filteredTasks}
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        menuActions={
-          <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
-            {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
-          </DropdownMenuItem>
-        }
         storageKey="wacrm_tasks_table_columns"
         isLoading={loading}
         rowKey={(task) => task.id}

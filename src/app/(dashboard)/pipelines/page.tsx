@@ -57,8 +57,8 @@ export default function PipelinesPage() {
   const [deals, setDeals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // DataTable state
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // DataTable state — default filter shows Active deals (Inactive/all via Status column filter).
+  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
   // Dialog / sheet state
@@ -74,8 +74,6 @@ export default function PipelinesPage() {
   const [importDealsOpen, setImportDealsOpen] = useState(false);
   
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
-  // When on, the list also loads soft-deleted (Inactive) deals so they can be re-activated.
-  const [showInactive, setShowInactive] = useState(false);
 
   const handleBulkDelete = async () => {
     if (!canCreateDeals) return;
@@ -182,13 +180,12 @@ export default function PipelinesPage() {
     async (pipelineId: string) => {
       // Directional data-scoping (app-level; RLS is the real boundary). No-op unless the account
       // has Reporting Hierarchy on and the role isn't a bypass — see useDataScope.
-      let dealsBase = supabase
+      const dealsBase = supabase
         .from("deals")
         .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
         .eq("pipeline_id", pipelineId)
         .order("created_at", { ascending: false });
-      // Default view hides soft-deleted / Inactive deals.
-      if (!showInactive) dealsBase = dealsBase.eq("is_active", true);
+      // Fetch all deals; the Record Status column filter (default Active) decides what shows.
       const { data: dealsData } = await scope.apply(dealsBase, "user_id");
 
       const { data: fieldsData } = await supabase
@@ -219,8 +216,7 @@ export default function PipelinesPage() {
       }
       return enhancedDeals as Deal[];
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [supabase, scope.apply, scope.key, showInactive],
+    [supabase, scope.apply, scope.key],
   );
 
   const seedDefaultPipeline = useCallback(async (): Promise<Pipeline | null> => {
@@ -752,12 +748,6 @@ export default function PipelinesPage() {
               data={filteredDeals}
               filterState={filterState}
               onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-              menuActions={
-                <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
-                  {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-                  {showInactive ? 'Hide Inactive' : 'Show Inactive'}
-                </DropdownMenuItem>
-              }
               storageKey={`wacrm_deals_table_${selectedPipelineId}`}
               onRowClick={(deal) => router.push(`/deals/${deal.id}`)}
               rowKey={(deal) => deal.id}

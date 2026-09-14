@@ -26,10 +26,10 @@ export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalSearch, setGlobalSearch] = useState("");
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // Default filter shows Active announcements (Inactive/all via the Status column filter).
+  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
 
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
@@ -37,13 +37,11 @@ export default function AnnouncementsPage() {
     if (!accountId) return;
     setLoading(true);
 
-    let q = supabase
+    const { data, error } = await supabase
       .from("tenant_announcements")
       .select("*")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false });
-    if (!showInactive) q = q.eq("is_active", true);
-    const { data, error } = await q;
 
     if (error) {
       toast.error("Failed to load announcements");
@@ -51,7 +49,7 @@ export default function AnnouncementsPage() {
       setAnnouncements(data || []);
     }
     setLoading(false);
-  }, [accountId, supabase, showInactive]);
+  }, [accountId, supabase]);
 
   useEffect(() => {
     loadAnnouncements();
@@ -254,12 +252,6 @@ export default function AnnouncementsPage() {
           storageKey="announcements-table"
           rowKey={(row) => row.id}
           onRowClick={(row) => router.push(`/announcements/${row.id}`)}
-          menuActions={isAdmin ? (
-            <DropdownMenuItem onClick={() => setShowInactive((v) => !v)} className="cursor-pointer gap-2">
-              {showInactive ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-              {showInactive ? 'Hide Inactive' : 'Show Inactive'}
-            </DropdownMenuItem>
-          ) : undefined}
         />
       </div>
 
