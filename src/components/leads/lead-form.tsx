@@ -251,25 +251,36 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
     if (saveError) {
       toast.error("Failed to save lead: " + saveError.message);
     } else if (savedId) {
+      const lid = savedId;
+      // Custom values + activity log are independent → run them together (was:
+      // delete, insert, then log = 3 sequential trips). Builders are thenable.
+      const post: PromiseLike<unknown>[] = [];
       const cfUpserts = Object.entries(customValues)
         .filter(([_, val]) => val !== undefined && val !== null && String(val).trim() !== "")
-        .map(([fieldId, val]) => ({
-          lead_id: savedId,
-          custom_field_id: fieldId,
-          value: String(val),
-        }));
-
+        .map(([fieldId, val]) => ({ lead_id: lid, custom_field_id: fieldId, value: String(val) }));
       if (cfUpserts.length > 0) {
-        await supabase.from("lead_custom_values").delete().eq("lead_id", savedId);
-        await supabase.from("lead_custom_values").insert(cfUpserts);
+        // Upsert current + delete cleared (disjoint rows, run together).
+        // UNIQUE(lead_id, custom_field_id) backs the upsert.
+        const keepIds = cfUpserts.map(c => c.custom_field_id);
+        post.push((async () => {
+          let del = supabase.from("lead_custom_values").delete().eq("lead_id", lid);
+          if (keepIds.length > 0) del = del.not('custom_field_id', 'in', `(${keepIds.join(',')})`);
+          await Promise.all([
+            del,
+            supabase.from("lead_custom_values").upsert(cfUpserts, { onConflict: 'lead_id,custom_field_id' }),
+          ]);
+        })());
       }
-
-      await logModuleActivity(supabase, {
-        moduleName: "lead",
-        recordId: savedId,
-        action: lead ? "updated" : "created",
-        message: lead ? `Lead details updated` : `Lead created`,
-      });
+      // Activity log — bookkeeping; never fail the save on it.
+      post.push(
+        logModuleActivity(supabase, {
+          moduleName: "lead",
+          recordId: lid,
+          action: lead ? "updated" : "created",
+          message: lead ? `Lead details updated` : `Lead created`,
+        }).catch(() => {}),
+      );
+      await Promise.all(post);
 
       toast.success(lead ? "Lead updated successfully!" : "Lead added successfully!");
       onOpenChange(false);

@@ -343,23 +343,30 @@ export function PaymentForm({
       
       const newPaymentId = paymentResult?.id || idempotencyKey.current;
 
-      // 3. Link the uploaded proof to the payment
+      // 3-4. Proof link, custom-field values, and the activity log are all
+      // independent writes that only need the new payment id → run them together
+      // instead of one-after-another (was 3 sequential round-trips to Singapore).
+      // Supabase builders are thenable (PromiseLike), not real Promises.
+      const post: PromiseLike<unknown>[] = [];
+
       if (proofPath) {
-        const { error: attachErr } = await supabase.from('payment_attachments').insert({
-          payment_id: newPaymentId,
-          user_id: user!.id,
-          file_name: proofFile!.name,
-          file_url: proofPath,
-          file_size: proofFile!.size,
-          content_type: proofFile!.type,
-        });
-        if (attachErr) {
-          console.error('Attachment link error', attachErr);
-          toast.warning('Payment saved, but the proof image could not be linked to it.');
-        }
+        post.push(
+          supabase.from('payment_attachments').insert({
+            payment_id: newPaymentId,
+            user_id: user!.id,
+            file_name: proofFile!.name,
+            file_url: proofPath,
+            file_size: proofFile!.size,
+            content_type: proofFile!.type,
+          }).then(({ error: attachErr }) => {
+            if (attachErr) {
+              console.error('Attachment link error', attachErr);
+              toast.warning('Payment saved, but the proof image could not be linked to it.');
+            }
+          }),
+        );
       }
 
-      // 4. Save Custom Fields
       const cvInserts = Object.entries(customValues)
         .filter(([_, val]) => val !== undefined && val !== '')
         .map(([cfId, val]) => ({
@@ -367,18 +374,21 @@ export function PaymentForm({
           custom_field_id: cfId,
           value: val,
         }));
-        
       if (cvInserts.length > 0) {
-        await supabase.from('payment_custom_values').insert(cvInserts);
+        post.push(supabase.from('payment_custom_values').insert(cvInserts));
       }
 
-      // 4. Log Activity
-      await logModuleActivity(supabase, {
-        moduleName: 'payment',
-        recordId: newPaymentId,
-        action: 'created',
-        message: `Payment created via ${source}.`,
-      });
+      // Activity log — bookkeeping; never fail the save on it.
+      post.push(
+        logModuleActivity(supabase, {
+          moduleName: 'payment',
+          recordId: newPaymentId,
+          action: 'created',
+          message: `Payment created via ${source}.`,
+        }).catch(() => {}),
+      );
+
+      await Promise.all(post);
 
       // 5. Cleanup
       toast.success('Payment saved successfully!');

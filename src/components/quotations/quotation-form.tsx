@@ -349,74 +349,83 @@ export function QuotationForm({
     }
 
     if (savedQuotationId) {
-      // Sync Items
-      // 1. Delete old items if updating
-      if (quotationId) {
-        await supabase.from('quotation_items').delete().eq('quotation_id', savedQuotationId);
-      }
-      // 2. Insert new items
-      const itemsPayload = items.map((item, index) => ({
-        quotation_id: savedQuotationId,
-        product_id: item.product_id || null,
-        product_name: item.product_name,
-        unit: item.unit,
-        quantity: item.quantity,
-        price: item.price,
-        tax_rate: item.tax_rate,
-        tax_amount: item.tax_amount,
-        sub_total: item.sub_total,
-        total: item.total,
-        position: index,
-      }));
-      await supabase.from('quotation_items').insert(itemsPayload);
+      const qid = savedQuotationId;
+      // Items and custom values live in different tables → sync them on parallel
+      // tracks (was: items delete+insert, then custom-values delete+insert, all
+      // sequential). Supabase builders are thenable (PromiseLike), not Promises.
+      const syncs: PromiseLike<unknown>[] = [];
 
-      // Sync Custom Fields
-      if (customFields.length > 0) {
+      // Items: replace-all (no per-line unique key → delete-then-insert on edit).
+      syncs.push((async () => {
         if (quotationId) {
-          await supabase.from('quotation_custom_values').delete().eq('quotation_id', savedQuotationId);
+          await supabase.from('quotation_items').delete().eq('quotation_id', qid);
         }
-        
+        const itemsPayload = items.map((item, index) => ({
+          quotation_id: qid,
+          product_id: item.product_id || null,
+          product_name: item.product_name,
+          unit: item.unit,
+          quantity: item.quantity,
+          price: item.price,
+          tax_rate: item.tax_rate,
+          tax_amount: item.tax_amount,
+          sub_total: item.sub_total,
+          total: item.total,
+          position: index,
+        }));
+        await supabase.from('quotation_items').insert(itemsPayload);
+      })());
+
+      // Custom values: upsert current + delete cleared (disjoint, run together).
+      // UNIQUE(quotation_id, custom_field_id) backs the upsert.
+      if (customFields.length > 0) {
         const cvPayloads = customFields
           .filter(cf => customValues[cf.id] !== undefined && customValues[cf.id] !== '')
-          .map(cf => ({
-            quotation_id: savedQuotationId,
-            custom_field_id: cf.id,
-            value: customValues[cf.id]
-          }));
-          
-        if (cvPayloads.length > 0) {
-          await supabase.from('quotation_custom_values').insert(cvPayloads);
-        }
+          .map(cf => ({ quotation_id: qid, custom_field_id: cf.id, value: customValues[cf.id] }));
+        const keepIds = cvPayloads.map(c => c.custom_field_id);
+        syncs.push((async () => {
+          const writes: PromiseLike<unknown>[] = [];
+          if (quotationId) {
+            let del = supabase.from('quotation_custom_values').delete().eq('quotation_id', qid);
+            if (keepIds.length > 0) del = del.not('custom_field_id', 'in', `(${keepIds.join(',')})`);
+            writes.push(del);
+          }
+          if (cvPayloads.length > 0) {
+            writes.push(supabase.from('quotation_custom_values').upsert(cvPayloads, { onConflict: 'quotation_id,custom_field_id' }));
+          }
+          if (writes.length) await Promise.all(writes);
+        })());
       }
+
+      await Promise.all(syncs);
 
       setSaving(false);
       toast.success(initialData ? 'Quotation updated' : 'Quotation created');
-      
-      if (!initialData && draftParentId) {
-        // Update the parent so it hides from the main table
-        try {
-          await supabase.from('quotations').update({ is_latest_version: false }).eq('id', draftParentId);
-        } catch(e) { console.error('Failed to update is_latest_version', e); }
 
-        // Log the generation of the new version on the parent and the child!
-        await logQuotationActivity(supabase, draftParentId, 'versioned', { 
-          new_version: draftVersion, 
-          new_id: savedQuotationId,
+      // Activity logging (+ the draft parent's is_latest_version flag) is
+      // independent of the syncs above and of each other → fire together. These
+      // are bookkeeping; never fail the save on a log write.
+      const logs: PromiseLike<unknown>[] = [];
+      if (!initialData && draftParentId) {
+        logs.push(
+          supabase.from('quotations').update({ is_latest_version: false }).eq('id', draftParentId)
+            .then(() => {}, (e) => console.error('Failed to update is_latest_version', e)),
+        );
+        logs.push(logQuotationActivity(supabase, draftParentId, 'versioned', {
+          new_version: draftVersion,
+          new_id: qid,
           new_number: quotationPayload.quotation_number,
-          original_number: draftParentNumber
-        });
-        await logQuotationActivity(supabase, savedQuotationId, 'created_as_version', { 
+          original_number: draftParentNumber,
+        }));
+        logs.push(logQuotationActivity(supabase, qid, 'created_as_version', {
           original_id: draftParentId,
           new_number: quotationPayload.quotation_number,
-          original_number: draftParentNumber
-        });
+          original_number: draftParentNumber,
+        }));
       } else {
-        await logQuotationActivity(
-          supabase, 
-          savedQuotationId, 
-          quotationId ? 'updated' : 'created'
-        );
+        logs.push(logQuotationActivity(supabase, qid, quotationId ? 'updated' : 'created'));
       }
+      await Promise.all(logs.map((p) => Promise.resolve(p).catch(() => {})));
 
       // Instead of redirecting from inside the form, let the parent handle it
       onSaved(savedQuotationId);

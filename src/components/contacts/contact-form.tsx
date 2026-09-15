@@ -370,29 +370,49 @@ export function ContactForm({
       };
 
       let contactId: string;
+      // Supabase builders are thenable (PromiseLike), not real Promises.
+      const parallel: PromiseLike<unknown>[] = [];
 
       if (isEdit && contact) {
-        const { error } = await supabase.from('contacts').update(fields).eq('id', contact.id);
-        if (error) throw error;
+        // Id known → the contacts UPDATE runs alongside the custom-value write
+        // below (different tables). A NEW contact must be inserted first for its id.
         contactId = contact.id;
+        parallel.push(
+          supabase.from('contacts').update(fields).eq('id', contact.id).then(({ error }) => {
+            if (error) throw error;
+          }),
+        );
       } else {
         const { data: created, error } = await supabase
           .from('contacts')
           .insert({ ...fields, account_id: accountId, user_id: user.id })
-          .select()
+          .select('id')
           .single();
         if (error) throw error;
         contactId = created.id;
       }
 
-      // Custom values: replace-all.
-      await supabase.from('contact_custom_values').delete().eq('contact_id', contactId);
-      const cvRows = Object.entries(customValues)
-        .filter(([, v]) => v && v.trim())
-        .map(([fieldId, v]) => ({ contact_id: contactId, custom_field_id: fieldId, value: v }));
-      if (cvRows.length > 0) {
-        await supabase.from('contact_custom_values').insert(cvRows);
+      // Custom values: replace-all → upsert the current values and delete the
+      // cleared ones (disjoint rows, run together). Was delete-all + re-insert;
+      // UNIQUE(contact_id, custom_field_id) backs the upsert.
+      {
+        const cid = contactId;
+        const cvRows = Object.entries(customValues)
+          .filter(([, v]) => v && v.trim())
+          .map(([fieldId, v]) => ({ contact_id: cid, custom_field_id: fieldId, value: v }));
+        const keepIds = cvRows.map((c) => c.custom_field_id);
+        parallel.push((async () => {
+          let del = supabase.from('contact_custom_values').delete().eq('contact_id', cid);
+          if (keepIds.length > 0) del = del.not('custom_field_id', 'in', `(${keepIds.join(',')})`);
+          const writes: PromiseLike<unknown>[] = [del];
+          if (cvRows.length > 0) {
+            writes.push(supabase.from('contact_custom_values').upsert(cvRows, { onConflict: 'contact_id,custom_field_id' }));
+          }
+          await Promise.all(writes);
+        })());
       }
+
+      await Promise.all(parallel);
 
       toast.success(isEdit ? 'Customer updated' : 'Customer created');
       onOpenChange(false);

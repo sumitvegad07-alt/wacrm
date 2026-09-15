@@ -353,25 +353,24 @@ export function ProductForm({
     setSaving(true);
 
     try {
-      // Upload any newly picked files, then combine with the already-uploaded
-      // URLs (kept in order). image = images[0] keeps single-image readers working.
-      const uploadedUrls: string[] = [];
-      for (let i = 0; i < newImageFiles.length; i++) {
-        const file = newImageFiles[i];
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${accountId}-${Date.now()}-${i}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(fileName, file);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(fileName);
-
-        uploadedUrls.push(publicUrl);
-      }
+      // Upload any newly picked files in PARALLEL (was a sequential loop — each
+      // upload paid a full round-trip). Order is preserved by mapping into the
+      // result array. image = images[0] keeps single-image readers working.
+      const uploadStamp = Date.now();
+      const uploadedUrls: string[] = await Promise.all(
+        newImageFiles.map(async (file, i) => {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${accountId}-${uploadStamp}-${i}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage
+            .from('product-images')
+            .upload(fileName, file);
+          if (uploadError) throw uploadError;
+          const { data: { publicUrl } } = supabase.storage
+            .from('product-images')
+            .getPublicUrl(fileName);
+          return publicUrl;
+        }),
+      );
 
       const finalImages = [...images, ...uploadedUrls];
       const finalImageUrl = finalImages[0] ?? null;
@@ -402,87 +401,105 @@ export function ProductForm({
         active,
       };
 
+      // Product row. A NEW product must be INSERTED first so its id exists for the
+      // conversion + custom-value child rows. For an EDIT the id is already known,
+      // so the product UPDATE joins the parallel batch below (different tables, no
+      // ordering dependency). This turns ~5 sequential round-trips into ~2.
       let savedProductId = product?.id;
+      // Supabase query builders are thenable (PromiseLike), not real Promises.
+      const parallel: PromiseLike<unknown>[] = [];
 
       if (isEdit && product) {
-        const { error } = await supabase
-          .from('products')
-          .update(payload)
-          .eq('id', product.id);
-
-        if (error) throw error;
-        
-        await logModuleActivity(supabase, {
-          moduleName: 'product',
-          recordId: product.id,
-          action: 'Product Updated',
-          message: `Product details for "${payload.name}" were updated.`,
-          details: { updated_fields: Object.keys(payload) }
-        });
+        parallel.push(
+          supabase.from('products').update(payload).eq('id', product.id).then(({ error }) => {
+            if (error) throw error;
+          }),
+        );
       } else {
         const { data, error } = await supabase
           .from('products')
-          .insert({
-            ...payload,
-            account_id: accountId,
-            user_id: user.id,
-          })
+          .insert({ ...payload, account_id: accountId, user_id: user.id })
           .select('id')
           .single();
-
         if (error) throw error;
         savedProductId = data.id;
-        
-        await logModuleActivity(supabase, {
-          moduleName: 'product',
-          recordId: data.id,
-          action: 'Product Created',
-          message: `Product "${payload.name}" was created.`,
-        });
       }
+
+      // Activity log is a nice-to-have — never block the save on it or fail the
+      // save if it errors.
+      parallel.push(
+        logModuleActivity(supabase, {
+          moduleName: 'product',
+          recordId: savedProductId!,
+          action: isEdit ? 'Product Updated' : 'Product Created',
+          message: isEdit
+            ? `Product details for "${payload.name}" were updated.`
+            : `Product "${payload.name}" was created.`,
+          ...(isEdit ? { details: { updated_fields: Object.keys(payload) } } : {}),
+        }).catch(() => {}),
+      );
 
       // Save Multi Unit conversion units (base unit = unit_id, factor 1, not stored
       // here). Replace-all: delete removed rows, upsert the current set. Only when
       // the feature is on; otherwise the product's existing conversions are left
       // untouched (turning the feature off never destroys data).
       if (multiUnitEnabled && savedProductId) {
+        const pid = savedProductId;
         const clean = conversions
           .filter((c) => c.unit_id && c.unit_id !== unitId && Number(c.factor) > 0)
           .map((c) => ({
             account_id: accountId,
-            product_id: savedProductId,
+            product_id: pid,
             unit_id: c.unit_id,
             conversion_factor: Number(c.factor),
             active: true,
           }));
         // Drop conversions the user removed, or that collide with the base unit.
         const keepUnitIds = clean.map((c) => c.unit_id);
-        let del = supabase.from('product_unit_conversions').delete().eq('product_id', savedProductId);
-        if (keepUnitIds.length > 0) del = del.not('unit_id', 'in', `(${keepUnitIds.join(',')})`);
-        await del;
-        if (clean.length > 0) {
-          const { error: convErr } = await supabase
-            .from('product_unit_conversions')
-            .upsert(clean, { onConflict: 'product_id,unit_id' });
-          if (convErr) throw convErr;
-        }
+        parallel.push(
+          (async () => {
+            let del = supabase.from('product_unit_conversions').delete().eq('product_id', pid);
+            if (keepUnitIds.length > 0) del = del.not('unit_id', 'in', `(${keepUnitIds.join(',')})`);
+            const { error: delErr } = await del;
+            if (delErr) throw delErr;
+            if (clean.length > 0) {
+              const { error: convErr } = await supabase
+                .from('product_unit_conversions')
+                .upsert(clean, { onConflict: 'product_id,unit_id' });
+              if (convErr) throw convErr;
+            }
+          })(),
+        );
       }
 
-      // Save custom fields
+      // Custom field values — upsert the present ones and delete the cleared ones
+      // (disjoint rows, run together). Replaces the old delete-all + re-insert; a
+      // UNIQUE(product_id, custom_field_id) constraint backs the upsert.
       if (savedProductId) {
+        const pid = savedProductId;
         const cfUpserts = customFields
           .filter((f) => customValues[f.id] !== undefined)
-          .map((f) => ({
-             product_id: savedProductId,
-             custom_field_id: f.id,
-             value: customValues[f.id]
-          }));
-        
-        if (cfUpserts.length > 0) {
-          await supabase.from('product_custom_values').delete().eq('product_id', savedProductId);
-          await supabase.from('product_custom_values').insert(cfUpserts);
-        }
+          .map((f) => ({ product_id: pid, custom_field_id: f.id, value: customValues[f.id] }));
+        const keepFieldIds = cfUpserts.map((c) => c.custom_field_id);
+        parallel.push(
+          (async () => {
+            let del = supabase.from('product_custom_values').delete().eq('product_id', pid);
+            if (keepFieldIds.length > 0) del = del.not('custom_field_id', 'in', `(${keepFieldIds.join(',')})`);
+            const writes: PromiseLike<{ error: unknown }>[] = [del];
+            if (cfUpserts.length > 0) {
+              writes.push(
+                supabase
+                  .from('product_custom_values')
+                  .upsert(cfUpserts, { onConflict: 'product_id,custom_field_id' }),
+              );
+            }
+            const results = await Promise.all(writes);
+            for (const r of results) if (r?.error) throw r.error;
+          })(),
+        );
       }
+
+      await Promise.all(parallel);
 
       toast.success(isEdit ? 'Product updated' : 'Product created');
       onSaved();

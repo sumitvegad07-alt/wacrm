@@ -691,7 +691,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
         // Customer change/re-attach goes through update_order's validated
         // p_contact_id (migration 085): it runs the same dispatch-lock check and
         // verifies the customer belongs to the account, all in one transaction —
-        // no separate direct write to orders.
+        // no separate direct write to orders. Must finish before the child writes.
         const { data, error } = await supabase.rpc('update_order', {
           p_order_id: orderId,
           p_lines: pricingInputs.priced,
@@ -701,20 +701,40 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
           p_order_schemes: pricingInputs.orderSchemes,
         });
         if (error) throw error;
-        if (orderId && Object.keys(customValues).length > 0) {
-          await supabase.from('order_custom_values').delete().eq('order_id', orderId);
-          const toInsert = Object.entries(customValues)
+
+        // Custom values + activity log are independent of each other → run them
+        // together (was: delete, then insert, then log = 3 sequential trips).
+        // Supabase builders are thenable (PromiseLike), not real Promises.
+        const post: PromiseLike<unknown>[] = [];
+        if (Object.keys(customValues).length > 0) {
+          const toUpsert = Object.entries(customValues)
             .filter(([_, v]) => v !== undefined && v !== '')
             .map(([fId, v]) => ({ account_id: accountId, order_id: orderId, custom_field_id: fId, value: v }));
-          if (toInsert.length > 0) {
-            await supabase.from('order_custom_values').insert(toInsert);
-          }
+          const keepIds = toUpsert.map((c) => c.custom_field_id);
+          post.push((async () => {
+            // Drop cleared values; upsert the current ones. Disjoint rows, so the
+            // delete and upsert run together (UNIQUE(order_id, custom_field_id)).
+            let del = supabase.from('order_custom_values').delete().eq('order_id', orderId);
+            if (keepIds.length > 0) del = del.not('custom_field_id', 'in', `(${keepIds.join(',')})`);
+            const writes: PromiseLike<unknown>[] = [del];
+            if (toUpsert.length > 0) {
+              writes.push(
+                supabase.from('order_custom_values').upsert(toUpsert, { onConflict: 'order_id,custom_field_id' }),
+              );
+            }
+            await Promise.all(writes);
+          })());
         }
+        // Log the edit on the order timeline (the RPC doesn't log this) — never
+        // block or fail the save on the log write.
+        post.push(
+          logModuleActivity(supabase, {
+            moduleName: 'order', recordId: orderId, action: 'order_edited', message: 'Order updated',
+          }).catch(() => {}),
+        );
+        await Promise.all(post);
+
         const status = (data as Record<string, unknown>)?.pricing_status as string | undefined;
-        // Log the edit on the order timeline (the RPC doesn't log this).
-        await logModuleActivity(supabase, {
-          moduleName: 'order', recordId: orderId, action: 'order_edited', message: 'Order updated',
-        });
         toast.success(status === 'review' ? 'Order saved — flagged for review' : 'Order updated');
       } else {
         const newOrderId = crypto.randomUUID();
@@ -734,20 +754,28 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
           p_order_schemes: pricingInputs.orderSchemes,
         });
         if (error) throw error;
-        if (newOrderId && Object.keys(customValues).length > 0) {
+
+        // Custom-value insert (order is brand new — a plain insert) + activity log
+        // run together after the order row exists.
+        const post: PromiseLike<unknown>[] = [];
+        if (Object.keys(customValues).length > 0) {
           const toInsert = Object.entries(customValues)
             .filter(([_, v]) => v !== undefined && v !== '')
             .map(([fId, v]) => ({ account_id: accountId, order_id: newOrderId, custom_field_id: fId, value: v }));
           if (toInsert.length > 0) {
-            await supabase.from('order_custom_values').insert(toInsert);
+            post.push(supabase.from('order_custom_values').insert(toInsert));
           }
         }
         const num = (data as Record<string, unknown>)?.order_number as string | undefined;
         // Log creation on the order timeline (create_order doesn't log this).
-        await logModuleActivity(supabase, {
-          moduleName: 'order', recordId: newOrderId, action: 'order_created',
-          message: num ? `Order ${num} created` : 'Order created',
-        });
+        post.push(
+          logModuleActivity(supabase, {
+            moduleName: 'order', recordId: newOrderId, action: 'order_created',
+            message: num ? `Order ${num} created` : 'Order created',
+          }).catch(() => {}),
+        );
+        await Promise.all(post);
+
         toast.success(num ? `Order ${num} created` : 'Order created');
       }
       onOpenChange(false);

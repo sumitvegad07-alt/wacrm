@@ -255,13 +255,6 @@ export function DealForm({
         setSaving(false);
         return;
       }
-      
-      await logModuleActivity(supabase, {
-        moduleName: 'deal',
-        recordId: deal.id,
-        action: 'updated',
-        message: 'Deal updated.'
-      });
     } else {
       const {
         data: { session },
@@ -288,29 +281,33 @@ export function DealForm({
         return;
       }
       savedDealId = data.id;
-      
-      await logModuleActivity(supabase, {
-        moduleName: 'deal',
-        recordId: savedDealId!,
-        action: 'created',
-        message: 'Deal generated.'
-      });
     }
 
+    // Activity log + custom values are independent → run them together (was: log,
+    // then delete, then insert = 3 sequential trips). deal_custom_values has no
+    // unique key, so its values stay delete-then-insert within one task; the log
+    // (a nice-to-have) never blocks or fails the save.
+    const post: PromiseLike<unknown>[] = [
+      logModuleActivity(supabase, {
+        moduleName: 'deal',
+        recordId: savedDealId!,
+        action: deal ? 'updated' : 'created',
+        message: deal ? 'Deal updated.' : 'Deal generated.',
+      }).catch(() => {}),
+    ];
     if (savedDealId) {
+      const did = savedDealId;
       const cfUpserts = customFields
         .filter(f => customValues[f.id] !== undefined)
-        .map((f) => ({
-           deal_id: savedDealId,
-           custom_field_id: f.id,
-           value: customValues[f.id]
-        }));
-      
+        .map((f) => ({ deal_id: did, custom_field_id: f.id, value: customValues[f.id] }));
       if (cfUpserts.length > 0) {
-        await supabase.from('deal_custom_values').delete().eq('deal_id', savedDealId);
-        await supabase.from('deal_custom_values').insert(cfUpserts);
+        post.push((async () => {
+          await supabase.from('deal_custom_values').delete().eq('deal_id', did);
+          await supabase.from('deal_custom_values').insert(cfUpserts);
+        })());
       }
     }
+    await Promise.all(post);
 
     setSaving(false);
     toast.success(deal ? "Deal updated" : "Deal created");

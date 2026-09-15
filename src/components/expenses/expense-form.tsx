@@ -280,7 +280,7 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
       const { error: err } = await supabase.from("expenses").update(payload).eq("id", expense.id);
       error = err;
     } else {
-      const { data: insertData, error: err } = await supabase.from("expenses").insert(payload).select().single();
+      const { data: insertData, error: err } = await supabase.from("expenses").insert(payload).select('id').single();
       error = err;
       if (insertData) savedId = insertData.id;
     }
@@ -288,15 +288,24 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
     if (error) {
       toast.error(error.message);
     } else if (savedId) {
-      // Sync custom fields
-      const cfUpserts = customFields.filter(f => customValues[f.id] !== undefined).map(f => ({
-         expense_id: savedId!,
-         custom_field_id: f.id,
-         value: customValues[f.id]
-      }));
-      if (cfUpserts.length > 0) {
-        await supabase.from('expense_custom_values').delete().eq('expense_id', savedId);
-        await supabase.from('expense_custom_values').insert(cfUpserts);
+      const eid = savedId;
+      // Sync custom fields: upsert the current values and delete the cleared ones
+      // (disjoint rows, run together — was delete-all + re-insert). A
+      // UNIQUE(expense_id, custom_field_id) constraint backs the upsert.
+      if (customFields.length > 0) {
+        const cfUpserts = customFields.filter(f => customValues[f.id] !== undefined).map(f => ({
+           expense_id: eid,
+           custom_field_id: f.id,
+           value: customValues[f.id]
+        }));
+        const keepIds = cfUpserts.map(c => c.custom_field_id);
+        let del = supabase.from('expense_custom_values').delete().eq('expense_id', eid);
+        if (keepIds.length > 0) del = del.not('custom_field_id', 'in', `(${keepIds.join(',')})`);
+        const writes: PromiseLike<unknown>[] = [del];
+        if (cfUpserts.length > 0) {
+          writes.push(supabase.from('expense_custom_values').upsert(cfUpserts, { onConflict: 'expense_id,custom_field_id' }));
+        }
+        await Promise.all(writes);
       }
 
       toast.success(expense ? "Expense updated" : "Expense submitted");
