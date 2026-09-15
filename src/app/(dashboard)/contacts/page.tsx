@@ -95,14 +95,20 @@ export default function ContactsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     // Fetch all customers (active + inactive); the Status column filter (default Active) decides what shows.
-    const [{ data: contactsData }, { data: tagsData }, { data: fieldsData }] = await Promise.all([
+    const [{ data: contactsData }, { data: tagsData }, { data: fieldsData }, { data: profilesData }] = await Promise.all([
       supabase.from('contacts').select('*').order('created_at', { ascending: false }),
       supabase.from('tags').select('*').order('name'),
-      supabase.from('custom_fields').select('*').eq('module_name', 'contact')
+      supabase.from('custom_fields').select('*').eq('module_name', 'contact'),
+      supabase.from('profiles').select('id, full_name')
     ]);
 
     setAllTags(tagsData || []);
     setCustomFields(fieldsData || []);
+
+    // Map a customer's directly-assigned employee (contacts.employee_id → profiles.id)
+    // to a name for the Assigned Employee column.
+    const employeeNameById: Record<string, string> = {};
+    profilesData?.forEach((p: any) => { if (p.id) employeeNameById[p.id] = p.full_name; });
 
     // Order-hierarchy config → drives the optional Customer Level column.
     if (accountId) {
@@ -153,6 +159,7 @@ export default function ContactsPage() {
           ...contact,
           tags: tagsByContact[contact.id] || [],
           _territoryName: contact.territory_id ? (territoryNames[contact.territory_id] ?? null) : null,
+          _assignedEmployee: contact.employee_id ? (employeeNameById[contact.employee_id] ?? null) : null,
           ...customData
         };
       });
@@ -262,6 +269,17 @@ export default function ContactsPage() {
       // Shown by default: FMCG list scans as "Company → Contact Person".
       visibleByDefault: true,
       render: (contact) => <span>{contact.name || "-"}</span>
+    },
+    {
+      id: "assigned_employee",
+      label: "Assigned Employee",
+      type: "text",
+      // Visible by default; admins can hide it via Manage Columns.
+      visibleByDefault: true,
+      render: (contact) => {
+        const emp = (contact as any)._assignedEmployee;
+        return emp ? <span>{emp}</span> : <span className="text-muted-foreground">Unassigned</span>;
+      }
     },
     {
       id: "status",

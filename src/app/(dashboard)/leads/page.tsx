@@ -119,11 +119,21 @@ export default function LeadsPage() {
     }
 
     // Fetch Lookups
-    const [statusesRes, sourcesRes, industriesRes] = await Promise.all([
+    const [statusesRes, sourcesRes, industriesRes, profilesRes] = await Promise.all([
       supabase.from("lead_statuses").select("*").eq("account_id", account.id).order("position"),
       supabase.from("lead_sources").select("*").eq("account_id", account.id).order("name"),
-      supabase.from("lead_industries").select("*").eq("account_id", account.id).order("name")
+      supabase.from("lead_industries").select("*").eq("account_id", account.id).order("name"),
+      supabase.from("profiles").select("id, user_id, full_name").eq("account_id", account.id)
     ]);
+
+    // A lead's owner (leads.owner_id) is an auth user id, so map profiles by user_id
+    // to resolve the Assigned Employee name.
+    const employeeNameByUserId: Record<string, string> = {};
+    (profilesRes.data || []).forEach((p: any) => { if (p.user_id) employeeNameByUserId[p.user_id] = p.full_name; });
+    enhancedLeads = enhancedLeads.map((l: any) => ({
+      ...l,
+      _assignedEmployee: l.owner_id ? (employeeNameByUserId[l.owner_id] ?? null) : null,
+    }));
 
     setLeads(enhancedLeads);
     setCustomFields((fieldsData as CustomField[]) || []);
@@ -230,6 +240,17 @@ export default function LeadsPage() {
         ) : (
           <ColorPill color={colorFor(leadStatuses, lead.status)} label={lead.status || "New"} />
         )
+    },
+    {
+      id: "assigned_employee",
+      label: "Assigned Employee",
+      type: "text",
+      // Visible by default; admins can hide it via Manage Columns.
+      visibleByDefault: true,
+      render: (lead) => {
+        const emp = (lead as any)._assignedEmployee;
+        return emp ? <span>{emp}</span> : <span className="text-muted-foreground">Unassigned</span>;
+      }
     },
     {
       id: "created_at",

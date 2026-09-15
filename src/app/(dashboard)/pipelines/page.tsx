@@ -445,9 +445,11 @@ export default function PipelinesPage() {
     },
     {
       id: "assignee",
-      label: "Assignee",
+      label: "Assigned Employee",
       type: "text",
-      render: (deal) => <span>{deal.assignee?.full_name || "-"}</span>
+      // Visible by default; admins can hide it via Manage Columns.
+      visibleByDefault: true,
+      render: (deal) => <span>{deal.assignee?.full_name || <span className="text-muted-foreground">Unassigned</span>}</span>
     },
     {
       id: "created_at",
