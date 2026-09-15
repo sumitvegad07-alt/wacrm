@@ -486,6 +486,7 @@ export function ContactForm({
             }
             formData={{
               company,
+              customer_code: customerCode,
               name,
               phone,
               email,
@@ -499,6 +500,7 @@ export function ContactForm({
             }}
             onFormDataChange={(key, val) => {
               if (key === 'company') setCompany(val);
+              if (key === 'customer_code') setCustomerCode(val);
               if (key === 'name') setName(val);
               if (key === 'phone') {
                 setPhone(val);
@@ -682,19 +684,6 @@ export function ContactForm({
             />
           </div>
 
-          {/* Customer Code — an optional human-readable id. Can be set as the
-              account's customer unique key (Settings → Prevent duplicate records). */}
-          <div className="space-y-2">
-            <Label className="text-muted-foreground text-xs">
-              Customer Code{uniqueKey === 'code' ? ' (must be unique)' : ''}
-            </Label>
-            <Input
-              value={customerCode}
-              onChange={(e) => setCustomerCode(e.target.value)}
-              placeholder="e.g. CUST-0001"
-              className="bg-muted border-border text-foreground h-8 text-xs"
-            />
-          </div>
 
           {/* Financial Settings (credit limit / days / opening balance) are an
               SFA-line concept. Only show them on plans that include the SFA line

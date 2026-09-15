@@ -24,11 +24,12 @@ export const DEFAULT_MODULE_SECTIONS_AND_FIELDS: Record<string, DefaultSectionDe
       position: 0,
       fields: [
         { system_key: 'company', field_name: 'Company Name', field_type: 'text', is_required: true, show_in_table: true, position: 0 },
-        { system_key: 'name', field_name: 'Contact Person', field_type: 'text', is_required: true, show_in_table: true, position: 1 },
-        { system_key: 'phone', field_name: 'Phone Number', field_type: 'phone', is_required: true, show_in_table: true, position: 2 },
-        { system_key: 'whatsapp', field_name: 'WhatsApp Number', field_type: 'phone', is_required: false, show_in_table: true, position: 3 },
-        { system_key: 'email', field_name: 'Email Address', field_type: 'email', is_required: false, show_in_table: true, position: 4 },
-        { system_key: 'hierarchy_level', field_name: 'Customer Level', field_type: 'select', is_required: false, show_in_table: true, position: 5 },
+        { system_key: 'customer_code', field_name: 'Customer Code', field_type: 'text', is_required: false, show_in_table: true, position: 1 },
+        { system_key: 'name', field_name: 'Contact Person', field_type: 'text', is_required: true, show_in_table: true, position: 2 },
+        { system_key: 'phone', field_name: 'Phone Number', field_type: 'phone', is_required: true, show_in_table: true, position: 3 },
+        { system_key: 'whatsapp', field_name: 'WhatsApp Number', field_type: 'phone', is_required: false, show_in_table: true, position: 4 },
+        { system_key: 'email', field_name: 'Email Address', field_type: 'email', is_required: false, show_in_table: true, position: 5 },
+        { system_key: 'hierarchy_level', field_name: 'Customer Level', field_type: 'select', is_required: false, show_in_table: true, position: 6 },
       ],
     },
     {

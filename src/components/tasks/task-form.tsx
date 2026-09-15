@@ -214,7 +214,13 @@ export function TaskForm({
           const now = new Date();
           const pad = (n: number) => String(n).padStart(2, "0");
           setDueDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
-          setDueTime(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
+          // Time picker options are 5-minute slots formatted "HH:MM:00" — snap the
+          // current time to the nearest slot so the default actually matches an
+          // option (an off-grid "HH:MM" would show as blank).
+          let h = now.getHours();
+          let m = Math.round(now.getMinutes() / 5) * 5;
+          if (m === 60) { m = 0; h = (h + 1) % 24; }
+          setDueTime(`${pad(h)}:${pad(m)}:00`);
         }
         setActivityType(taskTypes[0] || "Task");
         setContactId(defaultContactId || "");

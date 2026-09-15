@@ -7,6 +7,7 @@ import {
   FileText,
   Loader2,
   CheckCircle2,
+  Check,
   AlertTriangle,
   XCircle,
   Download,
@@ -263,6 +264,19 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
       g.unknowns.filter((u) => {
         const a = sel[u.value.toLowerCase()];
         return a?.type === "create" && !a.parentId;
+      }).length
+    );
+  }, 0);
+
+  // New masters that ARE ready to be created on import (parent chosen where
+  // required). Used to confirm to the user that clicking Import creates them.
+  const pendingCreateCount = resolveGroups.reduce((n, g) => {
+    const sel = resolveSel[g.field] ?? {};
+    return (
+      n +
+      g.unknowns.filter((u) => {
+        const a = sel[u.value.toLowerCase()];
+        return a?.type === "create" && (!g.requireParent || !!a.parentId);
       }).length
     );
   }, 0);
@@ -648,6 +662,16 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                                     {`Choose which existing ${singular} this sits under — a customer's ${singular} can't be created at the top level.`}
                                   </p>
                                 )}
+                                {(sel.parentId || !g.requireParent) && (
+                                  <p className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                                    <Check className="size-3.5" />
+                                    &ldquo;{u.value}&rdquo; will be created
+                                    {sel.parentId
+                                      ? ` under ${parentOptions.find((o) => o.value === sel.parentId)?.label ?? "the selected parent"}`
+                                      : " at the top level"}{" "}
+                                    when you click Import.
+                                  </p>
+                                )}
                               </div>
                             )}
                             {sel.type === "create" && !g.hierarchical && canCreateHere && (
@@ -693,7 +717,9 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                 <div className="flex flex-col items-end gap-1">
                   <Button onClick={applyResolveAndImport} disabled={busy || unresolvedCreates > 0}>
                     {busy ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
-                    Import {importableCount}
+                    {pendingCreateCount > 0
+                      ? `Create ${pendingCreateCount} & Import ${importableCount}`
+                      : `Import ${importableCount}`}
                   </Button>
                   {unresolvedCreates > 0 && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-400">

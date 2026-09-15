@@ -81,10 +81,6 @@ export function ProductForm({
 
   // Inline "create new" for the Unit and Tax dropdowns — add a master on the fly
   // without leaving the product form. The new record is selected immediately.
-  const [newUnitOpen, setNewUnitOpen] = useState(false);
-  const [newUnitName, setNewUnitName] = useState('');
-  const [newUnitShort, setNewUnitShort] = useState('');
-  const [creatingUnit, setCreatingUnit] = useState(false);
   const [newTaxOpen, setNewTaxOpen] = useState(false);
   const [newTaxName, setNewTaxName] = useState('');
   const [newTaxRate, setNewTaxRate] = useState('');
@@ -187,27 +183,6 @@ export function ProductForm({
       .order('position')
       .order('rate');
     setTaxSlabs(data ?? []);
-  }
-
-  async function createUnitInline() {
-    if (!accountId || !newUnitName.trim()) return;
-    setCreatingUnit(true);
-    const { data, error } = await supabase
-      .from('product_units')
-      .insert({ account_id: accountId, name: newUnitName.trim(), short_name: newUnitShort.trim() || null })
-      .select('*')
-      .single();
-    setCreatingUnit(false);
-    if (error || !data) {
-      toast.error(error?.message || 'Could not create unit');
-      return;
-    }
-    setUnits((prev) => [...prev, data as ProductUnit].sort((a, b) => a.name.localeCompare(b.name)));
-    setUnitId(data.id);
-    setNewUnitName('');
-    setNewUnitShort('');
-    setNewUnitOpen(false);
-    toast.success('Unit created');
   }
 
   async function createTaxInline() {
@@ -620,17 +595,36 @@ export function ProductForm({
                   return (
                     <div className="grid gap-1">
                       {multiUnitEnabled && <span className="text-[11px] font-medium text-muted-foreground">Base unit</span>}
-                      <select
+                      <SearchableSelect
+                        options={units.map((u) => ({
+                          value: u.id,
+                          label: u.short_name ? `${u.name} (${u.short_name})` : u.name,
+                        }))}
                         value={unitId}
-                        onChange={(e) => setUnitId(e.target.value)}
+                        onChange={setUnitId}
                         disabled={baseUnitLocked}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        <option value="">Select Unit</option>
-                        {units.map(u => (
-                          <option key={u.id} value={u.id}>{u.name} {u.short_name ? `(${u.short_name})` : ''}</option>
-                        ))}
-                      </select>
+                        placeholder="Select unit"
+                        searchPlaceholder="Search units…"
+                        emptyMessage="No units yet."
+                        createLabel="unit"
+                        onCreateOption={async (label) => {
+                          if (!accountId) return null;
+                          const { data, error } = await supabase
+                            .from('product_units')
+                            .insert({ account_id: accountId, name: label.trim() })
+                            .select('*')
+                            .single();
+                          if (error || !data) {
+                            toast.error(error?.message || 'Could not create unit');
+                            return null;
+                          }
+                          setUnits((prev) =>
+                            [...prev, data as ProductUnit].sort((a, b) => a.name.localeCompare(b.name)),
+                          );
+                          setUnitId(data.id);
+                          return { value: data.id, label: (data as ProductUnit).name };
+                        }}
+                      />
                       {baseUnitLocked && (
                         <p className="text-[11px] text-amber-600 dark:text-amber-400">
                           Base unit is locked because this product already has orders or stock. You can still add or remove conversion units below.
@@ -670,30 +664,6 @@ export function ProductForm({
                           <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
                             onClick={() => setConversions((prev) => [...prev, { unit_id: '', factor: '' }])}>
                             <Plus className="h-3 w-3 mr-1" /> Add conversion unit
-                          </Button>
-                        </div>
-                      )}
-                      {!newUnitOpen ? (
-                        <button
-                          type="button"
-                          onClick={() => setNewUnitOpen(true)}
-                          className="mt-1 flex items-center gap-1 self-start text-xs font-medium text-primary hover:underline"
-                        >
-                          <Plus className="h-3 w-3" /> Create new unit
-                        </button>
-                      ) : (
-                        <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
-                          <Input
-                            value={newUnitName}
-                            onChange={(e) => setNewUnitName(e.target.value)}
-                            placeholder="Unit name (e.g. Box)"
-                            className="h-8 flex-1 min-w-[120px] text-sm"
-                          />
-                          <Button type="button" size="sm" className="h-8" disabled={creatingUnit || !newUnitName.trim()} onClick={createUnitInline}>
-                            {creatingUnit ? 'Adding…' : 'Add'}
-                          </Button>
-                          <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setNewUnitOpen(false)}>
-                            Cancel
                           </Button>
                         </div>
                       )}
