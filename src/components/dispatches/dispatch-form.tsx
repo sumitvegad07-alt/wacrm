@@ -214,38 +214,60 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
       let savedId = dispatchId as string | undefined;
       let savedNumber = dispatchNumber;
 
+      // Header write must land first (a NEW dispatch needs its id/number for the
+      // child rows and logs below).
       if (isEdit && dispatchId) {
         const { error } = await supabase.from('order_dispatches').update(header).eq('id', dispatchId);
         if (error) throw error;
-        await supabase.from('dispatch_items').delete().eq('dispatch_id', dispatchId);
-        const { error: diErr } = await supabase.from('dispatch_items').insert(
-          shipping.map((l) => ({ dispatch_id: dispatchId, order_item_id: l.orderItemId, product_name: l.productName, unit: l.unit, quantity: Number(l.qty) }))
-        );
-        if (diErr) throw diErr;
-        await logModuleActivity(supabase, { moduleName: 'dispatch', recordId: dispatchId, action: 'dispatch_edited', message: `Dispatch ${savedNumber} updated` });
-        // Mirror onto the order timeline, linked back to this dispatch.
-        await logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: 'dispatch_edited', message: `Dispatch ${savedNumber} updated`, details: { dispatch_id: dispatchId, dispatch_number: savedNumber } });
+        savedId = dispatchId;
       } else {
-        const { data: created, error } = await supabase.from('order_dispatches').insert({ account_id: accountId, order_id: orderId, ...header }).select().single();
+        const { data: created, error } = await supabase
+          .from('order_dispatches')
+          .insert({ account_id: accountId, order_id: orderId, ...header })
+          .select('id, dispatch_number')
+          .single();
         if (error || !created) throw error;
         savedId = created.id; savedNumber = created.dispatch_number;
+      }
+
+      const did = savedId!;
+      // Items, custom values, and the two activity logs are independent of each
+      // other → run them together (was ~5 sequential round-trips). Supabase
+      // builders are thenable (PromiseLike), not real Promises.
+      const post: PromiseLike<unknown>[] = [];
+
+      // Dispatch items: replace-all (delete-then-insert on edit; insert on create).
+      post.push((async () => {
+        if (isEdit) await supabase.from('dispatch_items').delete().eq('dispatch_id', did);
         const { error: diErr } = await supabase.from('dispatch_items').insert(
-          shipping.map((l) => ({ dispatch_id: created.id, order_item_id: l.orderItemId, product_name: l.productName, unit: l.unit, quantity: Number(l.qty) }))
+          shipping.map((l) => ({ dispatch_id: did, order_item_id: l.orderItemId, product_name: l.productName, unit: l.unit, quantity: Number(l.qty) }))
         );
         if (diErr) throw diErr;
-        await logModuleActivity(supabase, { moduleName: 'dispatch', recordId: created.id, action: 'dispatch_created', message: `Dispatch ${created.dispatch_number} generated.` });
-        // Mirror onto the order timeline, linked back to this dispatch.
-        await logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: 'dispatch_created', message: `Dispatch ${created.dispatch_number} generated.`, details: { dispatch_id: created.id, dispatch_number: created.dispatch_number } });
+      })());
+
+      // Custom values (dispatch_custom_values has no unique key → delete-then-
+      // insert within one task).
+      if (Object.keys(customValues).length > 0) {
+        post.push((async () => {
+          await supabase.from('dispatch_custom_values').delete().eq('dispatch_id', did);
+          const toInsert = Object.entries(customValues)
+            .filter(([_, v]) => v !== undefined && v !== '')
+            .map(([fId, v]) => ({ account_id: accountId, dispatch_id: did, custom_field_id: fId, value: v }));
+          if (toInsert.length > 0) {
+            await supabase.from('dispatch_custom_values').insert(toInsert);
+          }
+        })());
       }
-      if (savedId && Object.keys(customValues).length > 0) {
-        await supabase.from('dispatch_custom_values').delete().eq('dispatch_id', savedId);
-        const toInsert = Object.entries(customValues)
-          .filter(([_, v]) => v !== undefined && v !== '')
-          .map(([fId, v]) => ({ account_id: accountId, dispatch_id: savedId, custom_field_id: fId, value: v }));
-        if (toInsert.length > 0) {
-          await supabase.from('dispatch_custom_values').insert(toInsert);
-        }
-      }
+
+      // Activity logs (dispatch + mirrored on the order timeline) — bookkeeping;
+      // never fail the save on a log write.
+      const dAction = isEdit ? 'dispatch_edited' : 'dispatch_created';
+      const label = isEdit ? `Dispatch ${savedNumber} updated` : `Dispatch ${savedNumber} generated.`;
+      post.push(logModuleActivity(supabase, { moduleName: 'dispatch', recordId: did, action: dAction, message: label }).catch(() => {}));
+      post.push(logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: dAction, message: label, details: { dispatch_id: did, dispatch_number: savedNumber } }).catch(() => {}));
+
+      await Promise.all(post);
+
       toast.success(isEdit ? 'Dispatch updated' : `Dispatch ${savedNumber} created`);
       router.push(`/dispatches/${savedId}`);
     } catch (err: unknown) {

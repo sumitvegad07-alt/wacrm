@@ -153,22 +153,25 @@ function slabPayload(schemeId: string, slab: SchemeSlabRow) {
 
 async function writeChildren(schemeId: string, form: SchemeFormValues) {
   const supabase = createClient();
+  // Slabs, products and customers are independent tables → insert them together
+  // (was 3 sequential round-trips). Builders are thenable (PromiseLike).
+  const writes: PromiseLike<{ error: unknown }>[] = [];
   if (form.slabs.length > 0) {
-    const { error } = await supabase.from('scheme_slabs').insert(form.slabs.map((s) => slabPayload(schemeId, s)));
-    if (error) throw error;
+    writes.push(supabase.from('scheme_slabs').insert(form.slabs.map((s) => slabPayload(schemeId, s))));
   }
   if (form.productIds.length > 0) {
-    const { error } = await supabase
-      .from('scheme_products')
-      .insert(form.productIds.map((product_id) => ({ scheme_id: schemeId, product_id })));
-    if (error) throw error;
+    writes.push(
+      supabase.from('scheme_products').insert(form.productIds.map((product_id) => ({ scheme_id: schemeId, product_id }))),
+    );
   }
   if (form.targetType === 'specific_customers' && form.customerIds.length > 0) {
-    const { error } = await supabase
-      .from('scheme_customers')
-      .insert(form.customerIds.map((contact_id) => ({ scheme_id: schemeId, contact_id })));
-    if (error) throw error;
+    writes.push(
+      supabase.from('scheme_customers').insert(form.customerIds.map((contact_id) => ({ scheme_id: schemeId, contact_id }))),
+    );
   }
+  if (writes.length === 0) return;
+  const results = await Promise.all(writes);
+  for (const r of results) if (r?.error) throw r.error;
 }
 
 export async function createScheme(accountId: string, form: SchemeFormValues): Promise<string> {

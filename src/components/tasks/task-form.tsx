@@ -383,32 +383,38 @@ export function TaskForm({
     }
 
     if (savedTaskId) {
+      const tid = savedTaskId;
+      // Custom values + the linked-record activity logs are all independent →
+      // run them in one parallel batch (was: delete, insert, then the logs).
+      // task_custom_values has no unique key, so its values stay delete-then-
+      // insert within a single task. Log writes never fail the save.
+      const post: PromiseLike<unknown>[] = [];
+
       const cfUpserts = customFields
         .filter(f => customValues[f.id] !== undefined)
-        .map((f) => ({
-           task_id: savedTaskId,
-           custom_field_id: f.id,
-           value: customValues[f.id]
-        }));
-      
+        .map((f) => ({ task_id: tid, custom_field_id: f.id, value: customValues[f.id] }));
       if (cfUpserts.length > 0) {
-        await supabase.from('task_custom_values').delete().eq('task_id', savedTaskId);
-        await supabase.from('task_custom_values').insert(cfUpserts);
+        post.push((async () => {
+          await supabase.from('task_custom_values').delete().eq('task_id', tid);
+          await supabase.from('task_custom_values').insert(cfUpserts);
+        })());
       }
-      
-      const logPromises = [];
+
       const msg = task ? `${activityType} updated` : `${activityType} created`;
-      if (contactId) logPromises.push(logModuleActivity(supabase, { moduleName: 'contact', recordId: contactId, action: task ? 'updated' : 'created', message: msg }));
-      if (dealId) logPromises.push(logModuleActivity(supabase, { moduleName: 'deal', recordId: dealId, action: task ? 'updated' : 'created', message: msg }));
-      if (quotationId) logPromises.push(logModuleActivity(supabase, { moduleName: 'quotation', recordId: quotationId, action: task ? 'updated' : 'created', message: msg }));
-      if (productId) logPromises.push(logModuleActivity(supabase, { moduleName: 'product', recordId: productId, action: task ? 'updated' : 'created', message: msg }));
-      if (leadId) logPromises.push(logModuleActivity(supabase, { moduleName: 'lead', recordId: leadId, action: task ? 'updated' : 'created', message: msg }));
-      if (expenseId) logPromises.push(logModuleActivity(supabase, { moduleName: 'expense', recordId: expenseId, action: task ? 'updated' : 'created', message: msg }));
-      if (paymentId) logPromises.push(logModuleActivity(supabase, { moduleName: 'payment', recordId: paymentId, action: task ? 'updated' : 'created', message: msg }));
-      if (linkedModule === "Order" && orderId) logPromises.push(logModuleActivity(supabase, { moduleName: 'order', recordId: orderId, action: task ? 'updated' : 'created', message: msg }));
-      if (linkedModule === "Leave" && leaveId) logPromises.push(logModuleActivity(supabase, { moduleName: 'leave', recordId: leaveId, action: task ? 'updated' : 'created', message: msg }));
-      if (linkedModule === "Dispatch" && dispatchId) logPromises.push(logModuleActivity(supabase, { moduleName: 'dispatch', recordId: dispatchId, action: task ? 'updated' : 'created', message: msg }));
-      await Promise.all(logPromises);
+      const act = task ? 'updated' : 'created';
+      const log = (moduleName: string, recordId: string) =>
+        post.push(logModuleActivity(supabase, { moduleName, recordId, action: act, message: msg }).catch(() => {}));
+      if (contactId) log('contact', contactId);
+      if (dealId) log('deal', dealId);
+      if (quotationId) log('quotation', quotationId);
+      if (productId) log('product', productId);
+      if (leadId) log('lead', leadId);
+      if (expenseId) log('expense', expenseId);
+      if (paymentId) log('payment', paymentId);
+      if (linkedModule === "Order" && orderId) log('order', orderId);
+      if (linkedModule === "Leave" && leaveId) log('leave', leaveId);
+      if (linkedModule === "Dispatch" && dispatchId) log('dispatch', dispatchId);
+      await Promise.all(post);
     }
 
     setSaving(false);

@@ -60,18 +60,26 @@ export interface PriceListInput {
   items: { product_id: string; discount_percent: number }[];
 }
 
-/** Replace the whole set of overrides for a list (delete-all then insert). */
+/** Replace the whole set of overrides for a list. Upserts the current rows and
+ *  deletes the removed ones — disjoint rows, so both run together (was a
+ *  delete-all followed by an insert). UNIQUE(price_list_id, product_id) backs the
+ *  upsert. Builders are thenable (PromiseLike), not real Promises. */
 async function syncItems(listId: string, items: PriceListInput["items"]) {
   const supabase = createClient();
-  const { error: delErr } = await supabase.from("price_list_items").delete().eq("price_list_id", listId);
-  if (delErr) throw new Error(delErr.message);
   const rows = items
     .filter((i) => i.product_id)
     .map((i) => ({ price_list_id: listId, product_id: i.product_id, discount_percent: i.discount_percent }));
+  const keepProductIds = rows.map((r) => r.product_id);
+
+  let del = supabase.from("price_list_items").delete().eq("price_list_id", listId);
+  if (keepProductIds.length > 0) del = del.not("product_id", "in", `(${keepProductIds.join(",")})`);
+
+  const writes: PromiseLike<{ error: unknown }>[] = [del];
   if (rows.length > 0) {
-    const { error: insErr } = await supabase.from("price_list_items").insert(rows);
-    if (insErr) throw new Error(insErr.message);
+    writes.push(supabase.from("price_list_items").upsert(rows, { onConflict: "price_list_id,product_id" }));
   }
+  const results = await Promise.all(writes);
+  for (const r of results) if (r?.error) throw new Error((r.error as { message?: string })?.message ?? "Failed to save price list items");
 }
 
 export async function createPriceList(accountId: string, input: PriceListInput): Promise<string> {
