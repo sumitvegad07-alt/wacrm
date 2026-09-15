@@ -95,12 +95,13 @@ export default function ContactsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     // Fetch all customers (active + inactive); the Status column filter (default Active) decides what shows.
-    const [{ data: contactsData }, { data: tagsData }, { data: fieldsData }, { data: profilesData }, { data: areaData }] = await Promise.all([
+    const [{ data: contactsData }, { data: tagsData }, { data: fieldsData }, { data: profilesData }, { data: areaData }, { data: allTerritories }] = await Promise.all([
       supabase.from('contacts').select('*').order('created_at', { ascending: false }),
       supabase.from('tags').select('*').order('name'),
       supabase.from('custom_fields').select('*').eq('module_name', 'contact'),
       supabase.from('profiles').select('id, user_id, full_name'),
-      supabase.from('employee_area_assignments').select('employee_id, territory_id')
+      supabase.from('employee_area_assignments').select('employee_id, territory_id'),
+      supabase.from('territories').select('id, parent_id').is('deleted_at', null)
     ]);
 
     setAllTags(tagsData || []);
@@ -121,6 +122,20 @@ export default function ContactsPage() {
         (areaNamesByTerritory[a.territory_id] ||= []).push(nm);
       }
     });
+    // An assignment on a parent territory (e.g. a State) covers customers tagged to
+    // its children (a City/Area), so walk up the tree to the first assigned ancestor.
+    const territoryParent: Record<string, string | null> = {};
+    (allTerritories || []).forEach((t: any) => { territoryParent[t.id] = t.parent_id ?? null; });
+    const areaEmployeesFor = (territoryId: string | null | undefined): string[] => {
+      let cur = territoryId ?? null;
+      let guard = 0;
+      while (cur && guard < 8) {
+        if (areaNamesByTerritory[cur]?.length) return areaNamesByTerritory[cur];
+        cur = territoryParent[cur] ?? null;
+        guard += 1;
+      }
+      return [];
+    };
 
     // Order-hierarchy config → drives the optional Customer Level column.
     if (accountId) {
@@ -169,10 +184,10 @@ export default function ContactsPage() {
         });
         // Assigned Employee = direct assignment, else area-wise (via territory),
         // else the salesman who created the customer.
-        const areaNames = contact.territory_id ? areaNamesByTerritory[contact.territory_id] : undefined;
+        const areaNames = areaEmployeesFor(contact.territory_id);
         const assignedEmployee =
           nameOf(contact.employee_id) ||
-          (areaNames && areaNames.length > 0 ? areaNames.join(', ') : null) ||
+          (areaNames.length > 0 ? areaNames.join(', ') : null) ||
           nameOf(contact.user_id) ||
           null;
         return {
