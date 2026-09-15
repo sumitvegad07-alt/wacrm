@@ -10,6 +10,7 @@ import { Plus, CheckCircle2, XCircle, Ban, Loader2, Edit } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
@@ -224,28 +225,13 @@ export default function PaymentsPage() {
     },
     {
       id: 'actions',
-      label: '',
+      label: 'Action',
       type: 'text',
+      // Uniform Action column: Edit only. Payments are never soft-deleted; their
+      // Approve / Reject / Cancel workflow lives on the payment detail page (open
+      // via this Edit icon or the row) and in the bulk action bar.
       render: (p) => (
-        <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
-          {p.status === 'Pending' && (
-            <>
-              {canApprove && (
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={(e) => { e.stopPropagation(); handleInlineApprove(p); }} title="Approve">
-                  <CheckCircle2 className="size-4" />
-                </Button>
-              )}
-              {canReject && (
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); handleInlineReject(p); }} title="Reject">
-                  <XCircle className="size-4" />
-                </Button>
-              )}
-            </>
-          )}
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); router.push(`/payments/${p.id}`); }} title="Edit">
-            <Edit className="size-4" />
-          </Button>
-        </div>
+        <RowActions onEdit={() => router.push(`/payments/${p.id}`)} />
       ),
     },
   ];

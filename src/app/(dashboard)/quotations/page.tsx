@@ -38,6 +38,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useCan } from '@/hooks/use-can';
 
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { isDateInFilter } from "@/lib/date-filters";
@@ -299,96 +300,22 @@ export default function QuotationsPage() {
       id: "actions",
       label: "Action",
       visibleByDefault: true,
+      // Uniform Action column: Edit + Delete. Status transitions (Mark Sent /
+      // Approve / Reject) and New Version live on the quotation detail page,
+      // opened by clicking the row.
       render: (quotation) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger 
-            render={<Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" />}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-popover border-border">
-            <DropdownMenuItem 
-              className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/quotations/${quotation.id}`);
-              }}
-            >
-              <FileText className="size-4 mr-2" /> View
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                setFormQuotationId(quotation.id);
-                setFormCloneId(undefined);
-                setFormVersionId(undefined);
-                setFormOpen(true);
-              }}
-            >
-              <Pencil className="size-4 mr-2" /> Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                setFormQuotationId(undefined);
-                setFormCloneId(undefined);
-                setFormVersionId(quotation.id);
-                setFormOpen(true);
-              }}
-            >
-              <Copy className="size-4 mr-2" /> New Version
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border" />
-            
-            {quotation.status === 'Pending' && (
-              <DropdownMenuItem 
-                className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-                onClick={(e) => changeStatus(quotation.id, 'Sent', e)}
-              >
-                <Send className="size-4 mr-2 text-blue-500" /> Mark Sent
-              </DropdownMenuItem>
-            )}
-            {(quotation.status === 'Pending' || quotation.status === 'Sent') && (
-              <>
-                <DropdownMenuItem 
-                  className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-                  onClick={(e) => changeStatus(quotation.id, 'Approved', e)}
-                >
-                  <Check className="size-4 mr-2 text-emerald-500" /> Approve
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  className="text-popover-foreground focus:bg-muted focus:text-foreground cursor-pointer"
-                  onClick={(e) => changeStatus(quotation.id, 'Rejected', e)}
-                >
-                  <X className="size-4 mr-2 text-red-500" /> Reject
-                </DropdownMenuItem>
-              </>
-            )}
-            <DropdownMenuSeparator className="bg-border" />
-            {quotation.is_active === false ? (
-              <DropdownMenuItem
-                className="text-emerald-600 focus:bg-emerald-500/10 cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); handleReactivate(quotation.id); }}
-              >
-                <RotateCcw className="size-4 mr-2" /> Re-activate
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteTarget(quotation);
-                  setDeleteConfirmOpen(true);
-                }}
-              >
-                <Trash2 className="size-4 mr-2" /> Move to Inactive
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <RowActions
+          isInactive={quotation.is_active === false}
+          onEdit={() => {
+            setFormQuotationId(quotation.id);
+            setFormCloneId(undefined);
+            setFormVersionId(undefined);
+            setFormOpen(true);
+          }}
+          onDelete={() => { setDeleteTarget(quotation); setDeleteConfirmOpen(true); }}
+          onReactivate={() => handleReactivate(quotation.id)}
+          deleteTitle="Move to Inactive"
+        />
       )
     }
   ];

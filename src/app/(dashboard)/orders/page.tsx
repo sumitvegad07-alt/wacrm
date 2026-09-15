@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { useDataScope } from '@/hooks/use-data-scope';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
@@ -196,6 +197,15 @@ export default function OrdersPage() {
     fetchData();
   }
 
+  // The "dustbin" for an order is a Cancel — orders are never deleted, and only
+  // certain statuses can transition to Cancelled (LEGAL_TO).
+  const handleCancelOrder = async (o: OrderRow) => {
+    if (!confirm(`Cancel order ${o.order_number}? This sets its status to Cancelled.`)) return;
+    const { error } = await supabase.rpc('update_order_status', { p_order_id: o.id, p_new_status: 'Cancelled' });
+    if (error) toast.error('Failed to cancel order');
+    else { toast.success('Order cancelled'); fetchData(); }
+  };
+
   const columns: ColumnDef<OrderRow>[] = [
     {
       id: 'order_number',
@@ -259,18 +269,20 @@ export default function OrdersPage() {
     },
     ...(canEditOrder ? [{
       id: 'actions',
-      label: '',
+      label: 'Action',
       type: 'text' as const,
-      render: (o: OrderRow) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 gap-1"
-          onClick={(e) => { e.stopPropagation(); setEditOrderId(o.id); }}
-        >
-          <Pencil className="size-3.5" /> Edit
-        </Button>
-      ),
+      // Uniform Action column: Edit + Cancel (the order "dustbin"). Cancel is
+      // only offered when the current status can legally move to Cancelled.
+      render: (o: OrderRow) => {
+        const canCancel = (LEGAL_TO[o.status] || []).includes('Cancelled');
+        return (
+          <RowActions
+            onEdit={() => setEditOrderId(o.id)}
+            onDelete={canCancel ? () => handleCancelOrder(o) : undefined}
+            deleteTitle="Cancel order"
+          />
+        );
+      },
     }] : []),
   ];
 

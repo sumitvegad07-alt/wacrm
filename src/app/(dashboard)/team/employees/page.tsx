@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout, PageHeader, PageToolbar, StatusBadge } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 
 interface Employee {
@@ -196,6 +197,23 @@ export default function EmployeesPage() {
     }
   };
 
+  const handleReactivate = async (empId: string) => {
+    setEmployees(prev => prev.map(e => e.id === empId ? { ...e, status: "active" } : e));
+    try {
+      const res = await fetch("/api/team/employees", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: empId, updates: { status: "active" } })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to re-activate");
+      toast.success("Employee re-activated");
+    } catch (err: any) {
+      toast.error(err.message);
+      fetchData();
+    }
+  };
+
   const handleCreateEmployee = async () => {
     if (!addForm.full_name || !addForm.email || !addForm.password || !addForm.employee_role_id) {
       toast.error("Please fill all required fields (Name, Email, Password, Role)");
@@ -341,29 +359,22 @@ export default function EmployeesPage() {
     },
     {
       id: "actions",
-      label: "Actions",
+      label: "Action",
       type: "text",
       render: (emp) => {
         const isAdmin = emp.account_role === 'admin' || emp.account_role === 'owner';
+        const inactive = emp.status === "inactive";
         return (
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/team/employees/${emp.id}`); }}>
-              <Edit className="w-4 h-4 mr-2" />
-              Manage
-            </Button>
-            {emp.status !== "inactive" && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                disabled={isAdmin}
-                onClick={(e) => { e.stopPropagation(); handleDeactivate(emp.id); }}
-                title={isAdmin ? "Admins cannot be deactivated" : "Deactivate employee"}
-              >
-                Deactivate
-              </Button>
-            )}
-          </div>
+          <RowActions
+            isInactive={inactive}
+            editTitle="Manage"
+            onEdit={() => router.push(`/team/employees/${emp.id}`)}
+            // Admins/owners can't be deactivated; hide the trash for them.
+            onDelete={!isAdmin ? () => handleDeactivate(emp.id) : undefined}
+            onReactivate={() => handleReactivate(emp.id)}
+            deleteTitle="Deactivate"
+            reactivateTitle="Re-activate"
+          />
         );
       },
     },
