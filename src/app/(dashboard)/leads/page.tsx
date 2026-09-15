@@ -49,9 +49,9 @@ export default function LeadsPage() {
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   
   // Lookups for filters
-  const [leadStatuses, setLeadStatuses] = useState<{id: string, name: string}[]>([]);
-  const [leadSources, setLeadSources] = useState<{id: string, name: string}[]>([]);
-  const [leadIndustries, setLeadIndustries] = useState<{id: string, name: string}[]>([]);
+  const [leadStatuses, setLeadStatuses] = useState<{id: string, name: string, color?: string | null}[]>([]);
+  const [leadSources, setLeadSources] = useState<{id: string, name: string, color?: string | null}[]>([]);
+  const [leadIndustries, setLeadIndustries] = useState<{id: string, name: string, color?: string | null}[]>([]);
 
   const [loading, setLoading] = useState(true);
   
@@ -181,6 +181,33 @@ export default function LeadsPage() {
 
   // Removed dynamic extraction in favor of fetched lookups
 
+  // Colour codes are configured per option in Lead Settings (status/source/
+  // industry each carry a hex `color`). Render them as a coloured pill so the
+  // table reflects the same colour coding the settings screens define.
+  const colorFor = (
+    list: { name: string; color?: string | null }[],
+    value?: string | null,
+  ) => (value ? list.find((x) => x.name === value)?.color ?? null : null);
+
+  const ColorPill = ({ color, label }: { color?: string | null; label: string }) => (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+      style={
+        color
+          ? { backgroundColor: `${color}1a`, color }
+          : undefined
+      }
+    >
+      {color && (
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+      )}
+      <span className={color ? "" : "text-muted-foreground"}>{label}</span>
+    </span>
+  );
+
   const columns: ColumnDef<Lead>[] = [
     {
       id: "name",
@@ -197,12 +224,12 @@ export default function LeadsPage() {
       label: "Lead Status",
       type: "select",
       options: leadStatuses.map(s => ({ label: s.name, value: s.name })),
-      render: (lead) => (
-        <StatusBadge
-          status={lead.is_converted ? "converted" : lead.status || "new"}
-          label={lead.is_converted ? "Converted" : lead.status}
-        />
-      )
+      render: (lead) =>
+        lead.is_converted ? (
+          <StatusBadge status="converted" label="Converted" />
+        ) : (
+          <ColorPill color={colorFor(leadStatuses, lead.status)} label={lead.status || "New"} />
+        )
     },
     {
       id: "created_at",
@@ -219,11 +246,12 @@ export default function LeadsPage() {
       label: "Source",
       type: "select",
       options: leadSources.map(s => ({ label: s.name, value: s.name })),
-      render: (lead) => (
-        <span className="capitalize px-2 py-1 bg-muted rounded-full text-xs">
-          {lead.source || "-"}
-        </span>
-      )
+      render: (lead) =>
+        lead.source ? (
+          <ColorPill color={colorFor(leadSources, lead.source)} label={lead.source} />
+        ) : (
+          <span className="text-muted-foreground text-xs">-</span>
+        )
     },
     {
       id: "whatsapp",
@@ -236,7 +264,12 @@ export default function LeadsPage() {
       label: "Industry",
       type: "select",
       options: leadIndustries.map(s => ({ label: s.name, value: s.name })),
-      render: (lead) => <span>{lead.industry || "-"}</span>
+      render: (lead) =>
+        lead.industry ? (
+          <ColorPill color={colorFor(leadIndustries, lead.industry)} label={lead.industry} />
+        ) : (
+          <span className="text-muted-foreground text-xs">-</span>
+        )
     },
     // All remaining lead fields are exposed here so an admin can add any of them
     // from Manage Columns (hidden by default to keep the initial view compact).

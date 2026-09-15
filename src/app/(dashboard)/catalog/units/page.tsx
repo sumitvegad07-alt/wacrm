@@ -226,10 +226,6 @@ export default function CatalogUnitsPage() {
               <Label>Unit Name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Kilograms" autoFocus />
             </div>
-            <div className="space-y-2">
-              <Label>Short Name</Label>
-              <Input value={shortName} onChange={(e) => setShortName(e.target.value)} placeholder="e.g. kg" />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>Cancel</Button>

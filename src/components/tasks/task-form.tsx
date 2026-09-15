@@ -208,8 +208,14 @@ export function TaskForm({
         setStatus("Pending");
         setPriority("Medium");
         setAssignedUserId(profile?.id || "");
-        setDueDate("");
-        setDueTime("");
+        // Default a new task to today's date and the current time (device-local),
+        // so the user isn't forced to fill them in every time. They stay editable.
+        {
+          const now = new Date();
+          const pad = (n: number) => String(n).padStart(2, "0");
+          setDueDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
+          setDueTime(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
+        }
         setActivityType(taskTypes[0] || "Task");
         setContactId(defaultContactId || "");
         setDealId(defaultDealId || "");

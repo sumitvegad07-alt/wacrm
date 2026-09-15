@@ -760,12 +760,6 @@ export function ProductForm({
                             placeholder="Unit name (e.g. Box)"
                             className="h-8 flex-1 min-w-[120px] text-sm"
                           />
-                          <Input
-                            value={newUnitShort}
-                            onChange={(e) => setNewUnitShort(e.target.value)}
-                            placeholder="Short (e.g. BX)"
-                            className="h-8 w-24 text-sm"
-                          />
                           <Button type="button" size="sm" className="h-8" disabled={creatingUnit || !newUnitName.trim()} onClick={createUnitInline}>
                             {creatingUnit ? 'Adding…' : 'Add'}
                           </Button>
