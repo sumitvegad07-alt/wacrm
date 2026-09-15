@@ -220,6 +220,9 @@ export function ModuleSettingsPanel() {
   // Multi Unit: base + conversion units per product; pricing/stock in base units.
   const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
   const [amountDiscountBasis, setAmountDiscountBasis] = useState<'entered' | 'base'>('entered');
+  // Which field must be unique to block duplicates on save (per module).
+  const [productUniqueKey, setProductUniqueKey] = useState<'name' | 'code'>('name');
+  const [customerUniqueKey, setCustomerUniqueKey] = useState<'name' | 'code'>('name');
   // Geo-Fencing: block visit check-in/out unless the rep is within `radius_m`
   // of the customer's saved location. Read by the DB trigger + mobile app.
   const [geoFencingEnabled, setGeoFencingEnabled] = useState(false);
@@ -258,6 +261,8 @@ export function ModuleSettingsPanel() {
         setGstEnabled(!!s.gst_enabled);
         setHsnEnabled(!!s.hsn_enabled);
         setMultiUnitEnabled(!!s.extra_settings?.multi_unit_enabled);
+        setProductUniqueKey(s.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
+        setCustomerUniqueKey(s.extra_settings?.customer_unique_key === 'code' ? 'code' : 'name');
         setAmountDiscountBasis(os.amount_discount_basis === 'base' ? 'base' : 'entered');
 
         const gf = s.geo_fencing || {};
@@ -342,6 +347,8 @@ export function ModuleSettingsPanel() {
         extra_settings: {
           ...(originalSettings?.extra_settings || {}),
           multi_unit_enabled: multiUnitEnabled,
+          product_unique_key: productUniqueKey,
+          customer_unique_key: customerUniqueKey,
         },
         geo_fencing: {
           enabled: geoFencingEnabled,
@@ -383,7 +390,7 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, amountDiscountBasis, geoFencingEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, productUniqueKey, customerUniqueKey, amountDiscountBasis, geoFencingEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
@@ -392,6 +399,8 @@ export function ModuleSettingsPanel() {
     setGstEnabled(!!originalSettings.gst_enabled);
     setHsnEnabled(!!originalSettings.hsn_enabled);
     setMultiUnitEnabled(!!originalSettings.extra_settings?.multi_unit_enabled);
+    setProductUniqueKey(originalSettings.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
+    setCustomerUniqueKey(originalSettings.extra_settings?.customer_unique_key === 'code' ? 'code' : 'name');
     setAmountDiscountBasis(originalSettings.order_settings?.amount_discount_basis === 'base' ? 'base' : 'entered');
     const gf = originalSettings.geo_fencing || {};
     setGeoFencingEnabled(!!gf.enabled);
@@ -576,6 +585,44 @@ export function ModuleSettingsPanel() {
                   </div>
                 </FeatureRow>
               )}
+
+              {/* Duplicate prevention — pick the field that must be unique. Saving a
+                  product/customer whose value already exists is then blocked. */}
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Prevent duplicate records</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Choose the field that must be unique. A save is blocked when the value already
+                    exists on another active record.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-1.5">Product unique key</p>
+                    <KoopsOptionToggle
+                      options={[
+                        { label: "Name", value: "name" },
+                        { label: "Product Code", value: "code" },
+                      ]}
+                      value={productUniqueKey}
+                      onChange={setProductUniqueKey}
+                      disabled={!canEditSettings}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-1.5">Customer unique key</p>
+                    <KoopsOptionToggle
+                      options={[
+                        { label: "Name", value: "name" },
+                        { label: "Customer Code", value: "code" },
+                      ]}
+                      value={customerUniqueKey}
+                      onChange={setCustomerUniqueKey}
+                      disabled={!canEditSettings}
+                    />
+                  </div>
+                </div>
+              </div>
 
               <FeatureRow
                 label="Enable customer hierarchy"

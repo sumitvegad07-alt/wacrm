@@ -61,6 +61,8 @@ export function ProductForm({
   const [trackStock, setTrackStock] = useState(true);
   const [openingStock, setOpeningStock] = useState('');
   const [active, setActive] = useState(true);
+  // Which field must be unique (Extra Settings → Prevent duplicate records).
+  const [uniqueKey, setUniqueKey] = useState<'name' | 'code'>('name');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -151,6 +153,7 @@ export function ProductForm({
     });
     const muEnabled = !!acctRes.data?.settings?.extra_settings?.multi_unit_enabled;
     setMultiUnitEnabled(muEnabled);
+    setUniqueKey(acctRes.data?.settings?.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
 
     const cats = (catRes.data as ProductCategory[]) ?? [];
     setCategories(cats);
@@ -290,6 +293,28 @@ export function ProductForm({
     if (cfError) {
       toast.error(cfError);
       return;
+    }
+
+    // Duplicate guard — block a save whose unique-key value already exists on
+    // another active product in this account (key chosen in Extra Settings).
+    {
+      const keyField = uniqueKey === 'code' ? 'sku' : 'name';
+      const keyVal = (uniqueKey === 'code' ? sku : name).trim();
+      if (keyVal) {
+        const escaped = keyVal.replace(/[%_\\]/g, '\\$&'); // exact (case-insensitive) match, no wildcards
+        let q = supabase
+          .from('products')
+          .select('id')
+          .eq('account_id', accountId)
+          .eq('active', true)
+          .ilike(keyField, escaped);
+        if (product?.id) q = q.neq('id', product.id);
+        const { data: dup } = await q.limit(1);
+        if (dup && dup.length > 0) {
+          toast.error(`A product with this ${uniqueKey === 'code' ? 'Product Code' : 'name'} already exists.`);
+          return;
+        }
+      }
     }
 
     setSaving(true);

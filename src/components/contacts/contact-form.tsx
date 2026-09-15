@@ -85,6 +85,9 @@ export function ContactForm({
   const [country, setCountry] = useState('');
   const [pincode, setPincode] = useState('');
   const [gstNumber, setGstNumber] = useState('');   // customer GSTIN (party_gstin source for orders)
+  const [customerCode, setCustomerCode] = useState('');
+  // Which field must be unique (Extra Settings → Prevent duplicate records).
+  const [uniqueKey, setUniqueKey] = useState<'name' | 'code'>('name');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   
@@ -177,6 +180,7 @@ export function ContactForm({
       setCountry(contact?.country ?? '');
       setPincode(contact?.pincode ?? '');
       setGstNumber((contact as any)?.gst_number ?? '');
+      setCustomerCode((contact as any)?.customer_code ?? '');
       setLatitude(contact?.latitude != null ? String(contact.latitude) : '');
       setLongitude(contact?.longitude != null ? String(contact.longitude) : '');
       setCreditLimit((contact as any)?.credit_limit != null ? String((contact as any).credit_limit) : '');
@@ -219,6 +223,7 @@ export function ContactForm({
     const os = acctRes.data?.settings?.order_settings;
     setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? os.levels : [] });
     setAssignmentMode(acctRes.data?.settings?.assignment_mode || 'area');
+    setUniqueKey(acctRes.data?.settings?.extra_settings?.customer_unique_key === 'code' ? 'code' : 'name');
     setProfiles((profRes.data || []) as Profile[]);
     // Price Lists (v5) are an SFA-line feature; only load them there.
     if (hasSFA) {
@@ -333,6 +338,28 @@ export function ContactForm({
       return;
     }
 
+    // Duplicate guard — block a save whose unique-key value already exists on
+    // another customer in this account (key chosen in Extra Settings). Phone
+    // duplicates are handled separately above.
+    {
+      const keyField = uniqueKey === 'code' ? 'customer_code' : 'name';
+      const keyVal = (uniqueKey === 'code' ? customerCode : name).trim();
+      if (keyVal) {
+        const escaped = keyVal.replace(/[%_\\]/g, '\\$&');
+        let q = supabase
+          .from('contacts')
+          .select('id')
+          .eq('account_id', accountId)
+          .ilike(keyField, escaped);
+        if (isEdit && contact) q = q.neq('id', contact.id);
+        const { data: dup } = await q.limit(1);
+        if (dup && dup.length > 0) {
+          toast.error(`A customer with this ${uniqueKey === 'code' ? 'Customer Code' : 'name'} already exists.`);
+          return;
+        }
+      }
+    }
+
     setSaving(true);
 
     try {
@@ -352,6 +379,7 @@ export function ContactForm({
         country: country.trim() || null,
         pincode: pincode.trim() || null,
         gst_number: gstNumber.trim() || null,
+        customer_code: customerCode.trim() || null,
         latitude: latitude.trim() !== '' ? parseFloat(latitude) : null,
         longitude: longitude.trim() !== '' ? parseFloat(longitude) : null,
         hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
@@ -651,6 +679,20 @@ export function ContactForm({
               placeholder="24AAACX0000X1Z5"
               maxLength={15}
               className="bg-muted border-border text-foreground h-8 text-xs uppercase"
+            />
+          </div>
+
+          {/* Customer Code — an optional human-readable id. Can be set as the
+              account's customer unique key (Settings → Prevent duplicate records). */}
+          <div className="space-y-2">
+            <Label className="text-muted-foreground text-xs">
+              Customer Code{uniqueKey === 'code' ? ' (must be unique)' : ''}
+            </Label>
+            <Input
+              value={customerCode}
+              onChange={(e) => setCustomerCode(e.target.value)}
+              placeholder="e.g. CUST-0001"
+              className="bg-muted border-border text-foreground h-8 text-xs"
             />
           </div>
 
