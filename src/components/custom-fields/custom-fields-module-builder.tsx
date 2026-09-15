@@ -841,8 +841,8 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
 
       {/* ── Field Modal ── */}
       <Dialog open={fieldModalOpen} onOpenChange={setFieldModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0 sm:max-w-[96vw]">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
             <DialogTitle>
               {editingField ? 'Edit Field' : 'Add Field'}
             </DialogTitle>
@@ -850,7 +850,8 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
               Create or modify a custom field for {friendlyName}.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="mx-auto w-full max-w-3xl space-y-4">
             <div className="space-y-2">
               <Label htmlFor="fldName">Field Name *</Label>
               <Input
@@ -993,20 +994,15 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
                 Validation & Data Table Settings
               </Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/30 p-3 rounded-lg border border-border/50">
-                <label className={`flex items-center gap-2 text-sm cursor-pointer select-none ${isPredefinedField ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={fieldIsRequired}
-                    disabled={isPredefinedField}
-                    onChange={(e) => {
-                      if (!isPredefinedField) {
-                        setFieldIsRequired(e.target.checked);
-                      }
-                    }}
-                    className={`size-4 accent-primary rounded ${isPredefinedField ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                    onChange={(e) => setFieldIsRequired(e.target.checked)}
+                    className="size-4 accent-primary rounded cursor-pointer"
                   />
                   <span className="font-medium text-foreground">
-                    Required Field {isPredefinedField && '(Predefined — locked)'}
+                    Required Field
                   </span>
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
@@ -1051,7 +1047,8 @@ export function CustomFieldsModuleBuilder({ moduleName }: CustomFieldsModuleBuil
               </div>
             </div>
           </div>
-          <DialogFooter className="flex items-center justify-between sm:justify-between">
+          </div>
+          <DialogFooter className="flex items-center justify-between sm:justify-between px-6 py-4 border-t border-border shrink-0">
             {editingField ? (
               <Button
                 type="button"

@@ -485,7 +485,17 @@ export function TaskForm({
                 className="border-primary/50 focus-visible:ring-primary bg-background text-foreground h-11 text-base shadow-sm"
               />
 
+              {/* Order requested: Schedule Date, Schedule Time, Priority, Assigned To, then the rest. */}
               <div className="grid grid-cols-2 gap-4 mt-6">
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground text-xs uppercase font-medium">Scheduled Date</Label>
+                  <Input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="h-10 w-full bg-background"
+                  />
+                </div>
                 <div className="grid gap-2">
                   <Label className="text-muted-foreground text-xs uppercase font-medium">Scheduled Time</Label>
                   <SearchableSelect
@@ -495,6 +505,26 @@ export function TaskForm({
                     placeholder="Select time"
                     className="h-10 w-full bg-background"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground text-xs uppercase font-medium">Priority</Label>
+                  <Select
+                    value={priority}
+                    items={Object.fromEntries(PRIORITIES.map((p) => [p, p]))}
+                    onValueChange={(v) => setPriority((v as TaskPriority) ?? priority)}
+                  >
+                    <SelectTrigger className="h-10 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRIORITIES.map((p) => (
+                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-muted-foreground text-xs uppercase font-medium">Assigned To</Label>
@@ -535,24 +565,9 @@ export function TaskForm({
                     if (key === "priority") setPriority(val as TaskPriority);
                   }}
                   renderCustomSystemField={(field) => {
-                    if (field.system_key === 'priority') {
-                      return (
-                        <Select
-                          value={priority}
-                          items={Object.fromEntries(PRIORITIES.map((p) => [p, p]))}
-                          onValueChange={(v) => setPriority((v as TaskPriority) ?? priority)}
-                        >
-                          <SelectTrigger className="h-10 w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {PRIORITIES.map((p) => (
-                              <SelectItem key={p} value={p}>{p}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      );
-                    }
+                    // Scheduled Date + Priority are shown explicitly above (in the
+                    // requested order), so hide them from the custom section.
+                    if (field.system_key === 'priority' || field.system_key === 'due_date') return null;
                     return undefined;
                   }}
                 />

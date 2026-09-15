@@ -43,6 +43,7 @@ export default function FollowUpsPage() {
   const [activityStatus, setActivityStatus] = useState("Undone");
   const [period, setPeriod] = useState("All");
   const [activityType, setActivityType] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   
   const [customStart, setCustomStart] = useState("");
@@ -87,7 +88,8 @@ export default function FollowUpsPage() {
     if (accountId) {
       fetchTasks();
     }
-  }, [accountId, assignTo, activityStatus, period, activityType, searchQuery, customStart, customEnd]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId, assignTo, activityStatus, period, activityType, searchQuery, customStart, customEnd, priorityFilter]);
 
   async function fetchTasks() {
     setLoading(true);
@@ -137,6 +139,11 @@ export default function FollowUpsPage() {
             default: return true;
           }
         });
+      }
+
+      // Priority filter (default All).
+      if (priorityFilter !== "All") {
+        filteredData = filteredData.filter((task) => task.priority === priorityFilter);
       }
 
       setTasks(filteredData);
@@ -396,7 +403,23 @@ export default function FollowUpsPage() {
               </SelectContent>
             </Select>
           </div>
-          
+
+          <div className="w-36">
+            <Label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider font-semibold">Priority</Label>
+            <Select value={priorityFilter} onValueChange={(val) => setPriorityFilter(val || "All")}>
+              <SelectTrigger className="h-10 bg-background">
+                <SelectValue placeholder="Priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All Priorities</SelectItem>
+                <SelectItem value="Urgent">Urgent</SelectItem>
+                <SelectItem value="High">High</SelectItem>
+                <SelectItem value="Medium">Medium</SelectItem>
+                <SelectItem value="Low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <Button onClick={handleSearch} variant="secondary" className="ml-auto h-10 mt-6 lg:mt-0">
             Apply
           </Button>

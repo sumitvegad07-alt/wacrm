@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -114,14 +113,9 @@ export default function RolesPage() {
     return [...top, ...rest];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasCRM, hasSFA, hasWFA, isModuleEnabled, moduleSettingsLoaded]);
-  // Inline "find a right" filter. Prefilled + focused when the command palette
-  // deep-links here with ?find=<permission label>.
-  const searchParams = useSearchParams();
-  const [rightsFilter, setRightsFilter] = useState("");
-  useEffect(() => {
-    const f = searchParams.get("find");
-    if (f) setRightsFilter(f);
-  }, [searchParams]);
+  // The permission list shows all groups (search removed — the module headers make
+  // scanning easy, and the browser's own find works for a specific right).
+  const rightsFilter = "";
 
   const displayGroups = useMemo(() => {
     const q = rightsFilter.trim().toLowerCase();
@@ -557,20 +551,6 @@ export default function RolesPage() {
                       multi-column grid of that module's rights). */}
                   {!permissions.all && (
                     <div className="space-y-4 pb-20">
-                      {/* Find a specific right (also targeted by the global search). */}
-                      <div className="sticky top-0 z-10 -mx-1 bg-card/95 px-1 pb-2 pt-1 backdrop-blur">
-                        <Input
-                          value={rightsFilter}
-                          onChange={(e) => setRightsFilter(e.target.value)}
-                          placeholder="Find a right… (e.g. Export, Approve, Stock)"
-                          className="h-8 max-w-sm"
-                        />
-                      </div>
-                      {displayGroups.length === 0 && (
-                        <p className="px-1 py-6 text-center text-sm text-muted-foreground">
-                          No rights match “{rightsFilter}”.
-                        </p>
-                      )}
                       {displayGroups.map((group, i) => {
                         const onCount = group.permissions.filter((p) => !!permissions[p.id]).length;
                         const total = group.permissions.length;
