@@ -12,6 +12,10 @@ import { Loader2, Shield, Plus, AlertCircle, Save, Trash2, Edit2, Users, Check, 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
+import { DataTable } from "@/components/ui/data-table/data-table";
+import { RowActions } from "@/components/ui/data-table/row-actions";
+import type { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
+import { ConfirmDialog } from "@/components/shared";
 import type { RolePermissions } from "@/lib/auth/rbac";
 import {
   PERMISSION_GROUPS,
@@ -135,6 +139,9 @@ export default function RolesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<EmployeeRole | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [filterState, setFilterState] = useState<FilterState>({});
+  const [deleteRoleTarget, setDeleteRoleTarget] = useState<EmployeeRole | null>(null);
+  const [deletingRole, setDeletingRole] = useState(false);
 
   // Form State
   const [name, setName] = useState("");
@@ -161,9 +168,8 @@ export default function RolesPage() {
       toast.error("Failed to load roles");
     } else {
       setRoles(data || []);
-      if (!selectedRole && data && data.length > 0) {
-        handleSelectRole(data[0]);
-      }
+      // Land on the roles table (list) rather than auto-opening the first role's
+      // editor — the deep-link case (?find=) is handled by the search-params effect.
     }
     setLoading(false);
   };
@@ -244,10 +250,13 @@ export default function RolesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this role?")) return;
-    
+  const doDelete = async () => {
+    const id = deleteRoleTarget?.id;
+    if (!id) return;
+    setDeletingRole(true);
     const { error } = await supabase.from("employee_roles").delete().eq("id", id);
+    setDeletingRole(false);
+    setDeleteRoleTarget(null);
     if (error) {
       toast.error("Cannot delete role. It may be assigned to employees.");
     } else {
@@ -301,6 +310,60 @@ export default function RolesPage() {
   // not from a role's name, so nothing needs to be hard-locked.
   const isAdminRole = false;
 
+  const roleColumns: ColumnDef<EmployeeRole>[] = [
+    {
+      id: "name",
+      label: "Role Name",
+      type: "text",
+      render: (role) => (
+        <span className="font-medium inline-flex items-center gap-2">
+          {role.name}
+          {role.permissions?.all && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600">Admin</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      id: "description",
+      label: "Description",
+      type: "text",
+      render: (role) => <span className="text-sm text-muted-foreground">{role.description || "—"}</span>,
+    },
+    {
+      id: "count",
+      label: "Permissions",
+      render: (role) => (
+        <Badge variant="outline" className="font-mono">
+          {role.permissions?.all ? "All (Admin)" : Object.keys(role.permissions || {}).length}
+        </Badge>
+      ),
+    },
+    {
+      id: "created_at",
+      label: "Created at",
+      type: "date",
+      render: (role) => <span className="text-muted-foreground text-sm">{new Date(role.created_at).toLocaleDateString()}</span>,
+    },
+    {
+      id: "actions",
+      label: "Action",
+      render: (role) => (
+        <RowActions
+          editTitle="Edit rights"
+          onEdit={() => { handleSelectRole(role); setIsEditing(true); }}
+          onDelete={() => setDeleteRoleTarget(role)}
+        />
+      ),
+    },
+  ];
+
+  const filteredRoles = roles.filter((r) => {
+    const nameF = filterState["name"];
+    if (nameF && !r.name.toLowerCase().includes((nameF as string).toLowerCase())) return false;
+    return true;
+  });
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-background">
       {/* Top bar: horizontal role selector (replaces the old left column, so the
@@ -310,11 +373,11 @@ export default function RolesPage() {
           <Shield className="w-4 h-4 text-muted-foreground" />
           Employee Roles
         </h2>
-        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-          {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-          ) : (
-            roles.map((role) => (
+        {/* Quick role switcher — only while viewing/editing a role; the list view
+            is the table below, so the pills would just duplicate it there. */}
+        {(selectedRole || isEditing) && (
+          <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+            {roles.map((role) => (
               <button
                 key={role.id}
                 type="button"
@@ -330,57 +393,31 @@ export default function RolesPage() {
                   <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-600">Admin</span>
                 )}
               </button>
-            ))
-          )}
-        </div>
-        <Button size="sm" onClick={handleNewRole} variant="outline" className="shrink-0">
-          <Plus className="w-4 h-4 mr-1" /> New Role
-        </Button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Content — full width */}
       <div className="flex-1 flex flex-col bg-background overflow-hidden">
           {(!selectedRole && !isEditing) ? (
-            <div className="flex-1 flex flex-col p-8 overflow-y-auto bg-muted/10">
-              <div className="flex items-center gap-3 mb-6">
-                <Shield className="w-6 h-6 text-primary" />
-                <h2 className="text-xl font-semibold">Permission Audit Report</h2>
-              </div>
-              <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-muted/50 border-b text-muted-foreground uppercase text-xs font-semibold">
-                    <tr>
-                      <th className="px-6 py-4">Role Name</th>
-                      <th className="px-6 py-4 text-center">Permissions Count</th>
-                      <th className="px-6 py-4">Last Modified On</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {roles.map(role => {
-                      const count = role.permissions?.all ? 'All (Admin)' : Object.keys(role.permissions || {}).length;
-                      return (
-                        <tr key={role.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-6 py-4 font-medium">{role.name}</td>
-                          <td className="px-6 py-4 text-center">
-                            <Badge variant="outline" className="font-mono">{count}</Badge>
-                          </td>
-                          <td className="px-6 py-4 text-muted-foreground">
-                            {new Date(role.created_at).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {roles.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="px-6 py-8 text-center text-muted-foreground">
-                          No roles found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-sm text-muted-foreground mt-4 italic text-center">Select a role from the sidebar to view or edit detailed permissions.</p>
+            <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-muted/10">
+              <DataTable
+                columns={roleColumns}
+                data={filteredRoles}
+                filterState={filterState}
+                onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
+                storageKey="wacrm_employee_roles_table_columns"
+                isLoading={loading}
+                rowKey={(role) => role.id}
+                onRowClick={(role) => handleSelectRole(role)}
+                emptyMessage="No roles found."
+                actions={
+                  <Button size="sm" onClick={handleNewRole} className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Plus className="size-3 mr-1" /> New Role
+                  </Button>
+                }
+              />
             </div>
           ) : (
             <>
@@ -435,7 +472,7 @@ export default function RolesPage() {
                         <Copy className="w-4 h-4 mr-2" />
                         Clone
                       </Button>
-                      <Button variant="destructive" size="icon" onClick={() => selectedRole && handleDelete(selectedRole.id)} disabled={isAdminRole}>
+                      <Button variant="destructive" size="icon" onClick={() => selectedRole && setDeleteRoleTarget(selectedRole)} disabled={isAdminRole}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </>
@@ -611,6 +648,17 @@ export default function RolesPage() {
             </>
           )}
         </div>
+
+      <ConfirmDialog
+        open={!!deleteRoleTarget}
+        onOpenChange={(o) => { if (!o) setDeleteRoleTarget(null); }}
+        title="Delete role"
+        description={<>Delete <span className="font-medium text-foreground">{deleteRoleTarget?.name}</span>? This can&apos;t be undone. A role assigned to employees can&apos;t be deleted.</>}
+        variant="danger"
+        confirmLabel="Delete"
+        loading={deletingRole}
+        onConfirm={doDelete}
+      />
     </div>
   );
 }
