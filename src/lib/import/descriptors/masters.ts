@@ -66,7 +66,7 @@ export const contactsDescriptor: ImportDescriptor = {
   fieldsModule: "contact",
   customValuesTable: "contact_custom_values",
   customValuesFk: "contact_id",
-  systemColumns: ["name", "phone", "email", "company", "whatsapp", "address", "area", "city", "state", "country", "pincode"],
+  systemColumns: ["name", "customer_code", "phone", "email", "company", "whatsapp", "address", "area", "city", "state", "country", "pincode"],
   territoryReplacesKeys: ["country", "state", "city", "area"],
   lookups: [
     { field: "territory", table: "territories", matchColumns: ["name"], createable: "admin", hierarchical: true },
