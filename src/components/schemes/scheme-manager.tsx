@@ -23,7 +23,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { PageLayout, PageHeader, PageToolbar, EmptyState, StatusBadge, ConfirmDialog } from "@/components/shared";
-import { deleteScheme, getSchemes, setSchemeActive } from "@/lib/schemes/api";
+import { RowActions } from "@/components/ui/data-table/row-actions";
+import { getSchemes, setSchemeActive } from "@/lib/schemes/api";
 import {
   SCHEME_TYPE_LABELS,
   schemeStatus,
@@ -110,12 +111,13 @@ export function SchemeManager() {
     if (!deleteTarget) return;
     setBusy(true);
     try {
-      await deleteScheme(deleteTarget.id);
-      toast.success("Scheme deleted.");
+      // Soft delete — mark Inactive rather than hard-delete, so it can be re-activated.
+      await setSchemeActive(deleteTarget.id, false);
+      toast.success("Scheme moved to Inactive.");
       setDeleteTarget(null);
       await load();
     } catch (e: any) {
-      toast.error(e?.message ?? "Delete failed.");
+      toast.error(e?.message ?? "Failed to deactivate.");
     } finally {
       setBusy(false);
     }
@@ -168,6 +170,7 @@ export function SchemeManager() {
           <Table>
             <TableHeader>
               <TableRow>
+                {canEditSettings && <TableHead className="w-24">Action</TableHead>}
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Bands</TableHead>
@@ -175,7 +178,6 @@ export function SchemeManager() {
                 <TableHead>Window</TableHead>
                 <TableHead className="text-right">Priority</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -187,6 +189,18 @@ export function SchemeManager() {
                     className="cursor-pointer"
                     onClick={() => router.push(`/schemes/${s.id}`)}
                   >
+                    {canEditSettings && (
+                      <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <RowActions
+                          isInactive={!s.active}
+                          onEdit={() => router.push(`/schemes/${s.id}/edit`)}
+                          onDelete={() => setDeleteTarget(s)}
+                          onReactivate={() => toggleActive(s)}
+                          deleteTitle="Deactivate"
+                          reactivateTitle="Activate"
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{SCHEME_TYPE_LABELS[s.scheme_type]}</TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[260px] truncate" title={summariseSlabs(s)}>
@@ -207,31 +221,6 @@ export function SchemeManager() {
                     <TableCell>
                       <StatusBadge status={status === "live" ? "active" : status} label={STATUS_LABEL[status]} />
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      {canEditSettings && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => router.push(`/schemes/${s.id}/edit`)}>
-                              <Pencil className="h-4 w-4 mr-2" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/schemes/new?from=${s.id}`)}>
-                              <Copy className="h-4 w-4 mr-2" /> Duplicate
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleActive(s)}>
-                              {s.active ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
-                              {s.active ? "Deactivate" : "Activate"}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(s)}>
-                              <Trash2 className="h-4 w-4 mr-2" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -243,8 +232,8 @@ export function SchemeManager() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Delete scheme"
-        description={`Delete "${deleteTarget?.name}"? Its bands and targeting are removed too. Orders that already recorded this scheme keep their prices.`}
+        title="Move scheme to Inactive"
+        description={`Move "${deleteTarget?.name}" to Inactive? It stops applying at order entry but you can re-activate it anytime. Orders that already recorded this scheme keep their prices.`}
         variant="danger"
         loading={busy}
         onConfirm={confirmDelete}

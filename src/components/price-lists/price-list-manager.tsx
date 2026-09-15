@@ -14,8 +14,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { PageLayout, PageHeader, EmptyState, StatusBadge, ConfirmDialog, FormPageShell, FormActions } from "@/components/shared";
+import { RowActions } from "@/components/ui/data-table/row-actions";
 import {
-  getPriceLists, getPriceListWithItems, createPriceList, updatePriceList, deletePriceList, setPriceListActive,
+  getPriceLists, getPriceListWithItems, createPriceList, updatePriceList, setPriceListActive,
 } from "@/lib/price-lists/api";
 import type { PriceList, PriceListItem } from "@/lib/price-lists/types";
 
@@ -150,12 +151,13 @@ export function PriceListManager() {
   async function confirmDelete() {
     if (!deleteTarget) return;
     try {
-      await deletePriceList(deleteTarget.id);
-      toast.success("Price list deleted.");
+      // Soft delete — mark Inactive rather than hard-delete, so it can be re-activated.
+      await setPriceListActive(deleteTarget.id, false);
+      setLists((prev) => prev.map((l) => (l.id === deleteTarget.id ? { ...l, active: false } : l)));
+      toast.success("Price list moved to Inactive.");
       setDeleteTarget(null);
-      load();
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not delete the price list.");
+      toast.error(e?.message ?? "Could not deactivate the price list.");
     }
   }
 
@@ -289,17 +291,29 @@ export function PriceListManager() {
           <Table>
             <TableHeader>
               <TableRow>
+                {canEditSettings && <TableHead className="w-24">Action</TableHead>}
                 <TableHead>Name</TableHead>
                 <TableHead className="text-right">Blanket discount</TableHead>
                 <TableHead className="text-right">Product overrides</TableHead>
                 <TableHead className="text-right">Customers</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-[1%]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {lists.map((l) => (
                 <TableRow key={l.id}>
+                  {canEditSettings && (
+                    <TableCell className="whitespace-nowrap">
+                      <RowActions
+                        isInactive={!l.active}
+                        onEdit={() => openEdit(l)}
+                        onDelete={() => setDeleteTarget(l)}
+                        onReactivate={() => toggleActive(l)}
+                        deleteTitle="Deactivate"
+                        reactivateTitle="Activate"
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="font-medium">{l.name}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {l.blanket_discount_percent == null ? "—" : `${Number(l.blanket_discount_percent)}%`}
@@ -308,21 +322,6 @@ export function PriceListManager() {
                   <TableCell className="text-right tabular-nums">{l.customer_count ?? 0}</TableCell>
                   <TableCell>
                     <StatusBadge status={l.active ? "Active" : "Inactive"} variant={l.active ? "success" : "neutral"} />
-                  </TableCell>
-                  <TableCell>
-                    {canEditSettings && (
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => toggleActive(l)}>
-                          {l.active ? "Deactivate" : "Activate"}
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => openEdit(l)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(l)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -334,9 +333,9 @@ export function PriceListManager() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title={`Delete "${deleteTarget?.name}"?`}
-        description="Customers on this list will fall back to catalogue pricing. Existing orders keep the prices they were saved with."
-        confirmLabel="Delete"
+        title={`Move "${deleteTarget?.name}" to Inactive?`}
+        description="It stops applying and customers on this list fall back to catalogue pricing, but you can re-activate it anytime. Existing orders keep the prices they were saved with."
+        confirmLabel="Move to Inactive"
         variant="danger"
         onConfirm={confirmDelete}
       />
