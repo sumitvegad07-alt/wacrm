@@ -251,8 +251,11 @@ export default function TasksPage() {
       label: "Priority",
       type: "select",
       options: Object.keys(PRIORITY_COLORS).map(s => ({ label: s, value: s })),
+      // Strong, unmistakable colours so High/Urgent stand out at a glance.
       render: (task) => (
-        <StatusBadge status={task.priority.toLowerCase()} label={task.priority} />
+        <Badge className={`${PRIORITY_COLORS[task.priority] || 'bg-slate-600 text-white shadow-sm border-transparent'} font-semibold`}>
+          {task.priority}
+        </Badge>
       )
     },
     {

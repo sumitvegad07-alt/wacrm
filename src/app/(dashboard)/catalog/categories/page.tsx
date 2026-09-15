@@ -4,6 +4,7 @@
 // module tables: pinned Action column, Status filter defaulting to Active,
 // soft-delete), plus the category-level naming config kept above the table.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -19,7 +20,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { PageLayout, PageHeader } from "@/components/shared";
+import { PageLayout, PageHeader, ConfirmDialog, BulkActionBar } from "@/components/shared";
+import { Trash2 } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -56,6 +58,21 @@ export default function CatalogCategoriesPage() {
   const [level, setLevel] = useState<1 | 2 | 3>(1);
   const [parentId, setParentId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CategoryRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  async function bulkDeactivate() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    const { error } = await supabase.from("product_categories").update({ is_active: false }).in("id", ids);
+    setDeleting(false);
+    if (error) toast.error("Could not update categories");
+    else { toast.success(`${ids.length} category(ies) moved to Inactive`); setSelectedIds(new Set()); load(); }
+    setBulkOpen(false);
+  }
 
   const load = useCallback(async () => {
     if (!accountId) return;
@@ -75,6 +92,17 @@ export default function CatalogCategoriesPage() {
   }, [accountId, supabase]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Sidebar "+" opens the create dialog via ?new=1.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      openAdd();
+      router.replace("/catalog/categories");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const levelName = (lvl: number) => (lvl === 3 ? level3Name : lvl === 2 ? level2Name : level1Name);
   const nameById = useMemo(() => {
@@ -137,11 +165,14 @@ export default function CatalogCategoriesPage() {
     load();
   }
 
-  async function softDelete(c: CategoryRow) {
-    if (!confirm(`Move "${c.name}" to Inactive? It can be re-activated later.`)) return;
-    const { error } = await supabase.from("product_categories").update({ is_active: false }).eq("id", c.id);
+  async function doDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const { error } = await supabase.from("product_categories").update({ is_active: false }).eq("id", deleteTarget.id);
+    setDeleting(false);
     if (error) toast.error("Could not deactivate category");
     else { toast.success("Category moved to Inactive"); load(); }
+    setDeleteTarget(null);
   }
 
   async function reactivate(c: CategoryRow) {
@@ -179,7 +210,7 @@ export default function CatalogCategoriesPage() {
           disabled={!canEditSettings}
           isInactive={c.is_active === false}
           onEdit={() => openEdit(c)}
-          onDelete={() => softDelete(c)}
+          onDelete={() => setDeleteTarget(c)}
           onReactivate={() => reactivate(c)}
           deleteTitle="Move to Inactive"
         />
@@ -252,6 +283,13 @@ export default function CatalogCategoriesPage() {
         )}
       </div>
 
+      {canEditSettings && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          onClear={() => setSelectedIds(new Set())}
+          actions={[{ label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) }]}
+        />
+      )}
       <DataTable
         columns={columns}
         data={filtered}
@@ -260,6 +298,11 @@ export default function CatalogCategoriesPage() {
         storageKey="wacrm_categories_table_columns"
         isLoading={loading}
         rowKey={(c) => c.id}
+        selection={canEditSettings ? {
+          selectedIds,
+          onSelectAll: (checked) => setSelectedIds(checked ? new Set(filtered.map((c) => c.id)) : new Set()),
+          onSelect: (id, checked) => setSelectedIds((prev) => { const n = new Set(prev); if (checked) n.add(id); else n.delete(id); return n; }),
+        } : undefined}
         actions={canEditSettings ? (
           <Button size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={openAdd}>
             <Plus className="size-3 mr-1" /> New Category
@@ -313,6 +356,28 @@ export default function CatalogCategoriesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}
+        title="Move category to Inactive"
+        description={<>Move <span className="font-medium text-foreground">{deleteTarget?.name}</span> to Inactive? It can be re-activated anytime.</>}
+        variant="danger"
+        confirmLabel="Move to Inactive"
+        loading={deleting}
+        onConfirm={doDelete}
+      />
+
+      <ConfirmDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        title={`Move ${selectedIds.size} category(ies) to Inactive`}
+        description="They can be re-activated anytime."
+        variant="danger"
+        confirmLabel="Move to Inactive"
+        loading={deleting}
+        onConfirm={bulkDeactivate}
+      />
     </PageLayout>
   );
 }

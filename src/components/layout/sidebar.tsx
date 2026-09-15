@@ -629,19 +629,27 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
           "/expenses",
           "/payments",
           "/dispatches",
+          "/catalog/categories",
+          "/catalog/units",
+          "/price-lists",
+          "/schemes",
         ].includes(item.href.split("?")[0]) && (
           <button
             type="button"
             onMouseEnter={() => {
               const basePath = item.href.split("?")[0];
-              const targetPath = basePath === "/pipelines" ? "/deals/new" : `${basePath}/new`;
+              // Categories/Units/Price Lists create via an in-page dialog (no /new route);
+              // open the page with ?new=1 to trigger it.
+              const dialogNew = ["/catalog/categories", "/catalog/units", "/price-lists"].includes(basePath);
+              const targetPath = basePath === "/pipelines" ? "/deals/new" : dialogNew ? `${basePath}?new=1` : `${basePath}/new`;
               router.prefetch(targetPath);
             }}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               const basePath = item.href.split("?")[0];
-              const targetPath = basePath === "/pipelines" ? "/deals/new" : `${basePath}/new`;
+              const dialogNew = ["/catalog/categories", "/catalog/units", "/price-lists"].includes(basePath);
+              const targetPath = basePath === "/pipelines" ? "/deals/new" : dialogNew ? `${basePath}?new=1` : `${basePath}/new`;
               router.push(targetPath);
               if (onClose) onClose();
             }}

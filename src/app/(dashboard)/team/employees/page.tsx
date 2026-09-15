@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageLayout, PageHeader, PageToolbar, StatusBadge } from "@/components/shared";
+import { PageLayout, PageHeader, PageToolbar, StatusBadge, ConfirmDialog } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -52,6 +52,8 @@ export default function EmployeesPage() {
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [holidayLists, setHolidayLists] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deactivateTarget, setDeactivateTarget] = useState<string | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
   
   const [search, setSearch] = useState("");
   const [filterState, setFilterState] = useState<FilterState>({ status: ["active"] });
@@ -176,12 +178,12 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleDeactivate = async (empId: string) => {
-    if (!confirm("Are you sure you want to deactivate this employee?")) return;
-    
+  const doDeactivate = async () => {
+    const empId = deactivateTarget;
+    if (!empId) return;
+    setDeactivating(true);
     // Optimistically update UI so it disappears immediately
     setEmployees(prev => prev.map(e => e.id === empId ? { ...e, status: "inactive" } : e));
-    
     try {
       const res = await fetch("/api/team/employees", {
         method: "PATCH",
@@ -194,6 +196,9 @@ export default function EmployeesPage() {
     } catch (err: any) {
       toast.error(err.message);
       fetchData(); // Revert on error
+    } finally {
+      setDeactivating(false);
+      setDeactivateTarget(null);
     }
   };
 
@@ -370,7 +375,7 @@ export default function EmployeesPage() {
             editTitle="Manage"
             onEdit={() => router.push(`/team/employees/${emp.id}`)}
             // Admins/owners can't be deactivated; hide the trash for them.
-            onDelete={!isAdmin ? () => handleDeactivate(emp.id) : undefined}
+            onDelete={!isAdmin ? () => setDeactivateTarget(emp.id) : undefined}
             onReactivate={() => handleReactivate(emp.id)}
             deleteTitle="Deactivate"
             reactivateTitle="Re-activate"
@@ -616,6 +621,17 @@ export default function EmployeesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        onOpenChange={(o) => { if (!o) setDeactivateTarget(null); }}
+        title="Deactivate employee"
+        description="Deactivate this employee? They will be marked Inactive and lose access, but you can re-activate them anytime."
+        variant="danger"
+        confirmLabel="Deactivate"
+        loading={deactivating}
+        onConfirm={doDeactivate}
+      />
     </PageLayout>
   );
 }

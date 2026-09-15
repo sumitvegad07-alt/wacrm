@@ -3,6 +3,7 @@
 // Catalog → Unit. Table view of units of measure, matching the other module
 // tables (pinned Action column, Status filter defaulting to Active, soft-delete).
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -18,7 +19,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { PageLayout } from "@/components/shared";
+import { PageLayout, ConfirmDialog, BulkActionBar } from "@/components/shared";
+import { Trash2 } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -45,6 +47,21 @@ export default function CatalogUnitsPage() {
   const [name, setName] = useState("");
   const [shortName, setShortName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<UnitRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  async function bulkDeactivate() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    const { error } = await supabase.from("product_units").update({ is_active: false }).in("id", ids);
+    setDeleting(false);
+    if (error) toast.error("Could not update units");
+    else { toast.success(`${ids.length} unit(s) moved to Inactive`); setSelectedIds(new Set()); load(); }
+    setBulkOpen(false);
+  }
 
   const load = useCallback(async () => {
     if (!accountId) return;
@@ -60,6 +77,17 @@ export default function CatalogUnitsPage() {
   }, [accountId, supabase]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Sidebar "+" opens the create dialog via ?new=1.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      openAdd();
+      router.replace("/catalog/units");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   function openAdd() {
     setEditing(null);
@@ -89,11 +117,14 @@ export default function CatalogUnitsPage() {
     load();
   }
 
-  async function softDelete(u: UnitRow) {
-    if (!confirm(`Move "${u.name}" to Inactive? It can be re-activated later.`)) return;
-    const { error } = await supabase.from("product_units").update({ is_active: false }).eq("id", u.id);
+  async function doDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const { error } = await supabase.from("product_units").update({ is_active: false }).eq("id", deleteTarget.id);
+    setDeleting(false);
     if (error) toast.error("Could not deactivate unit");
     else { toast.success("Unit moved to Inactive"); load(); }
+    setDeleteTarget(null);
   }
 
   async function reactivate(u: UnitRow) {
@@ -130,7 +161,7 @@ export default function CatalogUnitsPage() {
           disabled={!canEditSettings}
           isInactive={u.is_active === false}
           onEdit={() => openEdit(u)}
-          onDelete={() => softDelete(u)}
+          onDelete={() => setDeleteTarget(u)}
           onReactivate={() => reactivate(u)}
           deleteTitle="Move to Inactive"
         />
@@ -158,6 +189,13 @@ export default function CatalogUnitsPage() {
 
   return (
     <PageLayout>
+      {canEditSettings && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          onClear={() => setSelectedIds(new Set())}
+          actions={[{ label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) }]}
+        />
+      )}
       <DataTable
         columns={columns}
         data={filtered}
@@ -166,6 +204,11 @@ export default function CatalogUnitsPage() {
         storageKey="wacrm_units_table_columns"
         isLoading={loading}
         rowKey={(u) => u.id}
+        selection={canEditSettings ? {
+          selectedIds,
+          onSelectAll: (checked) => setSelectedIds(checked ? new Set(filtered.map((u) => u.id)) : new Set()),
+          onSelect: (id, checked) => setSelectedIds((prev) => { const n = new Set(prev); if (checked) n.add(id); else n.delete(id); return n; }),
+        } : undefined}
         actions={canEditSettings ? (
           <Button size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={openAdd}>
             <Plus className="size-3 mr-1" /> New Unit
@@ -196,6 +239,28 @@ export default function CatalogUnitsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}
+        title="Move unit to Inactive"
+        description={<>Move <span className="font-medium text-foreground">{deleteTarget?.name}</span> to Inactive? It can be re-activated anytime.</>}
+        variant="danger"
+        confirmLabel="Move to Inactive"
+        loading={deleting}
+        onConfirm={doDelete}
+      />
+
+      <ConfirmDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        title={`Move ${selectedIds.size} unit(s) to Inactive`}
+        description="They can be re-activated anytime."
+        variant="danger"
+        confirmLabel="Move to Inactive"
+        loading={deleting}
+        onConfirm={bulkDeactivate}
+      />
     </PageLayout>
   );
 }

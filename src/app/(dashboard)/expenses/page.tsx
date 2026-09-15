@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useAuth } from "@/hooks/use-auth";
 import { useDataScope } from "@/hooks/use-data-scope";
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -37,6 +37,8 @@ export default function ExpensesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
+  const [deleteTargetExp, setDeleteTargetExp] = useState<string | null>(null);
+  const [deletingExp, setDeletingExp] = useState(false);
   
   // Default filter shows Active expenses (Inactive/all via the Status column filter).
   const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
@@ -144,15 +146,18 @@ export default function ExpensesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Move this expense to Inactive? It can be re-activated later.")) return;
-    const { error } = await supabase.from("expenses").update({ is_active: false }).eq("id", id);
+  const doDelete = async () => {
+    if (!deleteTargetExp) return;
+    setDeletingExp(true);
+    const { error } = await supabase.from("expenses").update({ is_active: false }).eq("id", deleteTargetExp);
+    setDeletingExp(false);
     if (error) {
       toast.error("Failed to deactivate expense");
     } else {
       toast.success("Expense moved to Inactive");
       loadExpenses();
     }
+    setDeleteTargetExp(null);
   };
 
   const handleReactivate = async (id: string) => {
@@ -372,7 +377,7 @@ export default function ExpensesPage() {
         return (
           <RowActions
             onEdit={() => { setSelectedExpense(expense); setFormOpen(true); }}
-            onDelete={!inactive && expense.status === "Pending" ? () => handleDelete(expense.id) : undefined}
+            onDelete={!inactive && expense.status === "Pending" ? () => setDeleteTargetExp(expense.id) : undefined}
             onReactivate={inactive ? () => handleReactivate(expense.id) : undefined}
             isInactive={inactive}
             deleteTitle="Move to Inactive"
@@ -521,11 +526,22 @@ export default function ExpensesPage() {
         }}
       />
 
-      <ExpenseForm 
+      <ExpenseForm
         open={formOpen}
         onOpenChange={setFormOpen}
         expense={selectedExpense}
         onSaved={loadExpenses}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTargetExp}
+        onOpenChange={(o) => { if (!o) setDeleteTargetExp(null); }}
+        title="Move expense to Inactive"
+        description="Move this expense to Inactive? It will be hidden from the default list but you can re-activate it anytime."
+        variant="danger"
+        confirmLabel="Move to Inactive"
+        loading={deletingExp}
+        onConfirm={doDelete}
       />
     </PageLayout>
   );

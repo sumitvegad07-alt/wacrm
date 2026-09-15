@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Plus, Pencil, Trash2, ListChecks, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -13,7 +14,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { PageLayout, PageHeader, EmptyState, StatusBadge, ConfirmDialog, FormPageShell, FormActions } from "@/components/shared";
+import { PageLayout, PageHeader, EmptyState, StatusBadge, ConfirmDialog, FormPageShell, FormActions, BulkActionBar } from "@/components/shared";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import {
   getPriceLists, getPriceListWithItems, createPriceList, updatePriceList, setPriceListActive,
@@ -39,6 +40,26 @@ export function PriceListManager() {
   const [products, setProducts] = useState<ProductOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<PriceList | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  async function bulkDeactivate() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      for (const id of ids) await setPriceListActive(id, false);
+      setLists((prev) => prev.map((l) => (ids.includes(l.id) ? { ...l, active: false } : l)));
+      toast.success(`${ids.length} price list(s) moved to Inactive.`);
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not update price lists.");
+    } finally {
+      setBulkBusy(false);
+      setBulkOpen(false);
+    }
+  }
 
   // Editor state
   const [editorOpen, setEditorOpen] = useState(false);
@@ -69,6 +90,17 @@ export function PriceListManager() {
   }, [accountId, supabase]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Sidebar "+" opens the create editor via ?new=1.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      openCreate();
+      router.replace("/price-lists");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const productName = useMemo(() => {
     const m = new Map(products.map((p) => [p.id, p.name]));
@@ -287,10 +319,29 @@ export function PriceListManager() {
           ) : undefined}
         />
       ) : (
+        <>
+        {canEditSettings && (
+          <BulkActionBar
+            selectedCount={selectedIds.size}
+            onClear={() => setSelectedIds(new Set())}
+            actions={[{ label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) }]}
+          />
+        )}
         <div className="rounded-lg border border-border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                {canEditSettings && (
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      className="size-4 cursor-pointer accent-primary align-middle"
+                      checked={lists.length > 0 && lists.every((l) => selectedIds.has(l.id))}
+                      onChange={(e) => setSelectedIds(e.target.checked ? new Set(lists.map((l) => l.id)) : new Set())}
+                      aria-label="Select all price lists"
+                    />
+                  </TableHead>
+                )}
                 {canEditSettings && <TableHead className="w-24">Action</TableHead>}
                 <TableHead>Name</TableHead>
                 <TableHead className="text-right">Blanket discount</TableHead>
@@ -302,6 +353,16 @@ export function PriceListManager() {
             <TableBody>
               {lists.map((l) => (
                 <TableRow key={l.id}>
+                  {canEditSettings && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="size-4 cursor-pointer accent-primary align-middle"
+                        checked={selectedIds.has(l.id)}
+                        onChange={(e) => setSelectedIds((prev) => { const n = new Set(prev); if (e.target.checked) n.add(l.id); else n.delete(l.id); return n; })}
+                      />
+                    </TableCell>
+                  )}
                   {canEditSettings && (
                     <TableCell className="whitespace-nowrap">
                       <RowActions
@@ -328,7 +389,19 @@ export function PriceListManager() {
             </TableBody>
           </Table>
         </div>
+        </>
       )}
+
+      <ConfirmDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        title={`Move ${selectedIds.size} price list(s) to Inactive`}
+        description="They can be re-activated anytime. Existing orders keep the prices they were saved with."
+        confirmLabel="Move to Inactive"
+        variant="danger"
+        loading={bulkBusy}
+        onConfirm={bulkDeactivate}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

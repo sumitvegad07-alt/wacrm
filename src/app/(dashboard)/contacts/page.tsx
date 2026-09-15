@@ -264,6 +264,26 @@ export default function ContactsPage() {
       render: (contact) => <span>{contact.name || "-"}</span>
     },
     {
+      id: "status",
+      label: "Status",
+      type: "select",
+      visibleByDefault: true,
+      options: [
+        { label: "Active", value: "active" },
+        { label: "Inactive", value: "inactive" },
+      ],
+      render: (contact) => {
+        const active = (contact as any).is_active !== false;
+        return (
+          <Badge className={active
+            ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
+            : 'bg-muted text-muted-foreground border-border text-[10px] px-1.5 font-semibold'}>
+            {active ? 'Active' : 'Inactive'}
+          </Badge>
+        );
+      }
+    },
+    {
       id: "phone",
       label: "Phone",
       type: "text",
@@ -376,26 +396,6 @@ export default function ContactsPage() {
           {new Date(contact.created_at).toLocaleDateString()}
         </span>
       )
-    },
-    {
-      id: "status",
-      label: "Status",
-      type: "select",
-      visibleByDefault: true,
-      options: [
-        { label: "Active", value: "active" },
-        { label: "Inactive", value: "inactive" },
-      ],
-      render: (contact) => {
-        const active = (contact as any).is_active !== false;
-        return (
-          <Badge className={active
-            ? 'bg-emerald-600 text-white shadow-sm border-transparent text-[10px] px-1.5 font-semibold'
-            : 'bg-muted text-muted-foreground border-border text-[10px] px-1.5 font-semibold'}>
-            {active ? 'Active' : 'Inactive'}
-          </Badge>
-        );
-      }
     },
     {
       id: "actions",
@@ -615,7 +615,7 @@ export default function ContactsPage() {
         filterState={filterState}
         onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
         // _v2: saved column layouts would otherwise hide the new geo-tag columns.
-        storageKey="wacrm_contacts_table_columns_v2"
+        storageKey="wacrm_contacts_table_columns_v3"
         isLoading={loading}
         rowKey={(contact) => contact.id}
         onRowClick={(contact) => router.push(`/contacts/${contact.id}`)}

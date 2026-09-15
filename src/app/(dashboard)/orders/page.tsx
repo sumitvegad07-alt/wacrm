@@ -19,7 +19,7 @@ import { formatCurrency } from '@/lib/currency';
 import { OrderForm } from '@/components/orders/order-form';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from '@/components/shared';
 import { ORDER_STATUSES } from '@/lib/orders/statuses';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 
@@ -94,6 +94,8 @@ export default function OrdersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [hierarchyEnabled, setHierarchyEnabled] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<OrderRow | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const canCreateOrder = hasPermission(PERMISSIONS.CRM.CREATE_ORDERS);
   const canEditOrder = hasPermission(PERMISSIONS.CRM.EDIT_ORDERS);
   const canManageStatus = hasPermission(PERMISSIONS.CRM.MANAGE_ORDER_STATUS);
@@ -199,11 +201,14 @@ export default function OrdersPage() {
 
   // The "dustbin" for an order is a Cancel — orders are never deleted, and only
   // certain statuses can transition to Cancelled (LEGAL_TO).
-  const handleCancelOrder = async (o: OrderRow) => {
-    if (!confirm(`Cancel order ${o.order_number}? This sets its status to Cancelled.`)) return;
-    const { error } = await supabase.rpc('update_order_status', { p_order_id: o.id, p_new_status: 'Cancelled' });
+  const doCancelOrder = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    const { error } = await supabase.rpc('update_order_status', { p_order_id: cancelTarget.id, p_new_status: 'Cancelled' });
+    setCancelling(false);
     if (error) toast.error('Failed to cancel order');
     else { toast.success('Order cancelled'); fetchData(); }
+    setCancelTarget(null);
   };
 
   const columns: ColumnDef<OrderRow>[] = [
@@ -278,7 +283,7 @@ export default function OrdersPage() {
         return (
           <RowActions
             onEdit={() => setEditOrderId(o.id)}
-            onDelete={canCancel ? () => handleCancelOrder(o) : undefined}
+            onDelete={canCancel ? () => setCancelTarget(o) : undefined}
             deleteTitle="Cancel order"
           />
         );
@@ -397,6 +402,21 @@ export default function OrdersPage() {
         orderId={editOrderId}
         onOpenChange={(o) => { if (!o) setEditOrderId(null); }}
         onSaved={fetchData}
+      />
+
+      <ConfirmDialog
+        open={!!cancelTarget}
+        onOpenChange={(o) => { if (!o) setCancelTarget(null); }}
+        title="Cancel order"
+        description={
+          <>
+            Cancel order <span className="font-medium text-foreground">{cancelTarget?.order_number}</span>? This sets its status to Cancelled.
+          </>
+        }
+        variant="danger"
+        confirmLabel="Cancel order"
+        loading={cancelling}
+        onConfirm={doCancelOrder}
       />
     </PageLayout>
   );

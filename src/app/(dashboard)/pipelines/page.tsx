@@ -438,6 +438,12 @@ export default function PipelinesPage() {
       render: (deal) => <span>{deal.contact?.name || "-"}</span>
     },
     {
+      id: "contact_phone",
+      label: "Contact No",
+      type: "text",
+      render: (deal) => <span className="font-mono text-xs">{deal.contact?.phone || deal.contact?.whatsapp || "-"}</span>
+    },
+    {
       id: "assignee",
       label: "Assignee",
       type: "text",
@@ -521,6 +527,9 @@ export default function PipelinesPage() {
           if (!deal.title?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "contact") {
           if (!deal.contact?.name?.toLowerCase().includes((val as string).toLowerCase())) return false;
+        } else if (colId === "contact_phone") {
+          const ph = deal.contact?.phone || deal.contact?.whatsapp || "";
+          if (!ph.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "assignee") {
           if (!deal.assignee?.full_name?.toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "stage_id") {

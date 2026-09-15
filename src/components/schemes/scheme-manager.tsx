@@ -22,7 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { PageLayout, PageHeader, PageToolbar, EmptyState, StatusBadge, ConfirmDialog } from "@/components/shared";
+import { PageLayout, PageHeader, PageToolbar, EmptyState, StatusBadge, ConfirmDialog, BulkActionBar } from "@/components/shared";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { getSchemes, setSchemeActive } from "@/lib/schemes/api";
 import {
@@ -74,6 +74,25 @@ export function SchemeManager() {
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SchemeWithDetails | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  async function bulkDeactivate() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBusy(true);
+    try {
+      for (const id of ids) await setSchemeActive(id, false);
+      toast.success(`${ids.length} scheme(s) moved to Inactive.`);
+      setSelectedIds(new Set());
+      await load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update.");
+    } finally {
+      setBusy(false);
+      setBulkOpen(false);
+    }
+  }
 
   const load = useCallback(async () => {
     if (!accountId) return;
@@ -166,10 +185,29 @@ export function SchemeManager() {
           }
         />
       ) : (
+        <>
+        {canEditSettings && (
+          <BulkActionBar
+            selectedCount={selectedIds.size}
+            onClear={() => setSelectedIds(new Set())}
+            actions={[{ label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) }]}
+          />
+        )}
         <div className="rounded-md border border-border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                {canEditSettings && (
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      className="size-4 cursor-pointer accent-primary align-middle"
+                      checked={filtered.length > 0 && filtered.every((s) => selectedIds.has(s.id))}
+                      onChange={(e) => setSelectedIds(e.target.checked ? new Set(filtered.map((s) => s.id)) : new Set())}
+                      aria-label="Select all schemes"
+                    />
+                  </TableHead>
+                )}
                 {canEditSettings && <TableHead className="w-24">Action</TableHead>}
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
@@ -189,6 +227,16 @@ export function SchemeManager() {
                     className="cursor-pointer"
                     onClick={() => router.push(`/schemes/${s.id}`)}
                   >
+                    {canEditSettings && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          className="size-4 cursor-pointer accent-primary align-middle"
+                          checked={selectedIds.has(s.id)}
+                          onChange={(e) => setSelectedIds((prev) => { const n = new Set(prev); if (e.target.checked) n.add(s.id); else n.delete(s.id); return n; })}
+                        />
+                      </TableCell>
+                    )}
                     {canEditSettings && (
                       <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <RowActions
@@ -227,7 +275,18 @@ export function SchemeManager() {
             </TableBody>
           </Table>
         </div>
+        </>
       )}
+
+      <ConfirmDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        title={`Move ${selectedIds.size} scheme(s) to Inactive`}
+        description="They stop applying at order entry but can be re-activated anytime."
+        variant="danger"
+        loading={busy}
+        onConfirm={bulkDeactivate}
+      />
 
       <ConfirmDialog
         open={deleteTarget !== null}

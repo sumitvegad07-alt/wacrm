@@ -244,7 +244,6 @@ export default function LeadsPage() {
     { id: "contact_person", label: "Contact Person", type: "text", visibleByDefault: false, render: (l) => <span>{(l as any).contact_person || "-"}</span> },
     { id: "phone", label: "Phone", type: "text", visibleByDefault: false, render: (l) => <span className="font-mono text-xs">{(l as any).phone || "-"}</span> },
     { id: "email", label: "Email", type: "text", visibleByDefault: false, render: (l) => <span>{(l as any).email || "-"}</span> },
-    { id: "estimated_value", label: "Estimated Value", type: "text", visibleByDefault: false, render: (l) => { const v = (l as any).estimated_value; return <span className="text-sm font-medium">{v == null ? "-" : v}</span>; } },
     { id: "address", label: "Address", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).address || "-"}</span> },
     { id: "area", label: "Area", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).area || "-"}</span> },
     { id: "city", label: "City", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).city || "-"}</span> },
@@ -363,7 +362,7 @@ export default function LeadsPage() {
             const state = (lead as any).is_active !== false ? "active" : "inactive";
             if (!want.includes(state)) return false;
           }
-        } else if (["company","contact_person","phone","email","address","area","city","state","country","pincode","estimated_value"].includes(colId)) {
+        } else if (["company","contact_person","phone","email","address","area","city","state","country","pincode"].includes(colId)) {
           const field = (lead as any)[colId];
           if (field == null || !String(field).toLowerCase().includes((val as string).toLowerCase())) return false;
         } else if (colId === "created_at") {
