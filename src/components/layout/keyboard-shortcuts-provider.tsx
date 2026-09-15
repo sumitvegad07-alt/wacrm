@@ -132,11 +132,10 @@ export function KeyboardShortcutsProvider({
       const editing = isTextInput(e.target);
 
       switch (key) {
-        case "f":
-          if (shift) return;
-          e.preventDefault();
-          setPaletteOpen(true);
-          return;
+        // Ctrl+F is intentionally NOT intercepted: it falls through to the
+        // browser's native find-in-page (highlight every match on the current
+        // page, count "1/24", Enter to cycle). The in-app screen/settings/rights
+        // navigator lives on Alt+F (handled above).
         case "/":
           e.preventDefault();
           setHelpOpen(true);

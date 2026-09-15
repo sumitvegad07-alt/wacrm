@@ -136,7 +136,8 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       )}
 
       <div className="flex items-center gap-1 sm:gap-2">
-        {/* Global search (Alt+F / Ctrl+F). Opens the command palette. */}
+        {/* In-app navigator (Alt+F) — jump to a screen, setting or right.
+            Ctrl+F is left to the browser's native find-in-page. */}
         <button
           type="button"
           onClick={openPalette}

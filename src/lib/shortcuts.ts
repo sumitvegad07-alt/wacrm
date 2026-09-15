@@ -33,7 +33,8 @@ export interface ShortcutDef {
 }
 
 export const APP_SHORTCUTS: ShortcutDef[] = [
-  { action: "search", label: "Find / Search", keys: ["Ctrl", "F"] },
+  { action: "search", label: "Find screen / setting / right", keys: ["Alt", "F"] },
+  { action: "search", label: "Find text on this page", keys: ["Ctrl", "F"] },
   { action: "add", label: "Add new", keys: ["Ctrl", "A"] },
   { action: "save", label: "Save", keys: ["Ctrl", "S"] },
   { action: "save-new", label: "Save and new", keys: ["Ctrl", "Shift", "S"] },

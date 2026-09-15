@@ -415,47 +415,51 @@ export default function RolesPage() {
             </div>
           ) : (
             <>
-              {/* Header */}
-              <div className="p-6 border-b flex items-center justify-between bg-card z-10 shadow-sm">
-                <div className="flex-1 max-w-2xl">
+              {/* Header — compact: Role Name + Description sit on ONE row so the
+                  rights matrix below gets the vertical space (was two stacked
+                  full-width blocks). */}
+              <div className="px-6 py-3 border-b flex items-center justify-between gap-4 bg-card z-10 shadow-sm">
+                <div className="flex-1 min-w-0 max-w-4xl">
                   {isEditing ? (
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
                       <div>
-                        <Label>Role Name</Label>
-                        <Input 
-                          value={name} 
-                          onChange={(e) => setName(e.target.value)} 
+                        <Label className="text-xs text-muted-foreground">Role Name</Label>
+                        <Input
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
                           placeholder="e.g. Sales Manager"
-                          className="mt-1 font-semibold text-lg"
+                          className="mt-1 h-9 font-medium"
                         />
                       </div>
                       <div>
-                        <Label>Description</Label>
-                        <Input 
-                          value={description} 
-                          onChange={(e) => setDescription(e.target.value)} 
+                        <Label className="text-xs text-muted-foreground">Description</Label>
+                        <Input
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
                           placeholder="Brief description of this role's purpose"
-                          className="mt-1"
+                          className="mt-1 h-9"
                         />
                       </div>
                     </div>
                   ) : (
-                    <div>
-                      <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
+                    <div className="flex items-baseline gap-3 min-w-0">
+                      <h1 className="text-xl font-bold text-foreground flex items-center gap-2 shrink-0">
                         {selectedRole?.name}
-                        {isAdminRole && <Shield className="w-5 h-5 text-destructive" />}
+                        {isAdminRole && <Shield className="w-4 h-4 text-destructive" />}
                       </h1>
-                      <p className="text-muted-foreground mt-1">{selectedRole?.description}</p>
+                      {selectedRole?.description && (
+                        <p className="text-sm text-muted-foreground truncate">{selectedRole.description}</p>
+                      )}
                       {isAdminRole && (
-                        <p className="text-xs text-destructive mt-2 font-medium">
-                          This is a system role. Permissions cannot be modified.
-                        </p>
+                        <span className="text-xs text-destructive font-medium shrink-0">
+                          System role · locked
+                        </span>
                       )}
                     </div>
                   )}
                 </div>
-                
-                <div className="flex gap-2 ml-4">
+
+                <div className="flex gap-2 shrink-0">
                   {!isEditing ? (
                     <>
                       <Button variant="outline" onClick={() => setIsEditing(true)} disabled={isAdminRole}>

@@ -34,9 +34,9 @@ export function KeyboardShortcutsDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="mt-1 divide-y divide-border">
-          {APP_SHORTCUTS.map((s) => (
+          {APP_SHORTCUTS.map((s, idx) => (
             <div
-              key={s.action}
+              key={`${s.action}-${idx}`}
               className="flex items-center justify-between gap-4 py-2"
             >
               <span className="text-sm text-foreground">{s.label}</span>
