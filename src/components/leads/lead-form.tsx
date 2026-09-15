@@ -180,7 +180,9 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       toast.error("You must be logged in to an account to save a lead");
       return;
     }
-    if (!formData.name.trim()) {
+    // Honour the Required toggle on the predefined Name field.
+    const nameRequired = customFields.find((f) => f.system_key === 'name')?.is_required ?? true;
+    if (nameRequired && !formData.name.trim()) {
       toast.error("Business / Lead Name is required");
       return;
     }

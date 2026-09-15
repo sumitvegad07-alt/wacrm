@@ -248,7 +248,7 @@ export function ProductForm({
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) {
+    if (nameRequired && !name.trim()) {
       toast.error('Product name is required');
       return;
     }
@@ -467,6 +467,10 @@ export function ProductForm({
     onOpenChange(false);
     onSaved();
   }
+
+  // Honour the Required toggle on the predefined Name field: if an admin turns
+  // Required off in Manage Fields, the product can be saved without a name.
+  const nameRequired = customFields.find((f) => f.system_key === 'name')?.is_required ?? true;
 
   const fieldGrid = asPage
     ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
@@ -855,7 +859,7 @@ export function ProductForm({
               submit
               onCancel={() => onOpenChange(false)}
               saving={saving}
-              saveDisabled={!name.trim()}
+              saveDisabled={nameRequired && !name.trim()}
               saveLabel={isEdit ? 'Save Changes' : 'Create Product'}
             />
 

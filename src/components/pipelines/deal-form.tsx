@@ -213,9 +213,13 @@ export function DealForm({
     };
   }, [open, contactId, supabase]);
 
+  // Honour the Required toggle on the predefined Title field; contact and stage
+  // stay required (a deal structurally needs a customer and a pipeline stage).
+  const titleRequired = customFields.find((f) => f.system_key === 'title')?.is_required ?? true;
+
   async function handleSave() {
-    if (!title.trim() || !contactId || !stageId) {
-      toast.error("Title, contact, and stage are required");
+    if ((titleRequired && !title.trim()) || !contactId || !stageId) {
+      toast.error(titleRequired ? "Title, contact, and stage are required" : "Contact and stage are required");
       return;
     }
 
@@ -532,7 +536,7 @@ export function DealForm({
           onCancel={() => onOpenChange(false)}
           onSave={handleSave}
           saving={saving}
-          saveDisabled={!title.trim() || !contactId || !stageId}
+          saveDisabled={(titleRequired && !title.trim()) || !contactId || !stageId}
           saveLabel={deal ? "Save Changes" : "Create Deal"}
           leftSlot={
             deal ? (
