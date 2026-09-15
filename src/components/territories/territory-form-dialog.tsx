@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { enabledLevels, levelName } from "@/lib/territories/settings";
 import type { Territory, TerritorySettings } from "@/lib/territories/types";
 
@@ -63,15 +64,38 @@ export function TerritoryFormDialog({
   onSubmit,
 }: Props) {
   const enabled = useMemo(() => enabledLevels(settings), [settings]);
-  const childrenOf = useMemo(() => {
-    const m = new Map<string | null, Territory[]>();
-    rows.forEach((r) => {
-      if (!m.has(r.parent_id)) m.set(r.parent_id, []);
-      m.get(r.parent_id)!.push(r);
-    });
-    m.forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)));
+  const byIdAll = useMemo(() => {
+    const m = new Map<string, Territory>();
+    rows.forEach((r) => m.set(r.id, r));
     return m;
   }, [rows]);
+
+  // Full "Country / State / City" label for a node, walking up its parents.
+  const pathLabel = (t: Territory) => {
+    const parts: string[] = [];
+    let cur: Territory | undefined = t;
+    let guard = 0;
+    while (cur && guard < 8) {
+      parts.unshift(cur.name);
+      cur = cur.parent_id ? byIdAll.get(cur.parent_id) : undefined;
+      guard += 1;
+    }
+    return parts.join(" / ");
+  };
+
+  // Ancestor id chain (root → node itself) — used to set the whole parent path
+  // from a single chosen parent, so picking a City fills in its State + Country.
+  const chainOf = (id: string) => {
+    const chain: string[] = [];
+    let cur: Territory | undefined = byIdAll.get(id);
+    let guard = 0;
+    while (cur && guard < 8) {
+      chain.unshift(cur.id);
+      cur = cur.parent_id ? byIdAll.get(cur.parent_id) : undefined;
+      guard += 1;
+    }
+    return chain;
+  };
 
   const parentsLocked = mode === "edit" || (mode === "create" && !!presetParentPath);
 
@@ -110,12 +134,6 @@ export function TerritoryFormDialog({
     setLevel(pos);
     setPath([]); // ancestor chain depends on the level; reset
   }
-  function selectAncestor(i: number, id: string) {
-    const next = path.slice(0, i);
-    if (id) next.push(id);
-    setPath(next);
-  }
-
   const parentId = ancestorLevels.length > 0 ? path[ancestorLevels.length - 1] ?? null : null;
   const parentsComplete = ancestorLevels.every((_, i) => !!path[i]);
   const canSubmit = !!name.trim() && parentsComplete && !busy;
@@ -167,30 +185,37 @@ export function TerritoryFormDialog({
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter name…" autoFocus />
           </div>
 
-          {/* Parent cascade — one dropdown per level above the selected one */}
-          {ancestorLevels.map((al, i) => {
-            const options = childrenOf.get(i === 0 ? null : path[i - 1] ?? "__none__") ?? [];
+          {/* Parent — a single searchable picker of the level directly above the
+              one being created, labelled by full path ("India / Gujarat / Rajkot").
+              Picking it fills in the whole ancestor chain, so you don't have to
+              select Country → State → City top-down. */}
+          {ancestorLevels.length > 0 && (() => {
+            const parentLevel = ancestorLevels[ancestorLevels.length - 1];
+            const parentOptions = rows
+              .filter((r) => r.level === level - 1)
+              .map((r) => ({ value: r.id, label: pathLabel(r) }))
+              .sort((a, b) => a.label.localeCompare(b.label));
+            const selectedParent = path[path.length - 1] ?? "";
             return (
-              <div key={al.position} className="space-y-1">
+              <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">
-                  {al.name} <span className="text-destructive">*</span>
+                  {parentLevel.name} <span className="text-destructive">*</span>
                 </Label>
-                <select
-                  value={path[i] ?? ""}
-                  disabled={parentsLocked || (i > 0 && !path[i - 1])}
-                  onChange={(e) => selectAncestor(i, e.target.value)}
-                  className="w-full h-9 rounded-md bg-muted border border-border text-foreground text-sm px-3 disabled:opacity-60"
-                >
-                  <option value="">Select {al.name.toLowerCase()}…</option>
-                  {options.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={parentOptions}
+                  value={selectedParent}
+                  onChange={(id) => setPath(id ? chainOf(id) : [])}
+                  placeholder={`Select ${parentLevel.name.toLowerCase()}…`}
+                  searchPlaceholder={`Search ${parentLevel.name.toLowerCase()}…`}
+                  emptyMessage={`No ${parentLevel.name.toLowerCase()} found — create it first.`}
+                  disabled={parentsLocked}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Pick the {parentLevel.name.toLowerCase()}; its parents are filled in automatically.
+                </p>
               </div>
             );
-          })}
+          })()}
 
           {/* Code + Status */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
