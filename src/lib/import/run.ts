@@ -72,11 +72,20 @@ export async function createImportJob(supabase: SupabaseClient, args: CreateJobA
   return (data as { id: string }).id;
 }
 
+export interface CommitError {
+  row: number;
+  message: string;
+}
+
 export interface CommitResult {
   imported: number;
   updated: number;
   skipped: number;
   failed: number;
+  // Per-row reasons for the rows the server rejected at commit time. The DB
+  // function returns these (and also stores them on import_jobs.error_sample);
+  // we surface them so a failed import never shows a bare count with no cause.
+  errors: CommitError[];
 }
 
 /**
@@ -91,7 +100,7 @@ export async function commitInChunks(
   onProgress?: (done: number, total: number) => void,
 ): Promise<CommitResult> {
   const total = rows.length;
-  const agg: CommitResult = { imported: 0, updated: 0, skipped: 0, failed: 0 };
+  const agg: CommitResult = { imported: 0, updated: 0, skipped: 0, failed: 0, errors: [] };
 
   if (total === 0) {
     // Nothing to send, but still finalise the job so status/undo are consistent.
@@ -114,6 +123,11 @@ export async function commitInChunks(
     agg.updated += res.updated ?? 0;
     agg.skipped += res.skipped ?? 0;
     agg.failed += res.failed ?? 0;
+    // The DB numbers rejected rows 1-based WITHIN the chunk; offset by the chunk
+    // start so the row number points at the right line of the imported set.
+    for (const e of res.errors ?? []) {
+      agg.errors.push({ row: i + (e.row ?? 0), message: e.message });
+    }
     onProgress?.(Math.min(i + CHUNK_SIZE, total), total);
   }
   return agg;

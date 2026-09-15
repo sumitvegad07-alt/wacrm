@@ -72,6 +72,7 @@ interface ResultState {
   failed: number;
   invalidCount: number;
   undoable: boolean;
+  errors: { row: number; message: string }[];
 }
 
 const CONFIDENCE_STYLE: Record<string, string> = {
@@ -725,6 +726,32 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                   )}
                 </div>
               </div>
+
+              {result.failed > 0 && result.errors.length > 0 && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm">
+                  <p className="mb-2 font-medium text-red-600 dark:text-red-400">
+                    Why {result.failed} row{result.failed === 1 ? "" : "s"} could not be imported
+                  </p>
+                  <ul className="space-y-1">
+                    {Object.entries(
+                      result.errors.reduce<Record<string, number>>((acc, e) => {
+                        acc[e.message] = (acc[e.message] ?? 0) + 1;
+                        return acc;
+                      }, {}),
+                    )
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([message, count]) => (
+                        <li key={message} className="flex items-start justify-between gap-3 text-muted-foreground">
+                          <span>{message}</span>
+                          <span className="shrink-0 font-medium text-foreground">× {count}</span>
+                        </li>
+                      ))}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Fix these values in your file and import again. Rows that imported are unaffected.
+                  </p>
+                </div>
+              )}
 
               {result.invalidCount > 0 && (
                 <Button variant="outline" className="w-full" onClick={downloadErrorReport}>
