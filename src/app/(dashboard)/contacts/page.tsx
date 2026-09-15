@@ -95,20 +95,32 @@ export default function ContactsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     // Fetch all customers (active + inactive); the Status column filter (default Active) decides what shows.
-    const [{ data: contactsData }, { data: tagsData }, { data: fieldsData }, { data: profilesData }] = await Promise.all([
+    const [{ data: contactsData }, { data: tagsData }, { data: fieldsData }, { data: profilesData }, { data: areaData }] = await Promise.all([
       supabase.from('contacts').select('*').order('created_at', { ascending: false }),
       supabase.from('tags').select('*').order('name'),
       supabase.from('custom_fields').select('*').eq('module_name', 'contact'),
-      supabase.from('profiles').select('id, full_name')
+      supabase.from('profiles').select('id, user_id, full_name'),
+      supabase.from('employee_area_assignments').select('employee_id, territory_id')
     ]);
 
     setAllTags(tagsData || []);
     setCustomFields(fieldsData || []);
 
-    // Map a customer's directly-assigned employee (contacts.employee_id → profiles.id)
-    // to a name for the Assigned Employee column.
-    const employeeNameById: Record<string, string> = {};
-    profilesData?.forEach((p: any) => { if (p.id) employeeNameById[p.id] = p.full_name; });
+    // Resolve an employee id (a profiles.id OR an auth user id — the app stores both
+    // in different places) to a name.
+    const nameOf = (id: string | null | undefined): string | null => {
+      if (!id) return null;
+      const p = (profilesData || []).find((x: any) => x.id === id || x.user_id === id);
+      return p?.full_name ?? null;
+    };
+    // Area-wise assignment: territory_id → the employees assigned to that territory.
+    const areaNamesByTerritory: Record<string, string[]> = {};
+    (areaData || []).forEach((a: any) => {
+      const nm = nameOf(a.employee_id);
+      if (a.territory_id && nm) {
+        (areaNamesByTerritory[a.territory_id] ||= []).push(nm);
+      }
+    });
 
     // Order-hierarchy config → drives the optional Customer Level column.
     if (accountId) {
@@ -149,17 +161,25 @@ export default function ContactsPage() {
         }
       }
 
-      enhancedContacts = contactsData.map(contact => {
+      enhancedContacts = contactsData.map((contact: any) => {
         const contactValues = valuesData?.filter((v: any) => v.contact_id === contact.id) || [];
         const customData: any = {};
         contactValues.forEach((v: any) => {
           customData[`cf_${v.custom_field_id}`] = v.value;
         });
+        // Assigned Employee = direct assignment, else area-wise (via territory),
+        // else the salesman who created the customer.
+        const areaNames = contact.territory_id ? areaNamesByTerritory[contact.territory_id] : undefined;
+        const assignedEmployee =
+          nameOf(contact.employee_id) ||
+          (areaNames && areaNames.length > 0 ? areaNames.join(', ') : null) ||
+          nameOf(contact.user_id) ||
+          null;
         return {
           ...contact,
           tags: tagsByContact[contact.id] || [],
           _territoryName: contact.territory_id ? (territoryNames[contact.territory_id] ?? null) : null,
-          _assignedEmployee: contact.employee_id ? (employeeNameById[contact.employee_id] ?? null) : null,
+          _assignedEmployee: assignedEmployee,
           ...customData
         };
       });

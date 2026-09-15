@@ -188,12 +188,19 @@ export default function PipelinesPage() {
       // Fetch all deals; the Record Status column filter (default Active) decides what shows.
       const { data: dealsData } = await scope.apply(dealsBase, "user_id");
 
-      const { data: fieldsData } = await supabase
-        .from("custom_fields")
-        .select("*")
-        .eq("module_name", "deal");
+      const [{ data: fieldsData }, { data: profilesData }] = await Promise.all([
+        supabase.from("custom_fields").select("*").eq("module_name", "deal"),
+        supabase.from("profiles").select("id, user_id, full_name"),
+      ]);
 
       setCustomFields(fieldsData || []);
+
+      // Collaborator ids may be a profiles.id OR an auth user id — resolve either.
+      const nameOf = (id: string | null | undefined): string | null => {
+        if (!id) return null;
+        const p = (profilesData || []).find((x: any) => x.id === id || x.user_id === id);
+        return p?.full_name ?? null;
+      };
 
       let enhancedDeals = dealsData || [];
       if (dealsData && dealsData.length > 0) {
@@ -202,17 +209,24 @@ export default function PipelinesPage() {
           .from("deal_custom_values")
           .select("*")
           .in("deal_id", dealIds);
-          
-        if (valuesData && valuesData.length > 0) {
-          enhancedDeals = dealsData.map((deal: any) => {
-            const dealValues = valuesData.filter((v: any) => v.deal_id === deal.id);
-            const customData: any = {};
-            dealValues.forEach((v: any) => {
-              customData[`cf_${v.custom_field_id}`] = v.value;
-            });
-            return { ...deal, ...customData };
+
+        enhancedDeals = dealsData.map((deal: any) => {
+          const customData: any = {};
+          (valuesData || []).filter((v: any) => v.deal_id === deal.id).forEach((v: any) => {
+            customData[`cf_${v.custom_field_id}`] = v.value;
           });
-        }
+          return {
+            ...deal,
+            ...customData,
+            // Owner = the deal's assigned employee; falls back to the linked
+            // customer's assigned employee when the deal itself has none.
+            _dealOwner: deal.assignee?.full_name ?? nameOf(deal.contact?.employee_id),
+            _dealCollaborators: (Array.isArray(deal.collaborator_ids) ? deal.collaborator_ids : [])
+              .map((id: string) => nameOf(id))
+              .filter(Boolean)
+              .join(', '),
+          };
+        });
       }
       return enhancedDeals as Deal[];
     },
@@ -445,11 +459,24 @@ export default function PipelinesPage() {
     },
     {
       id: "assignee",
-      label: "Assigned Employee",
+      label: "Deal Owner",
       type: "text",
       // Visible by default; admins can hide it via Manage Columns.
       visibleByDefault: true,
-      render: (deal) => <span>{deal.assignee?.full_name || <span className="text-muted-foreground">Unassigned</span>}</span>
+      render: (deal) => {
+        const owner = (deal as any)._dealOwner || deal.assignee?.full_name;
+        return owner ? <span>{owner}</span> : <span className="text-muted-foreground">Unassigned</span>;
+      }
+    },
+    {
+      id: "deal_collaborator",
+      label: "Deal Collaborator",
+      type: "text",
+      visibleByDefault: true,
+      render: (deal) => {
+        const c = (deal as any)._dealCollaborators;
+        return c ? <span>{c}</span> : <span className="text-muted-foreground">-</span>;
+      }
     },
     {
       id: "created_at",

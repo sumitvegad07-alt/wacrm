@@ -126,13 +126,20 @@ export default function LeadsPage() {
       supabase.from("profiles").select("id, user_id, full_name").eq("account_id", account.id)
     ]);
 
-    // A lead's owner (leads.owner_id) is an auth user id, so map profiles by user_id
-    // to resolve the Assigned Employee name.
-    const employeeNameByUserId: Record<string, string> = {};
-    (profilesRes.data || []).forEach((p: any) => { if (p.user_id) employeeNameByUserId[p.user_id] = p.full_name; });
+    // Owner and collaborator ids may be a profiles.id OR an auth user id (the app
+    // stores both), so resolve against either.
+    const nameOf = (id: string | null | undefined): string | null => {
+      if (!id) return null;
+      const p = (profilesRes.data || []).find((x: any) => x.id === id || x.user_id === id);
+      return p?.full_name ?? null;
+    };
     enhancedLeads = enhancedLeads.map((l: any) => ({
       ...l,
-      _assignedEmployee: l.owner_id ? (employeeNameByUserId[l.owner_id] ?? null) : null,
+      _leadOwner: nameOf(l.owner_id) ?? nameOf(l.user_id),
+      _leadCollaborators: (Array.isArray(l.collaborator_ids) ? l.collaborator_ids : [])
+        .map((id: string) => nameOf(id))
+        .filter(Boolean)
+        .join(', '),
     }));
 
     setLeads(enhancedLeads);
@@ -242,14 +249,25 @@ export default function LeadsPage() {
         )
     },
     {
-      id: "assigned_employee",
-      label: "Assigned Employee",
+      id: "lead_owner",
+      label: "Lead Owner",
       type: "text",
-      // Visible by default; admins can hide it via Manage Columns.
+      // Owner = area-assigned employee / the creator set as owner. Visible by
+      // default; admins can hide it via Manage Columns.
       visibleByDefault: true,
       render: (lead) => {
-        const emp = (lead as any)._assignedEmployee;
+        const emp = (lead as any)._leadOwner;
         return emp ? <span>{emp}</span> : <span className="text-muted-foreground">Unassigned</span>;
+      }
+    },
+    {
+      id: "lead_collaborator",
+      label: "Lead Collaborator",
+      type: "text",
+      visibleByDefault: true,
+      render: (lead) => {
+        const c = (lead as any)._leadCollaborators;
+        return c ? <span>{c}</span> : <span className="text-muted-foreground">-</span>;
       }
     },
     {
