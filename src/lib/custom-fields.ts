@@ -90,7 +90,7 @@ export const DEFAULT_MODULE_SECTIONS_AND_FIELDS: Record<string, DefaultSectionDe
       position: 0,
       fields: [
         { system_key: 'name', field_name: 'Product Name', field_type: 'text', is_required: true, show_in_table: true, position: 0 },
-        { system_key: 'sku', field_name: 'SKU', field_type: 'text', is_required: false, show_in_table: true, position: 1 },
+        { system_key: 'sku', field_name: 'Product Code', field_type: 'text', is_required: false, show_in_table: true, position: 1 },
         { system_key: 'category', field_name: 'Category', field_type: 'text', is_required: false, show_in_table: true, position: 2 },
         { system_key: 'unit', field_name: 'Unit', field_type: 'text', is_required: false, show_in_table: true, position: 3 },
       ],

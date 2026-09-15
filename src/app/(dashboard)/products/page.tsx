@@ -182,7 +182,7 @@ export default function ProductsPage() {
     },
     {
       id: "sku",
-      label: "SKU",
+      label: "Product Code",
       type: "text",
       render: (product) => <span className="text-muted-foreground">{product.sku || '—'}</span>
     },

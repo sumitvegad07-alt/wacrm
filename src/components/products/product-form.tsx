@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Trash2, Package, Plus } from 'lucide-react';
 import { FormPageShell, FormActions, FormSection, MediaUpload } from '@/components/shared';
 import { logModuleActivity } from '@/lib/activities';
@@ -45,6 +46,9 @@ export function ProductForm({
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  // Description starts collapsed behind an "Add description" button; it expands
+  // automatically when editing a product that already has one.
+  const [showDescription, setShowDescription] = useState(false);
   const [sku, setSku] = useState('');
   const [price, setPrice] = useState('');
   // Multiple product images. `images` holds already-uploaded URLs; `newImageFiles`
@@ -83,14 +87,7 @@ export function ProductForm({
   const [newTaxName, setNewTaxName] = useState('');
   const [newTaxRate, setNewTaxRate] = useState('');
   const [creatingTax, setCreatingTax] = useState(false);
-  const [newCatLevel, setNewCatLevel] = useState<1 | 2 | 3 | null>(null);
-  const [newCatName, setNewCatName] = useState('');
-  const [creatingCat, setCreatingCat] = useState(false);
-
   const [categoryId, setCategoryId] = useState('');
-  const [l1Id, setL1Id] = useState('');
-  const [l2Id, setL2Id] = useState('');
-  const [l3Id, setL3Id] = useState('');
   const [unitId, setUnitId] = useState('');
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [units, setUnits] = useState<ProductUnit[]>([]);
@@ -99,7 +96,6 @@ export function ProductForm({
   const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
   const [conversions, setConversions] = useState<{ unit_id: string; factor: string }[]>([]);
   const [baseUnitLocked, setBaseUnitLocked] = useState(false);
-  const [levelsCount, setLevelsCount] = useState<1 | 2 | 3>(3);
   const [levelNames, setLevelNames] = useState({ l1: 'Category', l2: 'Sub-Category', l3: 'Brand' });
 
   useEffect(() => {
@@ -107,6 +103,7 @@ export function ProductForm({
       setConfirmDelete(false);
       setName(product?.name ?? '');
       setDescription(product?.description ?? '');
+      setShowDescription(!!product?.description);
       setSku(product?.sku ?? '');
       setPrice(product?.price?.toString() ?? '');
       {
@@ -147,7 +144,6 @@ export function ProductForm({
     ]);
     
     const ps = acctRes.data?.settings?.product_settings ?? {};
-    setLevelsCount(ps.levels_count || 3);
     setLevelNames({
       l1: ps.level_1_name || 'Category',
       l2: ps.level_2_name || 'Sub-Category',
@@ -177,26 +173,6 @@ export function ProductForm({
       setBaseUnitLocked(false);
     }
     
-    // Backtrack category hierarchy for existing product
-    if (product?.category_id && cats.length > 0) {
-      const targetCat = cats.find(c => c.id === product.category_id);
-      if (targetCat) {
-        if (targetCat.level === 3) {
-          setL3Id(targetCat.id);
-          setL2Id(targetCat.parent_id || '');
-          const pCat = cats.find(c => c.id === targetCat.parent_id);
-          setL1Id(pCat?.parent_id || '');
-        } else if (targetCat.level === 2) {
-          setL2Id(targetCat.id);
-          setL1Id(targetCat.parent_id || '');
-          setL3Id('');
-        } else if (targetCat.level === 1) {
-          setL1Id(targetCat.id);
-          setL2Id('');
-          setL3Id('');
-        }
-      }
-    }
   }
 
   async function fetchTaxSlabs() {
@@ -229,40 +205,6 @@ export function ProductForm({
     setNewUnitShort('');
     setNewUnitOpen(false);
     toast.success('Unit created');
-  }
-
-  async function createCategoryInline(level: 1 | 2 | 3) {
-    if (!accountId || !newCatName.trim()) return;
-    const parent_id = level === 1 ? null : level === 2 ? l1Id || null : l2Id || null;
-    if (level > 1 && !parent_id) {
-      toast.error(`Select a ${level === 2 ? levelNames.l1 : levelNames.l2} first`);
-      return;
-    }
-    setCreatingCat(true);
-    const { data, error } = await supabase
-      .from('product_categories')
-      .insert({ account_id: accountId, name: newCatName.trim(), level, parent_id })
-      .select('*')
-      .single();
-    setCreatingCat(false);
-    if (error || !data) {
-      toast.error(error?.message || 'Could not create');
-      return;
-    }
-    setCategories((prev) => [...prev, data as ProductCategory]);
-    if (level === 1) {
-      setL1Id(data.id);
-      setL2Id('');
-      setL3Id('');
-    } else if (level === 2) {
-      setL2Id(data.id);
-      setL3Id('');
-    } else {
-      setL3Id(data.id);
-    }
-    setNewCatName('');
-    setNewCatLevel(null);
-    toast.success('Created');
   }
 
   async function createTaxInline() {
@@ -340,7 +282,7 @@ export function ProductForm({
     const cfError = validateRequiredCustomFields(customFields, customValues, {
       name,
       sku,
-      category: l3Id || l2Id || l1Id || category,
+      category: categoryId || category,
       unit: unitId || unit,
       price,
       min_price: minPrice,
@@ -383,7 +325,7 @@ export function ProductForm({
         image: finalImageUrl,
         images: finalImages.length > 0 ? finalImages : null,
         category: null,
-        category_id: l3Id || l2Id || l1Id || null,
+        category_id: categoryId || null,
         unit: null,
         unit_id: unitId || null,
         // Stock fields written only when the module is on, so accounts without it
@@ -526,35 +468,6 @@ export function ProductForm({
     onSaved();
   }
 
-  // "+ Create new" affordance for a category level — a link that swaps to an
-  // inline name input, inserts the category at that level, and selects it.
-  const catCreateRow = (level: 1 | 2 | 3, label: string) =>
-    newCatLevel === level ? (
-      <div className="flex items-center gap-2">
-        <Input
-          value={newCatName}
-          onChange={(e) => setNewCatName(e.target.value)}
-          placeholder={`New ${label.toLowerCase()} name`}
-          className="h-8 text-sm"
-          autoFocus
-        />
-        <Button type="button" size="sm" className="h-8" disabled={creatingCat || !newCatName.trim()} onClick={() => createCategoryInline(level)}>
-          {creatingCat ? 'Adding…' : 'Add'}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setNewCatLevel(null)}>
-          Cancel
-        </Button>
-      </div>
-    ) : (
-      <button
-        type="button"
-        onClick={() => { setNewCatLevel(level); setNewCatName(''); }}
-        className="flex items-center gap-1 self-start text-xs font-medium text-primary hover:underline"
-      >
-        <Plus className="h-3 w-3" /> Create new {label.toLowerCase()}
-      </button>
-    );
-
   const fieldGrid = asPage
     ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
     : undefined;
@@ -629,61 +542,52 @@ export function ProductForm({
               }}
               renderCustomSystemField={(fld) => {
                 if (fld.system_key === 'category') {
-                  const level1 = categories.filter(c => c.level === 1);
-                  const level2 = categories.filter(c => c.level === 2 && c.parent_id === l1Id);
-                  const level3 = categories.filter(c => c.level === 3 && c.parent_id === l2Id);
+                  // One searchable dropdown listing every category by its full path
+                  // (e.g. "Food / Snacks / Lays") instead of a stacked select per
+                  // level. Selecting a node stores its id directly; its ancestors are
+                  // implied by the path. "Create new" adds a top-level category —
+                  // deeper levels are still managed on the Category master page.
+                  const catById = new Map(categories.map((c) => [c.id, c] as const));
+                  const pathOf = (id: string) => {
+                    const parts: string[] = [];
+                    let cur = catById.get(id);
+                    let guard = 0;
+                    while (cur && guard < 6) {
+                      parts.unshift(cur.name);
+                      cur = cur.parent_id ? catById.get(cur.parent_id) : undefined;
+                      guard += 1;
+                    }
+                    return parts.join(' / ');
+                  };
+                  const categoryOptions = categories
+                    .map((c) => ({ value: c.id, label: pathOf(c.id) }))
+                    .sort((a, b) => a.label.localeCompare(b.label));
 
                   return (
-                    <div className="grid gap-2">
-                      <select
-                        value={l1Id}
-                        onChange={(e) => {
-                          setL1Id(e.target.value);
-                          setL2Id('');
-                          setL3Id('');
-                        }}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="">Select {levelNames.l1}</option>
-                        {level1.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                      {catCreateRow(1, levelNames.l1)}
-
-                      {levelsCount >= 2 && (
-                        <select
-                          value={l2Id}
-                          onChange={(e) => {
-                            setL2Id(e.target.value);
-                            setL3Id('');
-                          }}
-                          disabled={!l1Id}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
-                        >
-                          <option value="">Select {levelNames.l2}</option>
-                          {level2.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      )}
-                      {levelsCount >= 2 && l1Id && catCreateRow(2, levelNames.l2)}
-
-                      {levelsCount >= 3 && (
-                        <select
-                          value={l3Id}
-                          onChange={(e) => setL3Id(e.target.value)}
-                          disabled={!l2Id}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
-                        >
-                          <option value="">Select {levelNames.l3}</option>
-                          {level3.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      )}
-                      {levelsCount >= 3 && l2Id && catCreateRow(3, levelNames.l3)}
-                    </div>
+                    <SearchableSelect
+                      options={categoryOptions}
+                      value={categoryId}
+                      onChange={setCategoryId}
+                      placeholder={`Select ${levelNames.l1.toLowerCase()}`}
+                      searchPlaceholder="Search categories…"
+                      emptyMessage="No categories yet."
+                      createLabel={levelNames.l1.toLowerCase()}
+                      onCreateOption={async (label) => {
+                        if (!accountId) return null;
+                        const { data, error } = await supabase
+                          .from('product_categories')
+                          .insert({ account_id: accountId, name: label.trim(), level: 1, parent_id: null })
+                          .select('*')
+                          .single();
+                        if (error || !data) {
+                          toast.error(error?.message || 'Could not create category');
+                          return null;
+                        }
+                        setCategories((prev) => [...prev, data as ProductCategory]);
+                        setCategoryId(data.id);
+                        return { value: data.id, label: (data as ProductCategory).name };
+                      }}
+                    />
                   );
                 }
                 if (fld.system_key === 'unit') {
@@ -798,15 +702,26 @@ export function ProductForm({
 
             <div className="space-y-4 pt-4 border-t border-border/50">
               <h4 className="text-sm font-medium text-foreground">Additional Details</h4>
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Description</Label>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Brief description..."
-                  className="min-h-[80px] border-border bg-muted text-foreground"
-                />
-              </div>
+              {showDescription ? (
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">Description</Label>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Brief description..."
+                    className="min-h-[80px] border-border bg-muted text-foreground"
+                    autoFocus
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowDescription(true)}
+                  className="flex items-center gap-1 self-start text-sm font-medium text-primary hover:underline"
+                >
+                  <Plus className="h-4 w-4" /> Add description
+                </button>
+              )}
 
               {stockEnabled && (
                 <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 p-3">
@@ -915,15 +830,24 @@ export function ProductForm({
               </div>
 
 
-              <div className="flex items-center gap-2 pt-2">
-                <input 
-                  type="checkbox"
-                  id="active"
-                  checked={active}
-                  onChange={(e) => setActive(e.target.checked)}
-                  className="rounded border-border bg-muted accent-primary"
-                />
-                <Label htmlFor="active" className="text-muted-foreground font-normal">Active Product</Label>
+              <div className="space-y-1.5 pt-2">
+                <Label className="text-muted-foreground">Status</Label>
+                <div className="flex items-center gap-6 h-9">
+                  {([['active', 'Active', true], ['inactive', 'Inactive', false]] as const).map(
+                    ([key, label, val]) => (
+                      <label key={key} className="flex items-center gap-1.5 text-sm cursor-pointer text-foreground">
+                        <input
+                          type="radio"
+                          name="product-status"
+                          checked={active === val}
+                          onChange={() => setActive(val)}
+                          className="accent-primary"
+                        />
+                        {label}
+                      </label>
+                    ),
+                  )}
+                </div>
               </div>
             </div>
           </>

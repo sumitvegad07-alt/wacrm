@@ -190,7 +190,7 @@ export default function ProductDetailsPage() {
                 <p className="font-medium">{product.name}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">SKU</p>
+                <p className="text-sm text-muted-foreground mb-1">Product Code</p>
                 <p className="font-medium">{product.sku || '-'}</p>
               </div>
               <div>
