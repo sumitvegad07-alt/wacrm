@@ -70,13 +70,18 @@ for each row execute function public.contacts_sync_geo_from_territory();
 
 -- Backfill every existing tenant: customers that already carry a territory but
 -- have blank/stale flat geo get corrected in place.
+-- (A set-returning function in UPDATE...FROM cannot take a column from the
+-- update target directly, so join a second reference to contacts and call the
+-- function LATERAL against it.)
 update public.contacts c
 set country = g.country,
     state   = g.state,
     city    = g.city,
     area    = g.area
-from public.territory_flat_geo(c.territory_id) g
-where c.territory_id is not null
+from public.contacts c2
+cross join lateral public.territory_flat_geo(c2.territory_id) g
+where c2.id = c.id
+  and c.territory_id is not null
   and (c.country is distinct from g.country
     or c.state   is distinct from g.state
     or c.city    is distinct from g.city
