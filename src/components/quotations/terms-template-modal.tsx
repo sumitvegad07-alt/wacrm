@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { sanitizeRichText } from '@/lib/security/sanitize-html';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -42,7 +43,7 @@ export function TermsTemplateModal({ open, onOpenChange, onSave, initialData }: 
         setStatus(initialData.status || 'Active');
         setIsDefault(initialData.is_default || false);
         if (editorRef.current) {
-          editorRef.current.innerHTML = initialData.content || '';
+          editorRef.current.innerHTML = sanitizeRichText(initialData.content);
         }
       } else {
         setTitle('');

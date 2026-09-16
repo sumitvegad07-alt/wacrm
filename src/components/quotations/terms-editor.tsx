@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, Code } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { sanitizeRichText } from '@/lib/security/sanitize-html';
 import { TermsTemplateModal } from './terms-template-modal';
 import type { QuotationTermsTemplate } from '@/types';
 
@@ -22,7 +23,7 @@ export function TermsEditor({ value, onChange, templates, onTemplateAdded }: Ter
   // Initialize content once
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value || '';
+      editorRef.current.innerHTML = sanitizeRichText(value);
     }
   }, [value]);
 
@@ -41,7 +42,7 @@ export function TermsEditor({ value, onChange, templates, onTemplateAdded }: Ter
   const insertTemplate = (content: string) => {
     onChange(content);
     if (editorRef.current) {
-      editorRef.current.innerHTML = content;
+      editorRef.current.innerHTML = sanitizeRichText(content);
     }
     setOpen(false);
   };

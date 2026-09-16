@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { sanitizeRichText } from '@/lib/security/sanitize-html';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -313,7 +314,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
               <h3 className="text-lg font-medium mb-4">Terms & Conditions</h3>
               <div 
                 className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground" 
-                dangerouslySetInnerHTML={{ __html: quotation.terms_conditions }} 
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(quotation.terms_conditions) }}
               />
             </div>
           )}

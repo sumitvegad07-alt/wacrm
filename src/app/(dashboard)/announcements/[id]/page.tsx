@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { sanitizeRichText } from "@/lib/security/sanitize-html";
 import { PageLayout, PageHeader } from "@/components/shared";
 import { Loader2, ArrowLeft, Link as LinkIcon, Paperclip, Calendar, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -118,7 +119,7 @@ export default function AnnouncementDetailsPage() {
             <h2 className="text-lg font-semibold mb-4 border-b pb-2">Content</h2>
             <div 
               className="prose prose-sm dark:prose-invert max-w-none"
-              dangerouslySetInnerHTML={{ __html: data.content }}
+              dangerouslySetInnerHTML={{ __html: sanitizeRichText(data.content) }}
             />
           </div>
         </div>
