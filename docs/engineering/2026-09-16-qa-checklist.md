@@ -82,6 +82,19 @@ Legend: **PASS** = executed & passed · **BLOCKED** = cannot run without prod-wr
 
 ---
 
+## Addendum — live logged-in READ-ONLY verification (2026-09-16)
+Founder logged into the local server (production session). I performed **read-only** checks only — **no records created, edited, saved, or deleted; no payloads injected** (that would write to prod).
+
+| Check | Result | Evidence |
+|---|---|---|
+| App loads & is functional when authenticated | **PASS** | Quotations list (52 real records), quotation detail QT-0053, Announcements list all render |
+| **Announcement detail render path** (`sanitizeRichText(data.content)`) on real data | **PASS** | "Monday motivation scheme" content renders fully with line-break formatting intact — sanitizer does **not** strip legitimate content (screenshot) |
+| **1d formatting-not-over-stripped** on real data | **PASS** | same as above — real stored content displays unchanged after sanitization |
+| Quotation detail render (QT-0053) | **PASS (no terms present)** | page renders cleanly; QT-0053 has no `terms_conditions`, so the terms render path wasn't exercised on this record — identical `sanitizeRichText` call is covered by announcement render + unit tests + harness |
+| Console on announcement detail | **NOTE** | 2 background `400`s from Supabase calls unrelated to this branch (an HTML-sanitization change cannot cause a network 400; page rendered fine). Pre-existing; worth a separate look but not a branch defect. Stale harness error is from the earlier (deleted) test page |
+
+**Still BLOCKED** (would require writing to production): injecting `<script>`/`onerror`/`javascript:` payloads and viewing them live; the F2 expense trigger path; the create/edit/delete regression sweep. These remain proven only via unit tests + browser harness, not against the live production DB.
+
 ## Summary
 | Bucket | Count |
 |---|---|
