@@ -80,6 +80,22 @@ Baseline re-confirmed today: `wacrm-web` → 1216 tests pass, `tsc --noEmit` cle
 
 ---
 
+---
+
+## Implementation status (Phase 4) — branch `qa/2026-09-16-quality-fixes`
+
+| Finding | Status | Commit | Evidence |
+|---------|--------|--------|----------|
+| **F1** XSS | **FIXED** | `ac39815` | `isomorphic-dompurify` sanitizer + 5 unit tests; wired into 2 render sites + 3 editor-load sinks; 1221 tests green, tsc clean |
+| **F5** scratch scripts | **FIXED** | `3f679ce` | 11 files removed; lint 1812→1779 problems; tsc clean |
+| **F2** definer search_path | **MIGRATION WRITTEN, NOT APPLIED** | `04201b5` | Precise scan found exactly 1 real offender (`log_expense_activity`); `update_updated_at_column` was a parser false-positive (it is `LANGUAGE plpgsql`, invoker). Prod apply = manual founder step |
+| **F3** dashboard TZ | **DEFERRED — reassessed as systemic** | — | See below |
+
+### F3 reassessment
+On implementation, a codebase-wide grep found **no account-timezone mechanism at all**: no `AT TIME ZONE` in report code, nothing reads `accounts.settings.timezone` in the query layer. The entire app treats "local" as **device-local**, which is correct-in-practice for a single-timezone (India/IST) user base. The dashboard is therefore **consistent** with the rest of the app, not a localized defect. Threading account-TZ math into only the dashboard would make it *inconsistent* with every other screen and add regression risk for **zero real-world benefit today**. Correct fix = a **codebase-wide account-timezone strategy** (a separate initiative), not a dashboard patch. Deferred deliberately.
+
+---
+
 ## Recommendation for next step
 
 Approve the **Quick Wins (F1, F5)** to implement first in an isolated local branch with TDD + regression tests (nothing pushed). F2/F3 need a DB migration and account-TZ threading respectively — implement locally, but the F2 prod apply remains your manual step. F1 is the one I'd prioritize: it's a live, authenticated stored-XSS path.
