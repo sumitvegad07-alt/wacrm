@@ -68,7 +68,11 @@ Recipients = the rep’s manager (if reporting hierarchy set) + all account admi
 | RG-1 | Rights visible | Team → Roles → edit a role. | A **Notifications & Alarms** group lists the 5 category rights with descriptions. |
 | RG-2 | No right, no notify | Give a rep none of the notification rights; trigger events for them. | Rep receives nothing in any category. |
 | RG-3 | Grant one category | Grant only **Receive task**; trigger a task-assign + a lead-assign. | Rep gets the task one only, not the lead one. |
-| RG-4 | Mute (data-level today) | Set `notification_preferences.muted=true` for a category the user holds. | That category stops arriving; others still arrive. *(Per-user mute **UI** is not built yet — see Known Gaps.)* |
+| RG-4 | Mute via UI (web) | Go to **Settings → Notifications**. Turn a category **off**. Trigger that event for yourself. | That category stops arriving; others still arrive. Only categories your role grants are listed. |
+| RG-5 | Unmute | Turn it back **on**; trigger again. | Notifications resume. Setting persists across reload. |
+| RG-6 | Mute via UI (📱 mobile) | In the app, open the bell → gear (Notification settings). Toggle a category off. | Same behaviour as web; shared `notification_preferences`. |
+| RG-7 | Default seed (existing tenants) | As an existing rep (non-admin role), with no manual grant. | The rep already holds task/assignment/announcement/punch rights (backfilled) and receives those notifications. |
+| RG-8 | Default seed (new account) | Provision a brand-new account; inspect the default **Sales Executive** role. | It has the 4 rep notification rights pre-granted; team-activity is not. |
 
 ## 6. 📱 Mobile push (items 2 & 3)
 
@@ -135,8 +139,6 @@ Applies to searchable dropdowns across all modules (lead source/status/owner, ex
 ---
 
 ## Known gaps / not yet built (call out in results)
-- **Per-user mute UI** (web + mobile): backend + rights honour mutes, but there is no toggle screen yet — test RG-4 at the DB level for now.
-- **Default-role seed**: reps get notification categories only once an admin grants the rights (consistent with the rights-gate model); no automatic defaults yet.
 - **Separate lead/contact notes delete (#8)**: only task-notes are removable today; `lead_notes`/`contact_notes` need a 1-line `is_active` migration to be deletable.
 - **#9 breadth**: keyboard nav is delivered for the searchable dropdown (the main gap). Full form-wide Enter-to-next-field behaviour is a larger, separate pass.
 - 📱 All mobile items require the new build + FCM (P3).
