@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { PasswordForm } from '@/components/settings/password-form';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
+import { NotificationPreferencesPanel } from '@/components/settings/notification-preferences-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
@@ -59,6 +60,7 @@ function SettingsContent() {
     overview: <ModuleSettingsPanel />,
     password: <PasswordForm />,
     appearance: <AppearancePanel />,
+    notifications: <NotificationPreferencesPanel />,
     ai: <AISettingsPanel />,
     whatsapp: hasWhatsApp ? (
       <WhatsAppConfig />

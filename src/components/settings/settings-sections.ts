@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
   Banknote,
   CalendarOff,
+  Bell,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,6 +35,7 @@ import {
 export const SETTINGS_SECTIONS = [
   'overview',
   'appearance',
+  'notifications',
   'password',
   'whatsapp',
   'ai',
@@ -71,6 +73,7 @@ export interface SectionMeta {
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
+  notifications: { id: 'notifications', label: 'Notifications', icon: Bell, group: 'account' },
   password: { id: 'password', label: 'Change Password', icon: KeyRound, group: 'hidden' },
   whatsapp: { id: 'whatsapp', label: 'Whatsapp', icon: PlugZap, group: 'workspace' },
   ai: { id: 'ai', label: 'Knowledge Base', icon: BrainCircuit, group: 'hidden' }, // hidden in rail

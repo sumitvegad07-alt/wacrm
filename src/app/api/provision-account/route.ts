@@ -279,6 +279,14 @@ export async function POST(req: Request) {
           // Task report + share PDF (base)
           view_task_reports: true,
           share_reports: true,
+          // Notifications (base) — a rep receives their own task reminders &
+          // assignments, announcements, and the shift punch-in/out alarm by
+          // default. Team-activity alerts are for admins, so they are NOT seeded
+          // here. Users can still mute any of these in their own settings.
+          receive_task_notifications: true,
+          receive_assignment_notifications: true,
+          receive_announcement_notifications: true,
+          receive_punch_alarm: true,
           // ── Workforce (WFA) line ──
           ...(lines.wfa
             ? {
