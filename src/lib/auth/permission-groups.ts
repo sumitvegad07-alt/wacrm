@@ -413,6 +413,17 @@ export const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.TEAM.MANAGE_ROLES, label: "Create / Edit Roles & Permissions" },
       { id: PERMISSIONS.TEAM.APPROVE_DEVICES, label: "Approve Mobile Devices" },
     ]
+  },
+  {
+    category: "Notifications & Alarms",
+    note: "Controls which notifications a role RECEIVES (web + mobile). Without a right, that notification is never sent to the user. Each user can additionally mute categories in their own settings.",
+    permissions: [
+      { id: PERMISSIONS.NOTIFICATIONS.RECEIVE_TASK, label: "Task reminders & task-assigned alerts" },
+      { id: PERMISSIONS.NOTIFICATIONS.RECEIVE_ASSIGNMENT, label: "Lead / Deal / Customer assigned to me" },
+      { id: PERMISSIONS.NOTIFICATIONS.RECEIVE_ANNOUNCEMENT, label: "Announcements" },
+      { id: PERMISSIONS.NOTIFICATIONS.RECEIVE_TEAM_ACTIVITY, label: "Team activity (rep created order / expense / payment / lead / etc.)" },
+      { id: PERMISSIONS.NOTIFICATIONS.RECEIVE_PUNCH_ALARM, label: "Punch-in / Punch-out shift alarm (mobile)" },
+    ]
   }
 ];
 

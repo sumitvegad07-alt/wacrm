@@ -326,4 +326,19 @@ export const PERMISSIONS = {
   ASSISTANT: {
     USE_ASK_OZZO: 'use_ask_ozzo',
   },
+
+  // Notifications & Alarms (web + mobile). These gate WHO RECEIVES a category of
+  // notification — no right, the notification generator never produces that
+  // category for the user (enforced server-side, not just UI). Within a granted
+  // category a user may still mute it in their own notification preferences.
+  // owner/admin resolve all-true via has_permission(), so admins receive team
+  // activity by default; reps get task/assignment/announcement/punch via the
+  // default-role seed.
+  NOTIFICATIONS: {
+    RECEIVE_TASK: 'receive_task_notifications',            // task reminders + task-assigned
+    RECEIVE_ASSIGNMENT: 'receive_assignment_notifications', // lead/deal/customer assigned to me
+    RECEIVE_ANNOUNCEMENT: 'receive_announcement_notifications',
+    RECEIVE_TEAM_ACTIVITY: 'receive_team_activity_notifications', // admin: rep created order/expense/etc (item 3)
+    RECEIVE_PUNCH_ALARM: 'receive_punch_alarm',            // shift-time punch-in/out alarm (item 6)
+  },
 } as const;

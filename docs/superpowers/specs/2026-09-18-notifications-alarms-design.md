@@ -47,31 +47,53 @@ Two deliberately separate layers.
 - Both gated by rights (`receive_task_notifications`, `receive_punch_alarm`) + personal mute,
   evaluated on-device from the synced permission set.
 
-### Layer B — Server-sent push + in-app center (reuses `automation_events`)
-1. **DB triggers** emit rows into the existing `automation_events` queue for the new events:
-   `lead_created`, `deal_created`, `expense_created`, `payment_created`, `task_completed`,
-   `lead_assigned`, `customer_assigned`, `task_assigned`, `announcement_published`.
-   (Existing `customer_created`, `order_created` are reused for admin team-activity.)
-2. **Notification generator** — new cron worker (sibling to the WhatsApp `event-worker`), reads
-   unprocessed events, resolves **internal-user** recipients (hierarchy + rights + mutes), and
-   writes one `notifications` row per recipient. Inherits the queue's claim/dedup/staleness
-   guards. Idempotent via a unique (event_id, recipient_user_id) key.
+### Layer B — Server-sent push + in-app center (dedicated `notification_outbox`)
+
+> **Why not reuse `automation_events`:** the WhatsApp `event-worker` *destructively claims*
+> each event (`pending → processing`) BEFORE checking for a matching automation. A second
+> consumer on the same queue would race it and lose events. Notifications therefore get their
+> own isolated outbox — same battle-tested trigger/worker pattern, no shared claim state, and
+> no coupling to the WhatsApp kill-switch or 12h staleness rule.
+
+1. **DB triggers** (mirroring the `automation_events` trigger discipline: one INSERT, never
+   raise, `occurred_at` clamped) emit rows into `notification_outbox` for:
+   `order_created`, `customer_created`, `lead_created`, `deal_created`, `expense_created`,
+   `payment_created`, `task_completed` (team-activity, item 3), plus
+   `lead_assigned`, `customer_assigned`, `task_assigned` (assignment, item 2) and
+   `announcement_published` (item 2).
+2. **Notification generator** — new cron worker, reads unprocessed `notification_outbox` rows,
+   resolves **internal-user** recipients (hierarchy + rights + mutes), writes one
+   `notifications` row per recipient, marks the outbox row done. Idempotent via a unique
+   (source_event_id, recipient_user_id) key on `notifications`.
 3. **Push dispatcher** — sends undelivered `notifications` rows to Expo Push API, marks
-   `pushed_at`, prunes dead tokens. Web reads the same table via Supabase Realtime for the
-   in-app bell/center (no push needed on web for v1; browser push deferred).
+   `pushed_at`, prunes dead tokens. Web reads the same `notifications` table via Supabase
+   Realtime for the in-app bell/center (no push needed on web for v1; browser push deferred).
 
 Recipient resolution reuses the reporting-hierarchy helpers already used by data-scope.
 
 ## 4. Data model (new tables, account-scoped, RLS on)
 
 ```
+notification_outbox                 -- Layer B event queue (isolated from automation_events)
+  id uuid pk
+  account_id uuid
+  event_type text                   -- order_created | lead_assigned | announcement_published | ...
+  record_id uuid
+  record_snapshot jsonb
+  actor_user_id uuid null           -- who caused it (the rep), for hierarchy resolution
+  occurred_at timestamptz           -- clamped business time
+  status text default 'pending'     -- pending | processing | done | failed
+  attempts int default 0
+  processed_at timestamptz null
+  -- partial index on (status, occurred_at) WHERE status='pending'
+
 notifications
   id uuid pk
   account_id uuid  -> accounts
   recipient_user_id uuid            -- profiles.id
   category text                     -- task_reminder | assignment | announcement | team_activity | punch_alarm | ...
-  event_type text                   -- source automation_events.event_type (nullable for local)
-  source_event_id uuid null         -- automation_events.id (dedup)
+  event_type text                   -- source notification_outbox.event_type (nullable for local)
+  source_event_id uuid null         -- notification_outbox.id (dedup)
   title text
   body text
   data jsonb                        -- { entity: 'lead'|'order'|..., id, deep_link }
