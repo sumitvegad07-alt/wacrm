@@ -206,6 +206,9 @@ export const PERMISSIONS = {
   // Location / Attendance (new field rights)
   FIELD: {
     VIEW_LIVE_FEED: 'view_live_feed',
+    // Gates ONLY the map inside the mobile Live Feed; the KPI tiles stay visible
+    // to anyone who can open Live Feed. owner/admin resolve all-true.
+    VIEW_LIVE_FEED_MAP: 'view_live_feed_map',
     VIEW_TRACKING_HEALTH: 'view_tracking_health',
     VIEW_ATTENDANCE: 'view_attendance',
     EXPORT_ATTENDANCE: 'export_attendance',

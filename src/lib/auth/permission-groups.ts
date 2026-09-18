@@ -256,6 +256,7 @@ export const PERMISSION_GROUPS: PermGroup[] = [
     permissions: [
       { id: PERMISSIONS.MOBILE.VIEW_LOCATION_TRACKING, label: "View Location Dashboard" },
       { id: PERMISSIONS.FIELD.VIEW_LIVE_FEED, label: "View Live Feed / All Locations" },
+      { id: PERMISSIONS.FIELD.VIEW_LIVE_FEED_MAP, label: "View Map in Live Feed (mobile)" },
       { id: PERMISSIONS.FIELD.VIEW_TRACKING_HEALTH, label: "View Tracking Health" },
       { id: PERMISSIONS.FIELD.VIEW_ATTENDANCE, label: "View Attendance" },
       { id: PERMISSIONS.FIELD.EXPORT_ATTENDANCE, label: "Export Attendance" },
