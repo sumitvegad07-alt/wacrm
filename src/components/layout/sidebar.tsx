@@ -48,6 +48,7 @@ import {
   KeyRound,
   Wallet,
   Palette,
+  Bell,
   LayoutGrid,
   Layers,
   Ruler,
@@ -411,6 +412,8 @@ export function getMenuStructure(
         { href: "/settings?tab=module_settings", label: "Organization Settings", icon: Settings, permission: "manage_org_settings" },
         // Appearance is a personal theme preference — available to everyone.
         { href: "/settings?tab=appearance", label: "Appearance", icon: Palette },
+        // Notifications: personal mute preferences — available to everyone.
+        { href: "/settings?tab=notifications", label: "Notifications", icon: Bell },
         ...(!moduleSettings || moduleSettings.whatsapp !== false
           ? [{ href: "/settings?tab=whatsapp", label: "Whatsapp", icon: MessageSquare, permission: "manage_whatsapp_settings" }]
           : []),
