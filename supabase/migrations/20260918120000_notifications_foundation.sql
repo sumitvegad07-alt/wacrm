@@ -359,7 +359,16 @@ CREATE TRIGGER trg_notif_announcement_published AFTER INSERT ON tenant_announcem
   FOR EACH ROW EXECUTE FUNCTION notif_announcement_published();
 
 -- ============================================================================
--- 6. Comments
+-- 6. Realtime — the web bell subscribes to INSERTs on notifications
+-- ============================================================================
+-- RLS still applies to Realtime, so a browser only receives its own rows.
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ============================================================================
+-- 7. Comments
 -- ============================================================================
 COMMENT ON TABLE notification_outbox IS
   'Isolated business-event queue for the Notifications subsystem. Written only by '

@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/layout/mode-toggle";
+import { NotificationBell } from "@/components/layout/notification-bell";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -159,6 +160,8 @@ export function Header({ onOpenSidebar }: HeaderProps) {
         >
           <Search className="size-4" />
         </button>
+
+        <NotificationBell />
 
         <ModeToggle />
 
