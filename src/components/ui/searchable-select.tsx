@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Check, ChevronsUpDown, Search, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -49,10 +49,50 @@ export function SearchableSelect({
   const [creating, setCreating] = useState(false);
   const [createMode, setCreateMode] = useState(false);
   const [createText, setCreateText] = useState("");
+  // Keyboard navigation: which filtered option is highlighted (arrow keys move
+  // it, Enter selects it) so the dropdown is fully usable without the mouse.
+  const [highlight, setHighlight] = useState(0);
+  const optionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const filteredOptions = options.filter((option) =>
     option.label.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Keep the highlight in range as the filter narrows, and reset to the top
+  // whenever the popover reopens.
+  useEffect(() => {
+    if (highlight > filteredOptions.length - 1) setHighlight(filteredOptions.length > 0 ? filteredOptions.length - 1 : 0);
+  }, [filteredOptions.length, highlight]);
+  useEffect(() => {
+    if (open) setHighlight(0);
+  }, [open]);
+  // Keep the highlighted row visible as it moves.
+  useEffect(() => {
+    optionRefs.current[highlight]?.scrollIntoView({ block: "nearest" });
+  }, [highlight]);
+
+  const selectOption = (val: string) => {
+    onChange(val === value ? "" : val);
+    setSearch("");
+    setOpen(false);
+  };
+
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight((h) => Math.min(h + 1, filteredOptions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const opt = filteredOptions[highlight];
+      if (opt) selectOption(opt.value);
+      else if (canCreateTyped) doCreate(trimmed);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
 
   const trimmed = search.trim();
   const exactExists = options.some((o) => o.label.toLowerCase() === trimmed.toLowerCase());
@@ -93,10 +133,12 @@ export function SearchableSelect({
         <div className="flex items-center border-b border-border/50 px-3">
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
           <input
+            autoFocus
             className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             placeholder={searchPlaceholder}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setHighlight(0); }}
+            onKeyDown={onSearchKeyDown}
           />
         </div>
         <ScrollArea className="max-h-[280px] overflow-y-auto">
@@ -106,17 +148,17 @@ export function SearchableSelect({
             </div>
           ) : (
             <div className="p-1">
-              {filteredOptions.map((option) => (
+              {filteredOptions.map((option, i) => (
                 <div
                   key={option.value}
+                  ref={(el) => { optionRefs.current[i] = el; }}
+                  onMouseEnter={() => setHighlight(i)}
                   className={cn(
-                    "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                    value === option.value ? "bg-accent/50 text-accent-foreground" : "text-popover-foreground"
+                    "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                    i === highlight ? "bg-accent text-accent-foreground" : "text-popover-foreground",
+                    value === option.value && "font-medium"
                   )}
-                  onClick={() => {
-                    onChange(option.value === value ? "" : option.value);
-                    setOpen(false);
-                  }}
+                  onClick={() => selectOption(option.value)}
                 >
                   <Check
                     className={cn(
