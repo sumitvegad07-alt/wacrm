@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Calendar, CheckSquare, FileText, CheckCircle, XCircle, Copy, FilePlus2, Plus, MessageSquare, Phone, MapPin, CheckCircle2 } from 'lucide-react';
+import { Calendar, CheckSquare, FileText, CheckCircle, XCircle, Copy, FilePlus2, Plus, MessageSquare, Phone, MapPin, CheckCircle2, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TaskForm } from '@/components/tasks/task-form';
@@ -85,9 +85,36 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
     }
   };
 
-  const plannedTasks = tasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled' && t.activity_type?.toLowerCase() !== 'note');
-  const pastTasks = tasks.filter(t => t.status === 'Completed' || t.status === 'Cancelled');
-  const taskNotes = tasks.filter(t => t.activity_type?.toLowerCase() === 'note');
+  // Soft delete (dustbin): a removed task/note is marked is_active=false and
+  // simply drops out of the timeline. Nothing is hard-deleted, so it can be
+  // reactivated from the Tasks list. Kept here (not in the parent's query) so
+  // every screen that mounts the Timeline hides removed rows consistently.
+  const softDeleteTask = async (task: any, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isNote = task.activity_type?.toLowerCase() === 'note';
+    const { error } = await supabase
+      .from('tasks')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', task.id);
+    if (error) {
+      toast.error(`Failed to remove ${isNote ? 'note' : 'task'}`);
+      return;
+    }
+    toast.success(`${isNote ? 'Note' : 'Task'} removed`);
+    await logModuleActivity(supabase, {
+      moduleName,
+      recordId,
+      action: 'updated',
+      message: `Removed ${isNote ? 'note' : 'task'} '${task.title || task.description || task.activity_type || ''}'`,
+    });
+    onRefresh();
+  };
+
+  const activeTasks = tasks.filter((t) => t.is_active !== false);
+  const plannedTasks = activeTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled' && t.activity_type?.toLowerCase() !== 'note');
+  const pastTasks = activeTasks.filter(t => t.status === 'Completed' || t.status === 'Cancelled');
+  const taskNotes = activeTasks.filter(t => t.activity_type?.toLowerCase() === 'note');
 
   const getActionIcon = (action: string) => {
     if (action.includes('created') || action.includes('generated')) return <FilePlus2 className="size-3 text-primary" />;
@@ -192,7 +219,7 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
 
   const combinedPast: TimelineEvent[] = [
     ...notes.map(n => ({ id: `n-${n.id}`, type: 'note' as const, date: new Date(n.created_at), data: n })),
-    ...taskNotes.map(n => ({ id: `tn-${n.id}`, type: 'note' as const, date: new Date(n.created_at), data: { note_text: n.description || n.title } })),
+    ...taskNotes.map(n => ({ id: `tn-${n.id}`, type: 'note' as const, date: new Date(n.created_at), data: { ...n, note_text: n.description || n.title } })),
     ...pastTasks.map(t => ({ id: `t-${t.id}`, type: 'task' as const, date: new Date(t.created_at), data: t })),
     ...processedActivities.map(a => ({ id: `a-${a.data.id}`, type: a.type as 'changelog' | 'activity', date: a.date, data: a.data }))
   ];
@@ -270,11 +297,22 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
                         )}
                       </div>
                     </div>
-                    <button 
-                      onClick={(e) => toggleTaskStatus(task, e)}
-                      className="shrink-0 size-5 border border-border rounded-sm hover:border-primary flex items-center justify-center transition-colors bg-background"
-                    >
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        onClick={(e) => softDeleteTask(task, e)}
+                        aria-label="Remove task"
+                        title="Remove (mark inactive)"
+                        className="size-6 rounded-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => toggleTaskStatus(task, e)}
+                        aria-label="Complete task"
+                        className="size-5 border border-border rounded-sm hover:border-primary flex items-center justify-center transition-colors bg-background"
+                      >
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -312,10 +350,25 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
                 const isNote = event.type === 'note';
                 
                 if (isNote) {
+                  // Only task-notes (activity_type='note' rows in `tasks`) carry an
+                  // is_active flag, so only they can be soft-removed here today.
+                  const isTaskNote = event.id.startsWith('tn-');
                   return (
                     <div key={event.id} className="py-3 px-2">
                       <div className="bg-muted/40 rounded p-3 text-sm border border-border/50">
-                        <p className="font-semibold text-xs text-muted-foreground mb-1">Note</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-xs text-muted-foreground mb-1">Note</p>
+                          {isTaskNote && (
+                            <button
+                              onClick={(e) => softDeleteTask(event.data, e)}
+                              aria-label="Remove note"
+                              title="Remove (mark inactive)"
+                              className="shrink-0 -mt-1 -mr-1 size-6 rounded-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          )}
+                        </div>
                         <p className="whitespace-pre-wrap">{event.data.note_text}</p>
                         <p className="text-[10px] text-muted-foreground mt-2">{event.date.toLocaleString()}</p>
                       </div>
@@ -358,12 +411,23 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
                           {event.data.assignee && ` (Assigned to ${event.data.assignee.full_name || event.data.assignee.email})`}
                         </p>
                       </div>
-                      <button 
-                        onClick={(e) => toggleTaskStatus(event.data, e)}
-                        className="shrink-0 size-5 border-none rounded-sm bg-green-500 text-white flex items-center justify-center transition-colors"
-                      >
-                         <CheckCircle2 className="size-4" />
-                      </button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          onClick={(e) => softDeleteTask(event.data, e)}
+                          aria-label="Remove task"
+                          title="Remove (mark inactive)"
+                          className="size-6 rounded-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => toggleTaskStatus(event.data, e)}
+                          aria-label="Restore task"
+                          className="size-5 border-none rounded-sm bg-green-500 text-white flex items-center justify-center transition-colors"
+                        >
+                          <CheckCircle2 className="size-4" />
+                        </button>
+                      </div>
                     </div>
                   );
                 }
