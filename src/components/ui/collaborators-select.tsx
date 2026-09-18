@@ -31,7 +31,11 @@ export function CollaboratorsSelect({
     if (isSelected(p)) {
       onChange(selectedIds.filter((id) => id !== p.id && id !== p.user_id));
     } else {
-      onChange([...selectedIds, p.id]);
+      // Store the AUTH user id (profiles.user_id), not profiles.id: the leads/deals
+      // RLS visibility rule checks `auth.uid() = ANY(collaborator_ids)`, so a
+      // profiles.id here would add the collaborator but never grant them access.
+      // Falls back to p.id only if user_id is somehow missing.
+      onChange([...selectedIds, p.user_id || p.id]);
     }
   };
 
