@@ -41,6 +41,39 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// A short two-note chime synthesised with the Web Audio API (no asset needed).
+// Browsers block audio until the user has interacted with the page; by the time
+// an admin receives a notification they've been clicking around, so it plays.
+// Any failure (blocked autoplay, no AudioContext) is swallowed silently.
+let _audioCtx: AudioContext | null = null;
+function playChime() {
+  try {
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    _audioCtx = _audioCtx || new Ctx();
+    const ctx = _audioCtx;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const now = ctx.currentTime;
+    [880, 1174.7].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t = now + i * 0.14;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.16, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.24);
+    });
+  } catch {
+    /* audio unavailable — silent */
+  }
+}
+
 export function NotificationBell() {
   const router = useRouter();
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -60,6 +93,7 @@ export function NotificationBell() {
   }, []);
 
   // Initial load + Realtime subscription (RLS keeps this to the user's own rows).
+  // A new row arriving over Realtime is a genuinely new notification, so chime.
   useEffect(() => {
     load();
     const supabase = createClient();
@@ -68,7 +102,10 @@ export function NotificationBell() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications" },
-        () => load(),
+        () => {
+          playChime();
+          load();
+        },
       )
       .subscribe();
     return () => {
