@@ -196,7 +196,9 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
         (cProfs ?? []).forEach((p: { user_id: string; full_name: string }) => creatorNames.set(p.user_id, p.full_name));
       }
 
-      // 4. Next scheduled weekday for current page (earliest upcoming weekday 1..7)
+      // 4. Next scheduled weekday for current page — the genuinely NEXT upcoming ISO weekday
+      // (1..7) relative to today, wrapping into next week. Picking the smallest configured
+      // weekday (the old behaviour) always showed e.g. "Monday" even when viewed on a Friday.
       const nextScheduled = new Map<string, number>();
       if (pageIds.length > 0) {
         const { data: plans } = await supabase
@@ -204,11 +206,19 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
           .select('route_id, day_of_week')
           .in('route_id', pageIds)
           .eq('is_active', true);
+        const dowsByRoute = new Map<string, Set<number>>();
         (plans ?? []).forEach((p: { route_id: string; day_of_week: number }) => {
-          const cur = nextScheduled.get(p.route_id);
-          if (cur === undefined || p.day_of_week < cur) {
-            nextScheduled.set(p.route_id, p.day_of_week);
-          }
+          const set = dowsByRoute.get(p.route_id) ?? new Set<number>();
+          set.add(p.day_of_week);
+          dowsByRoute.set(p.route_id, set);
+        });
+        const now = new Date();
+        const todayDow = now.getDay() === 0 ? 7 : now.getDay(); // ISO Mon=1..Sun=7
+        dowsByRoute.forEach((set, routeId) => {
+          const sorted = [...set].sort((a, b) => a - b);
+          // First weekday today-or-later; if none remain this week, wrap to the earliest next week.
+          const next = sorted.find((d) => d >= todayDow) ?? sorted[0];
+          nextScheduled.set(routeId, next);
         });
       }
 
@@ -463,7 +473,11 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
         return q;
       };
       const [t, r, c] = await Promise.all([mk(), mk('in_progress'), mk('completed')]);
+      // Check every count — not just the total — so a failed in_progress/completed query surfaces
+      // as an error instead of silently rendering a "0 running / 0 completed" tile.
       if (t.error) throw mapPostgrestError(t.error);
+      if (r.error) throw mapPostgrestError(r.error);
+      if (c.error) throw mapPostgrestError(c.error);
       return { total: t.count ?? 0, running: r.count ?? 0, completed: c.count ?? 0 };
     }, maxRetries);
   }

@@ -91,8 +91,17 @@ describe('permissions', () => {
   it('denies when permissions are null', () => {
     expect(hasRoutePermission(null, ROUTE_PERMISSIONS.VIEW)).toBe(false);
   });
-  it('exposes 19 distinct keys', () => {
-    expect(new Set(ALL_ROUTE_PERMISSION_KEYS).size).toBe(19);
+  it('exposes 20 distinct keys', () => {
+    expect(new Set(ALL_ROUTE_PERMISSION_KEYS).size).toBe(20);
+  });
+  it('the Roles editor groups cover EVERY defined route permission key', () => {
+    // Guards the gap that hid modify_route_sequence: any key in ROUTE_PERMISSIONS that a server
+    // RPC checks must be grantable in the UI, so it must appear in a group.
+    const grouped = new Set(ALL_ROUTE_PERMISSION_KEYS);
+    for (const key of Object.values(ROUTE_PERMISSIONS)) {
+      expect(grouped.has(key)).toBe(true);
+    }
+    expect(grouped.size).toBe(Object.values(ROUTE_PERMISSIONS).length);
   });
 });
 

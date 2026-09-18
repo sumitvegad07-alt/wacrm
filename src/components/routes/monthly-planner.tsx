@@ -68,11 +68,22 @@ interface DayCellData {
   holidayName?: string;
 }
 
+// Local YYYY-MM-DD for a Date, using its LOCAL calendar fields. `toISOString()` converts to UTC
+// and, in timezones ahead of UTC (e.g. IST +5:30), shifts local-midnight back to the previous
+// day — which mislabels every cell and lands the "Today" highlight on the wrong day. Never use
+// toISOString() for a calendar date (house rule: reports & dates are account-local).
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // Helper: generate calendar grid days for a given year and month (0-indexed month)
 function getMonthCalendarDays(year: number, month: number): DayCellData[] {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr(new Date());
 
   // ISO day of week: Monday=1 .. Sunday=7
   const startDow = firstDay.getDay() === 0 ? 7 : firstDay.getDay();
@@ -81,7 +92,7 @@ function getMonthCalendarDays(year: number, month: number): DayCellData[] {
   // Previous month leading days
   for (let i = startDow - 1; i > 0; i--) {
     const d = new Date(year, month, 1 - i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateStr(d);
     const dow = (d.getDay() === 0 ? 7 : d.getDay()) as IsoDayOfWeek;
     days.push({
       dateStr,
@@ -99,9 +110,11 @@ function getMonthCalendarDays(year: number, month: number): DayCellData[] {
   // Current month days
   for (let day = 1; day <= lastDay.getDate(); day++) {
     const d = new Date(year, month, day);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateStr(d);
     const dow = (d.getDay() === 0 ? 7 : d.getDay()) as IsoDayOfWeek;
-    const isHoliday = day === 15 && month === 7; // Independence Day example
+    // No holiday calendar is wired up yet, so never fabricate one. (Previously this hardcoded
+    // "Independence Day" on Aug 15 for every tenant, which was wrong for non-Indian tenants and
+    // hid the fact that no real holidays were being surfaced.) TODO: source from a holiday table.
     days.push({
       dateStr,
       dayNumber: day,
@@ -111,8 +124,7 @@ function getMonthCalendarDays(year: number, month: number): DayCellData[] {
       isCurrentMonth: true,
       isToday: dateStr === todayStr,
       isWeeklyOff: dow === 7,
-      isHoliday,
-      holidayName: isHoliday ? "Independence Day" : undefined,
+      isHoliday: false,
     });
   }
 
@@ -121,7 +133,7 @@ function getMonthCalendarDays(year: number, month: number): DayCellData[] {
   let nextDay = 1;
   while (days.length < totalCells) {
     const d = new Date(year, month + 1, nextDay++);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateStr(d);
     const dow = (d.getDay() === 0 ? 7 : d.getDay()) as IsoDayOfWeek;
     days.push({
       dateStr,
@@ -532,7 +544,15 @@ export function MonthlyPlannerBoard() {
   };
 
   const handleSaveRecurrence = () => {
-    toast.success(`Recurrence rule '${recurrencePattern}' saved for route assignment.`);
+    // No backend supports arbitrary recurrence patterns yet: an assignment is a weekly slot that
+    // already repeats every matching weekday. Do NOT claim a rule was saved (there is no RPC) —
+    // tell the truth so nobody relies on a schedule that was never persisted.
+    const dayName = FULL_WEEKDAY_NAMES[(selectedRecurrenceAssignment?.day_of_week ?? 1) - 1];
+    if (recurrencePattern === "weekly" || recurrencePattern === "one_time") {
+      toast.info(`This route already repeats every ${dayName}. Use "Copy to Day" to add more weekdays.`);
+    } else {
+      toast.info("Custom recurrence patterns aren't available yet — assignments repeat weekly. Use \"Copy to Day\" to add more weekdays.");
+    }
     setRecurrenceModalOpen(false);
   };
 
@@ -840,12 +860,11 @@ export function MonthlyPlannerBoard() {
               </select>
             </div>
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-              <p className="font-medium text-foreground">Business Calendar Rules Active:</p>
-              <ul className="mt-1 list-inside list-disc space-y-0.5">
-                <li>Auto-skips Sundays (Weekly Off)</li>
-                <li>Respects national & state Holidays</li>
-                <li>Supports temporary leave reassignment</li>
-              </ul>
+              <p className="font-medium text-foreground">Note</p>
+              <p className="mt-1">
+                Route assignments currently repeat weekly on the chosen weekday. Holiday-aware
+                recurrence and leave reassignment aren&rsquo;t available yet.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -935,8 +954,8 @@ export function MonthlyPlannerBoard() {
             <DialogTitle>Bulk Assign Routes</DialogTitle>
           </DialogHeader>
           <div className="py-4 text-xs text-muted-foreground">
-            Use this utility to assign multiple routes to sales representatives across the month in batch.
-            Bulk assignment respects territory eligibility rules and prevents duplicate active assignments.
+            Bulk assignment isn't available yet. For now, assign routes one at a time with
+            &ldquo;Create Assignment&rdquo; or drag a route chip between day cells.
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkAssignModalOpen(false)}>
@@ -944,11 +963,12 @@ export function MonthlyPlannerBoard() {
             </Button>
             <Button
               onClick={() => {
-                toast.success("Bulk assignment wizard ready");
+                // Honest messaging: there is no bulk-assign RPC yet, so don't imply one ran.
+                toast.info("Bulk assign isn't available yet — use \"Create Assignment\" to assign routes individually.");
                 setBulkAssignModalOpen(false);
               }}
             >
-              Launch Wizard
+              Got it
             </Button>
           </DialogFooter>
         </DialogContent>
