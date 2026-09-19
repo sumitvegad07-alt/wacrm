@@ -87,10 +87,15 @@ export function extractActorRawId(eventType: string, snap: Snapshot): string | n
       return uuid(snap.user_id)
     case 'expense_created':
       return uuid(snap.employee_id)
-    case 'task_completed':
     case 'task_assigned':
-      // tasks.user_id is the creator (auth space); assigned_user_id is the assignee.
+      // tasks.user_id is the creator/assigner (auth space).
       return uuid(snap.user_id)
+    case 'task_completed':
+      // The actor is whoever COMPLETED the task (the assignee), not the creator.
+      // Using the creator here wrongly self-skips an admin who created the task,
+      // so they never hear that their rep completed it (and it would name the
+      // wrong person). assigned_user_id is the completer; fall back to creator.
+      return uuid(snap.assigned_user_id) ?? uuid(snap.user_id)
     case 'lead_assigned':
       return uuid(snap.user_id)
     case 'deal_assigned':
@@ -98,8 +103,9 @@ export function extractActorRawId(eventType: string, snap: Snapshot): string | n
     case 'announcement_published':
       return uuid(snap.created_by)
     case 'order_created':
-      // orders snapshot has no reliable single creator column; leave null.
-      return null
+      // orders.user_id is the creator (populated on every row); use it so the
+      // team-activity notification names the rep instead of "A team member".
+      return uuid(snap.user_id)
     default:
       return null
   }

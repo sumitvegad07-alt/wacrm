@@ -1,14 +1,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+// Collection KPIs count RECORDED payments — Approved plus those still Pending
+// approval — so a payment a rep just entered shows up immediately instead of
+// reading zero until an admin approves it. Rejected/Cancelled are excluded.
+// (Outstanding/overdue/credit calcs below deliberately stay Approved-only: those
+// must reflect money actually received.)
+const RECORDED_STATUSES = ['Approved', 'Pending'] as const;
+
 export async function fetchTodaysCollection(supabase: SupabaseClient, accountId: string): Promise<number> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
   const { data } = await supabase
     .from('payments')
     .select('amount, verified_amount')
     .eq('account_id', accountId)
-    .eq('status', 'Approved')
+    .in('status', RECORDED_STATUSES as unknown as string[])
     .gte('created_at', today.toISOString());
     
   return (data || []).reduce((sum, p) => sum + (p.verified_amount ?? p.amount), 0);
@@ -24,13 +31,13 @@ export async function fetchMonthlyCollection(supabase: SupabaseClient, accountId
       .from('payments')
       .select('amount, verified_amount')
       .eq('account_id', accountId)
-      .eq('status', 'Approved')
+      .in('status', RECORDED_STATUSES as unknown as string[])
       .gte('created_at', startOfCurrentMonth.toISOString()),
     supabase
       .from('payments')
       .select('amount, verified_amount')
       .eq('account_id', accountId)
-      .eq('status', 'Approved')
+      .in('status', RECORDED_STATUSES as unknown as string[])
       .gte('created_at', startOfPreviousMonth.toISOString())
       .lt('created_at', startOfCurrentMonth.toISOString())
   ]);
@@ -46,8 +53,8 @@ export async function fetchCollectionByPaymentType(supabase: SupabaseClient, acc
     .from('payments')
     .select('payment_mode, amount, verified_amount')
     .eq('account_id', accountId)
-    .eq('status', 'Approved');
-    
+    .in('status', RECORDED_STATUSES as unknown as string[]);
+
   const typeMap: Record<string, number> = {};
   (data || []).forEach(p => {
     const type = p.payment_mode || 'Other';
@@ -62,8 +69,8 @@ export async function fetchCollectionByUser(supabase: SupabaseClient, accountId:
     .from('payments')
     .select('amount, verified_amount, user_id')
     .eq('account_id', accountId)
-    .eq('status', 'Approved');
-    
+    .in('status', RECORDED_STATUSES as unknown as string[]);
+
   if (!data) return [];
   
   const userMap: Record<string, number> = {};

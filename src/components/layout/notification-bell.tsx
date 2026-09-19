@@ -141,9 +141,10 @@ export function NotificationBell() {
     (n: NotificationItem) => {
       if (!n.read_at) markRead([n.id]);
       setOpen(false);
+      // Land on the list/table for the entity (e.g. a "Lead assigned" alert opens
+      // the Leads table) so the user sees the record in context, not a detail page.
       const base = n.data?.entity ? ENTITY_ROUTE[n.data.entity] : undefined;
-      if (base && n.data?.id) router.push(`${base}/${n.data.id}`);
-      else if (base) router.push(base);
+      if (base) router.push(base);
     },
     [markRead, router],
   );
