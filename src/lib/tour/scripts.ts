@@ -185,6 +185,14 @@ export const employeesTour: TourScript = {
       title: 'Click “Add Employee”', text: 'This opens the new-employee form. Each employee gets a mobile login.',
       advanceOn: 'click',
     },
+    { id: 'check_area', kind: 'check', flag: 'areaWise', ifTrue: 'assign_area', ifFalse: 'save_employee' },
+    {
+      id: 'assign_area', kind: 'spotlight',
+      page: '/team/employees/new', anchor: '[data-tour="employee-area"]',
+      title: 'Assign this employee’s area',
+      text: 'You assign customers area-wise, so give each field employee their territory here — that’s how they get the customers in that area. (Office/manager staff can be left blank.)',
+      advanceOn: 'next', optional: true,
+    },
     {
       id: 'save_employee', kind: 'spotlight',
       page: '/team/employees/new', anchor: '[data-shortcut="save"]',

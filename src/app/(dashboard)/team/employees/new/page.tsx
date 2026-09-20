@@ -268,7 +268,7 @@ export default function NewEmployeePage() {
 
         {/* Geography, once, full-width — the Country → State → City cascade that
             also gets assigned as the employee's territory on save. */}
-        <div className="space-y-3">
+        <div className="space-y-3" data-tour="employee-area">
           <h4 className="text-sm font-medium text-foreground border-b border-border pb-1.5">
             Assigned Area
           </h4>
