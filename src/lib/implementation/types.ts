@@ -6,6 +6,10 @@ export type Combine = 'and' | 'or';
 
 export type AnswerMap = Record<string, unknown>;
 
+// Resolver values captured at enrollment. A step completes only when its live
+// value grows beyond this baseline, so pre-existing defaults don't pre-complete.
+export type BaselineMap = Record<string, number | boolean>;
+
 export interface ValidationRule {
   id: string;
   step_id: string;

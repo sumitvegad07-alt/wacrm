@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { AppQueryProvider } from "@/components/providers/query-provider";
@@ -115,6 +115,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     router,
   ]);
 
+  const provisionHandled = useRef(false);
   useEffect(() => {
     // Fire first-load provisioning for a fresh account. New signups start on a
     // 'trialing' status (10-day trial), so 'active' alone would never provision
@@ -122,19 +123,28 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     if (
       account &&
       !account.is_provisioned &&
+      !provisionHandled.current &&
       (account.subscription_status === 'active' ||
         account.subscription_status === 'trialing')
     ) {
+      provisionHandled.current = true;
       fetch("/api/provision-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ account_id: account.id, industry: account.industry }),
-      }).then(() => {
-        // Reload page to reflect new data or silently update state
-        // To avoid infinite loops, the API updates the DB. Next reload will catch it.
+      }).then((res) => {
+        // Provisioning has now seeded default territories/roles/etc. A fresh WFA
+        // signup is led straight into the guided setup (focus mode) — and because
+        // this happens AFTER provisioning, the Getting Started baseline snapshot
+        // correctly includes those defaults, so they don't count as the user's work.
+        if (res.ok && hasWFA) {
+          router.replace("/getting-started/welcome");
+        } else {
+          router.refresh();
+        }
       });
     }
-  }, [account]);
+  }, [account, hasWFA, router]);
 
   if (loading) {
     return <BrandSplash />;
@@ -233,6 +243,20 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const trialDaysLeft = trialEndsAt
     ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86_400_000))
     : null;
+
+  // Focus mode: the fresh-signup guided setup runs without the main menu, so the
+  // customer isn't distracted by the whole app while being taught step by step.
+  // Detected by path (usePathname is prerender-safe; useSearchParams is not).
+  if (pathname === "/getting-started/welcome") {
+    return (
+      <KeyboardShortcutsProvider>
+        <div className="h-screen overflow-y-auto bg-background">
+          <PresenceHeartbeat />
+          {children}
+        </div>
+      </KeyboardShortcutsProvider>
+    );
+  }
 
   return (
     <KeyboardShortcutsProvider>

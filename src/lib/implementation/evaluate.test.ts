@@ -35,6 +35,18 @@ describe('evaluateRules', () => {
     const r = await evaluateRules(step, fakeCtx(), override({ meaningful_data: false }));
     expect(r.requiredSatisfied).toBe(false);
   });
+  it('baseline: count must grow beyond enrollment baseline (defaults ignored)', async () => {
+    const step = mkStep({ step_key: 'c', rules: [rule('territory_count', { operator: 'gt', required_threshold: 0 })] });
+    // baseline 3 default territories: value 3 is NOT net-new, value 4 is.
+    expect((await evaluateRules(step, fakeCtx(), override({ territory_count: 3 }), { territory_count: 3 })).requiredSatisfied).toBe(false);
+    expect((await evaluateRules(step, fakeCtx(), override({ territory_count: 4 }), { territory_count: 3 })).requiredSatisfied).toBe(true);
+  });
+  it('baseline: exists must appear since enrollment', async () => {
+    const step = mkStep({ step_key: 'd', rules: [rule('employee_logged_in', { operator: 'exists' })] });
+    // already true at baseline → not net-new; true when baseline was false → pass.
+    expect((await evaluateRules(step, fakeCtx(), override({ employee_logged_in: true }), { employee_logged_in: true })).requiredSatisfied).toBe(false);
+    expect((await evaluateRules(step, fakeCtx(), override({ employee_logged_in: true }), { employee_logged_in: false })).requiredSatisfied).toBe(true);
+  });
 });
 
 describe('evaluateTemplate', () => {

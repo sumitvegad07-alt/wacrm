@@ -10,20 +10,36 @@ const VALIDATION_LABELS: Record<string, string> = {
   attendance_or_visit: 'First activity recorded', meaningful_data: 'Live data flowing',
 };
 
-export function StepPanel({ evaluated, answers, pending, onAnswer, onSkip, onMarkDone, onToggleTask, onHelp }: {
+export function StepPanel({ evaluated, answers, pending, spotlight = false, stepNumber, stepTotal, onAnswer, onSkip, onMarkDone, onToggleTask, onHelp }: {
   evaluated: EvaluatedStep; answers: AnswerMap; pending: boolean;
+  spotlight?: boolean; stepNumber?: number; stepTotal?: number;
   onAnswer: (k: string, v: unknown) => void; onSkip: () => void; onMarkDone: () => void;
   onToggleTask: (taskId: string, done: boolean) => void; onHelp: () => void;
 }) {
   const { step, status, ruleResults } = evaluated;
   const done = status === 'completed' || status === 'auto_completed';
+  // In the guided flow the first deep-linked task becomes the big "do this now" CTA.
+  const primaryTask = spotlight ? step.tasks.find((t) => t.deep_link) : undefined;
+  const otherTasks = step.tasks.filter((t) => t.id !== primaryTask?.id);
+  const deepLink = (link: string) => `${link}?from=getting-started&step=${step.step_key}`;
   return (
     <div className="space-y-4">
       <div>
+        {stepNumber && stepTotal && (
+          <p className="text-xs font-medium uppercase tracking-wide text-primary">Step {stepNumber} of {stepTotal}</p>
+        )}
         <h2 className="text-xl font-semibold">{step.title}</h2>
         {step.description && <p className="text-sm text-muted-foreground">{step.description}</p>}
       </div>
       <ContentTabs step={step} />
+
+      {primaryTask?.deep_link && !done && (
+        <a href={deepLink(primaryTask.deep_link)} onClick={() => onToggleTask(primaryTask.id, true)}
+          className="group relative flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-4 text-center text-base font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition hover:brightness-110">
+          <span className="absolute inset-0 animate-pulse rounded-xl ring-2 ring-primary/40" aria-hidden />
+          {primaryTask.label} →
+        </a>
+      )}
 
       {step.questions.map((q) => (
         <div key={q.id} className="rounded-xl border p-4">
@@ -46,14 +62,14 @@ export function StepPanel({ evaluated, answers, pending, onAnswer, onSkip, onMar
         </div>
       ))}
 
-      {step.tasks.length > 0 && (
+      {otherTasks.length > 0 && (
         <ul className="space-y-2">
-          {step.tasks.map((t) => (
+          {otherTasks.map((t) => (
             <li key={t.id} className="flex items-center justify-between rounded-lg border p-3">
-              <span className="text-sm">{t.label}</span>
+              <span className="text-sm">{t.label}{t.optional ? ' (optional)' : ''}</span>
               {t.deep_link && (
                 <a className="text-sm font-medium text-primary underline"
-                  href={`${t.deep_link}?from=getting-started&step=${step.step_key}`}
+                  href={deepLink(t.deep_link)}
                   onClick={() => onToggleTask(t.id, true)}>Go →</a>
               )}
             </li>
@@ -76,9 +92,10 @@ export function StepPanel({ evaluated, answers, pending, onAnswer, onSkip, onMar
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {!done && !step.auto_complete && <Button onClick={onMarkDone} disabled={pending}>Mark done</Button>}
-        {!done && step.is_optional && <Button variant="ghost" onClick={onSkip} disabled={pending}>Skip</Button>}
+      <div className="flex flex-wrap items-center gap-2">
+        {done && <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">✓ Done</span>}
+        {!done && <Button variant="secondary" onClick={onMarkDone} disabled={pending}>Mark as done</Button>}
+        {!done && step.is_optional && <Button variant="ghost" onClick={onSkip} disabled={pending}>Skip for now</Button>}
         <Button variant="outline" onClick={onHelp}>Need help?</Button>
       </div>
     </div>

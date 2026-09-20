@@ -6,9 +6,9 @@ import { evaluateTemplate } from '@/lib/implementation/evaluate';
 import { templateLineAllowed } from '@/lib/implementation/access';
 import type {
   TemplateDefinition, TemplateStep, AnswerMap, StepStatus, EvaluatedTemplate,
-  Milestone, AnalyticsEventType,
+  Milestone, AnalyticsEventType, BaselineMap,
 } from '@/lib/implementation/types';
-import type { ResolverCtx } from '@/lib/implementation/resolvers';
+import { runResolver, type ResolverCtx } from '@/lib/implementation/resolvers';
 
 const TEMPLATE_KEY = 'wfa_v1';
 const ROUTE = '/getting-started';
@@ -68,13 +68,35 @@ async function loadDefinition(supabase: SB): Promise<TemplateDefinition | null> 
   return { ...tpl, steps: fullSteps, milestones: (milestones.data ?? []) as Milestone[] } as TemplateDefinition;
 }
 
+// Snapshot every count/exists resolver value at enrollment. A step later
+// completes only when its value grows beyond this baseline, so pre-existing
+// defaults (seeded territories, the admin user, default roles) don't pre-tick.
+async function computeBaseline(supabase: SB, accountId: string, def: TemplateDefinition): Promise<BaselineMap> {
+  const keys = new Map<string, Record<string, unknown> | null>();
+  for (const s of def.steps) for (const r of s.rules) if (r.source_key !== 'answer') keys.set(r.source_key, r.params);
+  const ctx: ResolverCtx = { accountId, supabase: supabase as never, params: null, answers: {} };
+  const entries = await Promise.all(
+    [...keys].map(async ([k, p]) => [k, await runResolver(k, { ...ctx, params: p ?? null })] as const),
+  );
+  return Object.fromEntries(entries);
+}
+
 async function getOrCreateProgress(supabase: SB, accountId: string, def: TemplateDefinition, actorId: string) {
   const { data: existing } = await supabase.from('impl_progress').select('*')
     .eq('account_id', accountId).eq('template_key', TEMPLATE_KEY).maybeSingle();
-  if (existing) return existing;
+  if (existing) {
+    // Backfill baseline once for rows enrolled before the baseline column existed.
+    if (existing.baseline == null) {
+      const baseline = await computeBaseline(supabase, accountId, def);
+      await supabase.from('impl_progress').update({ baseline }).eq('id', existing.id);
+      existing.baseline = baseline;
+    }
+    return existing;
+  }
+  const baseline = await computeBaseline(supabase, accountId, def);
   const { data: created } = await supabase.from('impl_progress').insert({
     account_id: accountId, template_id: def.id, template_key: TEMPLATE_KEY, template_version: def.version,
-    status: 'in_progress',
+    status: 'in_progress', baseline,
   }).select('*').single();
   await logEvent(supabase, accountId, actorId, def.id, created!.id, null, 'template_started');
   return created!;
@@ -98,14 +120,16 @@ export type LoadResult = EvaluatedTemplate & { answers: AnswerMap; milestonesToC
 
 // The core: evaluate, persist step_progress + progress caches, fire milestones.
 async function evaluateAndPersist(
-  supabase: SB, accountId: string, actorId: string, def: TemplateDefinition, progress: { id: string },
+  supabase: SB, accountId: string, actorId: string, def: TemplateDefinition,
+  progress: { id: string; baseline?: BaselineMap | null },
 ): Promise<LoadResult> {
   const [answers, prior] = await Promise.all([
     loadAnswers(supabase, progress.id),
     priorStatuses(supabase, progress.id),
   ]);
   const resolverCtx: ResolverCtx = { accountId, supabase: supabase as never, params: null, answers };
-  const evalResult = await evaluateTemplate(def, answers, prior, resolverCtx);
+  const baseline: BaselineMap = (progress.baseline as BaselineMap) ?? {};
+  const evalResult = await evaluateTemplate(def, answers, prior, resolverCtx, undefined, baseline);
 
   // Persist step_progress (upsert on progress_id+step_id).
   const nowIso = new Date().toISOString();

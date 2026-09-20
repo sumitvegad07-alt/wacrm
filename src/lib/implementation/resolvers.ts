@@ -31,14 +31,15 @@ export const RESOLVERS: Record<string, Resolver> = {
   role_count: (ctx) => countRows(ctx, 'employee_roles', (q: any) => q.eq('status', 'active')),
   employee_count: (ctx) => countRows(ctx, 'profiles'),
   employee_logged_in: async (ctx) => {
-    // A login/activity signal: presence OR any tracking session. Run both in
-    // parallel and OR the results — faster than sequential short-circuit.
-    const [presence, session] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- chained builder
-      existsRows(ctx, 'member_presence', (q: any) => q.not('last_seen_at', 'is', null)),
+    // "An employee logged into the MOBILE app." Use mobile-only signals so the
+    // web admin's own session never trips this: push_tokens (registered when the
+    // Expo app logs in) OR a tracking_session (mobile punch-in). Deliberately NOT
+    // member_presence, which includes the admin's web presence.
+    const [pushed, session] = await Promise.all([
+      existsRows(ctx, 'push_tokens'),
       existsRows(ctx, 'tracking_sessions'),
     ]);
-    return presence || session;
+    return pushed || session;
   },
   attendance_or_visit: async (ctx) => {
     const [sessions, visits] = await Promise.all([

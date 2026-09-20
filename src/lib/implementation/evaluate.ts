@@ -1,25 +1,35 @@
 import type {
   TemplateDefinition, TemplateStep, EvaluatedStep, EvaluatedTemplate,
-  RuleEvaluation, StepStatus, AnswerMap, ResolverOverride,
+  RuleEvaluation, StepStatus, AnswerMap, BaselineMap, ResolverOverride,
 } from './types';
 import { runResolver, type ResolverCtx } from './resolvers';
 import { isStepApplicable } from './conditions';
 import { computeProgressPct, computeScore, computeHealthPct } from './scoring';
 
 const RESOLVED = new Set<StepStatus>(['completed', 'auto_completed', 'skipped']);
+const num = (v: number | boolean | undefined) => (typeof v === 'number' ? v : v ? 1 : 0);
 
-function ruleRequiredPass(op: string, value: number | boolean, threshold: number | null): boolean {
-  if (op === 'exists') return value === true || (typeof value === 'number' && value > 0);
-  const v = typeof value === 'number' ? value : value ? 1 : 0;
-  const t = threshold ?? 0;
-  if (op === 'gt') return v > t;
-  if (op === 'gte') return v >= t;
-  if (op === 'eq') return v === t;
+// A rule passes only for NET-NEW work beyond the enrollment baseline, so
+// pre-existing defaults never auto-complete a step.
+function ruleRequiredPass(op: string, value: number | boolean, threshold: number | null, baseline: number | boolean | undefined): boolean {
+  if (op === 'exists') {
+    const cur = value === true || (typeof value === 'number' && value > 0);
+    const base = baseline === true || (typeof baseline === 'number' && baseline > 0);
+    return cur && !base; // appeared since enrollment
+  }
+  const v = num(value);
+  const b = num(baseline);
+  const floor = Math.max(threshold ?? 0, b); // beyond both the required threshold and the baseline
+  if (op === 'gt') return v > floor;
+  if (op === 'gte') return v >= Math.max(threshold ?? 0, b + 1);
+  if (op === 'eq') return v === (threshold ?? 0);
   return false;
 }
 
 export async function evaluateRules(
-  step: TemplateStep, ctx: ResolverCtx, resolver: ResolverOverride = (k, p) => runResolver(k, { ...ctx, params: p ?? null }),
+  step: TemplateStep, ctx: ResolverCtx,
+  resolver: ResolverOverride = (k, p) => runResolver(k, { ...ctx, params: p ?? null }),
+  baseline: BaselineMap = {},
 ): Promise<{ ruleResults: RuleEvaluation[]; requiredSatisfied: boolean }> {
   const ruleResults: RuleEvaluation[] = [];
   const passes: boolean[] = [];
@@ -27,7 +37,7 @@ export async function evaluateRules(
   for (const rule of step.rules) {
     combine = rule.combine;
     const value = await resolver(rule.source_key, rule.params);
-    const requiredPass = ruleRequiredPass(rule.operator, value, rule.required_threshold);
+    const requiredPass = ruleRequiredPass(rule.operator, value, rule.required_threshold, baseline[rule.source_key]);
     const numeric = typeof value === 'number' ? value : value ? 1 : 0;
     const recommendedPass = rule.recommended_threshold == null ? null : numeric >= rule.recommended_threshold;
     ruleResults.push({
@@ -48,6 +58,7 @@ export async function evaluateTemplate(
   priorStatuses: Record<string, StepStatus>,
   ctx: ResolverCtx,
   resolver?: ResolverOverride,
+  baseline: BaselineMap = {},
 ): Promise<EvaluatedTemplate> {
   const baseResolver: ResolverOverride = resolver ?? ((k, p) => runResolver(k, { ...ctx, answers, params: p ?? null }));
   const sorted = [...def.steps].sort((a, b) => a.position - b.position);
@@ -79,7 +90,7 @@ export async function evaluateTemplate(
   for (const step of sorted) {
     const applicable = applicableMap.get(step.id) ?? false;
     const { ruleResults, requiredSatisfied } = applicable
-      ? await evaluateRules(step, { ...ctx, answers }, cachedResolver)
+      ? await evaluateRules(step, { ...ctx, answers }, cachedResolver, baseline)
       : { ruleResults: [], requiredSatisfied: false };
     const prior = priorStatuses[step.id];
     let status: StepStatus;
