@@ -27,6 +27,14 @@ async function existsRows(ctx: ResolverCtx, table: string, extra?: (q: any) => a
 export const RESOLVERS: Record<string, Resolver> = {
   territory_count: (ctx) => countRows(ctx, 'territories'),
   customer_count: (ctx) => countRows(ctx, 'contacts'),
+  // CRM line
+  lead_count: (ctx) => countRows(ctx, 'leads'),
+  deal_count: (ctx) => countRows(ctx, 'deals'),
+  quotation_count: (ctx) => countRows(ctx, 'quotations'),
+  // SFA line
+  product_count: (ctx) => countRows(ctx, 'products'),
+  price_list_count: (ctx) => countRows(ctx, 'price_lists'),
+  order_count: (ctx) => countRows(ctx, 'orders'),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- chained builder
   role_count: (ctx) => countRows(ctx, 'employee_roles', (q: any) => q.eq('status', 'active')),
   employee_count: (ctx) => countRows(ctx, 'profiles'),

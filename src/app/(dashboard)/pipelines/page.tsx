@@ -691,6 +691,7 @@ export default function PipelinesPage() {
               Deal Pipelines
             </GatedButton>
             <GatedButton
+              data-tour="deal-add"
               canAct={canCreateDeals}
               gateReason="create deals"
               disabled={!selectedPipelineId || stages.length === 0}

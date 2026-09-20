@@ -429,7 +429,8 @@ export default function QuotationsPage() {
                 Seed Dummy
               </Button>
             )}
-            <Button 
+            <Button
+              data-tour="quotation-add"
               className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
               onClick={() => router.push('/quotations/new')}
             >

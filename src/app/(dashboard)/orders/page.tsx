@@ -327,7 +327,7 @@ export default function OrdersPage() {
               </Button>
             )}
             {canCreateOrder && (
-              <Button onClick={() => router.push('/orders/new')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Button data-tour="order-add" onClick={() => router.push('/orders/new')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Plus className="size-4" /> Create Order
               </Button>
             )}

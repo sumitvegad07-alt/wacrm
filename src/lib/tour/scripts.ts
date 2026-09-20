@@ -220,12 +220,34 @@ export const seeLiveDataTour: TourScript = {
   ],
 };
 
+// CRM/SFA entity tours — lean: spotlight the "Add" button (click → the entity's
+// new-record form), then end. Data-driven: the *_count validation ticks the step
+// once a real record exists, so no forced completion.
+function addEntityTour(id: string, stepKey: string, page: string, anchor: string, title: string, text: string): TourScript {
+  return { id, stepKey, beats: [{ id: 'add', kind: 'spotlight', page, anchor, title, text, advanceOn: 'click' }] };
+}
+export const leadsTour = addEntityTour('leads', 'lead_capture', '/leads', '[data-tour="lead-add"]',
+  'Click “Add Lead”', 'This opens the new-lead form — fill it in and save. Your step ticks green once your first lead is added.');
+export const dealsTour = addEntityTour('deals', 'deal_pipeline', '/deals', '[data-tour="deal-add"]',
+  'Click “Add Deal”', 'Create an opportunity and move it through your pipeline stages. Your step ticks green once your first deal exists.');
+export const quotationsTour = addEntityTour('quotations', 'quotation_first', '/quotations', '[data-tour="quotation-add"]',
+  'Click “New Quotation”', 'Build a price quote for a customer, then save. Your step ticks green once your first quotation is created.');
+export const productsTour = addEntityTour('products', 'product_setup', '/products', '[data-tour="product-add"]',
+  'Click to add a product', 'Add your first product (or use Import for bulk upload). Your step ticks green once products exist.');
+export const ordersTour = addEntityTour('orders', 'order_first', '/orders', '[data-tour="order-add"]',
+  'Click “Create Order”', 'Place an order for a customer, then save. Your step ticks green once your first order is recorded.');
+
 export const TOURS: Record<string, TourScript> = {
   [territoryTour.id]: territoryTour,
   [customersTour.id]: customersTour,
   [rolesTour.id]: rolesTour,
   [employeesTour.id]: employeesTour,
   [seeLiveDataTour.id]: seeLiveDataTour,
+  [leadsTour.id]: leadsTour,
+  [dealsTour.id]: dealsTour,
+  [quotationsTour.id]: quotationsTour,
+  [productsTour.id]: productsTour,
+  [ordersTour.id]: ordersTour,
 };
 
 // Getting Started step_key → tour id (only steps that have a guided tour).
@@ -235,4 +257,9 @@ export const STEP_TOURS: Record<string, string> = {
   role_creation: 'roles',
   employee_creation: 'employees',
   see_live_data: 'see_live_data',
+  lead_capture: 'leads',
+  deal_pipeline: 'deals',
+  quotation_first: 'quotations',
+  product_setup: 'products',
+  order_first: 'orders',
 };

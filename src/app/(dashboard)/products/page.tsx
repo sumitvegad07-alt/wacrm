@@ -337,6 +337,7 @@ export default function ProductsPage() {
         actions={
           canCreateProducts ? (
             <Button
+              data-tour="product-add"
               onClick={() => router.push('/products/new')}
               size="sm"
               className="h-7 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium px-2.5"

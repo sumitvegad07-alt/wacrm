@@ -498,7 +498,7 @@ export default function LeadsPage() {
             <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => setImportOpen(true)}>
               <Upload className="size-3 mr-1" /> Import Leads
             </Button>
-            <Button size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/leads/new')}>
+            <Button data-tour="lead-add" size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/leads/new')}>
               <Plus className="size-3 mr-1" /> Add Lead
             </Button>
           </div>

@@ -56,9 +56,16 @@ describe('answer resolver', () => {
 });
 
 describe('registry', () => {
-  it('exposes exactly the WFA v1 keys', () => {
+  it('exposes exactly the composite (core + CRM + WFA + SFA) keys', () => {
     expect(Object.keys(RESOLVERS).sort()).toEqual(
-      ['answer', 'attendance_or_visit', 'customer_count', 'employee_count', 'employee_logged_in', 'meaningful_data', 'role_count', 'territory_count'].sort()
+      [
+        'answer', 'attendance_or_visit', 'customer_count', 'employee_count',
+        'employee_logged_in', 'meaningful_data', 'role_count', 'territory_count',
+        // CRM
+        'lead_count', 'deal_count', 'quotation_count',
+        // SFA
+        'product_count', 'price_list_count', 'order_count',
+      ].sort()
     );
   });
   it('throws on unknown key', async () => {
