@@ -1,10 +1,38 @@
 'use client';
 import type { EvaluatedStep, AnswerMap } from '@/lib/implementation/types';
 import { Button } from '@/components/ui/button';
-import { Play, MessageCircle } from 'lucide-react';
+import { Play, MessageCircle, Copy, Smartphone, ClipboardCheck, MapPin } from 'lucide-react';
+import Link from 'next/link';
+import { toast } from 'sonner';
 import { ContentTabs } from './ContentTabs';
 import { STEP_TOURS } from '@/lib/tour/scripts';
 import { launchTour } from '@/lib/tour/launch';
+
+// The mobile app download/share link shown on the "mobile login" step. Empty for
+// now (no public app link yet) → renders a "coming soon" placeholder. Set this to
+// the real URL (e.g. the Play Store link) when ready and it becomes copyable.
+const MOBILE_APP_URL = '';
+
+function CopyableUrl({ url }: { url: string }) {
+  if (!url) {
+    return (
+      <div className="mt-1 rounded-md border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground">
+        App link coming soon
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      <input readOnly value={url} onFocus={(e) => e.currentTarget.select()}
+        className="min-w-0 flex-1 rounded-md border border-border bg-muted px-3 py-1.5 text-sm" />
+      <button type="button"
+        onClick={() => { try { navigator.clipboard?.writeText(url); toast.success('App link copied'); } catch { /* clipboard may be blocked */ } }}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-sm font-medium hover:bg-muted">
+        <Copy className="h-4 w-4" /> Copy
+      </button>
+    </div>
+  );
+}
 
 // Customer-facing labels for validation metrics — never show raw source_keys.
 const VALIDATION_LABELS: Record<string, string> = {
@@ -39,10 +67,54 @@ export function StepPanel({ evaluated, answers, pending, spotlight = false, step
       </div>
       <ContentTabs step={step} />
 
-      {/* Steps with no guided tour and no in-app deep-link (e.g. the mobile-only
-          steps — mobile login, first activity) can't spotlight a web button, so
-          surface their how-to steps prominently here instead of hiding them. */}
-      {!tourId && !primaryTask && step.questions.length === 0 && step.tasks.every((t) => !t.deep_link) && step.quick_steps.length > 0 && !done && (
+      {/* Area-wise accounts derive a rep from each customer's territory, so every
+          employee must also be assigned their area/territory. */}
+      {!done && step.step_key === 'employee_creation' && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-500">
+          Assigning customers <span className="font-medium">area-wise</span>? Then assign each employee their area too — open the employee → the <span className="font-medium">Territory Assignment</span> tab and pick their territory/area.
+        </div>
+      )}
+
+      {/* Mobile login (step 6) — no web button to spotlight. Give a copyable app
+          link + a jump to the employee device screen to confirm login. */}
+      {!done && step.step_key === 'mobile_login' && (
+        <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <p className="text-sm font-semibold">How to complete this step</p>
+          <div>
+            <p className="text-sm">1. Share the app link with your team</p>
+            <CopyableUrl url={MOBILE_APP_URL} />
+          </div>
+          <div>
+            <p className="text-sm">2. Have one employee log in — then check their device below</p>
+            <Link href="/team/employees" className="mt-1 inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted">
+              <Smartphone className="h-4 w-4" /> View employee devices →
+            </Link>
+          </div>
+          {step.help_text && <p className="text-xs text-muted-foreground">{step.help_text}</p>}
+        </div>
+      )}
+
+      {/* First activity (step 7) — done on mobile; give buttons to verify the record. */}
+      {!done && step.step_key === 'first_activity' && (
+        <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <p className="text-sm font-semibold">How to complete this step</p>
+          <p className="text-sm text-muted-foreground">Have an employee do one of these on the mobile app, then check the record here:</p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/location-tracking/attendance" className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted">
+              <ClipboardCheck className="h-4 w-4" /> Check attendance →
+            </Link>
+            <Link href="/location-tracking/visits" className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted">
+              <MapPin className="h-4 w-4" /> Check visits →
+            </Link>
+          </div>
+          {step.help_text && <p className="text-xs text-muted-foreground">{step.help_text}</p>}
+        </div>
+      )}
+
+      {/* Generic fallback for any OTHER step with no tour and no in-app deep-link. */}
+      {!done && step.step_key !== 'mobile_login' && step.step_key !== 'first_activity'
+        && !tourId && !primaryTask && step.questions.length === 0
+        && step.tasks.every((t) => !t.deep_link) && step.quick_steps.length > 0 && (
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
           <p className="text-sm font-semibold">How to complete this step</p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">

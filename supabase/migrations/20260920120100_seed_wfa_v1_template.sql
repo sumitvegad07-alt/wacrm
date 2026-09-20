@@ -58,7 +58,7 @@ BEGIN
           'Define the roles your employees will have (e.g. Field Rep, Manager).',
           '["Open Roles","Create at least one role"]'::jsonb,'Roles carry permissions.',3,1)
   ON CONFLICT (template_id, step_key) DO UPDATE SET title=EXCLUDED.title RETURNING id INTO s4;
-  INSERT INTO impl_step_tasks (step_id, position, label, deep_link) VALUES (s4,0,'Create roles','/team') ON CONFLICT DO NOTHING;
+  INSERT INTO impl_step_tasks (step_id, position, label, deep_link) VALUES (s4,0,'Create roles','/team/roles') ON CONFLICT DO NOTHING;
   INSERT INTO impl_validation_rules (step_id, source_key, operator, required_threshold, recommended_threshold, health_weight, combine)
   VALUES (s4,'role_count','gt',0,3,1,'and');
 
@@ -69,8 +69,8 @@ BEGIN
           '["Open Team","Invite employees by mobile/email"]'::jsonb,'Each employee gets a mobile login.',5,1)
   ON CONFLICT (template_id, step_key) DO UPDATE SET title=EXCLUDED.title RETURNING id INTO s5;
   INSERT INTO impl_step_tasks (step_id, position, label, deep_link, optional) VALUES
-    (s5,0,'Add employees','/team',false),
-    (s5,1,'Assign areas to employees','/field-staff',true) ON CONFLICT DO NOTHING;
+    (s5,0,'Add employees','/team/employees',false),
+    (s5,1,'Assign areas to employees','/team/employees',true) ON CONFLICT DO NOTHING;
   INSERT INTO impl_validation_rules (step_id, source_key, operator, required_threshold, recommended_threshold, health_weight, combine)
   VALUES (s5,'employee_count','gt',0,5,1,'and');
 
@@ -98,7 +98,7 @@ BEGIN
           'Confirm real field data is flowing — attendance, visits or tracking.',
           '["Open Location Tracking / Reports","Confirm data appears"]'::jsonb,'You are live once real data exists.',2,1)
   ON CONFLICT (template_id, step_key) DO UPDATE SET title=EXCLUDED.title RETURNING id INTO s8;
-  INSERT INTO impl_step_tasks (step_id, position, label, deep_link) VALUES (s8,0,'View live data','/location-tracking') ON CONFLICT DO NOTHING;
+  INSERT INTO impl_step_tasks (step_id, position, label, deep_link) VALUES (s8,0,'View live data','/location-tracking/overview') ON CONFLICT DO NOTHING;
   INSERT INTO impl_validation_rules (step_id, source_key, operator, combine)
   VALUES (s8,'meaningful_data','exists','and');
 
