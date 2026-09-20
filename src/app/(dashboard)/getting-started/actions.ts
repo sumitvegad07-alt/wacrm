@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { evaluateTemplate } from '@/lib/implementation/evaluate';
-import { templateLineAllowed } from '@/lib/implementation/access';
+import { stepLineAllowed } from '@/lib/implementation/access';
 import type {
   TemplateDefinition, TemplateStep, AnswerMap, StepStatus, EvaluatedTemplate,
   Milestone, AnalyticsEventType, BaselineMap,
@@ -23,7 +23,22 @@ async function ctx() {
   const { data: profile } = await supabase
     .from('profiles').select('id, account_id, account_role').eq('user_id', user.id).single();
   if (!profile?.account_id) throw new Error('No account');
-  return { supabase, actorId: profile.id as string, accountId: profile.account_id as string };
+  const { data: acct } = await supabase
+    .from('accounts').select('subscription_plan').eq('id', profile.account_id).single();
+  return {
+    supabase, actorId: profile.id as string, accountId: profile.account_id as string,
+    plan: (acct?.subscription_plan ?? null) as unknown,
+  };
+}
+
+// Line-composed journey: keep only the steps/milestones this account's plan
+// grants (plus shared 'core' and any not-yet-tagged NULL-line steps).
+function filterByPlan(def: TemplateDefinition, plan: unknown): TemplateDefinition {
+  return {
+    ...def,
+    steps: def.steps.filter((s) => stepLineAllowed(s.line, plan)),
+    milestones: def.milestones.filter((m) => stepLineAllowed(m.line, plan)),
+  };
 }
 
 async function logEvent(
@@ -193,12 +208,10 @@ async function evaluateAndPersist(
 // on mount to refresh against live data in the background. Reconstructs the
 // evaluated view from each step's stored validation_snapshot.
 export async function loadGettingStarted(): Promise<LoadResult | { locked: true }> {
-  const { supabase, actorId, accountId } = await ctx();
-  const [acctRes, def] = await Promise.all([
-    supabase.from('accounts').select('subscription_plan').eq('id', accountId).single(),
-    loadDefinition(supabase),
-  ]);
-  if (!def || !templateLineAllowed(acctRes.data?.subscription_plan, def.product_line)) return { locked: true as const };
+  const { supabase, actorId, accountId, plan } = await ctx();
+  const def0 = await loadDefinition(supabase);
+  if (!def0) return { locked: true as const };
+  const def = filterByPlan(def0, plan);
   const progress = await getOrCreateProgress(supabase, accountId, def, actorId);
 
   const [answers, stepRows, ackRows] = await Promise.all([
@@ -223,9 +236,10 @@ export async function loadGettingStarted(): Promise<LoadResult | { locked: true 
 }
 
 export async function saveAnswer(questionKey: string, value: unknown): Promise<LoadResult> {
-  const { supabase, actorId, accountId } = await ctx();
-  const def = await loadDefinition(supabase);
-  if (!def) throw new Error('No template');
+  const { supabase, actorId, accountId, plan } = await ctx();
+  const def0 = await loadDefinition(supabase);
+  if (!def0) throw new Error('No template');
+  const def = filterByPlan(def0, plan);
   const progress = await getOrCreateProgress(supabase, accountId, def, actorId);
   await supabase.from('impl_answers').upsert({
     account_id: accountId, progress_id: progress.id, question_key: questionKey, value, answered_by: actorId,
@@ -237,17 +251,19 @@ export async function saveAnswer(questionKey: string, value: unknown): Promise<L
 }
 
 export async function recheck(): Promise<LoadResult> {
-  const { supabase, actorId, accountId } = await ctx();
-  const def = await loadDefinition(supabase);
-  if (!def) throw new Error('No template');
+  const { supabase, actorId, accountId, plan } = await ctx();
+  const def0 = await loadDefinition(supabase);
+  if (!def0) throw new Error('No template');
+  const def = filterByPlan(def0, plan);
   const progress = await getOrCreateProgress(supabase, accountId, def, actorId);
   return evaluateAndPersist(supabase, accountId, actorId, def, progress);
 }
 
 async function setStepStatus(stepId: string, status: 'skipped' | 'completed', event: AnalyticsEventType): Promise<LoadResult> {
-  const { supabase, actorId, accountId } = await ctx();
-  const def = await loadDefinition(supabase);
-  if (!def) throw new Error('No template');
+  const { supabase, actorId, accountId, plan } = await ctx();
+  const def0 = await loadDefinition(supabase);
+  if (!def0) throw new Error('No template');
+  const def = filterByPlan(def0, plan);
   const progress = await getOrCreateProgress(supabase, accountId, def, actorId);
   await supabase.from('impl_step_progress').upsert({
     account_id: accountId, progress_id: progress.id, step_id: stepId, status,
@@ -276,8 +292,9 @@ export async function toggleTask(taskId: string, done: boolean): Promise<{ ok: t
 }
 
 export async function requestHelp(stepId: string | null): Promise<{ supportUrl: string | null }> {
-  const { supabase, actorId, accountId } = await ctx();
-  const def = await loadDefinition(supabase);
+  const { supabase, actorId, accountId, plan } = await ctx();
+  const def0 = await loadDefinition(supabase);
+  const def = def0 ? filterByPlan(def0, plan) : null;
   const progress = def ? await getOrCreateProgress(supabase, accountId, def, actorId) : null;
   await logEvent(supabase, accountId, actorId, def?.id ?? null, progress?.id ?? null, stepId, 'help_requested');
   return { supportUrl: def?.support_whatsapp_url ?? null };
@@ -305,12 +322,13 @@ export async function isFounderViewer(): Promise<boolean> {
 }
 
 export async function resetGettingStarted(): Promise<LoadResult> {
-  const { supabase, actorId, accountId } = await ctx();
+  const { supabase, actorId, accountId, plan } = await ctx();
   const { data: { user } } = await supabase.auth.getUser();
   if (!isFounderEmail(user?.email)) throw new Error('Founder only');
 
-  const def = await loadDefinition(supabase);
-  if (!def) throw new Error('No template');
+  const def0 = await loadDefinition(supabase);
+  if (!def0) throw new Error('No template');
+  const def = filterByPlan(def0, plan);
 
   // Service role, but scoped strictly to the caller's OWN account, so the wipe
   // can't be blocked by RLS and can't touch another tenant's data.

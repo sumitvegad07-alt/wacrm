@@ -58,6 +58,7 @@ export interface StepMedia {
 export interface TemplateStep {
   id: string; template_id: string; position: number; step_key: string;
   step_type: 'task' | 'discovery' | 'milestone_gate';
+  line?: string | null; // 'core'|'crm'|'wfa'|'sfa'; null = always-applicable (pre-migration)
   title: string; description: string | null; video_url: string | null;
   quick_steps: string[]; help_text: string | null; help_context: string | null;
   estimated_minutes: number; is_optional: boolean; auto_complete: boolean; weight: number;
@@ -66,6 +67,7 @@ export interface TemplateStep {
 }
 export interface Milestone {
   id: string; template_id: string; position: number; milestone_key: string;
+  line?: string | null; // matches its step group; null = always-applicable
   title: string; message: string | null; icon: string | null; trigger_step_key: string;
 }
 export interface TemplateDefinition {

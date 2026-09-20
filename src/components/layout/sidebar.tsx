@@ -196,14 +196,14 @@ export function getMenuStructure(
       module: "dashboard",
     },
     {
-      // Implementation Center — customer-facing "Getting Started". WFA v1 template.
-      // Gated to the WFA line (page itself locks otherwise) and to admins/owners
-      // (owner/admin bypass the permission; a restricted role needs the right).
+      // Implementation Center — customer-facing "Getting Started". Line-composed:
+      // every plan gets a journey (core steps + its lines), so no line gate here.
+      // Gated to admins/owners (owner/admin bypass the permission; a restricted
+      // role needs the right).
       type: "link",
       href: "/getting-started",
       label: "Getting Started",
       icon: Rocket,
-      line: "wfa",
       permission: "view_implementation",
     },
     {
