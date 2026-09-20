@@ -3,13 +3,13 @@ import { useState, useTransition, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { PartyPopper, ArrowRight } from 'lucide-react';
-import { saveAnswer, recheck, skipStep, markStepDone, toggleTask, requestHelp, acknowledgeMilestone, type LoadResult } from './actions';
+import { saveAnswer, recheck, skipStep, markStepDone, toggleTask, requestHelp, acknowledgeMilestone, resetGettingStarted, type LoadResult } from './actions';
 import { Hero } from '@/components/getting-started/Hero';
 import { JourneyRail } from '@/components/getting-started/JourneyRail';
 import { StepPanel } from '@/components/getting-started/StepPanel';
 import { MilestoneCard } from '@/components/getting-started/MilestoneCard';
 
-export default function GettingStartedClient({ initial, focus = false }: { initial: LoadResult; focus?: boolean }) {
+export default function GettingStartedClient({ initial, focus = false, isFounder = false }: { initial: LoadResult; focus?: boolean; isFounder?: boolean }) {
   const [state, setState] = useState<LoadResult>(initial);
   // Which step the user is viewing. Defaults to the current step; completed
   // steps can be reopened read-only, future steps stay locked.
@@ -56,6 +56,23 @@ export default function GettingStartedClient({ initial, focus = false }: { initi
         </div>
       )}
       <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
+        {/* TEMP-QA: founder-only onboarding reset for re-testing without new signups. Remove before final release. */}
+        {isFounder && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                if (window.confirm('Reset your Getting Started progress? This clears steps/answers for THIS account only (no data is deleted) so you can re-walk onboarding.')) {
+                  run(() => resetGettingStarted(), 'Onboarding reset');
+                }
+              }}
+              className="rounded-md border border-dashed border-amber-500/60 px-2 py-1 text-xs font-medium text-amber-600 transition hover:bg-amber-500/10 disabled:opacity-50"
+            >
+              Reset onboarding (QA)
+            </button>
+          </div>
+        )}
         <Hero state={state} onResume={() => setViewId(state.currentStepId)} onRecheck={() => run(recheck, 'Re-checked')} pending={pending} />
 
         {celebrate && <MilestoneCard milestone={celebrate} onDismiss={() => run(() => acknowledgeMilestone(celebrate.id))} />}

@@ -1,10 +1,11 @@
-import { loadGettingStarted } from './actions';
+import { loadGettingStarted, isFounderViewer } from './actions';
 import GettingStartedClient from './GettingStartedClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function GettingStartedPage() {
   const data = await loadGettingStarted();
+  const isFounder = await isFounderViewer(); // TEMP-QA: gates the reset button
   if ('locked' in data) {
     return (
       <div className="mx-auto max-w-2xl p-6 text-center">
@@ -15,5 +16,5 @@ export default async function GettingStartedPage() {
       </div>
     );
   }
-  return <GettingStartedClient initial={data} />;
+  return <GettingStartedClient initial={data} isFounder={isFounder} />;
 }

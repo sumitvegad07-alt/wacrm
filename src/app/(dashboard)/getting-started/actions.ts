@@ -8,6 +8,8 @@ import type {
   Milestone, AnalyticsEventType, BaselineMap,
 } from '@/lib/implementation/types';
 import { runResolver, type ResolverCtx } from '@/lib/implementation/resolvers';
+import { isFounderEmail } from '@/lib/auth/founder';
+import { serviceClient } from '@/lib/auth/superadmin';
 
 const TEMPLATE_KEY = 'wfa_v1';
 
@@ -287,3 +289,45 @@ export async function acknowledgeMilestone(milestoneId: string): Promise<{ ok: t
     .eq('account_id', accountId).eq('milestone_id', milestoneId);
   return { ok: true };
 }
+
+// ===================== TEMP-QA: remove before final release =====================
+// Founder-only onboarding reset. Lets us re-walk Getting Started on the same
+// account instead of creating a fresh signup for every change. Deletes ONLY this
+// account's per-account progress rows (never the global template definition, never
+// any other tenant), then re-enrolls with a fresh baseline. To remove: delete this
+// block, the two imports it needs (isFounderEmail, serviceClient), and the QA
+// button in page.tsx / GettingStartedClient.tsx.
+// True only for the platform founder — gates the QA reset button's visibility.
+export async function isFounderViewer(): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return isFounderEmail(user?.email);
+}
+
+export async function resetGettingStarted(): Promise<LoadResult> {
+  const { supabase, actorId, accountId } = await ctx();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!isFounderEmail(user?.email)) throw new Error('Founder only');
+
+  const def = await loadDefinition(supabase);
+  if (!def) throw new Error('No template');
+
+  // Service role, but scoped strictly to the caller's OWN account, so the wipe
+  // can't be blocked by RLS and can't touch another tenant's data.
+  const svc = serviceClient();
+  const { data: prog } = await svc.from('impl_progress')
+    .select('id').eq('account_id', accountId).eq('template_key', TEMPLATE_KEY).maybeSingle();
+  if (prog) {
+    // Children first (all keyed by progress_id), then the root row.
+    for (const t of ['impl_task_progress', 'impl_step_progress', 'impl_milestone_progress', 'impl_answers', 'impl_analytics_events']) {
+      await svc.from(t).delete().eq('progress_id', prog.id);
+    }
+    await svc.from('impl_progress').delete().eq('id', prog.id);
+  }
+
+  // Re-enroll fresh (new baseline snapshotted from current data) and return the
+  // reset state so the client can render step 1 without a reload.
+  const fresh = await getOrCreateProgress(supabase, accountId, def, actorId);
+  return evaluateAndPersist(supabase, accountId, actorId, def, fresh);
+}
+// =================== END TEMP-QA ===================
