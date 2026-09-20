@@ -67,6 +67,7 @@ import {
   AlertTriangle,
   Clock,
   TrendingUp,
+  Rocket,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -193,6 +194,17 @@ export function getMenuStructure(
       label: "Dashboard",
       icon: LayoutDashboard,
       module: "dashboard",
+    },
+    {
+      // Implementation Center — customer-facing "Getting Started". WFA v1 template.
+      // Gated to the WFA line (page itself locks otherwise) and to admins/owners
+      // (owner/admin bypass the permission; a restricted role needs the right).
+      type: "link",
+      href: "/getting-started",
+      label: "Getting Started",
+      icon: Rocket,
+      line: "wfa",
+      permission: "view_implementation",
     },
     {
       type: "link",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { AppQueryProvider } from "@/components/providers/query-provider";
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 // import { AskOzzo } from "@/components/ozzo/ask-ozzo";
 import { BrandSplash } from "@/components/shared/brand";
 import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcuts-provider";
+import { BackToGettingStarted } from "@/components/getting-started/BackToGettingStarted";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -265,6 +266,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
           )}
+          {/* Return chip for Getting Started deep-links — self-hides unless
+              ?from=getting-started is present, so it covers every target page. */}
+          <Suspense fallback={null}>
+            <BackToGettingStarted />
+          </Suspense>
           {children}
         </main>
       </div>
