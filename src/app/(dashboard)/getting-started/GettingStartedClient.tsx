@@ -1,5 +1,5 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { PartyPopper, ArrowRight } from 'lucide-react';
@@ -15,6 +15,20 @@ export default function GettingStartedClient({ initial, focus = false }: { initi
   // steps can be reopened read-only, future steps stay locked.
   const [viewId, setViewId] = useState<string | null>(initial.currentStepId ?? initial.steps.find((s) => s.applicable)?.step.id ?? null);
   const [pending, startTransition] = useTransition();
+
+  // The page renders instantly from the last saved state (fast load). Refresh
+  // against live data once, quietly, on mount — no spinner, no toast.
+  const refreshed = useRef(false);
+  useEffect(() => {
+    if (refreshed.current) return;
+    refreshed.current = true;
+    (async () => {
+      try {
+        const res = await recheck();
+        if (res && 'steps' in res) setState(res);
+      } catch { /* keep the last-saved state on a transient error */ }
+    })();
+  }, []);
 
   const run = (fn: () => Promise<unknown>, msg?: string) =>
     startTransition(async () => {

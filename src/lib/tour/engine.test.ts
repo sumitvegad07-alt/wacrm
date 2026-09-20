@@ -15,7 +15,7 @@ describe('tour branching', () => {
   });
   it('check routes to Settings when more levels are needed', () => {
     const beat = getBeat(s, 'check_levels')!;
-    expect(nextBeatId(s, beat, { flags: { needsMoreLevels: true } })).toBe('enable_levels_nav');
+    expect(nextBeatId(s, beat, { flags: { needsMoreLevels: true } })).toBe('open_config_tab');
     expect(nextBeatId(s, beat, { flags: { needsMoreLevels: false } })).toBe('add_btn');
   });
   it('add-territory spotlight advances to the autofill teach', () => {

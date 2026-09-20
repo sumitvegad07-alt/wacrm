@@ -307,6 +307,7 @@ export function TerritoryManager() {
           <button
             key={t.id}
             type="button"
+            data-tour={`territory-tab-${t.id}`}
             onClick={() => setTab(t.id)}
             className={
               "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors " +

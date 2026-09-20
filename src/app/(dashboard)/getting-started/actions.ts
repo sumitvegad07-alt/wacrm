@@ -186,16 +186,38 @@ async function evaluateAndPersist(
 }
 
 // --- public actions ------------------------------------------------------
+// FAST initial load: render from the LAST SAVED state (no live resolver queries,
+// no writes) so opening Getting Started is instant. The client calls recheck()
+// on mount to refresh against live data in the background. Reconstructs the
+// evaluated view from each step's stored validation_snapshot.
 export async function loadGettingStarted(): Promise<LoadResult | { locked: true }> {
   const { supabase, actorId, accountId } = await ctx();
-  // Independent reads — run together.
   const [acctRes, def] = await Promise.all([
     supabase.from('accounts').select('subscription_plan').eq('id', accountId).single(),
     loadDefinition(supabase),
   ]);
   if (!def || !templateLineAllowed(acctRes.data?.subscription_plan, def.product_line)) return { locked: true as const };
   const progress = await getOrCreateProgress(supabase, accountId, def, actorId);
-  return evaluateAndPersist(supabase, accountId, actorId, def, progress);
+
+  const [answers, stepRows, ackRows] = await Promise.all([
+    loadAnswers(supabase, progress.id),
+    supabase.from('impl_step_progress').select('step_id, status, validation_snapshot').eq('progress_id', progress.id),
+    supabase.from('impl_milestone_progress').select('milestone_id').eq('progress_id', progress.id).eq('acknowledged', false),
+  ]);
+  const prior: Record<string, StepStatus> = {};
+  const snapshot: Record<string, number | boolean> = {};
+  for (const r of stepRows.data ?? []) {
+    prior[r.step_id] = r.status as StepStatus;
+    Object.assign(snapshot, (r.validation_snapshot as Record<string, number | boolean>) ?? {});
+  }
+  const baseline: BaselineMap = (progress.baseline as BaselineMap) ?? {};
+  const resolverCtx: ResolverCtx = { accountId, supabase: supabase as never, params: null, answers };
+  // Resolver reads the saved snapshot instead of the DB — zero live queries.
+  const cachedResolver = async (k: string) => (k in snapshot ? snapshot[k] : (0 as number | boolean));
+  const evalResult = await evaluateTemplate(def, answers, prior, resolverCtx, cachedResolver, baseline);
+  const ackIds = new Set((ackRows.data ?? []).map((r) => r.milestone_id));
+  const milestonesToCelebrate = def.milestones.filter((m) => ackIds.has(m.id));
+  return { ...evalResult, answers, milestonesToCelebrate, progressId: progress.id };
 }
 
 export async function saveAnswer(questionKey: string, value: unknown): Promise<LoadResult> {

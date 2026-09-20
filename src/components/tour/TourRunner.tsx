@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { driver, type Driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
+import './tour-theme.css';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
 import { TOURS } from '@/lib/tour/scripts';
