@@ -133,18 +133,21 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ account_id: account.id, industry: account.industry }),
       }).then((res) => {
-        // Provisioning has now seeded default territories/roles/etc. A fresh WFA
-        // signup is led straight into the guided setup (focus mode) — and because
-        // this happens AFTER provisioning, the Getting Started baseline snapshot
-        // correctly includes those defaults, so they don't count as the user's work.
-        if (res.ok && hasWFA) {
+        // Provisioning has now seeded default territories/roles/etc. A fresh signup
+        // is led straight into the guided setup (focus mode) — and because this
+        // happens AFTER provisioning, the Getting Started baseline snapshot correctly
+        // includes those defaults. We DON'T gate on hasWFA here: that flag can resolve
+        // a render later than `account`, and reading it in this closure raced to
+        // false → the user fell through to the dashboard. Instead we always route to
+        // the guide, which itself bounces non-WFA plans back to /dashboard.
+        if (res.ok) {
           router.replace("/getting-started/welcome");
         } else {
           router.refresh();
         }
       });
     }
-  }, [account, hasWFA, router]);
+  }, [account, router]);
 
   if (loading) {
     return <BrandSplash />;

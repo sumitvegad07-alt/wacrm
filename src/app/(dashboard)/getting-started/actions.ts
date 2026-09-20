@@ -1,7 +1,6 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
 import { evaluateTemplate } from '@/lib/implementation/evaluate';
 import { templateLineAllowed } from '@/lib/implementation/access';
 import type {
@@ -11,7 +10,6 @@ import type {
 import { runResolver, type ResolverCtx } from '@/lib/implementation/resolvers';
 
 const TEMPLATE_KEY = 'wfa_v1';
-const ROUTE = '/getting-started';
 
 type SB = Awaited<ReturnType<typeof createClient>>;
 
@@ -37,13 +35,20 @@ async function logEvent(
   });
 }
 
+// The template DEFINITION is global and static (only changes when we re-seed).
+// Re-fetching its 8 tables on every button click was the main cause of slow
+// actions — each is a separate cross-region round-trip. Cache it in-process.
+let _defCache: { def: TemplateDefinition | null; at: number } | null = null;
+const DEF_TTL_MS = 5 * 60 * 1000;
+
 // Assemble the nested TemplateDefinition from its definition tables.
 async function loadDefinition(supabase: SB): Promise<TemplateDefinition | null> {
+  if (_defCache && Date.now() - _defCache.at < DEF_TTL_MS) return _defCache.def;
   const { data: tpl } = await supabase
     .from('impl_templates').select('*')
     .eq('template_key', TEMPLATE_KEY).eq('is_active', true)
     .order('version', { ascending: false }).limit(1).maybeSingle();
-  if (!tpl) return null;
+  if (!tpl) { _defCache = { def: null, at: Date.now() }; return null; }
   const { data: steps } = await supabase.from('impl_steps').select('*').eq('template_id', tpl.id).order('position');
   const stepIds = (steps ?? []).map((s) => s.id);
   const inStep = (t: string) => supabase.from(t).select('*').in('step_id', stepIds);
@@ -65,7 +70,9 @@ async function loadDefinition(supabase: SB): Promise<TemplateDefinition | null> 
     media: by(media.data, s.id).sort((a: any, b: any) => a.position - b.position),
     rules: by(rules.data, s.id), conditions: by(conditions.data, s.id),
   })) as TemplateStep[];
-  return { ...tpl, steps: fullSteps, milestones: (milestones.data ?? []) as Milestone[] } as TemplateDefinition;
+  const def = { ...tpl, steps: fullSteps, milestones: (milestones.data ?? []) as Milestone[] } as TemplateDefinition;
+  _defCache = { def, at: Date.now() };
+  return def;
 }
 
 // Snapshot every count/exists resolver value at enrollment. A step later
@@ -131,7 +138,6 @@ async function evaluateAndPersist(
   const baseline: BaselineMap = (progress.baseline as BaselineMap) ?? {};
   const evalResult = await evaluateTemplate(def, answers, prior, resolverCtx, undefined, baseline);
 
-  // Persist step_progress (upsert on progress_id+step_id).
   const nowIso = new Date().toISOString();
   const rows = evalResult.steps.map((s) => ({
     account_id: accountId, progress_id: progress.id, step_id: s.step.id, status: s.status,
@@ -140,32 +146,40 @@ async function evaluateAndPersist(
     last_checked_at: nowIso,
     completed_at: (s.status === 'completed' || s.status === 'auto_completed') ? nowIso : null,
   }));
-  if (rows.length) await supabase.from('impl_step_progress').upsert(rows, { onConflict: 'progress_id,step_id' });
-
-  // Fire milestones whose trigger step is now completed/auto and not yet reached.
   const completedKeys = new Set(evalResult.steps.filter((s) => s.status === 'completed' || s.status === 'auto_completed').map((s) => s.step.step_key));
-  const { data: reached } = await supabase.from('impl_milestone_progress').select('milestone_id').eq('progress_id', progress.id);
-  const reachedIds = new Set((reached ?? []).map((r) => r.milestone_id));
+
+  // Independent: persist step_progress AND read which milestones were already
+  // reached — run together instead of one-after-another.
+  const [, reachedRes] = await Promise.all([
+    rows.length ? supabase.from('impl_step_progress').upsert(rows, { onConflict: 'progress_id,step_id' }) : Promise.resolve(),
+    supabase.from('impl_milestone_progress').select('milestone_id').eq('progress_id', progress.id),
+  ]);
+  const reachedIds = new Set((reachedRes.data ?? []).map((r) => r.milestone_id));
   const newlyReached = def.milestones.filter((m) => completedKeys.has(m.trigger_step_key) && !reachedIds.has(m.id));
   if (newlyReached.length) {
-    await supabase.from('impl_milestone_progress').insert(newlyReached.map((m) => ({
-      account_id: accountId, progress_id: progress.id, milestone_id: m.id,
-    })));
-    for (const m of newlyReached) await logEvent(supabase, accountId, actorId, def.id, progress.id, null, 'milestone_reached', { milestone_key: m.milestone_key });
+    await Promise.all([
+      supabase.from('impl_milestone_progress').insert(newlyReached.map((m) => ({
+        account_id: accountId, progress_id: progress.id, milestone_id: m.id,
+      }))),
+      supabase.from('impl_analytics_events').insert(newlyReached.map((m) => ({
+        account_id: accountId, actor_id: actorId, template_id: def.id, progress_id: progress.id,
+        step_id: null, event_type: 'milestone_reached', metadata: { milestone_key: m.milestone_key },
+      }))),
+    ]);
   }
 
-  // Persist progress caches + completion.
-  await supabase.from('impl_progress').update({
-    progress_pct: evalResult.progressPct, score: evalResult.score, health_pct: evalResult.healthPct,
-    current_step_id: evalResult.currentStepId, status: evalResult.completed ? 'completed' : 'in_progress',
-    completed_at: evalResult.completed ? nowIso : null, updated_at: nowIso,
-  }).eq('id', progress.id);
+  // Independent: write progress caches AND read still-unacknowledged milestones.
+  const [, toAckRes] = await Promise.all([
+    supabase.from('impl_progress').update({
+      progress_pct: evalResult.progressPct, score: evalResult.score, health_pct: evalResult.healthPct,
+      current_step_id: evalResult.currentStepId, status: evalResult.completed ? 'completed' : 'in_progress',
+      completed_at: evalResult.completed ? nowIso : null, updated_at: nowIso,
+    }).eq('id', progress.id),
+    supabase.from('impl_milestone_progress').select('milestone_id').eq('progress_id', progress.id).eq('acknowledged', false),
+  ]);
   if (evalResult.completed) await logEvent(supabase, accountId, actorId, def.id, progress.id, null, 'template_completed');
 
-  // Milestones still awaiting acknowledgement (for the celebration card).
-  const { data: toAck } = await supabase.from('impl_milestone_progress')
-    .select('milestone_id').eq('progress_id', progress.id).eq('acknowledged', false);
-  const ackIds = new Set((toAck ?? []).map((r) => r.milestone_id));
+  const ackIds = new Set((toAckRes.data ?? []).map((r) => r.milestone_id));
   const milestonesToCelebrate = def.milestones.filter((m) => ackIds.has(m.id));
 
   return { ...evalResult, answers, milestonesToCelebrate, progressId: progress.id };
@@ -174,9 +188,12 @@ async function evaluateAndPersist(
 // --- public actions ------------------------------------------------------
 export async function loadGettingStarted(): Promise<LoadResult | { locked: true }> {
   const { supabase, actorId, accountId } = await ctx();
-  const { data: acct } = await supabase.from('accounts').select('subscription_plan').eq('id', accountId).single();
-  const def = await loadDefinition(supabase);
-  if (!def || !templateLineAllowed(acct?.subscription_plan, def.product_line)) return { locked: true as const };
+  // Independent reads — run together.
+  const [acctRes, def] = await Promise.all([
+    supabase.from('accounts').select('subscription_plan').eq('id', accountId).single(),
+    loadDefinition(supabase),
+  ]);
+  if (!def || !templateLineAllowed(acctRes.data?.subscription_plan, def.product_line)) return { locked: true as const };
   const progress = await getOrCreateProgress(supabase, accountId, def, actorId);
   return evaluateAndPersist(supabase, accountId, actorId, def, progress);
 }
@@ -190,10 +207,9 @@ export async function saveAnswer(questionKey: string, value: unknown): Promise<L
     account_id: accountId, progress_id: progress.id, question_key: questionKey, value, answered_by: actorId,
     answered_at: new Date().toISOString(),
   }, { onConflict: 'progress_id,question_key' });
-  await logEvent(supabase, accountId, actorId, def.id, progress.id, null, 'question_answered', { question_key: questionKey });
-  const out = await evaluateAndPersist(supabase, accountId, actorId, def, progress);
-  revalidatePath(ROUTE);
-  return out;
+  // Fire-and-forget analytics; don't make the user wait on it.
+  void logEvent(supabase, accountId, actorId, def.id, progress.id, null, 'question_answered', { question_key: questionKey });
+  return evaluateAndPersist(supabase, accountId, actorId, def, progress);
 }
 
 export async function recheck(): Promise<LoadResult> {
@@ -201,9 +217,7 @@ export async function recheck(): Promise<LoadResult> {
   const def = await loadDefinition(supabase);
   if (!def) throw new Error('No template');
   const progress = await getOrCreateProgress(supabase, accountId, def, actorId);
-  const out = await evaluateAndPersist(supabase, accountId, actorId, def, progress);
-  revalidatePath(ROUTE);
-  return out;
+  return evaluateAndPersist(supabase, accountId, actorId, def, progress);
 }
 
 async function setStepStatus(stepId: string, status: 'skipped' | 'completed', event: AnalyticsEventType): Promise<LoadResult> {
@@ -215,25 +229,25 @@ async function setStepStatus(stepId: string, status: 'skipped' | 'completed', ev
     account_id: accountId, progress_id: progress.id, step_id: stepId, status,
     completed_by: actorId, completed_at: status === 'completed' ? new Date().toISOString() : null,
   }, { onConflict: 'progress_id,step_id' });
-  await logEvent(supabase, accountId, actorId, def.id, progress.id, stepId, event);
-  const out = await evaluateAndPersist(supabase, accountId, actorId, def, progress);
-  revalidatePath(ROUTE);
-  return out;
+  void logEvent(supabase, accountId, actorId, def.id, progress.id, stepId, event);
+  return evaluateAndPersist(supabase, accountId, actorId, def, progress);
 }
 export async function skipStep(stepId: string): Promise<LoadResult> { return setStepStatus(stepId, 'skipped', 'step_skipped'); }
 export async function markStepDone(stepId: string): Promise<LoadResult> { return setStepStatus(stepId, 'completed', 'step_completed'); }
 
+// A checklist tick is cosmetic — it must NOT reload the definition or re-run the
+// whole evaluation engine (that was making the deep-link click feel slow). Just
+// record it against the existing progress row and return immediately.
 export async function toggleTask(taskId: string, done: boolean): Promise<{ ok: true }> {
   const { supabase, actorId, accountId } = await ctx();
-  const def = await loadDefinition(supabase);
-  if (!def) throw new Error('No template');
-  const progress = await getOrCreateProgress(supabase, accountId, def, actorId);
-  await supabase.from('impl_task_progress').upsert({
-    account_id: accountId, progress_id: progress.id, task_id: taskId, done,
+  const { data: prog } = await supabase.from('impl_progress')
+    .select('id, template_id').eq('account_id', accountId).eq('template_key', TEMPLATE_KEY).maybeSingle();
+  if (!prog) return { ok: true };
+  void supabase.from('impl_task_progress').upsert({
+    account_id: accountId, progress_id: prog.id, task_id: taskId, done,
     done_by: actorId, done_at: done ? new Date().toISOString() : null,
-  }, { onConflict: 'progress_id,task_id' });
-  await logEvent(supabase, accountId, actorId, def.id, progress.id, null, 'task_toggled', { task_id: taskId, done });
-  revalidatePath(ROUTE);
+  }, { onConflict: 'progress_id,task_id' }).then(() =>
+    logEvent(supabase, accountId, actorId, prog.template_id, prog.id, null, 'task_toggled', { task_id: taskId, done }));
   return { ok: true };
 }
 
@@ -249,6 +263,5 @@ export async function acknowledgeMilestone(milestoneId: string): Promise<{ ok: t
   const { supabase, accountId } = await ctx();
   await supabase.from('impl_milestone_progress').update({ acknowledged: true })
     .eq('account_id', accountId).eq('milestone_id', milestoneId);
-  revalidatePath(ROUTE);
   return { ok: true };
 }
