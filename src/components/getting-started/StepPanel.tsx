@@ -3,6 +3,13 @@ import type { EvaluatedStep, AnswerMap } from '@/lib/implementation/types';
 import { Button } from '@/components/ui/button';
 import { ContentTabs } from './ContentTabs';
 
+// Customer-facing labels for validation metrics — never show raw source_keys.
+const VALIDATION_LABELS: Record<string, string> = {
+  territory_count: 'Territories', customer_count: 'Customers', role_count: 'Roles',
+  employee_count: 'Employees', employee_logged_in: 'Team member logged in',
+  attendance_or_visit: 'First activity recorded', meaningful_data: 'Live data flowing',
+};
+
 export function StepPanel({ evaluated, answers, pending, onAnswer, onSkip, onMarkDone, onToggleTask, onHelp }: {
   evaluated: EvaluatedStep; answers: AnswerMap; pending: boolean;
   onAnswer: (k: string, v: unknown) => void; onSkip: () => void; onMarkDone: () => void;
@@ -54,14 +61,18 @@ export function StepPanel({ evaluated, answers, pending, onAnswer, onSkip, onMar
         </ul>
       )}
 
-      {ruleResults.length > 0 && (
-        <div className="rounded-lg bg-muted/50 p-3 text-sm">
-          {ruleResults.map((r) => (
-            <div key={r.source_key} className={r.requiredPass ? 'text-green-600' : 'text-muted-foreground'}>
-              {r.source_key}: {String(r.value)} {r.requiredPass ? '✓' : ''}
-              {r.recommendedThreshold != null && ` · recommended ${r.recommendedThreshold}${r.recommendedPass ? ' ✓' : ' ⚠️'}`}
-            </div>
-          ))}
+      {ruleResults.some((r) => r.source_key !== 'answer') && (
+        <div className="space-y-1 rounded-lg bg-muted/50 p-3 text-sm">
+          {ruleResults.filter((r) => r.source_key !== 'answer').map((r) => {
+            const label = VALIDATION_LABELS[r.source_key] ?? r.source_key;
+            const isCount = typeof r.value === 'number';
+            return (
+              <div key={r.source_key} className={r.requiredPass ? 'text-green-600' : 'text-muted-foreground'}>
+                {r.requiredPass ? '✓' : '○'} {label}{isCount ? `: ${r.value}` : r.requiredPass ? '' : ' — not yet'}
+                {r.recommendedThreshold != null && ` · recommended ${r.recommendedThreshold}${r.recommendedPass ? ' ✓' : ' ⚠️'}`}
+              </div>
+            );
+          })}
         </div>
       )}
 
