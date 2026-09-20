@@ -121,8 +121,10 @@ export const customersTour: TourScript = {
     {
       id: 'save_customer', kind: 'spotlight',
       page: '/contacts/new', anchor: '[data-shortcut="save"]',
-      title: 'Fill the details, then Save', text: 'Enter the customer’s name & phone (and territory), then click Create Customer.',
-      advanceOn: 'next', optional: true, goto: 'done',
+      title: 'Fill the details, then Save', text: 'Enter the customer’s name & phone (and territory), then click Create Customer to save.',
+      // advanceOn 'click' (not 'next') so the tour only moves on when they actually
+      // click Save — no generic Next button to skip past without doing anything.
+      advanceOn: 'click', optional: true, goto: 'done',
     },
 
     // ── Import branch ──
@@ -139,8 +141,9 @@ export const customersTour: TourScript = {
       advanceOn: 'next', optional: true, goto: 'done',
     },
 
-    // Data-driven end: does NOT mark the step done — adding a real customer does.
-    { id: 'done', kind: 'complete', title: 'Nice — that’s how you add customers 🎉', text: 'Your step ticks green once your first customer is saved.', markDone: false },
+    // Data-driven end: does NOT mark the step done, so the wording must NOT claim a
+    // customer was created — it only tells them what completes the step.
+    { id: 'done', kind: 'complete', title: 'That’s how you add customers', text: 'This step turns green automatically once your first customer is saved.', markDone: false },
   ],
 };
 
