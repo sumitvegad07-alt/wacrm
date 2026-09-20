@@ -407,7 +407,7 @@ export default function RolesPage() {
                 onRowClick={(role) => handleSelectRole(role)}
                 emptyMessage="No roles found."
                 actions={
-                  <Button size="sm" onClick={handleNewRole} className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Button data-tour="role-add" size="sm" onClick={handleNewRole} className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground">
                     <Plus className="size-3 mr-1" /> New Role
                   </Button>
                 }
@@ -425,6 +425,7 @@ export default function RolesPage() {
                       <div>
                         <Label className="text-xs text-muted-foreground">Role Name</Label>
                         <Input
+                          data-tour="role-name"
                           value={name}
                           onChange={(e) => setName(e.target.value)}
                           placeholder="e.g. Sales Manager"
@@ -479,7 +480,7 @@ export default function RolesPage() {
                       <Button variant="ghost" onClick={() => selectedRole ? handleSelectRole(selectedRole) : setSelectedRole(null)}>
                         Cancel
                       </Button>
-                      <Button onClick={handleSave}>
+                      <Button data-tour="role-save" onClick={handleSave}>
                         <Save className="w-4 h-4 mr-2" />
                         Save Role
                       </Button>

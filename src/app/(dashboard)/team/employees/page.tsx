@@ -405,7 +405,7 @@ export default function EmployeesPage() {
         title="Employees"
         subtitle="Manage your team, credentials, and device access."
         actions={
-          <Button onClick={() => router.push('/team/employees/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+          <Button data-tour="employee-add" onClick={() => router.push('/team/employees/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <UserPlus className="w-4 h-4 mr-2" />
             Add Employee
           </Button>

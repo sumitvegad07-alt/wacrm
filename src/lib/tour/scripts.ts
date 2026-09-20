@@ -147,13 +147,84 @@ export const customersTour: TourScript = {
   ],
 };
 
+// The Roles handholding tour. Data-driven (role_count decides completion).
+export const rolesTour: TourScript = {
+  id: 'roles',
+  stepKey: 'role_creation',
+  beats: [
+    {
+      id: 'add_role', kind: 'spotlight',
+      page: '/team/roles', anchor: '[data-tour="role-add"]',
+      title: 'Click “New Role”', text: 'Roles decide what each employee can see and do (e.g. Field Rep, Manager).',
+      advanceOn: 'click',
+    },
+    {
+      id: 'name_role', kind: 'spotlight',
+      page: '/team/roles', anchor: '[data-tour="role-name"]',
+      title: 'Name the role', text: 'e.g. “Field Rep”. Then tick the permissions this role should have below.',
+      advanceOn: 'next', optional: true,
+    },
+    {
+      id: 'save_role', kind: 'spotlight',
+      page: '/team/roles', anchor: '[data-tour="role-save"]',
+      title: 'Save the role', text: 'Once you’ve set the name and permissions, click Save Role.',
+      advanceOn: 'click', optional: true, goto: 'done',
+    },
+    { id: 'done', kind: 'complete', title: 'That’s how you create roles', text: 'This step turns green automatically once your first role is saved.', markDone: false },
+  ],
+};
+
+// The Employees handholding tour. Data-driven (employee_count decides completion).
+export const employeesTour: TourScript = {
+  id: 'employees',
+  stepKey: 'employee_creation',
+  beats: [
+    {
+      id: 'add_employee', kind: 'spotlight',
+      page: '/team/employees', anchor: '[data-tour="employee-add"]',
+      title: 'Click “Add Employee”', text: 'This opens the new-employee form. Each employee gets a mobile login.',
+      advanceOn: 'click',
+    },
+    {
+      id: 'save_employee', kind: 'spotlight',
+      page: '/team/employees/new', anchor: '[data-shortcut="save"]',
+      title: 'Fill the details, then Create', text: 'Enter the employee’s name, mobile number and role, then click Create Employee to save.',
+      advanceOn: 'click', optional: true, goto: 'done',
+    },
+    { id: 'done', kind: 'complete', title: 'That’s how you add employees', text: 'This step turns green automatically once your first employee is added.', markDone: false },
+  ],
+};
+
+// The See-live-data tour. A light, observational walk — data-driven completion.
+export const seeLiveDataTour: TourScript = {
+  id: 'see_live_data',
+  stepKey: 'see_live_data',
+  beats: [
+    { id: 'go', kind: 'navigate', page: '/location-tracking/overview' },
+    {
+      id: 'show', kind: 'spotlight',
+      page: '/location-tracking/overview', anchor: '[data-tour="live-data"]',
+      title: 'Your live field data shows here',
+      text: 'Once your team logs in on mobile and starts working, attendance, visits and tracking appear here in real time.',
+      advanceOn: 'next', optional: true, goto: 'done',
+    },
+    { id: 'done', kind: 'complete', title: 'You’re ready to go live', text: 'This step turns green automatically once real field data starts flowing.', markDone: false },
+  ],
+};
+
 export const TOURS: Record<string, TourScript> = {
   [territoryTour.id]: territoryTour,
   [customersTour.id]: customersTour,
+  [rolesTour.id]: rolesTour,
+  [employeesTour.id]: employeesTour,
+  [seeLiveDataTour.id]: seeLiveDataTour,
 };
 
 // Getting Started step_key → tour id (only steps that have a guided tour).
 export const STEP_TOURS: Record<string, string> = {
   territory_setup: 'territory',
   customer_creation: 'customers',
+  role_creation: 'roles',
+  employee_creation: 'employees',
+  see_live_data: 'see_live_data',
 };

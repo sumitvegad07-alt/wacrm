@@ -39,6 +39,19 @@ export function StepPanel({ evaluated, answers, pending, spotlight = false, step
       </div>
       <ContentTabs step={step} />
 
+      {/* Steps with no guided tour and no in-app deep-link (e.g. the mobile-only
+          steps — mobile login, first activity) can't spotlight a web button, so
+          surface their how-to steps prominently here instead of hiding them. */}
+      {!tourId && !primaryTask && step.questions.length === 0 && step.tasks.every((t) => !t.deep_link) && step.quick_steps.length > 0 && !done && (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <p className="text-sm font-semibold">How to complete this step</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+            {step.quick_steps.map((s, i) => <li key={i}>{s}</li>)}
+          </ol>
+          {step.help_text && <p className="mt-2 text-xs text-muted-foreground">{step.help_text}</p>}
+        </div>
+      )}
+
       {spotlight && tourId && !done && (
         <button type="button" onClick={() => launchTour(tourId, step.id)}
           className="group relative flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-4 text-center text-base font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition hover:brightness-110">
