@@ -191,6 +191,12 @@ export const PERMISSIONS = {
     EXPORT: 'export_visits',
   },
 
+  // Implementation Center ("Getting Started") — admin/owner onboarding
+  IMPLEMENTATION: {
+    VIEW: 'view_implementation',
+    MANAGE: 'manage_implementation',
+  },
+
   // Mobile App & Field Force (existing keys)
   MOBILE: {
     VIEW_LOCATION_TRACKING: 'view_location_tracking',
