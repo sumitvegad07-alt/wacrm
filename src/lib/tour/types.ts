@@ -20,7 +20,9 @@ export type Beat =
     }
   | { id: string; kind: 'navigate'; page: string; goto?: string }
   | { id: string; kind: 'check'; flag: string; ifTrue: string; ifFalse: string }
-  | { id: string; kind: 'complete'; title: string; text?: string };
+  // markDone defaults to true (force-completes the step, e.g. Territory). Set false
+  // for data-driven steps (e.g. Customers) where the real validation should decide.
+  | { id: string; kind: 'complete'; title: string; text?: string; markDone?: boolean };
 
 export interface TourScript {
   id: string;        // e.g. 'territory'

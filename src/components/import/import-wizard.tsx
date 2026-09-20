@@ -372,6 +372,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
               <div
                 role="button"
                 tabIndex={0}
+                data-tour="import-upload"
                 onClick={() => !descLoading && fileRef.current?.click()}
                 onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !descLoading && fileRef.current?.click()}
                 className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 py-10 hover:bg-muted/50"

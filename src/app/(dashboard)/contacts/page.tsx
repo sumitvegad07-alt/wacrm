@@ -657,10 +657,10 @@ export default function ContactsPage() {
         data={filteredContacts}
         actions={
           <div className="flex items-center gap-2">
-            <GatedButton variant="outline" size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="h-7 text-xs px-2.5">
+            <GatedButton data-tour="customer-import" variant="outline" size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="h-7 text-xs px-2.5">
               <Upload className="size-3 mr-1" /> Import
             </GatedButton>
-            <GatedButton size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={openAddForm} className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground">
+            <GatedButton data-tour="customer-add" size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={openAddForm} className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground">
               <Plus className="size-3 mr-1" /> Add Customer
             </GatedButton>
           </div>

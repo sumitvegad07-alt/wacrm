@@ -84,11 +84,73 @@ export const territoryTour: TourScript = {
   ],
 };
 
+// The Customers handholding tour. DATA-DRIVEN: unlike Territory it never
+// force-completes the step (markDone:false) — the real customer_count validation
+// ticks it green once a customer actually exists. Area-wise accounts get an extra
+// beat spotlighting the territory picker (a territory is mandatory there).
+export const customersTour: TourScript = {
+  id: 'customers',
+  stepKey: 'customer_creation',
+  beats: [
+    {
+      id: 'method', kind: 'ask',
+      title: 'How do you want to add your customers?',
+      text: 'Add one at a time, or bulk-import from an Excel/CSV file.',
+      answerKey: 'method',
+      options: [
+        { label: 'Add manually (one by one)', value: 'manual', goto: 'add_customer' },
+        { label: 'Import from a spreadsheet', value: 'import', goto: 'import_open' },
+      ],
+    },
+
+    // ── Manual branch ──
+    {
+      id: 'add_customer', kind: 'spotlight',
+      page: '/contacts', anchor: '[data-tour="customer-add"]',
+      title: 'Click here to add a customer', text: 'This opens the new-customer form.',
+      advanceOn: 'click',
+    },
+    { id: 'check_area', kind: 'check', flag: 'areaWise', ifTrue: 'pick_territory', ifFalse: 'save_customer' },
+    {
+      id: 'pick_territory', kind: 'spotlight',
+      page: '/contacts/new', anchor: '[data-tour="customer-territory"]',
+      title: 'Assign this customer’s area/territory',
+      text: 'Because you assign customers area-wise, every customer needs a territory — that’s how a rep gets linked to them. Pick it here.',
+      advanceOn: 'next', optional: true,
+    },
+    {
+      id: 'save_customer', kind: 'spotlight',
+      page: '/contacts/new', anchor: '[data-shortcut="save"]',
+      title: 'Fill the details, then Save', text: 'Enter the customer’s name & phone (and territory), then click Create Customer.',
+      advanceOn: 'next', optional: true, goto: 'done',
+    },
+
+    // ── Import branch ──
+    {
+      id: 'import_open', kind: 'spotlight',
+      page: '/contacts', anchor: '[data-tour="customer-import"]',
+      title: 'Click here to import', text: 'Open the spreadsheet import.',
+      advanceOn: 'click',
+    },
+    {
+      id: 'import_upload', kind: 'spotlight',
+      page: '/contacts', anchor: '[data-tour="import-upload"]',
+      title: 'Upload your file', text: 'Choose your CSV/Excel and follow the on-screen steps (map columns → preview → import) to finish.',
+      advanceOn: 'next', optional: true, goto: 'done',
+    },
+
+    // Data-driven end: does NOT mark the step done — adding a real customer does.
+    { id: 'done', kind: 'complete', title: 'Nice — that’s how you add customers 🎉', text: 'Your step ticks green once your first customer is saved.', markDone: false },
+  ],
+};
+
 export const TOURS: Record<string, TourScript> = {
   [territoryTour.id]: territoryTour,
+  [customersTour.id]: customersTour,
 };
 
 // Getting Started step_key → tour id (only steps that have a guided tour).
 export const STEP_TOURS: Record<string, string> = {
   territory_setup: 'territory',
+  customer_creation: 'customers',
 };

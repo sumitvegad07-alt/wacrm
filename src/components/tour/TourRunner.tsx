@@ -94,13 +94,25 @@ export function TourRunner() {
               flag = desired > enabledLevels(settings).length;
             } catch { flag = false; }
           }
+          // Area-wise accounts require a territory per customer → branch the tour to
+          // spotlight the territory picker. Default true (area-wise) on read failure.
+          if (beat.flag === 'areaWise' && accountId) {
+            try {
+              const settings = await getAccountTerritorySettings(accountId);
+              flag = settings.assignment_mode !== 'direct';
+            } catch { flag = true; }
+          }
           if (!cancelled) advance(tour, beat, { flags: { [beat.flag]: flag } });
           return;
         }
 
         if (beat.kind === 'complete') {
           cleanupDriver();
-          try { await markStepDone(tour.stepId); } catch { /* still finish the tour */ }
+          // markDone defaults true; data-driven tours (Customers) pass false so the
+          // real validation — not the tour — decides when the step is complete.
+          if (beat.markDone !== false) {
+            try { await markStepDone(tour.stepId); } catch { /* still finish the tour */ }
+          }
           writeTour(null);
           toast.success(beat.title);
           router.push('/getting-started/welcome');

@@ -134,6 +134,10 @@ export function ContactForm({
   const [needsTerritoryReview, setNeedsTerritoryReview] = useState(false);
   // Data-driven: show the cascade once the hierarchy has levels + rows, on any plan.
   const showTerritoryCascade = enabledLevels(territorySettings).length > 0 && territoryRows.length > 0;
+  // Area-wise assignment derives each customer's rep from their territory, so a
+  // territory is mandatory. Read the AUTHORITATIVE setting (territory_settings via
+  // getAccountTerritorySettings), not the stale top-level settings.assignment_mode.
+  const isAreaWise = territorySettings.assignment_mode !== 'direct';
 
   // When Territory Master is enabled, the flat country/state/city/area system
   // fields are replaced by the Territory picker — hide them from the shared
@@ -330,6 +334,13 @@ export function ContactForm({
     
     if (isModuleEnabled('whatsapp') && !whatsapp.trim()) {
       toast.error('WhatsApp Number is required');
+      return;
+    }
+
+    // Area-wise assignment: every customer must have a territory/area so a rep can
+    // be derived from it. Only enforced when the territory picker is actually shown.
+    if (isAreaWise && showTerritoryCascade && !territoryId) {
+      toast.error('Please assign a territory/area — your account assigns customers area-wise.');
       return;
     }
 
@@ -627,8 +638,9 @@ export function ContactForm({
           />
 
           {showTerritoryCascade && (
+            <div data-tour="customer-territory">
             <FormSection
-              title="Territory (Geography)"
+              title={isAreaWise ? 'Territory (Geography) *' : 'Territory (Geography)'}
               action={needsTerritoryReview ? (
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/15 text-amber-600 dark:text-amber-500 gap-1">
                   <AlertTriangle className="size-2.5" /> needs review
@@ -655,6 +667,7 @@ export function ContactForm({
                 }}
               />
             </FormSection>
+            </div>
           )}
 
           <FormSection title="GPS Coordinates (Optional)">
