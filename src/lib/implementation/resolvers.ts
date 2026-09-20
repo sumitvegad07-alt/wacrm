@@ -31,20 +31,29 @@ export const RESOLVERS: Record<string, Resolver> = {
   role_count: (ctx) => countRows(ctx, 'employee_roles', (q: any) => q.eq('status', 'active')),
   employee_count: (ctx) => countRows(ctx, 'profiles'),
   employee_logged_in: async (ctx) => {
-    // A login/activity signal: presence OR any tracking session for the account.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- chained builder
-    const presence = await existsRows(ctx, 'member_presence', (q: any) => q.not('last_seen_at', 'is', null));
-    if (presence) return true;
-    return existsRows(ctx, 'tracking_sessions');
+    // A login/activity signal: presence OR any tracking session. Run both in
+    // parallel and OR the results — faster than sequential short-circuit.
+    const [presence, session] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- chained builder
+      existsRows(ctx, 'member_presence', (q: any) => q.not('last_seen_at', 'is', null)),
+      existsRows(ctx, 'tracking_sessions'),
+    ]);
+    return presence || session;
   },
   attendance_or_visit: async (ctx) => {
-    if (await existsRows(ctx, 'tracking_sessions')) return true;
-    return existsRows(ctx, 'site_visits');
+    const [sessions, visits] = await Promise.all([
+      existsRows(ctx, 'tracking_sessions'),
+      existsRows(ctx, 'site_visits'),
+    ]);
+    return sessions || visits;
   },
   meaningful_data: async (ctx) => {
-    if (await existsRows(ctx, 'location_pings')) return true;
-    if (await existsRows(ctx, 'site_visits')) return true;
-    return existsRows(ctx, 'tracking_sessions');
+    const [pings, visits, sessions] = await Promise.all([
+      existsRows(ctx, 'location_pings'),
+      existsRows(ctx, 'site_visits'),
+      existsRows(ctx, 'tracking_sessions'),
+    ]);
+    return pings || visits || sessions;
   },
   answer: async (ctx) => {
     const key = ctx.params?.question_key as string | undefined;

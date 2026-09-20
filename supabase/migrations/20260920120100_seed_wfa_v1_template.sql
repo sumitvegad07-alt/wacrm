@@ -3,7 +3,7 @@
 DO $$
 DECLARE
   tpl uuid;
-  s_disc uuid; s1 uuid; s2 uuid; s3 uuid; s4 uuid; s5 uuid; s6 uuid; s7 uuid; s8 uuid;
+  s1 uuid; s2 uuid; s3 uuid; s4 uuid; s5 uuid; s6 uuid; s7 uuid; s8 uuid;
 BEGIN
   INSERT INTO impl_templates (product_line, template_key, version, name, display_name, description, estimated_minutes, support_whatsapp_url, is_active)
   VALUES ('wfa','wfa_v1',1,'WFA v1','Getting Started with Field Force',
@@ -12,18 +12,8 @@ BEGIN
   ON CONFLICT (template_key, version) DO UPDATE SET display_name=EXCLUDED.display_name
   RETURNING id INTO tpl;
 
-  -- Discovery (optional, light for WFA)
-  INSERT INTO impl_steps (template_id, position, step_key, step_type, title, description, quick_steps, help_text, estimated_minutes, is_optional, auto_complete, weight)
-  VALUES (tpl,0,'discovery','discovery','Tell us about your team',
-          'A couple of quick questions so we can tailor your setup.',
-          '["Pick your industry","Pick your team size"]'::jsonb,'This helps us recommend the right defaults.',2,true,true,0.5)
-  ON CONFLICT (template_id, step_key) DO UPDATE SET title=EXCLUDED.title RETURNING id INTO s_disc;
-  INSERT INTO impl_step_questions (step_id, position, question_key, label, input_type, options, required) VALUES
-    (s_disc,0,'industry','Which industry are you in?','single_select',
-     '[{"value":"fmcg","label":"FMCG / Distribution"},{"value":"pharma","label":"Pharma"},{"value":"services","label":"Services"},{"value":"other","label":"Other"}]'::jsonb,false),
-    (s_disc,1,'team_size','How large is your field team?','single_select',
-     '[{"value":"1_5","label":"1–5"},{"value":"6_20","label":"6–20"},{"value":"21_50","label":"21–50"},{"value":"50_plus","label":"50+"}]'::jsonb,false)
-  ON CONFLICT (step_id, question_key) DO NOTHING;
+  -- (Discovery / industry step removed: not useful for WFA implementation. The
+  --  engine still supports step_type='discovery' for future SFA/CRM templates.)
 
   -- Step 1 Territory
   INSERT INTO impl_steps (template_id, position, step_key, title, description, quick_steps, help_text, estimated_minutes, weight)

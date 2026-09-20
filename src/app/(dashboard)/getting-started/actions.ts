@@ -100,8 +100,10 @@ export type LoadResult = EvaluatedTemplate & { answers: AnswerMap; milestonesToC
 async function evaluateAndPersist(
   supabase: SB, accountId: string, actorId: string, def: TemplateDefinition, progress: { id: string },
 ): Promise<LoadResult> {
-  const answers = await loadAnswers(supabase, progress.id);
-  const prior = await priorStatuses(supabase, progress.id);
+  const [answers, prior] = await Promise.all([
+    loadAnswers(supabase, progress.id),
+    priorStatuses(supabase, progress.id),
+  ]);
   const resolverCtx: ResolverCtx = { accountId, supabase: supabase as never, params: null, answers };
   const evalResult = await evaluateTemplate(def, answers, prior, resolverCtx);
 
