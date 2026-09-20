@@ -104,7 +104,7 @@ export function TerritorySettings({ onSaved }: { onSaved?: () => void } = {}) {
       ) : (
         <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
           {/* Levels */}
-          <div className="space-y-3 p-4 border border-border rounded-lg bg-card">
+          <div data-tour="territory-levels" className="space-y-3 p-4 border border-border rounded-lg bg-card">
             <div className="flex items-center gap-2">
               <Layers className="h-4 w-4 text-muted-foreground" />
               <p className="text-sm font-medium">Hierarchy levels (Level 1 = broadest, e.g. Country)</p>

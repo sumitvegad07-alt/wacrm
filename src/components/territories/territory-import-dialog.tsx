@@ -75,6 +75,7 @@ export function TerritoryImportDialog({ accountId, open, onOpenChange, onImporte
         <div className="space-y-3">
           <button
             type="button"
+            data-tour="territory-import-file"
             onClick={() => fileRef.current?.click()}
             className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 py-8 hover:bg-muted/50"
           >
@@ -125,7 +126,7 @@ export function TerritoryImportDialog({ accountId, open, onOpenChange, onImporte
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {result ? "Close" : "Cancel"}
           </Button>
-          <Button onClick={runImport} disabled={!csv.trim() || busy}>
+          <Button data-tour="territory-import-save" onClick={runImport} disabled={!csv.trim() || busy}>
             {busy && <Loader2 className="size-4 mr-1 animate-spin" />}
             Import
           </Button>

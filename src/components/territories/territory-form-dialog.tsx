@@ -182,7 +182,7 @@ export function TerritoryFormDialog({
             <Label className="text-xs text-muted-foreground">
               Name <span className="text-destructive">*</span>
             </Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter name…" autoFocus />
+            <Input data-tour="territory-city" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter name…" autoFocus />
           </div>
 
           {/* Parent — a single searchable picker of the level directly above the

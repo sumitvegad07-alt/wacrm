@@ -2,6 +2,8 @@
 import type { EvaluatedStep, AnswerMap } from '@/lib/implementation/types';
 import { Button } from '@/components/ui/button';
 import { ContentTabs } from './ContentTabs';
+import { STEP_TOURS } from '@/lib/tour/scripts';
+import { launchTour } from '@/lib/tour/launch';
 
 // Customer-facing labels for validation metrics — never show raw source_keys.
 const VALIDATION_LABELS: Record<string, string> = {
@@ -18,8 +20,11 @@ export function StepPanel({ evaluated, answers, pending, spotlight = false, step
 }) {
   const { step, status, ruleResults } = evaluated;
   const done = status === 'completed' || status === 'auto_completed';
+  // If this step has a guided tour, it takes over the primary CTA — a real
+  // step-by-step walkthrough on the actual pages instead of a plain deep-link.
+  const tourId = STEP_TOURS[step.step_key];
   // In the guided flow the first deep-linked task becomes the big "do this now" CTA.
-  const primaryTask = spotlight ? step.tasks.find((t) => t.deep_link) : undefined;
+  const primaryTask = spotlight && !tourId ? step.tasks.find((t) => t.deep_link) : undefined;
   const otherTasks = step.tasks.filter((t) => t.id !== primaryTask?.id);
   const deepLink = (link: string) => `${link}?from=getting-started&step=${step.step_key}`;
   return (
@@ -32,6 +37,14 @@ export function StepPanel({ evaluated, answers, pending, spotlight = false, step
         {step.description && <p className="text-sm text-muted-foreground">{step.description}</p>}
       </div>
       <ContentTabs step={step} />
+
+      {spotlight && tourId && !done && (
+        <button type="button" onClick={() => launchTour(tourId, step.id)}
+          className="group relative flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-4 text-center text-base font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition hover:brightness-110">
+          <span className="absolute inset-0 animate-pulse rounded-xl ring-2 ring-primary/40" aria-hidden />
+          Start guided setup →
+        </button>
+      )}
 
       {primaryTask?.deep_link && !done && (
         <a href={deepLink(primaryTask.deep_link)} onClick={() => onToggleTask(primaryTask.id, true)}

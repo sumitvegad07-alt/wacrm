@@ -286,10 +286,10 @@ export function TerritoryManager() {
             </Button>
             {canEdit && (
               <>
-                <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+                <Button data-tour="territory-import" variant="outline" size="sm" onClick={() => setImportOpen(true)}>
                   <Upload className="size-4 mr-1" /> Import
                 </Button>
-                <Button size="sm" onClick={() => setEdit({ mode: "create" })}>
+                <Button data-tour="territory-add" size="sm" onClick={() => setEdit({ mode: "create" })}>
                   <Plus className="size-4 mr-1" /> Add Territory
                 </Button>
               </>

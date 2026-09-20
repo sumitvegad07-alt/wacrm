@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { BrandSplash } from "@/components/shared/brand";
 import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcuts-provider";
 import { BackToGettingStarted } from "@/components/getting-started/BackToGettingStarted";
+import { TourRunner } from "@/components/tour/TourRunner";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -255,6 +256,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <KeyboardShortcutsProvider>
         <div className="h-screen overflow-y-auto bg-background">
           <PresenceHeartbeat />
+          <TourRunner />
           {children}
         </div>
       </KeyboardShortcutsProvider>
@@ -267,6 +269,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       {/* Reports this tab's online/away presence once we know a user is
           signed in. Headless — renders nothing. */}
       <PresenceHeartbeat />
+      <TourRunner />
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
