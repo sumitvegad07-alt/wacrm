@@ -97,6 +97,7 @@ export default function GettingStartedClient({ initial, focus = false, isFounder
                 spotlight={viewed.step.id === state.currentStepId}
                 stepNumber={viewedIdx >= 0 ? viewedIdx + 1 : undefined}
                 stepTotal={applicable.length}
+                supportUrl={state.template.support_whatsapp_url}
                 onAnswer={(k, v) => run(() => saveAnswer(k, v))}
                 onSkip={() => run(() => skipStep(viewed.step.id), 'Step skipped')}
                 onMarkDone={() => run(() => markStepDone(viewed.step.id), 'Marked done')}

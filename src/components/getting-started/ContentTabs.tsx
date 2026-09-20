@@ -3,8 +3,8 @@ import { useState } from 'react';
 import type { TemplateStep } from '@/lib/implementation/types';
 
 export function ContentTabs({ step }: { step: TemplateStep }) {
+  // Video is surfaced via the "Watch Video" button in StepPanel, not an inline tab.
   const tabs: string[] = [];
-  if (step.video_url) tabs.push('Watch');
   if (step.quick_steps.length) tabs.push('Read');
   if (step.media.some((m) => m.media_type === 'image')) tabs.push('Screenshots');
   const [active, setActive] = useState(tabs[0] ?? 'Read');
@@ -18,9 +18,6 @@ export function ContentTabs({ step }: { step: TemplateStep }) {
         ))}
       </div>
       <div className="p-4">
-        {active === 'Watch' && step.video_url && (
-          <div className="aspect-video"><iframe className="h-full w-full rounded-lg" src={step.video_url} title="Walkthrough" allowFullScreen /></div>
-        )}
         {active === 'Read' && (
           <ol className="list-decimal space-y-1 pl-5 text-sm">{step.quick_steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
         )}

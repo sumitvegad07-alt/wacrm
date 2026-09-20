@@ -1,6 +1,7 @@
 'use client';
 import type { EvaluatedStep, AnswerMap } from '@/lib/implementation/types';
 import { Button } from '@/components/ui/button';
+import { Play, MessageCircle } from 'lucide-react';
 import { ContentTabs } from './ContentTabs';
 import { STEP_TOURS } from '@/lib/tour/scripts';
 import { launchTour } from '@/lib/tour/launch';
@@ -12,9 +13,9 @@ const VALIDATION_LABELS: Record<string, string> = {
   attendance_or_visit: 'First activity recorded', meaningful_data: 'Live data flowing',
 };
 
-export function StepPanel({ evaluated, answers, pending, spotlight = false, stepNumber, stepTotal, onAnswer, onSkip, onMarkDone, onToggleTask, onHelp }: {
+export function StepPanel({ evaluated, answers, pending, spotlight = false, stepNumber, stepTotal, supportUrl, onAnswer, onSkip, onMarkDone, onToggleTask, onHelp }: {
   evaluated: EvaluatedStep; answers: AnswerMap; pending: boolean;
-  spotlight?: boolean; stepNumber?: number; stepTotal?: number;
+  spotlight?: boolean; stepNumber?: number; stepTotal?: number; supportUrl?: string | null;
   onAnswer: (k: string, v: unknown) => void; onSkip: () => void; onMarkDone: () => void;
   onToggleTask: (taskId: string, done: boolean) => void; onHelp: () => void;
 }) {
@@ -109,7 +110,28 @@ export function StepPanel({ evaluated, answers, pending, spotlight = false, step
         {done && <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">✓ Done</span>}
         {!done && <Button variant="secondary" onClick={onMarkDone} disabled={pending}>Mark as done</Button>}
         {!done && step.is_optional && <Button variant="ghost" onClick={onSkip} disabled={pending}>Skip for now</Button>}
-        <Button variant="outline" onClick={onHelp}>Need help?</Button>
+
+        {/* Watch Video — opens this step's YouTube link. Placeholder (disabled) until a URL is set on the step. */}
+        {step.video_url ? (
+          <Button variant="outline" onClick={() => window.open(step.video_url!, '_blank', 'noopener,noreferrer')}>
+            <Play className="h-4 w-4" /> Watch Video
+          </Button>
+        ) : (
+          <Button variant="outline" disabled title="Video coming soon">
+            <Play className="h-4 w-4" /> Watch Video
+          </Button>
+        )}
+
+        {/* WhatsApp support — opens the template's support number. Placeholder (disabled) until it's set. */}
+        {supportUrl ? (
+          <Button variant="outline" onClick={onHelp}>
+            <MessageCircle className="h-4 w-4" /> WhatsApp support
+          </Button>
+        ) : (
+          <Button variant="outline" disabled title="Support link coming soon">
+            <MessageCircle className="h-4 w-4" /> WhatsApp support
+          </Button>
+        )}
       </div>
     </div>
   );
