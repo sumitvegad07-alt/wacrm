@@ -11,7 +11,7 @@ export function FloatingWidget() {
       {isOpen && (
         <div className="flex flex-col gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300">
           <a
-            href="tel:+919876543210"
+            href="tel:+919227126301"
             className="flex items-center gap-3 bg-card border border-border p-3 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all group"
           >
             <span className="text-sm font-bold text-foreground px-2">Call Sales</span>
@@ -20,7 +20,7 @@ export function FloatingWidget() {
             </div>
           </a>
           <a
-            href="https://wa.me/919876543210"
+            href="https://wa.me/919227126301"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-3 bg-card border border-border p-3 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all group"

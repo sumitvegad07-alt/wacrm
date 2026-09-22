@@ -1,7 +1,7 @@
 'use client';
 import type { EvaluatedStep, AnswerMap } from '@/lib/implementation/types';
 import { Button } from '@/components/ui/button';
-import { Play, MessageCircle, Copy, Smartphone, ClipboardCheck, MapPin } from 'lucide-react';
+import { Play, MessageCircle, Copy, Smartphone, ClipboardCheck, MapPin, Loader2, Check } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { ContentTabs } from './ContentTabs';
@@ -41,12 +41,16 @@ const VALIDATION_LABELS: Record<string, string> = {
   attendance_or_visit: 'First activity recorded', meaningful_data: 'Live data flowing',
 };
 
-export function StepPanel({ evaluated, answers, pending, spotlight = false, stepNumber, stepTotal, supportUrl, onAnswer, onSkip, onMarkDone, onToggleTask, onHelp }: {
-  evaluated: EvaluatedStep; answers: AnswerMap; pending: boolean;
+export function StepPanel({ evaluated, answers, busy, spotlight = false, stepNumber, stepTotal, supportUrl, onAnswer, onSkip, onMarkDone, onToggleTask, onHelp }: {
+  evaluated: EvaluatedStep; answers: AnswerMap; busy: string | null;
   spotlight?: boolean; stepNumber?: number; stepTotal?: number; supportUrl?: string | null;
   onAnswer: (k: string, v: unknown) => void; onSkip: () => void; onMarkDone: () => void;
   onToggleTask: (taskId: string, done: boolean) => void; onHelp: () => void;
 }) {
+  // `busy` names the action in flight (or null). It drives per-button spinners so a
+  // click is never ambiguous, and disables the panel so overlapping clicks can't
+  // fire while a ~1s server round-trip is running.
+  const working = busy !== null;
   const { step, status, ruleResults } = evaluated;
   const done = status === 'completed' || status === 'auto_completed';
   // If this step has a guided tour, it takes over the primary CTA — a real
@@ -146,11 +150,16 @@ export function StepPanel({ evaluated, answers, pending, spotlight = false, step
           <div className="mt-2 grid gap-2">
             {q.options.map((o) => {
               const selected = answers[q.question_key] === o.value;
+              const saving = busy === `answer:${q.question_key}:${String(o.value)}`;
               return (
                 <button key={o.value} onClick={() => onAnswer(q.question_key, o.value)}
-                  className={`rounded-lg border p-3 text-left text-sm ${selected ? 'ring-2 ring-primary' : ''}`}>
+                  disabled={working}
+                  className={`rounded-lg border p-3 text-left text-sm transition disabled:cursor-not-allowed ${selected ? 'ring-2 ring-primary' : ''} ${working && !selected ? 'opacity-50' : ''}`}>
                   <div className="flex items-center justify-between">
-                    <span>{o.label}</span>
+                    <span className="flex items-center gap-1.5">
+                      {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+                      {o.label}
+                    </span>
                     {o.recommended_badge && <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">{o.recommended_badge}</span>}
                   </div>
                   {o.note && <p className="mt-1 text-xs text-muted-foreground">{o.note}</p>}
@@ -181,10 +190,13 @@ export function StepPanel({ evaluated, answers, pending, spotlight = false, step
           {ruleResults.filter((r) => r.source_key !== 'answer').map((r) => {
             const label = VALIDATION_LABELS[r.source_key] ?? r.source_key;
             const isCount = typeof r.value === 'number';
+            // Roles carry no prescribed target (founder decision) — show the count,
+            // never a "recommended N" nag. Keep the recommendation on other metrics.
+            const showRec = r.recommendedThreshold != null && r.source_key !== 'role_count';
             return (
               <div key={r.source_key} className={r.requiredPass ? 'text-green-600' : 'text-muted-foreground'}>
                 {r.requiredPass ? '✓' : '○'} {label}{isCount ? `: ${r.value}` : r.requiredPass ? '' : ' — not yet'}
-                {r.recommendedThreshold != null && ` · recommended ${r.recommendedThreshold}${r.recommendedPass ? ' ✓' : ' ⚠️'}`}
+                {showRec && ` · recommended ${r.recommendedThreshold}${r.recommendedPass ? ' ✓' : ' ⚠️'}`}
               </div>
             );
           })}
@@ -193,8 +205,18 @@ export function StepPanel({ evaluated, answers, pending, spotlight = false, step
 
       <div className="flex flex-wrap items-center gap-2">
         {done && <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">✓ Done</span>}
-        {!done && <Button variant="secondary" onClick={onMarkDone} disabled={pending}>Mark as done</Button>}
-        {!done && step.is_optional && <Button variant="ghost" onClick={onSkip} disabled={pending}>Skip for now</Button>}
+        {!done && (
+          <Button variant="secondary" onClick={onMarkDone} disabled={working}>
+            {busy === 'markDone' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {busy === 'markDone' ? 'Saving…' : 'Mark as done'}
+          </Button>
+        )}
+        {!done && step.is_optional && (
+          <Button variant="ghost" onClick={onSkip} disabled={working}>
+            {busy === 'skip' && <Loader2 className="h-4 w-4 animate-spin" />}
+            {busy === 'skip' ? 'Skipping…' : 'Skip for now'}
+          </Button>
+        )}
 
         {/* Watch Video — opens this step's YouTube link. Placeholder (disabled) until a URL is set on the step. */}
         {step.video_url ? (

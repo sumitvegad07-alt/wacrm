@@ -1,5 +1,6 @@
 'use client';
 import type { EvaluatedTemplate } from '@/lib/implementation/types';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HealthPanel } from './HealthPanel';
 
@@ -15,9 +16,10 @@ function Ring({ pct }: { pct: number }) {
   );
 }
 
-export function Hero({ state, onResume, onRecheck, pending }: {
-  state: EvaluatedTemplate; onResume: () => void; onRecheck: () => void; pending: boolean;
+export function Hero({ state, onResume, onRecheck, busy }: {
+  state: EvaluatedTemplate; onResume: () => void; onRecheck: () => void; busy: string | null;
 }) {
+  const working = busy !== null;
   const remaining = state.steps
     .filter((s) => s.applicable && s.status !== 'completed' && s.status !== 'auto_completed' && s.status !== 'skipped')
     .reduce((a, s) => a + s.step.estimated_minutes, 0);
@@ -35,8 +37,11 @@ export function Hero({ state, onResume, onRecheck, pending }: {
           </div>
         </div>
         <div className="flex gap-2">
-          {!state.completed && <Button onClick={onResume}>Resume</Button>}
-          <Button variant="outline" onClick={onRecheck} disabled={pending}>Re-check</Button>
+          {!state.completed && <Button onClick={onResume} disabled={working}>Resume</Button>}
+          <Button variant="outline" onClick={onRecheck} disabled={working}>
+            {busy === 'recheck' && <Loader2 className="h-4 w-4 animate-spin" />}
+            {busy === 'recheck' ? 'Checking…' : 'Re-check'}
+          </Button>
         </div>
       </div>
       <HealthPanel steps={state.steps} />

@@ -8,8 +8,9 @@ BEGIN
   INSERT INTO impl_templates (product_line, template_key, version, name, display_name, description, estimated_minutes, support_whatsapp_url, is_active)
   VALUES ('wfa','wfa_v1',1,'WFA v1','Getting Started with Field Force',
           'Set up your team, territories and first field activity — no support call needed.',
-          25,'https://wa.me/919000000000?text=I%20need%20help%20with%20OZZO%20setup', true)
-  ON CONFLICT (template_key, version) DO UPDATE SET display_name=EXCLUDED.display_name
+          25,'https://wa.me/919227126301?text=I%20need%20help%20with%20OZZO%20setup', true)
+  ON CONFLICT (template_key, version) DO UPDATE SET display_name=EXCLUDED.display_name,
+    support_whatsapp_url=EXCLUDED.support_whatsapp_url
   RETURNING id INTO tpl;
 
   -- (Discovery / industry step removed: not useful for WFA implementation. The

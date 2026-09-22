@@ -2,13 +2,17 @@
 import type { EvaluatedStep } from '@/lib/implementation/types';
 
 export function HealthPanel({ steps }: { steps: EvaluatedStep[] }) {
+  // Roles are not prescriptive — there's no "right" number of roles for an
+  // account, so we never nag with a recommended target (founder decision). Show
+  // the count with a plain green tick, exactly like Territories.
+  const NON_PRESCRIPTIVE = new Set(['role_count']);
   const metrics = steps.flatMap((s) => s.ruleResults
     .filter((r) => r.recommendedThreshold != null)
     .map((r) => ({
       key: r.source_key,
       value: typeof r.value === 'number' ? r.value : (r.value ? 1 : 0),
       rec: r.recommendedThreshold!,
-      ok: r.recommendedPass === true,
+      ok: NON_PRESCRIPTIVE.has(r.source_key) ? true : r.recommendedPass === true,
     })));
   if (metrics.length === 0) return null;
   const label: Record<string, string> = { territory_count: 'Territories', customer_count: 'Customers', employee_count: 'Employees', role_count: 'Roles' };

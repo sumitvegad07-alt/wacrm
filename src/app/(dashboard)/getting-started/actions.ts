@@ -235,6 +235,24 @@ export async function loadGettingStarted(): Promise<LoadResult | { locked: true 
   return { ...evalResult, answers, milestonesToCelebrate, progressId: progress.id };
 }
 
+// Cheap "is onboarding finished?" check for chrome (the sidebar hides the
+// "Getting Started" link once setup is complete). Reads only impl_progress.status
+// — no template load, no evaluation — so it's a couple of quick round-trips and
+// safe to call on every session load. Complete = a progress row exists AND every
+// journey for the account is 'completed'.
+export async function getImplementationComplete(): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data: profile } = await supabase
+    .from('profiles').select('account_id').eq('user_id', user.id).maybeSingle();
+  if (!profile?.account_id) return false;
+  const { data } = await supabase
+    .from('impl_progress').select('status').eq('account_id', profile.account_id);
+  if (!data || data.length === 0) return false;
+  return data.every((r) => r.status === 'completed');
+}
+
 export async function saveAnswer(questionKey: string, value: unknown): Promise<LoadResult> {
   const { supabase, actorId, accountId, plan } = await ctx();
   const def0 = await loadDefinition(supabase);

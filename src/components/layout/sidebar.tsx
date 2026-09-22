@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { useExtraSettings, type AssignmentMode } from "@/hooks/use-extra-settings";
 import { useTotalUnread } from "@/hooks/use-total-unread";
+import { useImplementationComplete } from "@/hooks/use-implementation-complete";
 import {
   GitBranch,
   LayoutDashboard,
@@ -479,6 +480,9 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
   } = useAuth();
   const { assignmentMode } = useExtraSettings();
   const totalUnread = useTotalUnread();
+  // Once the account finishes onboarding, the "Getting Started" link leaves the
+  // main menu entirely (founder decision).
+  const implementationComplete = useImplementationComplete();
 
   const menuStructure = useMemo(
     () => getMenuStructure(moduleSettings, assignmentMode),
@@ -516,6 +520,8 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     line === "crm" ? hasCRM : line === "wfa" ? hasWFA : hasSFA;
 
   const canViewItem = (item: NavItem): boolean => {
+    // Getting Started disappears from the menu once implementation is complete.
+    if (item.href === "/getting-started" && implementationComplete) return false;
     if (item.permission && !hasPermission(item.permission)) return false;
     if (item.module && !hasPermission(`view_${item.module}`)) return false;
     if (item.href === "/broadcasts" && !hasBroadcasts) return false;
