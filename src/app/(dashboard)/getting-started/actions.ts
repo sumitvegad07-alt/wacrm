@@ -5,30 +5,40 @@ import { evaluateTemplate } from '@/lib/implementation/evaluate';
 import { stepLineAllowed } from '@/lib/implementation/access';
 import type {
   TemplateDefinition, TemplateStep, AnswerMap, StepStatus, EvaluatedTemplate,
-  Milestone, AnalyticsEventType, BaselineMap,
+  Milestone, AnalyticsEventType, BaselineMap, ResolverOverride,
 } from '@/lib/implementation/types';
 import { runResolver, type ResolverCtx } from '@/lib/implementation/resolvers';
-import { isFounderEmail } from '@/lib/auth/founder';
-import { serviceClient } from '@/lib/auth/superadmin';
 
 const TEMPLATE_KEY = 'wfa_v1';
 
 type SB = Awaited<ReturnType<typeof createClient>>;
 
 // --- helpers -------------------------------------------------------------
+// A user's profile id + account id never change, and their plan changes rarely.
+// Re-fetching both on every button click was two extra cross-region round-trips
+// per action; cache them per user for a short window so a click only pays the
+// (security-required) getUser() check. Keyed by user id, 60s TTL.
+type CtxData = { actorId: string; accountId: string; plan: unknown };
+const _ctxCache = new Map<string, { data: CtxData; at: number }>();
+const CTX_TTL_MS = 60 * 1000;
+
 async function ctx() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
+  const hit = _ctxCache.get(user.id);
+  if (hit && Date.now() - hit.at < CTX_TTL_MS) return { supabase, ...hit.data };
   const { data: profile } = await supabase
     .from('profiles').select('id, account_id, account_role').eq('user_id', user.id).single();
   if (!profile?.account_id) throw new Error('No account');
   const { data: acct } = await supabase
     .from('accounts').select('subscription_plan').eq('id', profile.account_id).single();
-  return {
-    supabase, actorId: profile.id as string, accountId: profile.account_id as string,
+  const data: CtxData = {
+    actorId: profile.id as string, accountId: profile.account_id as string,
     plan: (acct?.subscription_plan ?? null) as unknown,
   };
+  _ctxCache.set(user.id, { data, at: Date.now() });
+  return { supabase, ...data };
 }
 
 // Line-composed journey: keep only the steps/milestones this account's plan
@@ -133,27 +143,44 @@ async function loadAnswers(supabase: SB, progressId: string): Promise<AnswerMap>
   return map;
 }
 
-async function priorStatuses(supabase: SB, progressId: string): Promise<Record<string, StepStatus>> {
-  const { data } = await supabase.from('impl_step_progress').select('step_id, status').eq('progress_id', progressId);
-  const map: Record<string, StepStatus> = {};
-  for (const row of data ?? []) map[row.step_id] = row.status as StepStatus;
-  return map;
-}
-
 export type LoadResult = EvaluatedTemplate & { answers: AnswerMap; milestonesToCelebrate: Milestone[]; progressId: string };
 
 // The core: evaluate, persist step_progress + progress caches, fire milestones.
+//
+// `live` decides where the count/exists metrics come from:
+//   • live=true  → run every resolver against the DB (the ~13-18 cross-region
+//     COUNT queries). Used only by the explicit "Re-check" and the quiet on-mount
+//     refresh, where the user is asking us to look at fresh data.
+//   • live=false → reuse each step's last validation_snapshot for the counts, so a
+//     click (answer / skip / mark-done) doesn't fire that whole query wave. 'answer'
+//     rules still resolve live because they're in-memory and free, keeping the
+//     question-branching correct. This is what makes the buttons feel instant.
 async function evaluateAndPersist(
   supabase: SB, accountId: string, actorId: string, def: TemplateDefinition,
   progress: { id: string; baseline?: BaselineMap | null },
+  opts: { live?: boolean } = {},
 ): Promise<LoadResult> {
-  const [answers, prior] = await Promise.all([
+  const live = opts.live ?? true;
+  const [answers, stepRows] = await Promise.all([
     loadAnswers(supabase, progress.id),
-    priorStatuses(supabase, progress.id),
+    supabase.from('impl_step_progress').select('step_id, status, validation_snapshot').eq('progress_id', progress.id),
   ]);
+  const prior: Record<string, StepStatus> = {};
+  const snapshot: Record<string, number | boolean> = {};
+  for (const row of stepRows.data ?? []) {
+    prior[row.step_id] = row.status as StepStatus;
+    Object.assign(snapshot, (row.validation_snapshot as Record<string, number | boolean>) ?? {});
+  }
   const resolverCtx: ResolverCtx = { accountId, supabase: supabase as never, params: null, answers };
   const baseline: BaselineMap = (progress.baseline as BaselineMap) ?? {};
-  const evalResult = await evaluateTemplate(def, answers, prior, resolverCtx, undefined, baseline);
+  // Snapshot resolver for the fast path: 'answer' live (free), counts from cache.
+  const cachedResolver: ResolverOverride = async (k, p) =>
+    k === 'answer'
+      ? runResolver('answer', { ...resolverCtx, params: p ?? null })
+      : (k in snapshot ? snapshot[k] : (0 as number | boolean));
+  const evalResult = await evaluateTemplate(
+    def, answers, prior, resolverCtx, live ? undefined : cachedResolver, baseline,
+  );
 
   const nowIso = new Date().toISOString();
   const rows = evalResult.steps.map((s) => ({
@@ -265,7 +292,8 @@ export async function saveAnswer(questionKey: string, value: unknown): Promise<L
   }, { onConflict: 'progress_id,question_key' });
   // Fire-and-forget analytics; don't make the user wait on it.
   void logEvent(supabase, accountId, actorId, def.id, progress.id, null, 'question_answered', { question_key: questionKey });
-  return evaluateAndPersist(supabase, accountId, actorId, def, progress);
+  // Fast path: an answer only changes branching, not the live counts.
+  return evaluateAndPersist(supabase, accountId, actorId, def, progress, { live: false });
 }
 
 export async function recheck(): Promise<LoadResult> {
@@ -288,7 +316,9 @@ async function setStepStatus(stepId: string, status: 'skipped' | 'completed', ev
     completed_by: actorId, completed_at: status === 'completed' ? new Date().toISOString() : null,
   }, { onConflict: 'progress_id,step_id' });
   void logEvent(supabase, accountId, actorId, def.id, progress.id, stepId, event);
-  return evaluateAndPersist(supabase, accountId, actorId, def, progress);
+  // Fast path: marking done / skipping is an explicit status change — no need to
+  // re-run the live count queries; the next "Re-check" refreshes them.
+  return evaluateAndPersist(supabase, accountId, actorId, def, progress, { live: false });
 }
 export async function skipStep(stepId: string): Promise<LoadResult> { return setStepStatus(stepId, 'skipped', 'step_skipped'); }
 export async function markStepDone(stepId: string): Promise<LoadResult> { return setStepStatus(stepId, 'completed', 'step_completed'); }
@@ -324,46 +354,3 @@ export async function acknowledgeMilestone(milestoneId: string): Promise<{ ok: t
     .eq('account_id', accountId).eq('milestone_id', milestoneId);
   return { ok: true };
 }
-
-// ===================== TEMP-QA: remove before final release =====================
-// Founder-only onboarding reset. Lets us re-walk Getting Started on the same
-// account instead of creating a fresh signup for every change. Deletes ONLY this
-// account's per-account progress rows (never the global template definition, never
-// any other tenant), then re-enrolls with a fresh baseline. To remove: delete this
-// block, the two imports it needs (isFounderEmail, serviceClient), and the QA
-// button in page.tsx / GettingStartedClient.tsx.
-// True only for the platform founder — gates the QA reset button's visibility.
-export async function isFounderViewer(): Promise<boolean> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return isFounderEmail(user?.email);
-}
-
-export async function resetGettingStarted(): Promise<LoadResult> {
-  const { supabase, actorId, accountId, plan } = await ctx();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!isFounderEmail(user?.email)) throw new Error('Founder only');
-
-  const def0 = await loadDefinition(supabase);
-  if (!def0) throw new Error('No template');
-  const def = filterByPlan(def0, plan);
-
-  // Service role, but scoped strictly to the caller's OWN account, so the wipe
-  // can't be blocked by RLS and can't touch another tenant's data.
-  const svc = serviceClient();
-  const { data: prog } = await svc.from('impl_progress')
-    .select('id').eq('account_id', accountId).eq('template_key', TEMPLATE_KEY).maybeSingle();
-  if (prog) {
-    // Children first (all keyed by progress_id), then the root row.
-    for (const t of ['impl_task_progress', 'impl_step_progress', 'impl_milestone_progress', 'impl_answers', 'impl_analytics_events']) {
-      await svc.from(t).delete().eq('progress_id', prog.id);
-    }
-    await svc.from('impl_progress').delete().eq('id', prog.id);
-  }
-
-  // Re-enroll fresh (new baseline snapshotted from current data) and return the
-  // reset state so the client can render step 1 without a reload.
-  const fresh = await getOrCreateProgress(supabase, accountId, def, actorId);
-  return evaluateAndPersist(supabase, accountId, actorId, def, fresh);
-}
-// =================== END TEMP-QA ===================

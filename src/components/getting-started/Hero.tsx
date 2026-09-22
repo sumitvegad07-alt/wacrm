@@ -16,8 +16,11 @@ function Ring({ pct }: { pct: number }) {
   );
 }
 
-export function Hero({ state, onResume, onRecheck, busy }: {
+export function Hero({ state, onResume, onRecheck, busy, canResume = false }: {
   state: EvaluatedTemplate; onResume: () => void; onRecheck: () => void; busy: string | null;
+  // Show "Resume" only when the viewer is looking at a step other than their
+  // current one — then it takes them back. Otherwise it's a no-op, so hide it.
+  canResume?: boolean;
 }) {
   const working = busy !== null;
   const remaining = state.steps
@@ -37,7 +40,7 @@ export function Hero({ state, onResume, onRecheck, busy }: {
           </div>
         </div>
         <div className="flex gap-2">
-          {!state.completed && <Button onClick={onResume} disabled={working}>Resume</Button>}
+          {!state.completed && canResume && <Button onClick={onResume} disabled={working}>Resume setup</Button>}
           <Button variant="outline" onClick={onRecheck} disabled={working}>
             {busy === 'recheck' && <Loader2 className="h-4 w-4 animate-spin" />}
             {busy === 'recheck' ? 'Checking…' : 'Re-check'}
