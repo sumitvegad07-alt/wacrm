@@ -8,7 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { getByPath, getTemplate, setByPath } from "@/lib/proposals/registry";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getByPath, getTemplate, listTemplates, setByPath } from "@/lib/proposals/registry";
+import { changePlan } from "@/lib/proposals/change-plan";
+import { featuresForPlan } from "@/lib/proposals/plan-features";
 import { computeTotals, isPricePageCrowded } from "@/lib/proposals/totals";
 import { inr } from "@/lib/proposals/format";
 import type { LineItem, ProposalData, ProposalField } from "@/lib/proposals/types";
@@ -50,6 +59,36 @@ export default function ProposalForm({ id }: { id: string }) {
     template && template.listRatePerYear > 0
       ? (1 - totals.headlineRate / template.listRatePerYear) * 100
       : 0;
+
+  /**
+   * Switching plan rewrites pages 2-6 and re-labels the plan's own price rows
+   * at the new list price, so it confirms first rather than silently
+   * rewriting numbers the founder may have negotiated.
+   */
+  const switchPlan = (next: string | null) => {
+    if (!data || !next || next === plan) return;
+
+    const target = getTemplate(next);
+    if (!target) return;
+
+    const ok = window.confirm(
+      `Change this proposal from ${template?.label ?? plan} to ${target.label}?
+
+` +
+        `The document's wording and its feature list become ${target.label}'s ` +
+        `(${featuresForPlan(target.plan).length} features), and the ${target.label} ` +
+        `seat rows are re-priced to the list rate of ₹${inr(target.listRatePerYear)} ` +
+        `per user / year.
+
+Your client details, team size and any rows you added ` +
+        `yourself are kept.`,
+    );
+    if (!ok) return;
+
+    setData((prev) => (prev ? changePlan(prev, plan, next) : prev));
+    setPlan(next);
+    setDirty(true);
+  };
 
   const edit = (path: string, value: unknown) => {
     setData((prev) => (prev ? setByPath(prev, path, value) : prev));
@@ -149,9 +188,29 @@ export default function ProposalForm({ id }: { id: string }) {
           <h1 className="text-xl font-semibold mt-1">
             {data.client?.name || "New proposal"}
           </h1>
-          <p className="text-xs text-muted-foreground font-mono mt-0.5">
-            {data.ref} · {template.label}
-          </p>
+          <p className="text-xs text-muted-foreground font-mono mt-0.5">{data.ref}</p>
+
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-sm text-muted-foreground">Plan</span>
+            <Select value={plan} onValueChange={switchPlan}>
+              <SelectTrigger className="h-8 w-[230px]">
+                {/* This Select renders the raw value unless given the label. */}
+                <SelectValue placeholder="Plan">
+                  {template.label} · ₹{inr(template.listRatePerYear)}/user/yr
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {listTemplates().map((t) => (
+                  <SelectItem key={t.plan} value={t.plan}>
+                    {t.label} · ₹{inr(t.listRatePerYear)}/user/yr
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">
+              {featuresForPlan(template.plan).length} features
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
