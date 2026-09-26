@@ -20,7 +20,9 @@ import {
   Eye,
   Waypoints,
   Mail,
+  FileText,
 } from "lucide-react";
+import { isFounderEmail } from "@/lib/auth/founder";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -36,6 +38,13 @@ const NAV_ITEMS = [
   { href: "/admin/digest", label: "Ops Digest", icon: Mail },
   { href: "/admin/recovery", label: "Recovery Center", icon: ArchiveRestore },
   { href: "/admin/settings", label: "Settings", icon: Settings },
+];
+
+// OZZO's own sales proposals: platform-owner business data, not tenant
+// operations, so the link is hidden from every other superadmin. The pages and
+// the API 404 non-founders regardless — this only keeps the link out of sight.
+const FOUNDER_NAV_ITEMS = [
+  { href: "/admin/proposals", label: "Sales Proposals", icon: FileText },
 ];
 
 function SuperAdminShellInner({ children }: { children: React.ReactNode }) {
@@ -87,7 +96,10 @@ function SuperAdminShellInner({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {[
+            ...NAV_ITEMS,
+            ...(isFounderEmail(user?.email) ? FOUNDER_NAV_ITEMS : []),
+          ].map(({ href, label, icon: Icon }) => {
             const isActive =
               href === "/admin"
                 ? pathname === "/admin"
