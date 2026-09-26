@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ProposalPages } from "./proposal-pages";
 import { SFA_CONTENT } from "./content/sfa";
 import { getTemplate } from "../registry";
+import { includedGroupsForPlan } from "../plan-features";
 import type { ProposalData } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -35,7 +36,7 @@ const SHAAHI: ProposalData = {
 
 /** The document's visible words, whitespace collapsed the way a browser does. */
 function renderText(data: ProposalData): string {
-  const html = renderToStaticMarkup(<ProposalPages data={data} content={SFA_CONTENT} />);
+  const html = renderToStaticMarkup(<ProposalPages data={data} content={SFA_CONTENT} groups={includedGroupsForPlan("SFA")} />);
   return html
     .replace(/<[^>]+>/g, "")
     .replace(/&amp;/g, "&")
@@ -50,7 +51,7 @@ describe("SFA proposal document", () => {
   const text = renderText(SHAAHI);
 
   test("renders eight pages", () => {
-    const html = renderToStaticMarkup(<ProposalPages data={SHAAHI} content={SFA_CONTENT} />);
+    const html = renderToStaticMarkup(<ProposalPages data={SHAAHI} content={SFA_CONTENT} groups={includedGroupsForPlan("SFA")} />);
     expect(html.match(/class="page/g)).toHaveLength(8);
   });
 
@@ -93,7 +94,7 @@ describe("SFA proposal document", () => {
 
   describe("client-specific values reach the pages", () => {
     test("the full name is on the cover and the page footers", () => {
-      const footers = renderToStaticMarkup(<ProposalPages data={SHAAHI} content={SFA_CONTENT} />).match(
+      const footers = renderToStaticMarkup(<ProposalPages data={SHAAHI} content={SFA_CONTENT} groups={includedGroupsForPlan("SFA")} />).match(
         /Shaahi Niti Masale · 0\d/g,
       );
       // Pages 02-07. The cover and the thank-you page carry no footer.
@@ -124,6 +125,7 @@ describe("SFA proposal document", () => {
         <ProposalPages
           data={{ ...SHAAHI, voice: { ...SHAAHI.voice, builtFor: "Built for pharma — cold chain included." } }}
           content={SFA_CONTENT}
+          groups={includedGroupsForPlan("SFA")}
         />,
       );
       expect(html).toContain("<b>Built for pharma</b> — cold chain included.");

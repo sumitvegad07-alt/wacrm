@@ -40,8 +40,8 @@ export const PLAN_PRICE: Record<PlanId, number> = {
   CRM: 100,
   WFA: 150,
   CRM_WFA: 200,
-  SFA: 350,
-  CRM_SFA: 450,
+  SFA: 300,
+  CRM_SFA: 400,
 };
 
 /**
@@ -92,9 +92,12 @@ export const MODULE_LINE: Record<ModuleKey, ProductLine> = {
   // WFA line
   expense: "wfa",
   territory: "wfa",
-  route: "wfa",
   reporting_hierarchy: "wfa",
   // SFA line
+  // Route Management (RTM) is sold with SFA, not WFA — see the founder's
+  // Pricing, Packages & Plans sheet (2026-09-26). Moved here from the WFA
+  // line; no WFA or CRM+WFA account had it enabled when this changed.
+  route: "sfa",
   dispatch: "sfa",
   pending_dispatch: "sfa",
   payment: "sfa",

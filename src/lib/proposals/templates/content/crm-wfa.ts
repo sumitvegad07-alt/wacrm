@@ -2,10 +2,11 @@
 // CRM + WFA — front office plus field visibility.
 //
 // Scope check: both the CRM and WFA lines are on, so leads, deals, the
-// WhatsApp inbox, quotations, attendance, live location, visits, routes,
+// WhatsApp inbox, quotations, attendance, live location, visits,
 // territory and expenses are all fair to claim. The SFA line is OFF: no order
-// capture, no payment collection, no outstanding, no stock, no schemes and no
-// Daily Sales Report. Nothing below may promise those.
+// capture, no payment collection, no outstanding, no stock, no schemes, no
+// Route Management (RTM moved to SFA on 2026-09-26) and no Daily Sales
+// Report. Nothing below may promise those.
 // ============================================================
 
 import type { PlanContent } from "../content-types";
@@ -120,11 +121,11 @@ export const CRM_WFA_CONTENT: PlanContent = {
         ],
       },
       {
-        h: "Beats, Routes & Territory",
+        h: "Territory & Coverage",
         li: [
-          "Monthly beat planner & assigned routes",
-          "Route compliance — a skip needs a reason",
           "Territory tree: state → city → area",
+          "Area-wise assignment of people & customers",
+          "Everyone sees only their own patch",
         ],
       },
       {
@@ -182,7 +183,7 @@ export const CRM_WFA_CONTENT: PlanContent = {
       {
         cap: "Field · Android app",
         h: "Everything your team needs",
-        p: "Mark attendance, follow the day's route, check in at customers, log a call, update a deal and raise expense claims — syncing the moment the network returns.",
+        p: "Mark attendance, check in at customers, log a call, update a deal and raise expense claims — syncing the moment the network returns.",
       },
     ],
   },
@@ -193,64 +194,6 @@ export const CRM_WFA_CONTENT: PlanContent = {
     headingAccent: "Office and field.",
     headingTail: "No add-on modules.",
     sub: "Your price of ₹{rate} per user, per year unlocks the entire OZZO CRM and Workforce feature set for every login — office or field. Nothing below is a paid extra.",
-    groups: [
-      {
-        h: "Leads & Deals",
-        li: [
-          "Lead capture with source & owner",
-          "Visual deal pipelines (Kanban)",
-          "Tasks and follow-up reminders",
-          "Branded PDF quotations",
-        ],
-      },
-      {
-        h: "WhatsApp & AI",
-        li: [
-          "Shared WhatsApp team inbox",
-          "Approved message templates",
-          "AI assistant on your knowledge base",
-          "Chat history on the customer record",
-        ],
-      },
-      {
-        h: "Field Operations",
-        li: [
-          "Selfie + GPS attendance",
-          "Live location tracking",
-          "Geo-tagged & geo-fenced visits",
-          "Beat & route planner",
-          "Territory management",
-        ],
-      },
-      {
-        h: "Expenses & Travel",
-        li: [
-          "Claims with photo proof",
-          "Auto travel-distance claim",
-          "Custom categories & limits",
-          "Multi-level approval flow",
-        ],
-      },
-      {
-        h: "Team & Reports",
-        li: [
-          "Lead · Deal · Quotation reports",
-          "Attendance · Visit · Expense reports",
-          "Reporting hierarchy (manager / approver)",
-          "Leave, Holiday & Announcements",
-        ],
-      },
-      {
-        h: "Platform",
-        li: [
-          "Web dashboard + Android app",
-          "Full offline capture & auto-sync",
-          "Role-based access & data-scoping",
-          "Onboarding, data setup & training",
-          "WhatsApp & email support",
-        ],
-      },
-    ],
   },
 
   why: [

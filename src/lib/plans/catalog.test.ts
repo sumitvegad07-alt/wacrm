@@ -46,12 +46,23 @@ describe("plan catalog — allowed modules", () => {
     expect([...allowedModules("CRM")].sort()).toEqual(["quotation", "whatsapp"]);
   });
   it("WFA allows the workforce modules only", () => {
+    // Route Management is sold with SFA, not WFA (Pricing, Packages & Plans,
+    // 2026-09-26), so a WFA plan cannot switch it on at all.
     expect([...allowedModules("WFA")].sort()).toEqual([
       "expense",
       "reporting_hierarchy",
-      "route",
       "territory",
     ]);
+  });
+
+  it("WFA and CRM+WFA cannot enable Route Management", () => {
+    expect(allowedModules("WFA").has("route")).toBe(false);
+    expect(allowedModules("CRM_WFA").has("route")).toBe(false);
+  });
+
+  it("SFA and CRM+SFA still get Route Management", () => {
+    expect(allowedModules("SFA").has("route")).toBe(true);
+    expect(allowedModules("CRM_SFA").has("route")).toBe(true);
   });
   it("SFA allows workforce + sfa modules (no CRM modules)", () => {
     const a = allowedModules("SFA");

@@ -38,13 +38,13 @@ describe("SFA defaults", () => {
     expect(data.proposalDate).toBe("2026-09-22");
   });
 
-  test("opens at the catalog list price, not a remembered discount", () => {
-    // Catalog: SFA is 350/user/month. A discount like the 3,600 quoted to the
-    // first client must be a deliberate edit, not a silent default.
-    expect(sfa.listRatePerYear).toBe(4200);
+  test("opens at the catalog list price", () => {
+    // Pricing, Packages & Plans: SFA is 300 PUPM, i.e. 3,600 a year — which is
+    // what the first client was quoted, so that was list price, not a discount.
+    expect(sfa.listRatePerYear).toBe(3600);
     expect(data.lineItems).toHaveLength(2);
-    expect(data.lineItems[0]).toMatchObject({ users: 5, rate: 4200 });
-    expect(data.lineItems[1]).toMatchObject({ users: 1, rate: 4200 });
+    expect(data.lineItems[0]).toMatchObject({ users: 5, rate: 3600 });
+    expect(data.lineItems[1]).toMatchObject({ users: 1, rate: 3600 });
   });
 
   test("totals follow from the catalog price", () => {
@@ -53,8 +53,8 @@ describe("SFA defaults", () => {
       gstRate: data.gstRate,
     });
 
-    expect(t.subtotal).toBe(25200);
-    expect(t.perUserPerMonth).toBe(350);
+    expect(t.subtotal).toBe(21600);
+    expect(t.perUserPerMonth).toBe(300);
   });
 
   test("defaults to no GST, matching the reference proposal", () => {

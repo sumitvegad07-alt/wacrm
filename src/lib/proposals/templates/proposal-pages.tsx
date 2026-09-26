@@ -13,6 +13,7 @@
 import { Fragment } from "react";
 import type { ProposalData } from "../types";
 import type { PlanContent } from "./content-types";
+import type { FeatureGroup } from "../plan-features";
 import { computeTotals } from "../totals";
 import { formatLongDate, inr } from "../format";
 import { RichText } from "./rich-text";
@@ -24,6 +25,9 @@ function fill(text: string, tokens: Record<string, string>): string {
     key in tokens ? tokens[key] : whole,
   );
 }
+
+/** Most features the two-column layout holds before it must tighten. */
+const FEATURES_PER_ROOMY_PAGE = 40;
 
 function Pfoot({ client, label, n }: { client: string; label: string; n: string }) {
   return (
@@ -63,7 +67,16 @@ function BuiltFor({ text }: { text: string }) {
   );
 }
 
-export function ProposalPages({ data, content }: { data: ProposalData; content: PlanContent }) {
+export function ProposalPages({
+  data,
+  content,
+  groups,
+}: {
+  data: ProposalData;
+  content: PlanContent;
+  /** From plan-features.ts — exactly what this plan is sold. */
+  groups: FeatureGroup[];
+}) {
   const t = computeTotals(data.lineItems ?? [], {
     gstEnabled: !!data.gstEnabled,
     gstRate: Number(data.gstRate) || 0,
@@ -74,6 +87,7 @@ export function ProposalPages({ data, content }: { data: ProposalData; content: 
   const gst = !!data.gstEnabled;
   const gstRate = Number(data.gstRate) || 0;
   const prettyDate = formatLongDate(data.proposalDate);
+  const featureCount = groups.reduce((n, g) => n + g.li.length, 0);
 
   const tokens = {
     industry: data.voice?.industryPlural ?? "",
@@ -148,185 +162,7 @@ export function ProposalPages({ data, content }: { data: ProposalData; content: 
         </div>
       </section>
 
-      {/* ══════════ PAGE 2 · FIVE QUESTIONS ══════════ */}
-      <section className="page">
-        <Minihead tag="Why OZZO" />
-        <div className="section-head">
-          <div className="eyebrow">{content.questions.eyebrow}</div>
-          <h2>
-            {content.questions.heading} <span className="gt">{content.questions.headingAccent}</span>
-          </h2>
-          <p className="sub">{data.voice?.built}</p>
-        </div>
-
-        <div className="qa">
-          {content.questions.rows.map((row) => (
-            <div className="qrow" key={row.q}>
-              <div className="q">
-                <span className="badge">?</span>
-                <span className="t">{row.q}</span>
-              </div>
-              <div className="a">
-                <span className="tick">✓</span>
-                <span className="t">
-                  <RichText text={copy(row.a)} />
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="signoff">
-          <RichText text={copy(content.questions.signoff)} />
-        </div>
-
-        <Pfoot client={full} label={content.footerLabel} n="02" />
-      </section>
-
-      {/* ══════════ PAGE 3 · FEATURE TILES ══════════ */}
-      <section className="page">
-        <Minihead tag="What you get" />
-        <div className="section-head">
-          <div className="eyebrow">{content.toolkit.eyebrow}</div>
-          <h2>
-            {content.toolkit.heading} <span className="gt">{content.toolkit.headingAccent}</span>
-          </h2>
-        </div>
-
-        <div className="cards">
-          {content.toolkit.tiles.map((tile, i) => (
-            <div className="mcard" key={tile.h}>
-              <div className="top">
-                <span className="num">{i + 1}</span>
-                <h4>{tile.h}</h4>
-              </div>
-              <ul>
-                {tile.li.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        <Pfoot client={full} label={content.footerLabel} n="03" />
-      </section>
-
-      {/* ══════════ PAGE 4 · THE DIFFERENCE ══════════ */}
-      <section className="page">
-        <Minihead tag="The difference" />
-        <div className="section-head">
-          <div className="eyebrow">{content.band.eyebrow}</div>
-          <h2>
-            {content.band.heading} <span className="gt">{content.band.headingAccent}</span>
-          </h2>
-        </div>
-
-        <div className="band">
-          <div className="grid-bg" />
-          <div className="glow" />
-          <div className="inner">
-            <h3>
-              {content.band.innerHeading} <span className="gb">{content.band.innerHeadingAccent}</span>
-            </h3>
-            <p className="sub">{copy(content.band.sub)}</p>
-
-            <div className="stepper">
-              {/* Fragment, not a wrapper div: .stepper is a flex row whose
-                  direct children are the steps and the arrows between them. */}
-              {content.band.stepper.map((step, i) => (
-                <Fragment key={step.ev}>
-                  {i > 0 && <div className="arrow">→</div>}
-                  <div className="st">
-                    <div className="ev">{step.ev}</div>
-                    <div className="rz">
-                      <RichText text={step.rz} />
-                    </div>
-                  </div>
-                </Fragment>
-              ))}
-            </div>
-
-            <div className="two">
-              {content.band.boxes.map((box) => (
-                <div className="box" key={box.h}>
-                  <div className="h">
-                    <span className="dot" style={{ background: box.dot }} />
-                    <h4>{box.h}</h4>
-                  </div>
-                  <p>{box.p}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="section-head" style={{ marginTop: "22px" }}>
-          <div className="eyebrow">{content.band.splitEyebrow}</div>
-          <h2 style={{ fontSize: "22px" }}>
-            {content.band.splitHeading}{" "}
-            <span className="gt">{content.band.splitHeadingAccent}</span>
-          </h2>
-        </div>
-        <div className="split">
-          {content.band.panes.map((pane) => (
-            <div className="s" key={pane.cap}>
-              <div className="cap">{pane.cap}</div>
-              <h4>{pane.h}</h4>
-              <p>{pane.p}</p>
-            </div>
-          ))}
-        </div>
-
-        <Pfoot client={full} label={content.footerLabel} n="04" />
-      </section>
-
-      {/* ══════════ PAGE 5 · YOUR PLAN (INCLUDED) ══════════ */}
-      <section className="page">
-        <Minihead tag="Your plan" />
-        <div className="section-head">
-          <div className="eyebrow">{content.included.eyebrow}</div>
-          <h2>
-            {content.included.heading} <span className="gt">{content.included.headingAccent}</span>{" "}
-            {content.included.headingTail}
-          </h2>
-          <p className="sub">{copy(content.included.sub)}</p>
-        </div>
-
-        <div className="plan-hero">
-          <div>
-            <div className="tag">Your plan</div>
-            <h3>{content.planName}</h3>
-          </div>
-          <div className="p">
-            <div className="amt">
-              <span className="cur">₹</span>
-              {inr(t.headlineRate)}
-            </div>
-            <div className="u">per user / year · all features</div>
-          </div>
-        </div>
-
-        <div className="feat-grid">
-          {content.included.groups.map((group) => (
-            <div className="fgroup" key={group.h}>
-              <h4>{group.h}</h4>
-              {group.li.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </div>
-          ))}
-        </div>
-
-        <div className="allin">
-          ✓ <b>Everything above is included</b> in your ₹{inr(t.headlineRate)} / user / year — there
-          are no per-module charges and no hidden fees.
-        </div>
-
-        <Pfoot client={full} label={content.footerLabel} n="05" />
-      </section>
-
-      {/* ══════════ PAGE 6 · INVESTMENT ══════════ */}
+      {/* ══════════ PAGE 2 · INVESTMENT ══════════ */}
       <section className="page">
         <Minihead tag="Investment" />
         <div className="section-head">
@@ -469,6 +305,187 @@ export function ProposalPages({ data, content }: { data: ProposalData; content: 
               </span>
             </div>
           ))}
+        </div>
+
+        <Pfoot client={full} label={content.footerLabel} n="02" />
+      </section>
+
+      {/* ══════════ PAGE 3 · FIVE QUESTIONS ══════════ */}
+      <section className="page">
+        <Minihead tag="Why OZZO" />
+        <div className="section-head">
+          <div className="eyebrow">{content.questions.eyebrow}</div>
+          <h2>
+            {content.questions.heading} <span className="gt">{content.questions.headingAccent}</span>
+          </h2>
+          <p className="sub">{data.voice?.built}</p>
+        </div>
+
+        <div className="qa">
+          {content.questions.rows.map((row) => (
+            <div className="qrow" key={row.q}>
+              <div className="q">
+                <span className="badge">?</span>
+                <span className="t">{row.q}</span>
+              </div>
+              <div className="a">
+                <span className="tick">✓</span>
+                <span className="t">
+                  <RichText text={copy(row.a)} />
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="signoff">
+          <RichText text={copy(content.questions.signoff)} />
+        </div>
+
+        <Pfoot client={full} label={content.footerLabel} n="03" />
+      </section>
+
+      {/* ══════════ PAGE 4 · FEATURE TILES ══════════ */}
+      <section className="page">
+        <Minihead tag="What you get" />
+        <div className="section-head">
+          <div className="eyebrow">{content.toolkit.eyebrow}</div>
+          <h2>
+            {content.toolkit.heading} <span className="gt">{content.toolkit.headingAccent}</span>
+          </h2>
+        </div>
+
+        <div className="cards">
+          {content.toolkit.tiles.map((tile, i) => (
+            <div className="mcard" key={tile.h}>
+              <div className="top">
+                <span className="num">{i + 1}</span>
+                <h4>{tile.h}</h4>
+              </div>
+              <ul>
+                {tile.li.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <Pfoot client={full} label={content.footerLabel} n="04" />
+      </section>
+
+      {/* ══════════ PAGE 5 · THE DIFFERENCE ══════════ */}
+      <section className="page">
+        <Minihead tag="The difference" />
+        <div className="section-head">
+          <div className="eyebrow">{content.band.eyebrow}</div>
+          <h2>
+            {content.band.heading} <span className="gt">{content.band.headingAccent}</span>
+          </h2>
+        </div>
+
+        <div className="band">
+          <div className="grid-bg" />
+          <div className="glow" />
+          <div className="inner">
+            <h3>
+              {content.band.innerHeading} <span className="gb">{content.band.innerHeadingAccent}</span>
+            </h3>
+            <p className="sub">{copy(content.band.sub)}</p>
+
+            <div className="stepper">
+              {/* Fragment, not a wrapper div: .stepper is a flex row whose
+                  direct children are the steps and the arrows between them. */}
+              {content.band.stepper.map((step, i) => (
+                <Fragment key={step.ev}>
+                  {i > 0 && <div className="arrow">→</div>}
+                  <div className="st">
+                    <div className="ev">{step.ev}</div>
+                    <div className="rz">
+                      <RichText text={step.rz} />
+                    </div>
+                  </div>
+                </Fragment>
+              ))}
+            </div>
+
+            <div className="two">
+              {content.band.boxes.map((box) => (
+                <div className="box" key={box.h}>
+                  <div className="h">
+                    <span className="dot" style={{ background: box.dot }} />
+                    <h4>{box.h}</h4>
+                  </div>
+                  <p>{box.p}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="section-head" style={{ marginTop: "22px" }}>
+          <div className="eyebrow">{content.band.splitEyebrow}</div>
+          <h2 style={{ fontSize: "22px" }}>
+            {content.band.splitHeading}{" "}
+            <span className="gt">{content.band.splitHeadingAccent}</span>
+          </h2>
+        </div>
+        <div className="split">
+          {content.band.panes.map((pane) => (
+            <div className="s" key={pane.cap}>
+              <div className="cap">{pane.cap}</div>
+              <h4>{pane.h}</h4>
+              <p>{pane.p}</p>
+            </div>
+          ))}
+        </div>
+
+        <Pfoot client={full} label={content.footerLabel} n="05" />
+      </section>
+
+      {/* ══════════ PAGE 6 · YOUR PLAN (INCLUDED) ══════════ */}
+      <section className="page">
+        <Minihead tag="Your plan" />
+        <div className="section-head">
+          <div className="eyebrow">{content.included.eyebrow}</div>
+          <h2>
+            {content.included.heading} <span className="gt">{content.included.headingAccent}</span>{" "}
+            {content.included.headingTail}
+          </h2>
+          <p className="sub">{copy(content.included.sub)}</p>
+        </div>
+
+        <div className="plan-hero">
+          <div>
+            <div className="tag">Your plan</div>
+            <h3>{content.planName}</h3>
+          </div>
+          <div className="p">
+            <div className="amt">
+              <span className="cur">₹</span>
+              {inr(t.headlineRate)}
+            </div>
+            <div className="u">per user / year · all features</div>
+          </div>
+        </div>
+
+        {/* Measured on the real sheet: up to 38 features (SFA) fit the roomy
+            two-column grid; CRM + SFA's ~46 overflow it, and the page clips
+            without warning. Past the budget the grid tightens itself. */}
+        <div className={`feat-grid${featureCount > FEATURES_PER_ROOMY_PAGE ? " dense" : ""}`}>
+          {groups.map((group) => (
+            <div className="fgroup" key={group.h}>
+              <h4>{group.h}</h4>
+              {group.li.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <div className="allin">
+          ✓ <b>Everything above is included</b> in your ₹{inr(t.headlineRate)} / user / year — there
+          are no per-module charges and no hidden fees.
         </div>
 
         <Pfoot client={full} label={content.footerLabel} n="06" />

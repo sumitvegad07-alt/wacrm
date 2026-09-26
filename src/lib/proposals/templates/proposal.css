@@ -231,3 +231,117 @@
   .ty .brandmini .logo{width:40px;height:40px;border-radius:10px;box-shadow:0 6px 22px rgba(124,58,237,.45);}
   .ty .brandmini .bn{font-weight:800;font-size:20px;color:#fff;letter-spacing:-0.02em;}
   .ty .brandmini .bt{font-size:10px;color:#a7a4c0;letter-spacing:.04em;}
+
+  /* ═════════════════════════════════════════════════════════════════════
+     PAGE FILL — 2026-09-26
+
+     The document was drawn compactly, which left roughly a third of every
+     inner page blank (measured: 44% on the questions page, 33-35% on three
+     more). An eight-page proposal that is one-third whitespace reads as
+     padding, so:
+
+       1. inner pages distribute their blocks down the sheet instead of
+          stacking them at the top, and
+       2. the blocks themselves breathe — larger type, more padding — so that
+          distribution produces generous spacing rather than a few big gaps.
+
+     The cover and thank-you pages are excluded: they lay themselves out.
+     ═════════════════════════════════════════════════════════════════════ */
+
+  /* Blocks keep their natural rhythm — spreading them with space-between
+     filled the page by measurement but read as disconnected islands. The page
+     is filled by making the content itself bigger instead. */
+  .page:not(.cover):not(.ty){padding-bottom:24mm;}
+
+  .section-head{margin-bottom:18px;}
+  .section-head h2{font-size:27.5px;}
+  .section-head .sub{font-size:13.5px;margin-top:9px;line-height:1.65;}
+
+  /* Five questions */
+  .qa{gap:14px;margin-top:20px;}
+  .qrow .q{padding:19px 18px;}
+  .qrow .a{padding:19px 18px;}
+  .qrow .q .t{font-size:13.5px;}
+  .qrow .a .t{font-size:13px;line-height:1.5;}
+  .signoff{margin-top:20px;font-size:13.5px;line-height:1.6;padding-left:15px;}
+
+  /* Feature tiles */
+  .cards{gap:13px;}
+  .mcard{padding:16px 16px 14px;}
+  .mcard h4{font-size:13.5px;}
+  .mcard li{font-size:11.8px;line-height:1.5;margin-bottom:5px;}
+
+  /* The difference */
+  .band{padding:28px 28px 26px;}
+  .band h3{font-size:25px;}
+  .band p.sub{font-size:13.5px;}
+  .two{gap:14px;margin-top:18px;}
+  .two .box{padding:17px;}
+  .two .box h4{font-size:14px;}
+  .two .box p{font-size:12px;line-height:1.6;}
+  .split{gap:14px;margin-top:16px;}
+  .split .s{padding:18px;}
+  .split .s h4{font-size:15px;}
+  .split .s p{font-size:12.5px;line-height:1.6;}
+
+  /* What's included */
+  .feat-grid{gap:12px 16px;}
+  .fgroup{padding:14px 16px;}
+  .fgroup h4{font-size:11.5px;margin-bottom:10px;}
+  .fgroup li{font-size:11.5px;margin-bottom:6.5px;}
+  .allin{margin-top:14px;padding:13px 16px;font-size:12.5px;}
+
+  /* Terms & getting started */
+  .terms{gap:13px;}
+  .term{padding:17px 18px;}
+  .term .c h4{font-size:14px;margin-bottom:4px;}
+  .term .c p{font-size:12.5px;line-height:1.6;}
+  .steps{gap:11px;margin-top:18px;}
+  .step h4{font-size:13px;}
+  .step p{font-size:11.5px;line-height:1.5;}
+
+  /* Investment */
+  .why{gap:11px 20px;margin-top:16px;}
+  .why .w{font-size:12.5px;line-height:1.5;}
+  .chips .c{font-size:11.5px;}
+
+  /* Second pass: the four pages still sitting under 80% fill. Bigger rows and
+     roomier cards — a proposal page reads as composed at ~85%, where the
+     bottom margin looks like a margin rather than a void. */
+
+  /* Five questions — the lightest page, and bigger rows read better anyway */
+  .qa{gap:17px;margin-top:22px;}
+  .qrow .q{padding:24px 20px;}
+  .qrow .a{padding:24px 20px;}
+  .qrow .q .t{font-size:14.5px;}
+  .qrow .a .t{font-size:14px;line-height:1.55;}
+  .signoff{margin-top:24px;font-size:14.5px;padding-left:17px;}
+
+  /* Investment */
+  .price-hero{margin:6px 0 18px;}
+  .ptable th{padding:14px 18px;font-size:11px;}
+  .ptable td{padding:16px 18px;font-size:13.5px;}
+  .ptable tr.total td{font-size:16px;}
+  .benefit{padding:16px 18px;font-size:12.5px;}
+  .incl{margin-top:18px;}
+  .chips{gap:9px;}
+
+  /* The difference */
+  .band{padding:34px 32px 30px;}
+  .two{margin-top:22px;}
+  .two .box{padding:20px;}
+  .split .s{padding:22px;}
+
+  /* Terms & getting started */
+  .terms{gap:15px;}
+  .term{padding:21px 20px;}
+  .steps{margin-top:22px;}
+  .step{padding:4px 2px;}
+
+  /* A long feature list (CRM + SFA sells around fifty) tightens itself rather
+     than overflowing the fixed sheet, which clips without any warning. */
+  .feat-grid.dense{grid-template-columns:1fr 1fr 1fr;gap:9px 12px;}
+  .feat-grid.dense .fgroup{padding:11px 12px;border-radius:12px;}
+  .feat-grid.dense .fgroup h4{font-size:10.5px;margin-bottom:7px;letter-spacing:.1em;}
+  .feat-grid.dense .fgroup li{font-size:10.5px;line-height:1.35;margin-bottom:4px;padding-left:14px;}
+  .feat-grid.dense .fgroup li::before{font-size:10px;}

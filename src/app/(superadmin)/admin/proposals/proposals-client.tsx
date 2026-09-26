@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatLongDate, inr } from "@/lib/proposals/format";
 import { listTemplates } from "@/lib/proposals/registry";
+import { featuresForPlan } from "@/lib/proposals/plan-features";
 import { STATUS_CLASS, STATUS_LABEL, type ProposalStatus } from "@/lib/proposals/status";
 import type { ProposalListRow } from "@/lib/proposals/types";
 
@@ -146,13 +147,33 @@ export default function ProposalsClient() {
               <Plus className="h-4 w-4 mr-1" />
               {busy === "new" ? "Creating…" : "New proposal"}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            {/* Fixed width and nowrap: at the menu's natural width "CRM + WFA"
+                wrapped onto three lines and the price was cut off. */}
+            <DropdownMenuContent align="end" className="w-[330px] p-1.5">
+              <div className="px-2.5 pt-1.5 pb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                Start a proposal for
+              </div>
               {listTemplates().map((t) => (
-                <DropdownMenuItem key={t.plan} onClick={() => create(t.plan)}>
-                  <span className="flex-1">{t.label}</span>
-                  <span className="text-xs text-muted-foreground ml-3">
-                    ₹{inr(t.listRatePerYear)}/user/yr
-                  </span>
+                <DropdownMenuItem
+                  key={t.plan}
+                  onClick={() => create(t.plan)}
+                  className="flex items-center gap-3 rounded-md px-2.5 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium whitespace-nowrap">{t.label}</div>
+                    <div className="text-[11px] text-muted-foreground whitespace-nowrap">
+                      {t.content.eyebrow.replace(" · Proposal", "")} ·{" "}
+                      {featuresForPlan(t.plan).length} features
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-sm font-semibold tabular-nums whitespace-nowrap">
+                      ₹{inr(t.listRatePerYear)}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground whitespace-nowrap">
+                      per user / year
+                    </div>
+                  </div>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>

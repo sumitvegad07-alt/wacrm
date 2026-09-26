@@ -8,6 +8,7 @@
 
 import type { ProposalData } from "../types";
 import { getTemplate } from "../registry";
+import { includedGroupsForPlan } from "../plan-features";
 import { ProposalPages } from "./proposal-pages";
 
 export function ProposalDocument({ plan, data }: { plan: string; data: ProposalData }) {
@@ -21,5 +22,11 @@ export function ProposalDocument({ plan, data }: { plan: string; data: ProposalD
     );
   }
 
-  return <ProposalPages data={data} content={template.content} />;
+  return (
+    <ProposalPages
+      data={data}
+      content={template.content}
+      groups={includedGroupsForPlan(template.plan)}
+    />
+  );
 }

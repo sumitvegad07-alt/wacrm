@@ -197,62 +197,6 @@ export const CRM_CONTENT: PlanContent = {
     headingAccent: "Every CRM feature.",
     headingTail: "No add-on modules.",
     sub: "Your price of ₹{rate} per user, per year unlocks the entire OZZO CRM feature set for every login. Nothing below is a paid extra.",
-    groups: [
-      {
-        h: "Leads & Deals",
-        li: [
-          "Lead capture with source & owner",
-          "Visual deal pipelines (Kanban)",
-          "Stage, value & probability tracking",
-          "Tasks and follow-up reminders",
-        ],
-      },
-      {
-        h: "WhatsApp & AI",
-        li: [
-          "Shared WhatsApp team inbox",
-          "Approved message templates",
-          "AI assistant on your knowledge base",
-          "Chat history on the customer record",
-        ],
-      },
-      {
-        h: "Quotations & Documents",
-        li: [
-          "Branded PDF quotations",
-          "Version trail on every quote",
-          "Your letterhead & document templates",
-        ],
-      },
-      {
-        h: "Customers & Data",
-        li: [
-          "One customer & lead timeline",
-          "Custom fields on every record",
-          "Bulk import framework",
-          "Full export — your data is yours",
-        ],
-      },
-      {
-        h: "Team & Reports",
-        li: [
-          "Lead · Deal · Quotation reports",
-          "Configurable report engine",
-          "Basic attendance & leave management",
-          "Holiday calendar & announcements",
-        ],
-      },
-      {
-        h: "Platform",
-        li: [
-          "Web dashboard + Android app",
-          "Real-time sync (web ↔ mobile)",
-          "Role-based access & data-scoping",
-          "Onboarding, data setup & training",
-          "WhatsApp & email support",
-        ],
-      },
-    ],
   },
 
   why: [

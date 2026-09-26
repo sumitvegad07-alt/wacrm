@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { PLAN_LINES, type PlanId } from "@/lib/plans/catalog";
 import { getTemplate, listTemplates } from "../../registry";
+import { includedGroupsForPlan } from "../../plan-features";
 import type { PlanContent } from "../content-types";
 
 // ---------------------------------------------------------------------------
@@ -54,9 +55,6 @@ const LINE_CLAIMS: Record<"crm" | "wfa" | "sfa", string[]> = {
     "Geo-fenc",
     "geo-tagged",
     "Geo-tagged",
-    "beat planner",
-    "Beat &",
-    "Beat,",
     "territory",
     "Territory",
     "odometer",
@@ -66,6 +64,14 @@ const LINE_CLAIMS: Record<"crm" | "wfa" | "sfa", string[]> = {
     "attendance muster",
   ],
   sfa: [
+    "beat planner",
+    "Beat &",
+    "Beat,",
+    "beat routes",
+    "Route Management",
+    "route planner",
+    "Route compliance",
+    "assigned routes",
     "order capture",
     "Order capture",
     "Offline order capture",
@@ -132,7 +138,7 @@ describe("plan content packs", () => {
       test("has the five questions, ten tiles and six included groups the layout expects", () => {
         expect(template.content.questions.rows).toHaveLength(5);
         expect(template.content.toolkit.tiles).toHaveLength(10);
-        expect(template.content.included.groups).toHaveLength(6);
+        expect(includedGroupsForPlan(plan).length).toBeGreaterThanOrEqual(3);
         // The sixth "why" tile is the client-specific built-for line.
         expect(template.content.why).toHaveLength(5);
       });
@@ -151,7 +157,7 @@ describe("plan content packs", () => {
     expect(getTemplate("CRM")!.listRatePerYear).toBe(1200);
     expect(getTemplate("WFA")!.listRatePerYear).toBe(1800);
     expect(getTemplate("CRM_WFA")!.listRatePerYear).toBe(2400);
-    expect(getTemplate("SFA")!.listRatePerYear).toBe(4200);
-    expect(getTemplate("CRM_SFA")!.listRatePerYear).toBe(5400);
+    expect(getTemplate("SFA")!.listRatePerYear).toBe(3600);
+    expect(getTemplate("CRM_SFA")!.listRatePerYear).toBe(4800);
   });
 });

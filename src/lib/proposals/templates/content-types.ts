@@ -96,7 +96,11 @@ export interface PlanContent {
     headingAccent: string;
     headingTail: string;
     sub: string;
-    groups: FeatureTile[];
+    /**
+     * NOT here: the feature list comes from plan-features.ts (the founder's
+     * pricing sheet), so the document always lists exactly what the plan is
+     * sold. The pack only supplies the framing copy around it.
+     */
   };
 
   /** Page 6 — the "Why <client> chooses OZZO" tiles. Supports **bold**. */

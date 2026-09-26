@@ -2,9 +2,10 @@
 // WFA — Workforce Automation, on its own.
 //
 // Scope check: the WFA line owns attendance, live location, tracking health,
-// geo-tagged visits, beats/routes, territory, expenses and the reporting
-// hierarchy. It does NOT include orders, payments, outstanding, stock or
-// schemes (SFA), nor leads, deals, the WhatsApp inbox or quotations (CRM).
+// geo-tagged visits, territory, expenses and the reporting
+// hierarchy. It does NOT include orders, payments, outstanding, stock,
+// schemes or Route Management (SFA — RTM moved there on 2026-09-26), nor
+// leads, deals, the WhatsApp inbox or quotations (CRM).
 //
 // The Daily Sales Report is an SFA row; on WFA the equivalent is a visit-based
 // day report, which is what this pack claims.
@@ -98,11 +99,11 @@ export const WFA_CONTENT: PlanContent = {
         ],
       },
       {
-        h: "Beat & Route Planning",
+        h: "Tasks & Follow-ups",
         li: [
-          "Monthly beat planner & assigned routes",
-          "The day's route on the rep's phone",
-          "Route compliance — a skip needs a reason",
+          "Unlimited tasks with owner & due date",
+          "Follow-ups nobody has to remember",
+          "Custom fields on every record",
         ],
       },
       {
@@ -184,7 +185,7 @@ export const WFA_CONTENT: PlanContent = {
       {
         cap: "Field · Android app",
         h: "Everything a field person needs",
-        p: "Mark attendance, follow the day's route, check in at each location with a photo, and raise expense claims — syncing the moment the network returns.",
+        p: "Mark attendance, check in at each location with a photo, log the visit and raise expense claims — syncing the moment the network returns.",
       },
     ],
   },
@@ -195,70 +196,13 @@ export const WFA_CONTENT: PlanContent = {
     headingAccent: "Every workforce feature.",
     headingTail: "No add-on modules.",
     sub: "Your price of ₹{rate} per user, per year unlocks the entire OZZO WFA feature set for every login — field or admin. Nothing below is a paid extra.",
-    groups: [
-      {
-        h: "Attendance",
-        li: [
-          "Selfie + GPS punch in / out",
-          "Auto-classified present / late / short",
-          "Shifts, rosters & muster",
-          "Odometer capture on punch",
-        ],
-      },
-      {
-        h: "Location Tracking",
-        li: [
-          "Live location of punched-in staff",
-          "All-locations map & day timeline",
-          "Historical track report",
-          "Tracking Health device alerts",
-        ],
-      },
-      {
-        h: "Visits & Routes",
-        li: [
-          "Geo-tagged & geo-fenced visits",
-          "Beat / route planning & calendar",
-          "Route compliance with skip reasons",
-          "Territory master & area assignment",
-        ],
-      },
-      {
-        h: "Expenses",
-        li: [
-          "Claims with photo proof",
-          "Auto travel-distance claim",
-          "Custom categories & limits",
-          "Multi-level approval flow",
-        ],
-      },
-      {
-        h: "Team & Reports",
-        li: [
-          "Attendance · Visit · Expense reports",
-          "Reporting hierarchy (manager / approver)",
-          "Leave management & approval",
-          "Holiday calendar & announcements",
-        ],
-      },
-      {
-        h: "Platform",
-        li: [
-          "Web dashboard + Android app",
-          "Full offline capture & auto-sync",
-          "Role-based access & data-scoping",
-          "Onboarding, data setup & training",
-          "WhatsApp & email support",
-        ],
-      },
-    ],
   },
 
   why: [
     "**Attendance that cannot be faked** — selfie, GPS and geo-fence together.",
     "**Works offline** — the day records itself with or without a signal.",
     "**Made in India, priced for India** — ₹{permonth}/user/month, all in.",
-    "**Live in days** — we set up your team, areas & routes for you.",
+    "**Live in days** — we set up your team, areas & customers for you.",
     "**Real support** — over WhatsApp & email, from real people.",
   ],
 

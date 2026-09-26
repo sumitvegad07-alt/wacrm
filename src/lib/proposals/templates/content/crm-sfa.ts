@@ -192,67 +192,6 @@ export const CRM_SFA_CONTENT: PlanContent = {
     headingAccent: "The whole platform.",
     headingTail: "No add-on modules.",
     sub: "Your price of ₹{rate} per user, per year unlocks every OZZO line — CRM, Workforce and Sales Force Automation — for every login. Nothing below is a paid extra.",
-    groups: [
-      {
-        h: "Front Office",
-        li: [
-          "Leads, deals & visual pipelines",
-          "Shared WhatsApp inbox + AI assistant",
-          "Branded PDF quotations",
-          "One customer timeline, office + field",
-        ],
-      },
-      {
-        h: "Field Operations",
-        li: [
-          "Selfie + GPS attendance",
-          "Live location tracking",
-          "Geo-tagged & geo-fenced visits",
-          "Beat & route planner",
-          "Territory management",
-        ],
-      },
-      {
-        h: "Sales & Orders",
-        li: [
-          "Offline order capture",
-          "Product catalogue (GST / HSN)",
-          "Multi-unit & branded order PDF",
-          "Dispatch tracking",
-          "Order guardrails (credit / stock)",
-        ],
-      },
-      {
-        h: "Money & Stock",
-        li: [
-          "Field payment collection",
-          "Self-calculating outstanding",
-          "Ageing report",
-          "Live stock ledger & closing stock",
-          "Expense & travel claims",
-        ],
-      },
-      {
-        h: "Customers & Pricing",
-        li: [
-          "Distributor / dealer / retailer levels",
-          "Customer-specific price lists",
-          "Schemes & discounts",
-          "Custom fields on every record",
-          "Data import",
-        ],
-      },
-      {
-        h: "Team, Reports & Platform",
-        li: [
-          "Daily Sales Report (per rep)",
-          "Lead · Deal · Sales · Payment · Ageing reports",
-          "Web dashboard + Android app",
-          "Role-based access & data-scoping",
-          "Onboarding, training & support",
-        ],
-      },
-    ],
   },
 
   why: [
