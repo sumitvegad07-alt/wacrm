@@ -1,28 +1,35 @@
 // ============================================================
-// OZZO SFA proposal — the eight pages, ported from
-// docs/proposals/proposal.html.
+// The eight proposal pages, for any plan.
 //
-// The markup, copy and layout are the original document. What changed: every
-// value that used to be typed into the body in two or three places now comes
-// from `data` or from `computeTotals`, so the pages cannot disagree with each
-// other. The figures that were quietly duplicated:
-//   - the annual total   → price table, savings/GST panel, "covers everything", terms
-//   - the per-user rate  → page 5 sub, plan hero, all-in line, price hero
-//   - the per-month rate → price hero and a page-6 bullet
-//   - the user count     → price table and "your N logins are created"
+// Structure, layout and the CSS are the original Shaahi Niti document. The
+// words come from a per-plan content pack, and every repeated figure comes
+// from computeTotals — so a CRM proposal cannot promise field-sales features,
+// and no page can disagree with another about the price.
+//
+// Pages 1, 7 and 8 (cover, terms, thank-you) are structural: their wording is
+// the same whatever the plan, apart from values the founder types.
 // ============================================================
 
-import type { ProposalData } from "../../types";
-import { computeTotals } from "../../totals";
-import { formatLongDate, inr } from "../../format";
-import "./sfa-proposal.css";
+import { Fragment } from "react";
+import type { ProposalData } from "../types";
+import type { PlanContent } from "./content-types";
+import { computeTotals } from "../totals";
+import { formatLongDate, inr } from "../format";
+import { RichText } from "./rich-text";
+import "./proposal.css";
 
-/** Page footer, identical on the seven inner pages apart from the number. */
-function Pfoot({ client, n }: { client: string; n: string }) {
+/** Fills {industry}, {rate} and {permonth} in a copy string. */
+function fill(text: string, tokens: Record<string, string>): string {
+  return (text ?? "").replace(/\{(\w+)\}/g, (whole, key) =>
+    key in tokens ? tokens[key] : whole,
+  );
+}
+
+function Pfoot({ client, label, n }: { client: string; label: string; n: string }) {
   return (
     <div className="pfoot">
       <span>
-        <span className="b">OZZO</span> · Sales Force Automation Proposal
+        <span className="b">OZZO</span> · {label}
       </span>
       <span>
         {client} · {n}
@@ -56,7 +63,7 @@ function BuiltFor({ text }: { text: string }) {
   );
 }
 
-export function SfaProposalDocument({ data }: { data: ProposalData }) {
+export function ProposalPages({ data, content }: { data: ProposalData; content: PlanContent }) {
   const t = computeTotals(data.lineItems ?? [], {
     gstEnabled: !!data.gstEnabled,
     gstRate: Number(data.gstRate) || 0,
@@ -67,6 +74,13 @@ export function SfaProposalDocument({ data }: { data: ProposalData }) {
   const gst = !!data.gstEnabled;
   const gstRate = Number(data.gstRate) || 0;
   const prettyDate = formatLongDate(data.proposalDate);
+
+  const tokens = {
+    industry: data.voice?.industryPlural ?? "",
+    rate: inr(t.headlineRate),
+    permonth: inr(t.perUserPerMonth),
+  };
+  const copy = (text: string) => fill(text, tokens);
 
   return (
     <div className="ozzo-doc">
@@ -86,35 +100,24 @@ export function SfaProposalDocument({ data }: { data: ProposalData }) {
           </div>
 
           <div className="hero">
-            <div className="eyebrow on-ink">Sales Force Automation · Proposal</div>
+            <div className="eyebrow on-ink">{content.eyebrow}</div>
             <h1>
-              Put your field team
+              {content.cover.headline}
               <br />
-              <span className="gb">on autopilot.</span>
+              <span className="gb">{content.cover.headlineAccent}</span>
             </h1>
             <p className="subline">
-              Attendance, visits, orders and collections from one mobile app — while outstanding and
-              stock keep themselves. A tailored proposal for{" "}
+              {content.cover.subline} A tailored proposal for{" "}
               <b style={{ color: "#fff" }}>{full}</b>.
             </p>
 
             <div className="hl-strip">
-              <div className="hl">
-                <div className="k">Field</div>
-                <div className="v">Selfie + GPS attendance & live location</div>
-              </div>
-              <div className="hl">
-                <div className="k">Sales</div>
-                <div className="v">Offline order capture with branded PDF</div>
-              </div>
-              <div className="hl">
-                <div className="k">Money</div>
-                <div className="v">Self-calculating outstanding & stock</div>
-              </div>
-              <div className="hl">
-                <div className="k">Anywhere</div>
-                <div className="v">Web dashboard + Android app</div>
-              </div>
+              {content.cover.highlights.map((h) => (
+                <div className="hl" key={h.k}>
+                  <div className="k">{h.k}</div>
+                  <div className="v">{h.v}</div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -149,195 +152,56 @@ export function SfaProposalDocument({ data }: { data: ProposalData }) {
       <section className="page">
         <Minihead tag="Why OZZO" />
         <div className="section-head">
-          <div className="eyebrow">Five questions every sales owner asks</div>
+          <div className="eyebrow">{content.questions.eyebrow}</div>
           <h2>
-            The questions you can&apos;t answer today — <span className="gt">answered.</span>
+            {content.questions.heading} <span className="gt">{content.questions.headingAccent}</span>
           </h2>
           <p className="sub">{data.voice?.built}</p>
         </div>
 
         <div className="qa">
-          <div className="qrow">
-            <div className="q">
-              <span className="badge">?</span>
-              <span className="t">Where is my sales team right now?</span>
+          {content.questions.rows.map((row) => (
+            <div className="qrow" key={row.q}>
+              <div className="q">
+                <span className="badge">?</span>
+                <span className="t">{row.q}</span>
+              </div>
+              <div className="a">
+                <span className="tick">✓</span>
+                <span className="t">
+                  <RichText text={copy(row.a)} />
+                </span>
+              </div>
             </div>
-            <div className="a">
-              <span className="tick">✓</span>
-              <span className="t">
-                Selfie + GPS attendance and <b>live location</b> for every rep, all day.
-              </span>
-            </div>
-          </div>
-          <div className="qrow">
-            <div className="q">
-              <span className="badge">?</span>
-              <span className="t">Did they actually visit the outlet?</span>
-            </div>
-            <div className="a">
-              <span className="tick">✓</span>
-              <span className="t">
-                <b>Geo-tagged, geo-fenced visits</b> — check-in only works at the shop.
-              </span>
-            </div>
-          </div>
-          <div className="qrow">
-            <div className="q">
-              <span className="badge">?</span>
-              <span className="t">What did they book?</span>
-            </div>
-            <div className="a">
-              <span className="tick">✓</span>
-              <span className="t">
-                Orders captured at the counter — <b>even offline</b> — with a branded PDF.
-              </span>
-            </div>
-          </div>
-          <div className="qrow">
-            <div className="q">
-              <span className="badge">?</span>
-              <span className="t">How much is still outstanding?</span>
-            </div>
-            <div className="a">
-              <span className="tick">✓</span>
-              <span className="t">
-                <b>Self-calculates</b> from orders & collections — plus an Ageing report.
-              </span>
-            </div>
-          </div>
-          <div className="qrow">
-            <div className="q">
-              <span className="badge">?</span>
-              <span className="t">How much stock is really left?</span>
-            </div>
-            <div className="a">
-              <span className="tick">✓</span>
-              <span className="t">
-                A <b>live stock ledger</b> derives closing stock — no godown guessing.
-              </span>
-            </div>
-          </div>
+          ))}
         </div>
 
         <div className="signoff">
-          One system, updated in real time —{" "}
-          <b>no paper, no re-typing, no separate accounting software.</b> The rest of this proposal
-          shows exactly what you get and what it costs.
+          <RichText text={copy(content.questions.signoff)} />
         </div>
 
-        <Pfoot client={full} n="02" />
+        <Pfoot client={full} label={content.footerLabel} n="02" />
       </section>
 
-      {/* ══════════ PAGE 3 · FEATURE TILES (10) ══════════ */}
+      {/* ══════════ PAGE 3 · FEATURE TILES ══════════ */}
       <section className="page">
         <Minihead tag="What you get" />
         <div className="section-head">
-          <div className="eyebrow">The complete SFA toolkit</div>
+          <div className="eyebrow">{content.toolkit.eyebrow}</div>
           <h2>
-            Everything your field sales runs on — <span className="gt">in one app.</span>
+            {content.toolkit.heading} <span className="gt">{content.toolkit.headingAccent}</span>
           </h2>
         </div>
 
         <div className="cards">
-          {[
-            {
-              n: "1",
-              h: "Attendance & Live Location",
-              li: [
-                "Selfie + GPS check-in / check-out",
-                "Present / Late / Short / Absent auto-classified",
-                "Live location & day route per rep",
-              ],
-            },
-            {
-              n: "2",
-              h: "Beat, Route & Territory",
-              li: [
-                "Monthly beat planner & assigned routes",
-                "Rep sees “My Route” & outlets to visit",
-                "Territory tree: state → city → area",
-              ],
-            },
-            {
-              n: "3",
-              h: "Geo-tagged Visits",
-              li: [
-                "Every visit stamped with GPS & time",
-                "Geo-fencing — check-in only at the outlet",
-                "Productive visit = a visit that booked an order",
-              ],
-            },
-            {
-              n: "4",
-              h: "Orders & Dispatch",
-              li: [
-                "Take orders at the counter — works offline",
-                "Catalogue with GST / HSN & multi-unit",
-                "Branded order PDF + dispatch tracking",
-              ],
-            },
-            {
-              n: "5",
-              h: "Collection & Outstanding",
-              li: [
-                "Record collections in the field with proof",
-                "Outstanding per customer, self-calculating",
-                "Ageing report — who owes, how long",
-              ],
-            },
-            {
-              n: "6",
-              h: "Stock in Hand",
-              li: [
-                "Live stock ledger per product",
-                "Closing stock derived automatically",
-                "No register, no separate software",
-              ],
-            },
-            {
-              n: "7",
-              h: "Trade Hierarchy & Pricing",
-              li: [
-                "Distributor / dealer / retailer levels",
-                "Customer-specific price lists",
-                "Discounts controlled centrally",
-              ],
-            },
-            {
-              n: "8",
-              h: "Schemes & Offers",
-              li: [
-                "Quantity & value based schemes",
-                "Auto-applied on the order screen",
-                "Season / festival offer control",
-              ],
-            },
-            {
-              n: "9",
-              h: "Expenses & Travel",
-              li: [
-                "Submit travel & expense claims on mobile",
-                "Odometer & proof attachments",
-                "Manager review & approval",
-              ],
-            },
-            {
-              n: "10",
-              h: "Reports & Daily Sales Report",
-              li: [
-                "Per-rep Daily Sales Report (DSR)",
-                "Sales, Order, Payment, Visit, Ageing, Expense",
-                "Leave, Holiday & Announcements built in",
-              ],
-            },
-          ].map((card) => (
-            <div className="mcard" key={card.n}>
+          {content.toolkit.tiles.map((tile, i) => (
+            <div className="mcard" key={tile.h}>
               <div className="top">
-                <span className="num">{card.n}</span>
-                <h4>{card.h}</h4>
+                <span className="num">{i + 1}</span>
+                <h4>{tile.h}</h4>
               </div>
               <ul>
-                {card.li.map((line) => (
+                {tile.li.map((line) => (
                   <li key={line}>{line}</li>
                 ))}
               </ul>
@@ -345,16 +209,16 @@ export function SfaProposalDocument({ data }: { data: ProposalData }) {
           ))}
         </div>
 
-        <Pfoot client={full} n="03" />
+        <Pfoot client={full} label={content.footerLabel} n="03" />
       </section>
 
-      {/* ══════════ PAGE 4 · NO ACCOUNTING ══════════ */}
+      {/* ══════════ PAGE 4 · THE DIFFERENCE ══════════ */}
       <section className="page">
         <Minihead tag="The difference" />
         <div className="section-head">
-          <div className="eyebrow">The one that saves you money</div>
+          <div className="eyebrow">{content.band.eyebrow}</div>
           <h2>
-            No accounting software for <span className="gt">outstanding & stock.</span>
+            {content.band.heading} <span className="gt">{content.band.headingAccent}</span>
           </h2>
         </div>
 
@@ -363,109 +227,76 @@ export function SfaProposalDocument({ data }: { data: ProposalData }) {
           <div className="glow" />
           <div className="inner">
             <h3>
-              The numbers keep <span className="gb">themselves.</span>
+              {content.band.innerHeading} <span className="gb">{content.band.innerHeadingAccent}</span>
             </h3>
-            <p className="sub">
-              Most {data.voice?.industryPlural} buy a second accounting package only to answer two
-              questions. OZZO derives both — live — from the orders and payments your team already
-              enters. Nothing is re-keyed.
-            </p>
+            <p className="sub">{copy(content.band.sub)}</p>
 
             <div className="stepper">
-              <div className="st">
-                <div className="ev">Order booked</div>
-                <div className="rz">
-                  <b>outstanding ↑</b> · <b>stock ↓</b>
-                </div>
-              </div>
-              <div className="arrow">→</div>
-              <div className="st">
-                <div className="ev">Payment collected</div>
-                <div className="rz">
-                  <b>outstanding ↓</b>
-                </div>
-              </div>
-              <div className="arrow">→</div>
-              <div className="st">
-                <div className="ev">Goods received</div>
-                <div className="rz">
-                  <b>stock ↑</b>
-                </div>
-              </div>
+              {/* Fragment, not a wrapper div: .stepper is a flex row whose
+                  direct children are the steps and the arrows between them. */}
+              {content.band.stepper.map((step, i) => (
+                <Fragment key={step.ev}>
+                  {i > 0 && <div className="arrow">→</div>}
+                  <div className="st">
+                    <div className="ev">{step.ev}</div>
+                    <div className="rz">
+                      <RichText text={step.rz} />
+                    </div>
+                  </div>
+                </Fragment>
+              ))}
             </div>
 
             <div className="two">
-              <div className="box">
-                <div className="h">
-                  <span className="dot" style={{ background: "#5ea1ff" }} />
-                  <h4>Outstanding — automatic</h4>
+              {content.band.boxes.map((box) => (
+                <div className="box" key={box.h}>
+                  <div className="h">
+                    <span className="dot" style={{ background: box.dot }} />
+                    <h4>{box.h}</h4>
+                  </div>
+                  <p>{box.p}</p>
                 </div>
-                <p>
-                  Every order raises a party&apos;s balance; every collection lowers it. The figure
-                  and the Ageing report update the instant a rep books or collects — no month-end,
-                  no accountant.
-                </p>
-              </div>
-              <div className="box">
-                <div className="h">
-                  <span className="dot" style={{ background: "#ec5fe6" }} />
-                  <h4>Stock — automatic</h4>
-                </div>
-                <p>
-                  A live ledger moves with every inward and dispatch. Closing stock is a running
-                  balance per product, so “what&apos;s left” is always a number you can trust.
-                </p>
-              </div>
+              ))}
             </div>
           </div>
         </div>
 
         <div className="section-head" style={{ marginTop: "22px" }}>
-          <div className="eyebrow">Web + Mobile</div>
+          <div className="eyebrow">{content.band.splitEyebrow}</div>
           <h2 style={{ fontSize: "22px" }}>
-            You manage. They sell. <span className="gt">Same data.</span>
+            {content.band.splitHeading}{" "}
+            <span className="gt">{content.band.splitHeadingAccent}</span>
           </h2>
         </div>
         <div className="split">
-          <div className="s">
-            <div className="cap">Admin · Web dashboard</div>
-            <h4>Command centre for the office</h4>
-            <p>
-              See live locations, approve routes & payments, manage products, prices &
-              schemes, and open any report for the whole team.
-            </p>
-          </div>
-          <div className="s">
-            <div className="cap">Field · Android app</div>
-            <h4>Everything a salesman needs</h4>
-            <p>
-              Mark attendance, follow the beat, check in at outlets, take orders offline, collect
-              payments and share a branded PDF — syncing the moment the network returns.
-            </p>
-          </div>
+          {content.band.panes.map((pane) => (
+            <div className="s" key={pane.cap}>
+              <div className="cap">{pane.cap}</div>
+              <h4>{pane.h}</h4>
+              <p>{pane.p}</p>
+            </div>
+          ))}
         </div>
 
-        <Pfoot client={full} n="04" />
+        <Pfoot client={full} label={content.footerLabel} n="04" />
       </section>
 
       {/* ══════════ PAGE 5 · YOUR PLAN (INCLUDED) ══════════ */}
       <section className="page">
         <Minihead tag="Your plan" />
         <div className="section-head">
-          <div className="eyebrow">Plan & pricing — what&apos;s included</div>
+          <div className="eyebrow">{content.included.eyebrow}</div>
           <h2>
-            One plan. <span className="gt">Every feature.</span> No add-on modules.
+            {content.included.heading} <span className="gt">{content.included.headingAccent}</span>{" "}
+            {content.included.headingTail}
           </h2>
-          <p className="sub">
-            Your price of ₹{inr(t.headlineRate)} per user, per year unlocks the entire OZZO SFA
-            feature set for every login — field or admin. Nothing below is a paid extra.
-          </p>
+          <p className="sub">{copy(content.included.sub)}</p>
         </div>
 
         <div className="plan-hero">
           <div>
             <div className="tag">Your plan</div>
-            <h3>OZZO SFA — Complete</h3>
+            <h3>{content.planName}</h3>
           </div>
           <div className="p">
             <div className="amt">
@@ -477,67 +308,7 @@ export function SfaProposalDocument({ data }: { data: ProposalData }) {
         </div>
 
         <div className="feat-grid">
-          {[
-            {
-              h: "Field Operations",
-              li: [
-                "Selfie + GPS attendance",
-                "Live location tracking",
-                "Geo-tagged & geo-fenced visits",
-                "Beat & route planner",
-                "Territory management",
-              ],
-            },
-            {
-              h: "Sales & Orders",
-              li: [
-                "Offline order capture",
-                "Product catalogue (GST / HSN)",
-                "Multi-unit & branded order PDF",
-                "Dispatch tracking",
-                "Quotations",
-              ],
-            },
-            {
-              h: "Money & Stock",
-              li: [
-                "Field payment collection",
-                "Self-calculating outstanding",
-                "Ageing report",
-                "Live stock ledger & closing stock",
-                "Expense & travel claims",
-              ],
-            },
-            {
-              h: "Customers & Pricing",
-              li: [
-                "Distributor / dealer / retailer levels",
-                "Customer-specific price lists",
-                "Schemes & discounts",
-                "Custom fields on every record",
-                "Data import",
-              ],
-            },
-            {
-              h: "Team & Reports",
-              li: [
-                "Daily Sales Report (per rep)",
-                "Sales · Order · Payment · Visit reports",
-                "Attendance & leave classification",
-                "Leave, Holiday & Announcements",
-              ],
-            },
-            {
-              h: "Platform",
-              li: [
-                "Web dashboard + Android app",
-                "Real-time sync (web ↔ mobile)",
-                "Role-based access control",
-                "Onboarding, data setup & training",
-                "WhatsApp & email support",
-              ],
-            },
-          ].map((group) => (
+          {content.included.groups.map((group) => (
             <div className="fgroup" key={group.h}>
               <h4>{group.h}</h4>
               {group.li.map((line) => (
@@ -552,7 +323,7 @@ export function SfaProposalDocument({ data }: { data: ProposalData }) {
           are no per-module charges and no hidden fees.
         </div>
 
-        <Pfoot client={full} n="05" />
+        <Pfoot client={full} label={content.footerLabel} n="05" />
       </section>
 
       {/* ══════════ PAGE 6 · INVESTMENT ══════════ */}
@@ -690,39 +461,17 @@ export function SfaProposalDocument({ data }: { data: ProposalData }) {
             <span className="ic">✓</span>
             <BuiltFor text={data.voice?.builtFor ?? ""} />
           </div>
-          <div className="w">
-            <span className="ic">✓</span>
-            <span>
-              <b>No second software</b> — outstanding & stock included, not extra.
-            </span>
-          </div>
-          <div className="w">
-            <span className="ic">✓</span>
-            <span>
-              <b>Works offline</b> — orders never wait for a signal.
-            </span>
-          </div>
-          <div className="w">
-            <span className="ic">✓</span>
-            <span>
-              <b>Made in India, priced for India</b> — ₹{inr(t.perUserPerMonth)}/user/month, all in.
-            </span>
-          </div>
-          <div className="w">
-            <span className="ic">✓</span>
-            <span>
-              <b>Live in days</b> — we set up your products & team for you.
-            </span>
-          </div>
-          <div className="w">
-            <span className="ic">✓</span>
-            <span>
-              <b>Real support</b> — over WhatsApp & email, from real people.
-            </span>
-          </div>
+          {content.why.map((line) => (
+            <div className="w" key={line}>
+              <span className="ic">✓</span>
+              <span>
+                <RichText text={copy(line)} />
+              </span>
+            </div>
+          ))}
         </div>
 
-        <Pfoot client={full} n="06" />
+        <Pfoot client={full} label={content.footerLabel} n="06" />
       </section>
 
       {/* ══════════ PAGE 7 · TERMS ══════════ */}
@@ -822,7 +571,7 @@ export function SfaProposalDocument({ data }: { data: ProposalData }) {
           </div>
         </div>
 
-        <Pfoot client={full} n="07" />
+        <Pfoot client={full} label={content.footerLabel} n="07" />
       </section>
 
       {/* ══════════ PAGE 8 · THANK YOU ══════════ */}

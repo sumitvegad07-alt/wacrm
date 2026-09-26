@@ -1,17 +1,14 @@
 // ============================================================
-// SFA proposal template: the field list the form builds itself from, and the
-// starting values.
+// The form's field schema — the same for every plan.
 //
-// The industry wording ships with the Shaahi Niti Masale phrasing deliberately
-// visible rather than blank: it shows what belongs in the field, and it is the
-// exact text that must change when the next proposal goes to a plastics or
-// agro company. Everything OZZO says about itself — features, terms, theme —
-// is not a field, so every proposal stays on-brand.
+// What the founder types (who the client is, the industry wording, who signed
+// it) does not change between a CRM and an SFA proposal. What DOES change per
+// plan is the document's copy, which lives in templates/content/<plan>.ts.
 // ============================================================
 
-import type { ProposalData, ProposalFieldGroup } from "../../types";
+import type { ProposalFieldGroup } from "../types";
 
-export const SFA_GROUPS: ProposalFieldGroup[] = [
+export const PROPOSAL_GROUPS: ProposalFieldGroup[] = [
   {
     title: "Identity",
     fields: [
@@ -82,35 +79,3 @@ export const SFA_GROUPS: ProposalFieldGroup[] = [
     ],
   },
 ];
-
-export function sfaDefaults(proposalDate: string): ProposalData {
-  return {
-    ref: "",
-    proposalDate,
-    validDays: 10,
-    client: { name: "", shortName: "", industry: "", website: "", address: "" },
-    preparedBy: { name: "Sumit", phone: "+91 92271 26301", email: "sales@ozzo.co.in" },
-    voice: {
-      built:
-        "You've built a trusted spices & masala brand across a growing dealer and retailer network. As it grows, the simple questions get hard. OZZO answers each one, live.",
-      industryPlural: "spices businesses",
-      builtFor: "Built for FMCG distribution — trade levels, beats & schemes out of the box.",
-    },
-    lineItems: [
-      {
-        label: "OZZO SFA — Field Salesman",
-        subLabel: "Android app · full field toolkit",
-        users: 5,
-        rate: 3600,
-      },
-      {
-        label: "OZZO SFA — Admin / Manager",
-        subLabel: "Web dashboard · reports & approvals",
-        users: 1,
-        rate: 3600,
-      },
-    ],
-    gstEnabled: false,
-    gstRate: 18,
-  };
-}

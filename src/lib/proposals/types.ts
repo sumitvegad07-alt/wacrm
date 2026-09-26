@@ -72,8 +72,11 @@ export interface ProposalTotals {
   perUserPerMonth: number;
 }
 
-/** Plan lines that can have a proposal template. SFA ships first. */
-export type ProposalPlan = "SFA" | "CRM" | "WFA";
+/**
+ * The plans a proposal can be written for — the app's own sellable plans, so a
+ * proposal can never quote something the product does not sell.
+ */
+export type { PlanId as ProposalPlan } from "@/lib/plans/catalog";
 
 /** One editable field, used to build the form without hand-writing inputs. */
 export interface ProposalField {
@@ -101,5 +104,9 @@ export interface ProposalListRow {
   annual_total: number;
   grand_total: number;
   gst_enabled: boolean;
+  status: string;
+  sent_at: string | null;
+  /** When it was marked won or lost — the month the business counts in. */
+  decided_at: string | null;
   updated_at: string;
 }

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { toErrorResponse } from "@/lib/auth/account";
 import { requireFounder, serviceClient } from "@/lib/auth/superadmin";
 import { getTemplate } from "@/lib/proposals/registry";
+import { isProposalStatus, statusPatch } from "@/lib/proposals/status";
 import { denormalise } from "../route";
 import type { ProposalData } from "@/lib/proposals/types";
 
@@ -35,6 +36,32 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     await requireFounder();
     const { id } = await props.params;
     const body = await req.json().catch(() => ({}));
+
+    // A status change is its own kind of write: it stamps the timestamps the
+    // forecast depends on and must never be mixed with a content edit, or a
+    // later edit would quietly move the month a deal was booked in.
+    if (body?.status !== undefined) {
+      if (!isProposalStatus(body.status)) {
+        return NextResponse.json({ error: `Unknown status "${body.status}"` }, { status: 400 });
+      }
+
+      const admin = serviceClient();
+      const { data: current } = await admin
+        .from("platform_proposals")
+        .select("sent_at")
+        .eq("id", id)
+        .maybeSingle();
+
+      const { error: statusError } = await admin
+        .from("platform_proposals")
+        .update(statusPatch(body.status, current ?? {}))
+        .eq("id", id);
+
+      if (statusError) {
+        return NextResponse.json({ error: statusError.message }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true });
+    }
 
     const plan = typeof body?.plan === "string" ? body.plan : "SFA";
     if (!getTemplate(plan)) {

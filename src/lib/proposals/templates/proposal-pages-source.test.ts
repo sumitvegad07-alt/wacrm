@@ -17,9 +17,9 @@ import { join } from "node:path";
 // handles both, and neither triggers the bug.
 // ---------------------------------------------------------------------------
 
-const SOURCE = readFileSync(join(__dirname, "sfa-proposal.tsx"), "utf8");
+const SOURCE = readFileSync(join(__dirname, "proposal-pages.tsx"), "utf8");
 
-describe("sfa-proposal.tsx source", () => {
+describe("proposal-pages.tsx source", () => {
   test("has no HTML entity directly after a closing tag and a space", () => {
     const offenders = SOURCE.split("\n")
       .map((line, i) => ({ line, n: i + 1 }))

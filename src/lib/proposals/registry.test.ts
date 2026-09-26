@@ -3,22 +3,30 @@ import { getByPath, getTemplate, listTemplates, setByPath } from "./registry";
 import { computeTotals } from "./totals";
 
 describe("getTemplate", () => {
-  test("returns the SFA template", () => {
-    expect(getTemplate("SFA")?.plan).toBe("SFA");
-  });
-
-  test("returns undefined for a plan that has no template yet", () => {
-    expect(getTemplate("CRM")).toBeUndefined();
+  test("returns a template for every sellable plan", () => {
+    for (const plan of ["CRM", "WFA", "CRM_WFA", "SFA", "CRM_SFA"]) {
+      expect(getTemplate(plan)?.plan, plan).toBe(plan);
+    }
   });
 
   test("returns undefined for an unknown plan rather than throwing", () => {
     expect(getTemplate("NOPE")).toBeUndefined();
   });
+
+  test("labels a plan the way the rest of the app does", () => {
+    expect(getTemplate("CRM_SFA")?.label).toBe("CRM + SFA");
+  });
 });
 
 describe("listTemplates", () => {
-  test("lists only the plans that actually have a template", () => {
-    expect(listTemplates().map((t) => t.plan)).toEqual(["SFA"]);
+  test("lists the five plans in catalog order", () => {
+    expect(listTemplates().map((t) => t.plan)).toEqual([
+      "CRM",
+      "WFA",
+      "CRM_WFA",
+      "SFA",
+      "CRM_SFA",
+    ]);
   });
 });
 
@@ -30,21 +38,23 @@ describe("SFA defaults", () => {
     expect(data.proposalDate).toBe("2026-09-22");
   });
 
-  test("starts from the reference proposal's pricing so the common case is two edits", () => {
+  test("opens at the catalog list price, not a remembered discount", () => {
+    // Catalog: SFA is 350/user/month. A discount like the 3,600 quoted to the
+    // first client must be a deliberate edit, not a silent default.
+    expect(sfa.listRatePerYear).toBe(4200);
     expect(data.lineItems).toHaveLength(2);
-    expect(data.lineItems[0]).toMatchObject({ users: 5, rate: 3600 });
-    expect(data.lineItems[1]).toMatchObject({ users: 1, rate: 3600 });
+    expect(data.lineItems[0]).toMatchObject({ users: 5, rate: 4200 });
+    expect(data.lineItems[1]).toMatchObject({ users: 1, rate: 4200 });
   });
 
-  test("reproduces the reference proposal's totals", () => {
+  test("totals follow from the catalog price", () => {
     const t = computeTotals(data.lineItems, {
       gstEnabled: data.gstEnabled,
       gstRate: data.gstRate,
     });
 
-    expect(t.subtotal).toBe(21600);
-    expect(t.grandTotal).toBe(21600);
-    expect(t.perUserPerMonth).toBe(300);
+    expect(t.subtotal).toBe(25200);
+    expect(t.perUserPerMonth).toBe(350);
   });
 
   test("defaults to no GST, matching the reference proposal", () => {
@@ -70,22 +80,34 @@ describe("SFA defaults", () => {
     expect(data.client.name).toBe("");
     expect(data.client.shortName).toBe("");
   });
+});
 
-  test("every field the form renders has a value in the defaults", () => {
-    const paths = sfa.groups.flatMap((g) => g.fields.map((f) => f.path));
+describe("every plan's defaults", () => {
+  for (const plan of ["CRM", "WFA", "CRM_WFA", "SFA", "CRM_SFA"]) {
+    const template = getTemplate(plan)!;
+    const data = template.defaults("2026-09-22");
 
-    expect(paths.length).toBeGreaterThan(0);
-    for (const path of paths) {
-      expect(getByPath(data, path), `no default for "${path}"`).toBeDefined();
-    }
-  });
+    test(`${plan}: every field the form renders has a value`, () => {
+      const paths = template.groups.flatMap((g) => g.fields.map((f) => f.path));
 
-  test("declares no field for values that are computed", () => {
-    const paths = sfa.groups.flatMap((g) => g.fields.map((f) => f.path));
+      expect(paths.length).toBeGreaterThan(0);
+      for (const path of paths) {
+        expect(getByPath(data, path), `no default for "${path}"`).toBeDefined();
+      }
+    });
 
-    expect(paths).not.toContain("lineItems");
-    expect(paths).not.toContain("gstEnabled");
-  });
+    test(`${plan}: declares no field for values that are computed`, () => {
+      const paths = template.groups.flatMap((g) => g.fields.map((f) => f.path));
+      expect(paths).not.toContain("lineItems");
+      expect(paths).not.toContain("gstEnabled");
+    });
+
+    test(`${plan}: writes its own industry wording, not another plan's`, () => {
+      expect(data.voice.built).toBeTruthy();
+      expect(data.voice.industryPlural).toBeTruthy();
+      expect(data.voice.builtFor).toBeTruthy();
+    });
+  }
 });
 
 describe("getByPath / setByPath", () => {

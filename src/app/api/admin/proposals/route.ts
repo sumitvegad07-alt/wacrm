@@ -17,7 +17,8 @@ import { todayInIndia } from "@/lib/proposals/today";
 import type { ProposalData } from "@/lib/proposals/types";
 
 const LIST_COLUMNS =
-  "id, ref, plan, client_name, proposal_date, users_total, annual_total, grand_total, gst_enabled, updated_at";
+  "id, ref, plan, client_name, proposal_date, users_total, annual_total, grand_total, " +
+  "gst_enabled, status, sent_at, decided_at, updated_at";
 
 export async function GET() {
   try {

@@ -46,6 +46,11 @@ export default function ProposalForm({ id }: { id: string }) {
     [data],
   );
 
+  const discountPct =
+    template && template.listRatePerYear > 0
+      ? (1 - totals.headlineRate / template.listRatePerYear) * 100
+      : 0;
+
   const edit = (path: string, value: unknown) => {
     setData((prev) => (prev ? setByPath(prev, path, value) : prev));
     setDirty(true);
@@ -136,10 +141,10 @@ export default function ProposalForm({ id }: { id: string }) {
         <div>
           <button
             className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
-            onClick={() => router.push("/admin/proposals")}
+            onClick={() => router.push(`/admin/proposals/${id}`)}
           >
             <ArrowLeft className="h-4 w-4" />
-            All proposals
+            Back to proposal
           </button>
           <h1 className="text-xl font-semibold mt-1">
             {data.client?.name || "New proposal"}
@@ -283,6 +288,45 @@ export default function ProposalForm({ id }: { id: string }) {
             </div>
           )}
         </div>
+
+        {/* The catalog list price, so a discount is something you can see
+            yourself giving rather than something you discover later. */}
+        {template.listRatePerYear > 0 && (
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm flex flex-wrap items-center gap-x-2">
+            <span className="text-muted-foreground">
+              {template.label} list price is <b>₹{inr(template.listRatePerYear)}</b> / user / year.
+            </span>
+            {discountPct > 0.5 ? (
+              <span className="text-amber-700">
+                You are quoting {Math.round(discountPct)}% below list.
+              </span>
+            ) : discountPct < -0.5 ? (
+              <span>You are quoting {Math.round(-discountPct)}% above list.</span>
+            ) : (
+              <span className="text-emerald-700">At list price.</span>
+            )}
+            <button
+              type="button"
+              className="ml-auto text-violet-600 hover:underline text-xs"
+              onClick={() => {
+                setData((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        lineItems: prev.lineItems.map((li) => ({
+                          ...li,
+                          rate: template.listRatePerYear,
+                        })),
+                      }
+                    : prev,
+                );
+                setDirty(true);
+              }}
+            >
+              Reset to list price
+            </button>
+          </div>
+        )}
 
         {/* What the document will print — shown here so the numbers are checked
             before the PDF is sent, not after. */}

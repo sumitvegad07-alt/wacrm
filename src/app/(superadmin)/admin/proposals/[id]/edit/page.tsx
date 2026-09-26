@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { requireFounder } from "@/lib/auth/superadmin";
-import ProposalDetail from "./proposal-detail";
+import ProposalForm from "./proposal-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProposalDetailPage(props: { params: Promise<{ id: string }> }) {
+export default async function ProposalEditPage(props: { params: Promise<{ id: string }> }) {
   try {
     await requireFounder();
   } catch {
@@ -12,5 +12,5 @@ export default async function ProposalDetailPage(props: { params: Promise<{ id: 
   }
 
   const { id } = await props.params;
-  return <ProposalDetail id={id} />;
+  return <ProposalForm id={id} />;
 }

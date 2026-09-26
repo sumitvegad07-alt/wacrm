@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { SfaProposalDocument } from "./sfa-proposal";
-import { sfaDefaults } from "./defaults";
-import type { ProposalData } from "../../types";
+import { ProposalPages } from "./proposal-pages";
+import { SFA_CONTENT } from "./content/sfa";
+import { getTemplate } from "../registry";
+import type { ProposalData } from "../types";
 
 // ---------------------------------------------------------------------------
 // The document is a sales artefact: a dropped space or a stale figure is not a
@@ -16,8 +17,13 @@ import type { ProposalData } from "../../types";
 // ---------------------------------------------------------------------------
 
 const SHAAHI: ProposalData = {
-  ...sfaDefaults("2026-09-22"),
+  ...getTemplate("SFA")!.defaults("2026-09-22"),
   ref: "OZZO/2026/09/SNM-01",
+  // The reference proposal was quoted at 3,600, below the catalog list price.
+  lineItems: [
+    { label: "OZZO SFA — Field Salesman", subLabel: "Android app", users: 5, rate: 3600 },
+    { label: "OZZO SFA — Admin / Manager", subLabel: "Web dashboard", users: 1, rate: 3600 },
+  ],
   client: {
     name: "Shaahi Niti Masale",
     shortName: "Shaahi Niti",
@@ -29,7 +35,7 @@ const SHAAHI: ProposalData = {
 
 /** The document's visible words, whitespace collapsed the way a browser does. */
 function renderText(data: ProposalData): string {
-  const html = renderToStaticMarkup(<SfaProposalDocument data={data} />);
+  const html = renderToStaticMarkup(<ProposalPages data={data} content={SFA_CONTENT} />);
   return html
     .replace(/<[^>]+>/g, "")
     .replace(/&amp;/g, "&")
@@ -44,7 +50,7 @@ describe("SFA proposal document", () => {
   const text = renderText(SHAAHI);
 
   test("renders eight pages", () => {
-    const html = renderToStaticMarkup(<SfaProposalDocument data={SHAAHI} />);
+    const html = renderToStaticMarkup(<ProposalPages data={SHAAHI} content={SFA_CONTENT} />);
     expect(html.match(/class="page/g)).toHaveLength(8);
   });
 
@@ -87,7 +93,7 @@ describe("SFA proposal document", () => {
 
   describe("client-specific values reach the pages", () => {
     test("the full name is on the cover and the page footers", () => {
-      const footers = renderToStaticMarkup(<SfaProposalDocument data={SHAAHI} />).match(
+      const footers = renderToStaticMarkup(<ProposalPages data={SHAAHI} content={SFA_CONTENT} />).match(
         /Shaahi Niti Masale · 0\d/g,
       );
       // Pages 02-07. The cover and the thank-you page carry no footer.
@@ -115,8 +121,9 @@ describe("SFA proposal document", () => {
 
     test("the built-for line bolds the part before the dash", () => {
       const html = renderToStaticMarkup(
-        <SfaProposalDocument
+        <ProposalPages
           data={{ ...SHAAHI, voice: { ...SHAAHI.voice, builtFor: "Built for pharma — cold chain included." } }}
+          content={SFA_CONTENT}
         />,
       );
       expect(html).toContain("<b>Built for pharma</b> — cold chain included.");
@@ -218,7 +225,7 @@ describe("SFA proposal document", () => {
 
   describe("a half-filled proposal still renders", () => {
     const empty = renderText({
-      ...sfaDefaults("2026-09-22"),
+      ...getTemplate("SFA")!.defaults("2026-09-22"),
       ref: "OZZO/2026/09/OZ-01",
       lineItems: [],
     });
