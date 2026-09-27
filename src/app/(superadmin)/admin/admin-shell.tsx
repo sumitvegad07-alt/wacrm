@@ -23,6 +23,7 @@ import {
   FileText,
   BarChart3,
   Calculator,
+  Trash2,
 } from "lucide-react";
 import { isFounderEmail } from "@/lib/auth/founder";
 
@@ -47,6 +48,7 @@ const NAV_ITEMS = [
 // the API 404 non-founders regardless — this only keeps the link out of sight.
 const FOUNDER_NAV_ITEMS = [
   { href: "/admin/calculator", label: "Price Calculator", icon: Calculator },
+  { href: "/admin/retention", label: "Data Retention", icon: Trash2 },
   { href: "/admin/proposals", label: "Sales Proposals", icon: FileText },
   { href: "/admin/forecast", label: "Business Forecast", icon: BarChart3 },
 ];
