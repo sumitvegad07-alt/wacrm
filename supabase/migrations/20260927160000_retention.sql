@@ -128,20 +128,28 @@ language sql
 security definer
 set search_path = public, pg_temp
 as $$
-  select p.user_id,
-         (p.recorded_at at time zone p_tz)::date as day
-  from public.location_pings p
-  where p.account_id = p_account
-    and p.recorded_at < p_before
-  group by 1, 2
-  having not exists (
+  -- The day has to be computed and grouped in a CTE first. Referencing
+  -- p.recorded_at from a HAVING clause on the grouped query is invalid SQL
+  -- (42803: ungrouped column) — the grouping key is the converted date, not the
+  -- timestamp it came from.
+  with days as (
+    select p.user_id as uid,
+           (p.recorded_at at time zone p_tz)::date as d
+    from public.location_pings p
+    where p.account_id = p_account
+      and p.recorded_at < p_before
+    group by 1, 2
+  )
+  select days.uid, days.d
+  from days
+  where not exists (
     select 1
     from public.location_daily_summary s
     where s.account_id = p_account
-      and s.user_id = p.user_id
-      and s.day = (p.recorded_at at time zone p_tz)::date
+      and s.user_id = days.uid
+      and s.day = days.d
   )
-  order by 2, 1
+  order by days.d, days.uid
   limit p_limit;
 $$;
 
