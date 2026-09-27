@@ -19,6 +19,15 @@ import {
 } from "@/lib/location/tracking-window";
 import { FENCE_RADII, normalizeGeoFencing } from "@/lib/location/geofence-config";
 
+/** The shape of accounts.settings this panel merges into. Only the nested blobs
+ *  it re-spreads are named; everything else rides along untouched. */
+type SettingsBlob = Record<string, unknown> & {
+  order_settings?: Record<string, unknown>;
+  extra_settings?: Record<string, unknown>;
+  company_profile?: Record<string, unknown>;
+  tracking_settings?: { working_days?: unknown };
+};
+
 interface HierarchyLevel {
   position: number;
   name: string;
@@ -360,8 +369,21 @@ export function ModuleSettingsPanel() {
         .filter((l) => l.name.trim())
         .map((l, i) => ({ position: i + 1, name: l.name.trim(), color: l.color || LEVEL_COLORS[i % LEVEL_COLORS.length] }));
       
+      // Merge onto the settings as they are RIGHT NOW, not onto the snapshot taken
+      // when this panel mounted. accounts.settings is one JSONB column written by
+      // several panels; spreading a stale snapshot silently reverts whatever was
+      // saved elsewhere while this page sat open — including the geo-fencing
+      // switches. Falls back to the snapshot if the re-read fails.
+      const { data: freshRow } = await supabase
+        .from("accounts")
+        .select("settings")
+        .eq("id", accountId)
+        .maybeSingle();
+      const baseSettings: SettingsBlob =
+        (freshRow?.settings as SettingsBlob | null) ?? (originalSettings as SettingsBlob);
+
       const newSettings = {
-        ...originalSettings,
+        ...baseSettings,
         assignment_mode: assignmentMode,
         gst_enabled: gstEnabled,
         hsn_enabled: hsnEnabled,
@@ -378,16 +400,16 @@ export function ModuleSettingsPanel() {
           // employee somehow has no list at all — writing a default here would quietly
           // reintroduce a Mon–Fri assumption for that fallback.
           working_days:
-            originalSettings?.tracking_settings?.working_days ?? DEFAULT_TRACKING.working_days,
+            baseSettings?.tracking_settings?.working_days ?? DEFAULT_TRACKING.working_days,
         },
         order_settings: {
-          ...originalSettings?.order_settings,
+          ...baseSettings?.order_settings,
           hierarchy_enabled: hierarchyEnabled,
           levels: cleanLevels,
           amount_discount_basis: amountDiscountBasis,
         },
         extra_settings: {
-          ...(originalSettings?.extra_settings || {}),
+          ...(baseSettings?.extra_settings || {}),
           multi_unit_enabled: multiUnitEnabled,
           product_unique_key: productUniqueKey,
           customer_unique_key: customerUniqueKey,
@@ -404,7 +426,7 @@ export function ModuleSettingsPanel() {
         },
         // Ensure company profile also receives GST and HSN flags
         company_profile: {
-          ...(originalSettings?.company_profile || {}),
+          ...(baseSettings?.company_profile || {}),
           gst_enabled: gstEnabled,
           hsn_enabled: hsnEnabled,
         },
