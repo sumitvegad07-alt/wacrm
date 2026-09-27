@@ -24,12 +24,59 @@ const WINDOW_MONTHS = 12;
 export interface ForecastRow {
   id: string;
   status: string;
+  /** What ONE invoice charges, incl. GST if charged. Normalised before use. */
   grand_total: number;
   users_total: number;
   proposal_date: string;
   decided_at: string | null;
   /** Missing on proposals written before terms existed — read as yearly. */
   billing_term?: string | null;
+}
+
+/**
+ * The period every money figure on the dashboard is expressed in.
+ *
+ * Without this, a quarterly proposal's ₹12,600 sat beside a yearly one's ₹36,000
+ * as though the second were nearly three times the business. Picking a basis
+ * restates every deal on the same footing, whichever way the founder wants to
+ * read the book.
+ */
+export type ForecastBasis = "monthly" | "quarterly" | "half_yearly" | "yearly";
+
+export const FORECAST_BASES: readonly ForecastBasis[] = [
+  "monthly",
+  "quarterly",
+  "half_yearly",
+  "yearly",
+] as const;
+
+export const BASIS_MONTHS: Record<ForecastBasis, number> = {
+  monthly: 1,
+  quarterly: 3,
+  half_yearly: 6,
+  yearly: 12,
+};
+
+export const BASIS_LABEL: Record<ForecastBasis, string> = {
+  monthly: "Per month",
+  quarterly: "Per quarter",
+  half_yearly: "Per half-year",
+  yearly: "Per year",
+};
+
+/**
+ * One deal's value restated in the chosen period.
+ *
+ * `grand_total` is what a single invoice charges, so a quarterly deal's figure
+ * covers three months and a yearly deal's covers twelve. Dividing by the deal's
+ * own term and multiplying by the basis is what makes the two comparable.
+ *
+ * Yearly basis on a yearly deal returns the stored number untouched, which is
+ * what the dashboard showed before a basis existed.
+ */
+export function valueOn(row: ForecastRow, basis: ForecastBasis): number {
+  const termMonths = TERM_MONTHS[asTerm(row.billing_term)];
+  return round2((num(row.grand_total) / termMonths) * BASIS_MONTHS[basis]);
 }
 
 export interface MonthBucket {
@@ -46,6 +93,8 @@ export interface RenewalBucket {
 }
 
 export interface ForecastSummary {
+  /** The period every money figure below is expressed in. */
+  basis: ForecastBasis;
   wonThisMonth: { count: number; value: number };
   pipeline: { count: number; value: number };
   wonTotal: number;
@@ -93,9 +142,14 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function summarise(rows: ForecastRow[], now: Date = new Date()): ForecastSummary {
+export function summarise(
+  rows: ForecastRow[],
+  now: Date = new Date(),
+  basis: ForecastBasis = "yearly",
+): ForecastSummary {
   const all = rows ?? [];
   const thisMonth = monthKey(now);
+  const value = (r: ForecastRow) => valueOn(r, basis);
 
   const won = all.filter((r) => r.status === "won");
   const lost = all.filter((r) => r.status === "lost");
@@ -109,7 +163,7 @@ export function summarise(rows: ForecastRow[], now: Date = new Date()): Forecast
   const hasEnoughHistory = decidedCount >= MIN_DECIDED_FOR_WIN_RATE;
   const winRate = hasEnoughHistory ? won.length / decidedCount : null;
 
-  const pipelineValue = round2(sent.reduce((sum, r) => sum + num(r.grand_total), 0));
+  const pipelineValue = round2(sent.reduce((sum, r) => sum + value(r), 0));
 
   // ── Last WINDOW_MONTHS months, oldest first, ending with the current one ──
   const monthly: MonthBucket[] = [];
@@ -122,14 +176,14 @@ export function summarise(rows: ForecastRow[], now: Date = new Date()): Forecast
     if (!r.decided_at) continue;
     const i = monthIndex.get(monthKey(r.decided_at));
     if (i === undefined) continue;
-    monthly[i].won = round2(monthly[i].won + num(r.grand_total));
+    monthly[i].won = round2(monthly[i].won + value(r));
     monthly[i].wonCount += 1;
   }
   for (const r of lost) {
     if (!r.decided_at) continue;
     const i = monthIndex.get(monthKey(r.decided_at));
     if (i === undefined) continue;
-    monthly[i].lost = round2(monthly[i].lost + num(r.grand_total));
+    monthly[i].lost = round2(monthly[i].lost + value(r));
   }
 
   // ── Renewals: a subscription comes round again one TERM after it was won, not
@@ -148,17 +202,18 @@ export function summarise(rows: ForecastRow[], now: Date = new Date()): Forecast
       addMonths(monthKey(r.decided_at), TERM_MONTHS[asTerm(r.billing_term)]),
     );
     if (i === undefined) continue;
-    renewals[i].value = round2(renewals[i].value + num(r.grand_total));
+    renewals[i].value = round2(renewals[i].value + value(r));
     renewals[i].count += 1;
   }
 
-  const wonTotal = round2(won.reduce((sum, r) => sum + num(r.grand_total), 0));
+  const wonTotal = round2(won.reduce((sum, r) => sum + value(r), 0));
   const wonUsers = won.reduce((sum, r) => sum + num(r.users_total), 0);
 
   return {
+    basis,
     wonThisMonth: {
       count: wonThisMonthRows.length,
-      value: round2(wonThisMonthRows.reduce((sum, r) => sum + num(r.grand_total), 0)),
+      value: round2(wonThisMonthRows.reduce((sum, r) => sum + value(r), 0)),
     },
     pipeline: { count: sent.length, value: pipelineValue },
     wonTotal,

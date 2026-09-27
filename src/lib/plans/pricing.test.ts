@@ -101,8 +101,8 @@ describe("the founder's 23-user example", () => {
     expect(q.annualised).toBe(104328);
   });
 
-  it("clears both guards", () => {
-    expect(q.belowMinUsers).toBe(false);
+  it("clears both advisories", () => {
+    expect(q.belowRecommended).toBe(false);
     expect(q.belowMinTicket).toBe(false);
   });
 
@@ -118,28 +118,52 @@ describe("the founder's 23-user example", () => {
   });
 });
 
-describe("minimum users guard", () => {
-  it("bills the minimum and flags it", () => {
+// Founder's ruling: the minimum is a recommendation, never a block. In sales you
+// cannot know in advance what has to be offered to win an account.
+describe("recommended minimum users", () => {
+  it("charges what was asked for, below the recommendation", () => {
     const q = quote({ plan: "CRM_SFA", users: 2, term: "quarterly", gstRate: 18 });
     expect(q.usersRequested).toBe(2);
-    expect(q.usersBilled).toBe(3);
-    expect(q.belowMinUsers).toBe(true);
-    expect(q.net).toBe(5040);
+    expect(q.usersBilled).toBe(2);
+    expect(q.net).toBe(3360);
   });
 
-  it("leaves a request at or above the minimum alone", () => {
+  it("flags it, and says how far short it is", () => {
+    const q = quote({ plan: "SFA", users: 2, term: "quarterly" });
+    expect(q.belowRecommended).toBe(true);
+    expect(q.minUsers).toBe(4);
+    expect(q.usersToRecommended).toBe(2);
+  });
+
+  it("stays quiet at or above the recommendation", () => {
     const q = quote({ plan: "SFA", users: 4, term: "quarterly" });
     expect(q.usersBilled).toBe(4);
-    expect(q.belowMinUsers).toBe(false);
+    expect(q.belowRecommended).toBe(false);
+    expect(q.usersToRecommended).toBe(0);
   });
 
-  it("applies to every plan and term", () => {
+  it("never clamps, on any plan or term", () => {
     for (const plan of PLAN_IDS) {
       for (const term of BILLING_TERMS) {
         const q = quote({ plan, users: 1, term });
-        expect(q.usersBilled).toBe(MIN_USERS[plan]);
+        expect(q.usersBilled).toBe(1);
+        expect(q.belowRecommended).toBe(MIN_USERS[plan] > 1);
       }
     }
+  });
+
+  it("a one-user deal on the top plan still prices out", () => {
+    const q = quote({ plan: "CRM_SFA", users: 1, term: "quarterly", gstRate: 18 });
+    expect(q.net).toBe(1680);
+    expect(q.total).toBe(1982);
+    expect(q.belowRecommended).toBe(true);
+  });
+
+  it("zero users is zero, not the recommendation", () => {
+    const q = quote({ plan: "SFA", users: 0, term: "quarterly" });
+    expect(q.usersBilled).toBe(0);
+    expect(q.net).toBe(0);
+    expect(q.belowRecommended).toBe(false);
   });
 });
 
@@ -195,7 +219,7 @@ describe("discount and GST edges", () => {
       gstRate: Number.NaN,
     });
     expect(Number.isFinite(q.total)).toBe(true);
-    expect(q.usersBilled).toBe(MIN_USERS.SFA);
+    expect(q.usersBilled).toBe(0);
     expect(q.gstRate).toBe(18);
   });
 

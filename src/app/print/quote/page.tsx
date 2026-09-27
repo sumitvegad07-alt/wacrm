@@ -16,7 +16,6 @@ import { notFound } from "next/navigation";
 import { requireFounder } from "@/lib/auth/superadmin";
 import { isNewPlan, PLAN_LABEL, type PlanId } from "@/lib/plans/catalog";
 import {
-  MIN_TICKET,
   TERM_LABEL,
   asTerm,
   compareTerms,
@@ -290,14 +289,10 @@ export default async function QuotePrintView(props: { searchParams: Promise<Sear
         >
           <li>All amounts in Indian Rupees{q.gstRate > 0 ? ", GST included as shown" : ", exclusive of GST"}.</li>
           <li>
-            Billing is per user. Users above the plan minimum of {q.minUsers} are charged at the
-            same per-user rate — there is no slab or step.
+            Billing is per user, at the same rate for every user — there is no slab or step.
           </li>
           <li>Payment is in advance for the full term.</li>
-          <li>
-            Any discount shown is specific to this quote and is not a standing price. Minimum
-            purchase ₹{inr(MIN_TICKET)} per quarter.
-          </li>
+          <li>Any discount shown is specific to this quote and is not a standing price.</li>
           <li>Quote valid for 10 days from {dated}.</li>
         </ul>
       </div>

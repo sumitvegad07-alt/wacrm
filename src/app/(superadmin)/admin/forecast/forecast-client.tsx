@@ -14,7 +14,14 @@ import {
 } from "recharts";
 import { ArrowLeft, BarChart3, Info } from "lucide-react";
 import { inr } from "@/lib/proposals/format";
-import { MIN_DECIDED_FOR_WIN_RATE, summarise, type ForecastRow } from "@/lib/proposals/forecast";
+import {
+  BASIS_LABEL,
+  FORECAST_BASES,
+  MIN_DECIDED_FOR_WIN_RATE,
+  summarise,
+  type ForecastBasis,
+  type ForecastRow,
+} from "@/lib/proposals/forecast";
 
 /** "2026-09" → "Sep 26", for axis labels. */
 function monthLabel(key: string): string {
@@ -39,7 +46,9 @@ export default function ForecastClient() {
     })();
   }, []);
 
-  const s = useMemo(() => summarise(rows, new Date()), [rows]);
+  const [basis, setBasis] = useState<ForecastBasis>("yearly");
+
+  const s = useMemo(() => summarise(rows, new Date(), basis), [rows, basis]);
 
   const monthlyData = useMemo(
     () => s.monthly.map((m) => ({ ...m, label: monthLabel(m.month) })),
@@ -71,6 +80,31 @@ export default function ForecastClient() {
         </p>
       </div>
 
+      {/* Every money figure below is restated in this period. Without it a
+          quarterly deal's one invoice sat beside a yearly deal's as though the
+          second were nearly three times the business. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-muted-foreground">Show values</span>
+        <div className="inline-flex items-center bg-muted/30 p-1 rounded-lg border border-border">
+          {FORECAST_BASES.map((b) => (
+            <button
+              key={b}
+              onClick={() => setBasis(b)}
+              className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                basis === b
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {BASIS_LABEL[b]}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-muted-foreground">
+          Each deal is restated {BASIS_LABEL[basis].toLowerCase()}, whatever term it was sold on.
+        </span>
+      </div>
+
       {err && (
         <div className="rounded-md border border-red-300 bg-red-50 text-red-700 text-sm px-3 py-2">
           {err}
@@ -80,19 +114,19 @@ export default function ForecastClient() {
       {/* ── Headline numbers ───────────────────────────────── */}
       <div className="grid gap-4 md:grid-cols-4">
         <Stat
-          label="Won this month"
+          label={`Won this month · ${BASIS_LABEL[basis].toLowerCase()}`}
           value={`₹${inr(s.wonThisMonth.value)}`}
           sub={`${s.wonThisMonth.count} ${s.wonThisMonth.count === 1 ? "deal" : "deals"}`}
           tone="emerald"
         />
         <Stat
-          label="Open pipeline"
+          label={`Open pipeline · ${BASIS_LABEL[basis].toLowerCase()}`}
           value={`₹${inr(s.pipeline.value)}`}
           sub={`${s.pipeline.count} sent, awaiting a decision`}
           tone="blue"
         />
         <Stat
-          label="Expected from pipeline"
+          label={`Expected from pipeline · ${BASIS_LABEL[basis].toLowerCase()}`}
           value={s.weightedPipeline === null ? "—" : `₹${inr(s.weightedPipeline)}`}
           sub={
             s.winRate === null
@@ -102,7 +136,7 @@ export default function ForecastClient() {
           tone="violet"
         />
         <Stat
-          label="Renewals, next 12 months"
+          label={`Renewals, next 12 months · ${BASIS_LABEL[basis].toLowerCase()}`}
           value={`₹${inr(s.renewalTotal)}`}
           sub="won deals coming round again"
           tone="amber"

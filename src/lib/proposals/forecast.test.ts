@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { MIN_DECIDED_FOR_WIN_RATE, summarise, type ForecastRow } from "./forecast";
+import { MIN_DECIDED_FOR_WIN_RATE, summarise, valueOn, type ForecastRow } from "./forecast";
 
 // Every figure on the dashboard is money the founder will plan around, so the
 // arithmetic is pinned here rather than trusted to the chart.
@@ -227,5 +227,72 @@ describe("summarise", () => {
     expect(s.wonThisMonth).toEqual({ count: 0, value: 0 });
     expect(s.pipeline).toEqual({ count: 0, value: 0 });
     expect(s.winRate).toBeNull();
+  });
+});
+
+// A quarterly deal's invoice covers three months and a yearly deal's covers
+// twelve, so comparing the raw figures overstates the yearly one by 4x. The
+// basis restates every deal on one footing.
+describe("forecast basis", () => {
+  const quarterly: ForecastRow = {
+    id: "q",
+    status: "won",
+    grand_total: 12600,
+    users_total: 10,
+    proposal_date: "2026-09-01",
+    decided_at: "2026-09-10T06:00:00Z",
+    billing_term: "quarterly",
+  };
+  const yearly: ForecastRow = {
+    id: "y",
+    status: "won",
+    grand_total: 36000,
+    users_total: 10,
+    proposal_date: "2026-09-01",
+    decided_at: "2026-09-10T06:00:00Z",
+    billing_term: "yearly",
+  };
+
+  test("restates one deal in each period", () => {
+    expect(valueOn(quarterly, "monthly")).toBe(4200);
+    expect(valueOn(quarterly, "quarterly")).toBe(12600);
+    expect(valueOn(quarterly, "half_yearly")).toBe(25200);
+    expect(valueOn(quarterly, "yearly")).toBe(50400);
+  });
+
+  test("a yearly deal on the yearly basis is the stored number, untouched", () => {
+    expect(valueOn(yearly, "yearly")).toBe(36000);
+    expect(valueOn(yearly, "monthly")).toBe(3000);
+  });
+
+  test("a missing term is read as yearly", () => {
+    expect(valueOn({ ...yearly, billing_term: null }, "yearly")).toBe(36000);
+    expect(valueOn({ ...yearly, billing_term: undefined }, "monthly")).toBe(3000);
+  });
+
+  test("the summary scales with the basis", () => {
+    const now = new Date("2026-09-27T06:00:00Z");
+    const yearlyView = summarise([quarterly, yearly], now, "yearly");
+    const monthlyView = summarise([quarterly, yearly], now, "monthly");
+
+    expect(yearlyView.basis).toBe("yearly");
+    expect(yearlyView.wonThisMonth.value).toBe(86400); // 50,400 + 36,000
+    expect(monthlyView.wonThisMonth.value).toBe(7200); // 4,200 + 3,000
+    expect(monthlyView.wonThisMonth.count).toBe(2);
+  });
+
+  test("defaults to yearly, so the dashboard reads as it always did", () => {
+    const now = new Date("2026-09-27T06:00:00Z");
+    expect(summarise([yearly], now).wonThisMonth.value).toBe(36000);
+    expect(summarise([yearly], now).basis).toBe("yearly");
+  });
+
+  test("a quarterly deal renews next quarter, not next year", () => {
+    const now = new Date("2026-09-27T06:00:00Z");
+    const s = summarise([quarterly], now, "quarterly");
+    const due = s.renewals.find((r) => r.value > 0);
+
+    expect(due?.month).toBe("2026-12");
+    expect(due?.value).toBe(12600);
   });
 });

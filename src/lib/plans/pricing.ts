@@ -58,13 +58,18 @@ export const TERM_UPLIFT: Record<BillingTerm, number> = {
 };
 
 /**
- * Smallest number of users each plan may be sold to.
+ * The RECOMMENDED number of users to sell each plan to — not a floor.
  *
- * These counts are derived, not chosen: at the quarterly rate every one of them
- * produces the *same* entry ticket of ₹5,040, which is what makes a single
- * "from ₹5,000" headline honest across all five plans. `entryTicket()` exposes
- * the figure, and a test pins the invariant, so changing a base rate without
- * re-deriving these counts fails the build rather than the marketing.
+ * Founder's ruling, 27 September 2026: never block a deal on this. In sales you
+ * cannot know in advance what has to be offered to win an account, so a quote
+ * for fewer users must still price out. The quote reports `belowRecommended` and
+ * the UI says so loudly; the arithmetic charges exactly what was asked for.
+ *
+ * The counts themselves are derived, not chosen: at the quarterly rate every one
+ * of them produces the *same* entry ticket of ₹5,040, which is what makes a
+ * single "from ₹5,000" headline honest across all five plans. `entryTicket()`
+ * exposes the figure, and a test pins the invariant, so changing a base rate
+ * without re-deriving these counts fails the build rather than the marketing.
  */
 export const MIN_USERS: Record<PlanId, number> = {
   CRM: 12,
@@ -77,9 +82,9 @@ export const MIN_USERS: Record<PlanId, number> = {
 /**
  * The advertised minimum purchase, pre-GST, for one quarter of service.
  *
- * A discount that takes a quote below this is warned about, not blocked — the
- * founder may still decide to go under. What must never happen is going under
- * by accident while the website says otherwise.
+ * Like MIN_USERS this is advisory: a quote below it is flagged, never refused.
+ * What must never happen is going under it by accident while the website says
+ * otherwise.
  */
 export const MIN_TICKET = 5000;
 
@@ -116,7 +121,7 @@ export function entryTicket(plan: PlanId, term: BillingTerm): number {
 
 export interface QuoteInput {
   plan: PlanId;
-  /** What the customer asked for. Billed users are clamped up to the minimum. */
+  /** What the customer asked for. Charged as asked — never clamped upward. */
   users: number;
   term: BillingTerm;
   /** Percent, 0–100. The founder's call, per deal — never a list price. */
@@ -131,11 +136,14 @@ export interface Quote {
   months: number;
   /** What was asked for, after cleaning. */
   usersRequested: number;
-  /** What is charged — never below the plan minimum. */
+  /** What is charged. Exactly what was asked for — this is not clamped. */
   usersBilled: number;
+  /** The recommended floor for this plan. Advisory only. */
   minUsers: number;
-  /** True when the request was clamped up. The UI must say so. */
-  belowMinUsers: boolean;
+  /** True when the quote is under the recommendation. The UI must say so loudly. */
+  belowRecommended: boolean;
+  /** How many more users would reach the recommendation. 0 when at or above it. */
+  usersToRecommended: number;
   ratePerMonth: number;
   ratePerUser: number;
   subtotal: number;
@@ -178,8 +186,10 @@ export function quote(input: QuoteInput): Quote {
   const months = TERM_MONTHS[term];
   const min = MIN_USERS[plan];
 
+  // Charged as asked. The recommendation is surfaced, never enforced — a deal the
+  // founder has decided to take below it must still produce a real number.
   const requested = Math.max(0, Math.floor(num(input.users)));
-  const usersBilled = Math.max(requested, min);
+  const usersBilled = requested;
 
   const discountPct = Math.min(100, Math.max(0, num(input.discountPct)));
   const gstRate = Math.max(0, num(input.gstRate, DEFAULT_GST_RATE));
@@ -201,7 +211,8 @@ export function quote(input: QuoteInput): Quote {
     usersRequested: requested,
     usersBilled,
     minUsers: min,
-    belowMinUsers: requested < min,
+    belowRecommended: requested > 0 && requested < min,
+    usersToRecommended: requested > 0 && requested < min ? min - requested : 0,
     ratePerMonth,
     ratePerUser,
     subtotal,
