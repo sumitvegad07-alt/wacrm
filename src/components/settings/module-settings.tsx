@@ -196,7 +196,16 @@ function FeatureRow({
 // ── Main Component ────────────────────────────────────────────
 export function ModuleSettingsPanel() {
   const supabase = createClient();
-  const { accountId, account, moduleSettings, canEditSettings, refreshModuleSettings, hasSFA, hasWFA } = useAuth();
+  const {
+    accountId,
+    account,
+    moduleSettings,
+    canEditSettings,
+    refreshModuleSettings,
+    refreshProfile,
+    hasSFA,
+    hasWFA,
+  } = useAuth();
 
   // Modules the account's plan includes. Legacy plans return the full set, so
   // those tenants keep every toggle. A module outside the plan is locked: the
@@ -408,6 +417,12 @@ export function ModuleSettingsPanel() {
 
       if (error) throw new Error("Failed to save extra settings");
       setOriginalSettings(newSettings);
+
+      // Re-read the account row so `account.settings` in context matches what was
+      // just saved. Without this the sidebar keeps the settings it read at login,
+      // so switching attendance fencing on would not reveal the Attendance
+      // Locations link until a full page reload.
+      await refreshProfile();
       
       // Update localStorage so sidebar immediately responds to Assignment Mode changes
       if (typeof window !== 'undefined') {
@@ -427,7 +442,7 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, productUniqueKey, customerUniqueKey, amountDiscountBasis, geoFencingEnabled, geoVisitEnabled, geoAttendanceEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, productUniqueKey, customerUniqueKey, amountDiscountBasis, geoFencingEnabled, geoVisitEnabled, geoAttendanceEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, refreshProfile, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });

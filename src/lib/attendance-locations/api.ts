@@ -74,6 +74,21 @@ export async function listAttendanceLocations(accountId: string): Promise<Attend
   }));
 }
 
+/** One location with its assignment list, for the edit form. */
+export async function getAttendanceLocation(id: string): Promise<AttendanceLocation | null> {
+  const supabase = createClient();
+  const [locRes, assignRes] = await Promise.all([
+    supabase.from("attendance_locations").select("*").eq("id", id).maybeSingle(),
+    supabase.from("attendance_location_users").select("profile_id").eq("location_id", id),
+  ]);
+  if (locRes.error) throw locRes.error;
+  if (!locRes.data) return null;
+  return {
+    ...(locRes.data as Omit<AttendanceLocation, "assigned_profile_ids">),
+    assigned_profile_ids: (assignRes.data ?? []).map((r) => r.profile_id as string),
+  };
+}
+
 /** Employees who can be assigned to a location. */
 export async function listAssignableEmployees(accountId: string): Promise<EmployeeOption[]> {
   const supabase = createClient();
