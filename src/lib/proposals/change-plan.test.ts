@@ -49,15 +49,15 @@ describe("changePlan", () => {
     const after = changePlan(sfaProposal(), "CRM_SFA", "CRM");
 
     for (const item of after.lineItems) {
-      expect(item.rate).toBe(1200);
+      expect(item.rate).toBe(100);
     }
   });
 
   test("keeps the team size — that is about the client, not the plan", () => {
     const before = sfaProposal({
       lineItems: [
-        { label: "OZZO CRM + SFA — Field Salesman", subLabel: "x", users: 14, rate: 4800 },
-        { label: "OZZO CRM + SFA — Admin / Manager", subLabel: "y", users: 3, rate: 4800 },
+        { label: "OZZO CRM + SFA — Field Salesman", subLabel: "x", users: 14, rate: 400 },
+        { label: "OZZO CRM + SFA — Admin / Manager", subLabel: "y", users: 3, rate: 400 },
       ],
     });
     const after = changePlan(before, "CRM_SFA", "CRM");
@@ -68,8 +68,8 @@ describe("changePlan", () => {
   test("keeps extra rows the founder added, re-priced but not renamed away", () => {
     const before = sfaProposal({
       lineItems: [
-        { label: "OZZO CRM + SFA — Field Salesman", subLabel: "x", users: 5, rate: 4800 },
-        { label: "OZZO CRM + SFA — Admin / Manager", subLabel: "y", users: 1, rate: 4800 },
+        { label: "OZZO CRM + SFA — Field Salesman", subLabel: "x", users: 5, rate: 400 },
+        { label: "OZZO CRM + SFA — Admin / Manager", subLabel: "y", users: 1, rate: 400 },
         { label: "Onsite training day", subLabel: "one-off", users: 2, rate: 5000 },
       ],
     });
@@ -85,26 +85,26 @@ describe("changePlan", () => {
     // plan-derived — re-basing it to the per-user rate would be wrong.
     const before = sfaProposal({
       lineItems: [
-        { label: "OZZO CRM + SFA — Field Salesman", subLabel: "x", users: 5, rate: 4800 },
-        { label: "OZZO CRM + SFA — Admin / Manager", subLabel: "y", users: 1, rate: 4800 },
+        { label: "OZZO CRM + SFA — Field Salesman", subLabel: "x", users: 5, rate: 400 },
+        { label: "OZZO CRM + SFA — Admin / Manager", subLabel: "y", users: 1, rate: 400 },
         { label: "Onsite training day", subLabel: "one-off", users: 2, rate: 5000 },
       ],
     });
     const after = changePlan(before, "CRM_SFA", "CRM");
 
     expect(after.lineItems[2].rate).toBe(5000);
-    expect(after.lineItems[0].rate).toBe(1200);
+    expect(after.lineItems[0].rate).toBe(100);
   });
 
   test("adds rows when the new plan seats more kinds of user than the old one", () => {
     const before = sfaProposal({
-      lineItems: [{ label: "OZZO CRM — User", subLabel: "x", users: 9, rate: 1200 }],
+      lineItems: [{ label: "OZZO CRM — User", subLabel: "x", users: 9, rate: 100 }],
     });
     const after = changePlan(before, "CRM", "CRM_SFA");
 
     expect(after.lineItems.length).toBeGreaterThanOrEqual(1);
     expect(after.lineItems[0].users).toBe(9);
-    for (const item of after.lineItems) expect(item.rate).toBe(4800);
+    for (const item of after.lineItems) expect(item.rate).toBe(400);
   });
 
   describe("industry wording", () => {

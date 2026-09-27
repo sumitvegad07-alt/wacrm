@@ -196,7 +196,7 @@ export const CRM_CONTENT: PlanContent = {
     heading: "One plan.",
     headingAccent: "Every CRM feature.",
     headingTail: "No add-on modules.",
-    sub: "Your price of ₹{rate} per user, per year unlocks the entire OZZO CRM feature set for every login. Nothing below is a paid extra.",
+    sub: "Your price of ₹{rate} per user, per {termnoun} unlocks the entire OZZO CRM feature set for every login. Nothing below is a paid extra.",
   },
 
   why: [

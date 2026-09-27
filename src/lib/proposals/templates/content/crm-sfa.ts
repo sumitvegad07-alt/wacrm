@@ -191,7 +191,7 @@ export const CRM_SFA_CONTENT: PlanContent = {
     heading: "One plan.",
     headingAccent: "The whole platform.",
     headingTail: "No add-on modules.",
-    sub: "Your price of ₹{rate} per user, per year unlocks every OZZO line — CRM, Workforce and Sales Force Automation — for every login. Nothing below is a paid extra.",
+    sub: "Your price of ₹{rate} per user, per {termnoun} unlocks every OZZO line — CRM, Workforce and Sales Force Automation — for every login. Nothing below is a paid extra.",
   },
 
   why: [

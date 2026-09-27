@@ -39,12 +39,12 @@ describe("SFA defaults", () => {
   });
 
   test("opens at the catalog list price", () => {
-    // Pricing, Packages & Plans: SFA is 300 PUPM, i.e. 3,600 a year — which is
+    // Pricing, Packages & Plans: SFA is 300 PUPM on the yearly term — which is
     // what the first client was quoted, so that was list price, not a discount.
-    expect(sfa.listRatePerYear).toBe(3600);
+    expect(sfa.listRatePerMonth).toBe(300);
     expect(data.lineItems).toHaveLength(2);
-    expect(data.lineItems[0]).toMatchObject({ users: 5, rate: 3600 });
-    expect(data.lineItems[1]).toMatchObject({ users: 1, rate: 3600 });
+    expect(data.lineItems[0]).toMatchObject({ users: 5, rate: 300 });
+    expect(data.lineItems[1]).toMatchObject({ users: 1, rate: 300 });
   });
 
   test("totals follow from the catalog price", () => {

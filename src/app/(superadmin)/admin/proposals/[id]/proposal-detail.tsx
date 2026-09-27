@@ -13,8 +13,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getTemplate } from "@/lib/proposals/registry";
+import { listRatePerMonth, getTemplate } from "@/lib/proposals/registry";
 import { computeTotals } from "@/lib/proposals/totals";
+import { TERM_LABEL, asTerm } from "@/lib/plans/pricing";
 import { formatLongDate, inr } from "@/lib/proposals/format";
 import { STATUS_CLASS, STATUS_LABEL, type ProposalStatus } from "@/lib/proposals/status";
 import type { ProposalData } from "@/lib/proposals/types";
@@ -116,12 +117,14 @@ export default function ProposalDetail({ id }: { id: string }) {
   if (!row) return <div className="p-6 text-muted-foreground">Loading…</div>;
 
   const data = row.data;
+  const term = asTerm(data.billingTerm);
   const totals = computeTotals(data.lineItems ?? [], {
     gstEnabled: !!data.gstEnabled,
     gstRate: Number(data.gstRate) || 0,
+    term,
   });
   const template = getTemplate(row.plan);
-  const listRate = template?.listRatePerYear ?? 0;
+  const listRate = template ? listRatePerMonth(template.plan, term) : 0;
   const discount = listRate > 0 ? 1 - totals.headlineRate / listRate : 0;
 
   return (
@@ -257,12 +260,16 @@ export default function ProposalDetail({ id }: { id: string }) {
                   <div className="text-xs text-muted-foreground">{item.subLabel}</div>
                 </td>
                 <td className="py-2 text-right">{item.users}</td>
-                <td className="py-2 text-right">₹{inr(Number(item.rate) || 0)}</td>
+                <td className="py-2 text-right">
+                  ₹{inr((Number(item.rate) || 0) * totals.months)}
+                </td>
                 <td className="py-2 text-right">₹{inr(totals.lineAmounts[i] ?? 0)}</td>
               </tr>
             ))}
             <tr className="border-t">
-              <td className="py-2 font-medium">Annual subtotal</td>
+              <td className="py-2 font-medium">
+                Subtotal · {TERM_LABEL[term].toLowerCase()} ({totals.months} months)
+              </td>
               <td className="py-2 text-right">{totals.usersTotal}</td>
               <td />
               <td className="py-2 text-right">₹{inr(totals.subtotal)}</td>

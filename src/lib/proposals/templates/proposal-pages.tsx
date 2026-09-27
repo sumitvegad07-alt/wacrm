@@ -19,7 +19,20 @@ import { formatLongDate, inr } from "../format";
 import { RichText } from "./rich-text";
 import "./proposal.css";
 
-/** Fills {industry}, {rate} and {permonth} in a copy string. */
+/**
+ * The noun the document uses for one billing period.
+ *
+ * "for the year" was hardcoded throughout when yearly was the only term. A
+ * quarterly proposal that still said "for the year" would be a contract-grade
+ * error, not a typo.
+ */
+function termNoun(months: number): string {
+  if (months === 3) return "quarter";
+  if (months === 6) return "half-year";
+  return "year";
+}
+
+/** Fills {industry}, {rate}, {permonth}, {termrate} and {termnoun} in a copy string. */
 function fill(text: string, tokens: Record<string, string>): string {
   return (text ?? "").replace(/\{(\w+)\}/g, (whole, key) =>
     key in tokens ? tokens[key] : whole,
@@ -89,10 +102,16 @@ export function ProposalPages({
   const prettyDate = formatLongDate(data.proposalDate);
   const featureCount = groups.reduce((n, g) => n + g.li.length, 0);
 
+  const noun = termNoun(t.months);
+  const ratePerUserForTerm = t.headlineRate * t.months;
+
   const tokens = {
     industry: data.voice?.industryPlural ?? "",
-    rate: inr(t.headlineRate),
+    /** Per user for one whole term — the figure the price table charges. */
+    rate: inr(ratePerUserForTerm),
     permonth: inr(t.perUserPerMonth),
+    termrate: inr(ratePerUserForTerm),
+    termnoun: noun,
   };
   const copy = (text: string) => fill(text, tokens);
 
@@ -176,13 +195,13 @@ export function ProposalPages({
         <div className="price-hero">
           <div className="big">
             <span className="cur">₹</span>
-            {inr(t.headlineRate)}
+            {inr(t.perUserPerMonth)}
           </div>
           <div className="per">
-            per user&nbsp;/&nbsp;year
+            per user&nbsp;/&nbsp;month
             <br />
             <span style={{ color: "var(--primary-700)", fontWeight: 600 }}>
-              ≈ ₹{inr(t.perUserPerMonth)} / user / month
+              ₹{inr(ratePerUserForTerm)} / user / {noun} · billed {noun === "year" ? "yearly" : `every ${t.months} months`}
             </span>
           </div>
           <div className="chip">All features included</div>
@@ -193,7 +212,7 @@ export function ProposalPages({
             <tr>
               <th>Item</th>
               <th className="r">Users</th>
-              <th className="r">Rate / user / year</th>
+              <th className="r">Rate / user / {noun}</th>
               <th className="r">Amount (₹)</th>
             </tr>
           </thead>
@@ -205,7 +224,10 @@ export function ProposalPages({
                   <span>{item.subLabel}</span>
                 </td>
                 <td className="r">{item.users}</td>
-                <td className="r">{inr(Number(item.rate) || 0)}</td>
+                {/* The column header says "per {noun}", so the figure must be the
+                    per-term rate — printing the monthly one here would leave the
+                    row's own arithmetic not adding up. */}
+                <td className="r">{inr((Number(item.rate) || 0) * t.months)}</td>
                 <td className="r">{inr(t.lineAmounts[i] ?? 0)}</td>
               </tr>
             ))}
@@ -230,7 +252,7 @@ export function ProposalPages({
                 </tr>
                 <tr className="total">
                   <td>
-                    Total payable / year <span className="muted">(incl. GST)</span>
+                    Total payable / {noun} <span className="muted">(incl. GST)</span>
                   </td>
                   <td className="r" />
                   <td className="r" />
@@ -240,7 +262,7 @@ export function ProposalPages({
             ) : (
               <tr className="total">
                 <td>
-                  Total payable / year <span className="muted">(all-inclusive)</span>
+                  Total payable / {noun} <span className="muted">(all-inclusive)</span>
                 </td>
                 <td className="r">{t.usersTotal}</td>
                 <td className="r" />
@@ -263,7 +285,7 @@ export function ProposalPages({
           ) : (
             <span className="t">
               <b>No GST — you save {gstRate}%.</b> OZZO is not charging GST on this proposal, so the
-              amount you pay is exactly <b>₹{inr(t.grandTotal)} for the year</b> — nothing added on
+              amount you pay is exactly <b>₹{inr(t.grandTotal)} for the {noun}</b> — nothing added on
               top. That&apos;s a straight ₹{inr(t.gstAmount)} saving versus a GST-billed quote.
             </span>
           )}
@@ -463,9 +485,9 @@ export function ProposalPages({
           <div className="p">
             <div className="amt">
               <span className="cur">₹</span>
-              {inr(t.headlineRate)}
+              {inr(t.perUserPerMonth)}
             </div>
-            <div className="u">per user / year · all features</div>
+            <div className="u">per user / month · all features</div>
           </div>
         </div>
 
@@ -484,8 +506,8 @@ export function ProposalPages({
         </div>
 
         <div className="allin">
-          ✓ <b>Everything above is included</b> in your ₹{inr(t.headlineRate)} / user / year — there
-          are no per-module charges and no hidden fees.
+          ✓ <b>Everything above is included</b> in your ₹{inr(t.perUserPerMonth)} / user / month —
+          there are no per-module charges and no hidden fees.
         </div>
 
         <Pfoot client={full} label={content.footerLabel} n="06" />
@@ -517,7 +539,7 @@ export function ProposalPages({
             <div className="c">
               <h4>Payment terms</h4>
               <p>
-                <b>100% advance</b> — the annual subscription is payable in full before onboarding
+                <b>100% advance</b> — the {noun}’s subscription is payable in full before onboarding
                 begins.
               </p>
             </div>
@@ -550,12 +572,12 @@ export function ProposalPages({
               {gst ? (
                 <p>
                   <b>GST at {gstRate}% is charged as shown on the Investment page</b>. The total
-                  payable is ₹{inr(t.grandTotal)} for the year, including ₹{inr(t.gstAmount)} of GST.
+                  payable is ₹{inr(t.grandTotal)} for the {noun}, including ₹{inr(t.gstAmount)} of GST.
                 </p>
               ) : (
                 <p>
                   <b>No GST</b> is charged on this proposal. The amount payable is exactly ₹
-                  {inr(t.grandTotal)} for the year, with nothing added on top.
+                  {inr(t.grandTotal)} for the {noun}, with nothing added on top.
                 </p>
               )}
             </div>

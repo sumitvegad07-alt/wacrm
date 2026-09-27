@@ -13,8 +13,10 @@
 //     previous plan's untouched default
 // ============================================================
 
+import { asTerm, termRatePerMonth, type BillingTerm } from "@/lib/plans/pricing";
+import { isNewPlan } from "@/lib/plans/catalog";
 import type { LineItem, ProposalData } from "./types";
-import { getTemplate } from "./registry";
+import { getTemplate, listRatePerMonth } from "./registry";
 
 /** True when the wording is still exactly what the plan shipped with. */
 function isUntouchedVoice(data: ProposalData, plan: string): boolean {
@@ -35,7 +37,9 @@ export function changePlan(data: ProposalData, from: string, to: string): Propos
   const target = getTemplate(to);
   if (!target) return data;
 
-  const rate = target.listRatePerYear;
+  // Re-based at the proposal's own term, not the list yearly rate — switching a
+  // quarterly proposal from SFA to CRM must stay quarterly-priced.
+  const rate = listRatePerMonth(target.plan, asTerm(data.billingTerm));
   const seats = target.content.seats;
   const existing = data.lineItems ?? [];
 
@@ -61,4 +65,58 @@ export function changePlan(data: ProposalData, from: string, to: string): Propos
     lineItems,
     voice: isUntouchedVoice(data, from) ? { ...target.content.defaultVoice } : data.voice,
   };
+}
+
+/**
+ * Switching a proposal from one billing term to another.
+ *
+ * The seat rows are re-priced to the new term's list rate, but **only rows still
+ * sitting at the old term's list rate**. A row the founder discounted by hand
+ * keeps its discount as a proportion of list, so changing the term does not
+ * silently undo a negotiated price — that is the failure mode worth guarding,
+ * because it would reach the client as a higher number than was agreed on the
+ * phone.
+ */
+export function changeTerm(data: ProposalData, to: BillingTerm): ProposalData {
+  const from = asTerm(data.billingTerm);
+  const term = asTerm(to);
+  if (from === term) return data;
+
+  const plan = data as unknown as { plan?: unknown };
+  void plan;
+
+  const existing = data.lineItems ?? [];
+
+  const lineItems: LineItem[] = existing.map((item) => {
+    const oldList = listRateFor(data, from);
+    const newList = listRateFor(data, term);
+    if (!oldList || !newList) return { ...item };
+
+    // Keep the discount proportional: a row at 90% of the old list rate lands at
+    // 90% of the new one.
+    const ratio = Number(item.rate) / oldList;
+    return { ...item, rate: Math.round(newList * ratio) };
+  });
+
+  return { ...data, billingTerm: term, lineItems };
+}
+
+/**
+ * The list rate for whichever plan this proposal is for, on a given term.
+ *
+ * The plan is not on the payload — it lives in its own column — so it is
+ * recovered from the seat labels' template. Falling back to the raw rate means a
+ * proposal whose plan cannot be identified is left exactly as typed rather than
+ * re-priced on a guess.
+ */
+function listRateFor(data: ProposalData, term: BillingTerm): number {
+  const label = data.lineItems?.[0]?.label ?? "";
+  for (const candidate of ["CRM_SFA", "CRM_WFA", "SFA", "WFA", "CRM"]) {
+    if (!isNewPlan(candidate)) continue;
+    const template = getTemplate(candidate);
+    if (template && template.content.seats[0]?.label === label) {
+      return termRatePerMonth(template.plan, term);
+    }
+  }
+  return 0;
 }

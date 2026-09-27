@@ -168,10 +168,10 @@ export default function ProposalsClient() {
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-sm font-semibold tabular-nums whitespace-nowrap">
-                      ₹{inr(t.listRatePerYear)}
+                      ₹{inr(t.listRatePerMonth)}
                     </div>
                     <div className="text-[11px] text-muted-foreground whitespace-nowrap">
-                      per user / year
+                      per user / month
                     </div>
                   </div>
                 </DropdownMenuItem>

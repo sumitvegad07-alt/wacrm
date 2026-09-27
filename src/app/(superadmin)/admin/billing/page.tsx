@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { monthlyRevenue } from "@/lib/admin/billing";
-import { PLAN_LABEL, PLAN_PRICE, type PlanId } from "@/lib/plans/catalog";
+import { PLAN_LABEL, type PlanId } from "@/lib/plans/catalog";
+import {
+  BILLING_TERMS,
+  MIN_USERS,
+  TERM_LABEL,
+  entryTicket,
+  termRatePerMonth,
+  type BillingTerm,
+} from "@/lib/plans/pricing";
 import {
   CreditCard,
   Building2,
@@ -69,7 +77,7 @@ interface AccountBilling {
 export default function BillingPage() {
   const [accounts, setAccounts] = useState<AccountBilling[]>([]);
   const [loading, setLoading] = useState(true);
-  const [billingCycle, setBillingCycle] = useState<'yearly' | 'half-yearly' | 'quarterly'>('yearly');
+  const [billingCycle, setBillingCycle] = useState<BillingTerm>('yearly');
   const supabase = createClient();
 
   useEffect(() => {
@@ -204,24 +212,15 @@ export default function BillingPage() {
         <div className="flex flex-col items-center justify-center mb-8 mt-4">
           <h2 className="text-lg font-bold mb-4 text-foreground">Select Billing Cycle</h2>
           <div className="inline-flex items-center bg-muted/30 p-1.5 rounded-full border border-border shadow-sm">
-            <button
-              onClick={() => setBillingCycle('quarterly')}
-              className={`px-6 py-2.5 text-sm font-bold rounded-full transition-all duration-200 ${billingCycle === 'quarterly' ? 'bg-primary text-primary-foreground shadow-md scale-105' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
-            >
-              Quarterly
-            </button>
-            <button
-              onClick={() => setBillingCycle('half-yearly')}
-              className={`px-6 py-2.5 text-sm font-bold rounded-full transition-all duration-200 ${billingCycle === 'half-yearly' ? 'bg-primary text-primary-foreground shadow-md scale-105' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
-            >
-              Half-Yearly
-            </button>
-            <button
-              onClick={() => setBillingCycle('yearly')}
-              className={`px-6 py-2.5 text-sm font-bold rounded-full transition-all duration-200 ${billingCycle === 'yearly' ? 'bg-primary text-primary-foreground shadow-md scale-105' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
-            >
-              Yearly
-            </button>
+            {BILLING_TERMS.map((t) => (
+              <button
+                key={t}
+                onClick={() => setBillingCycle(t)}
+                className={`px-6 py-2.5 text-sm font-bold rounded-full transition-all duration-200 ${billingCycle === t ? 'bg-primary text-primary-foreground shadow-md scale-105' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
+              >
+                {TERM_LABEL[t]}
+              </button>
+            ))}
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -241,13 +240,14 @@ export default function BillingPage() {
                   </span>
                 </div>
               </div>
-              <p className="text-xl font-bold text-foreground mb-3">
-                ₹{(billingCycle === 'quarterly'
-                      ? Math.round(PLAN_PRICE[plan.id] * 1.3)
-                      : billingCycle === 'half-yearly'
-                        ? Math.round(PLAN_PRICE[plan.id] * 1.2)
-                        : PLAN_PRICE[plan.id]
-                    ).toLocaleString("en-IN")}/user/mo
+              <p className="text-xl font-bold text-foreground">
+                ₹{termRatePerMonth(plan.id, billingCycle).toLocaleString("en-IN")}/user/mo
+              </p>
+              {/* Minimum purchase, alongside the rate — the two are one decision,
+                  and the entry ticket is what the "from ₹5,000" line refers to. */}
+              <p className="text-xs text-muted-foreground mb-3">
+                min {MIN_USERS[plan.id]} users · from ₹
+                {entryTicket(plan.id, billingCycle).toLocaleString("en-IN")}
               </p>
               <ul className="space-y-1">
                 {plan.features.map((f) => (

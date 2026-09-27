@@ -1,13 +1,18 @@
 // ============================================================
 // Every figure the proposal prints that is not typed by hand.
 //
-// The reference document repeats most of them: the annual total appears in the
+// The reference document repeats most of them: the term total appears in the
 // price table, the savings panel, the "covers everything" heading and the terms
 // page, and the per-month rate appears both on the price hero and inside a
 // page-6 bullet. Calculating them in one place is the whole reason this builder
 // exists — hand-editing is what leaves a proposal quoting two different prices.
+//
+// Since billing terms exist, a line's `rate` is per user per MONTH and the
+// amount is `users × rate × months in term`. The months come from the one
+// pricing engine in lib/plans/pricing.ts, never from a literal here.
 // ============================================================
 
+import { TERM_MONTHS, asTerm, type BillingTerm } from "@/lib/plans/pricing";
 import type { LineItem, ProposalTotals } from "./types";
 
 /** Blank inputs arrive from the form as "" or undefined; never let that reach the page as NaN. */
@@ -23,14 +28,17 @@ function round2(value: number): number {
 
 export function computeTotals(
   lineItems: LineItem[],
-  opts: { gstEnabled: boolean; gstRate: number },
+  opts: { gstEnabled: boolean; gstRate: number; term?: BillingTerm },
 ): ProposalTotals {
+  const term = asTerm(opts?.term);
+  const months = TERM_MONTHS[term];
+
   const rows = (lineItems ?? []).map((item) => ({
     users: num(item?.users),
     rate: num(item?.rate),
   }));
 
-  const lineAmounts = rows.map((r) => round2(r.users * r.rate));
+  const lineAmounts = rows.map((r) => round2(r.users * r.rate * months));
   const usersTotal = rows.reduce((sum, r) => sum + r.users, 0);
   const subtotal = round2(lineAmounts.reduce((sum, amount) => sum + amount, 0));
 
@@ -48,12 +56,14 @@ export function computeTotals(
 
   return {
     usersTotal,
+    months,
     lineAmounts,
     subtotal,
     gstAmount,
     grandTotal,
     headlineRate,
-    perUserPerMonth: Math.round(headlineRate / 12),
+    perUserPerMonth: Math.round(headlineRate),
+    annualised: round2(subtotal * (12 / months)),
   };
 }
 

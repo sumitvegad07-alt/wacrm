@@ -13,6 +13,8 @@
 //     derived from it — is withheld rather than shown as false precision.
 // ============================================================
 
+import { TERM_MONTHS, asTerm } from "@/lib/plans/pricing";
+
 /** Below this many decided proposals, a win rate means nothing. */
 export const MIN_DECIDED_FOR_WIN_RATE = 5;
 
@@ -26,6 +28,8 @@ export interface ForecastRow {
   users_total: number;
   proposal_date: string;
   decided_at: string | null;
+  /** Missing on proposals written before terms existed — read as yearly. */
+  billing_term?: string | null;
 }
 
 export interface MonthBucket {
@@ -128,8 +132,10 @@ export function summarise(rows: ForecastRow[], now: Date = new Date()): Forecast
     monthly[i].lost = round2(monthly[i].lost + num(r.grand_total));
   }
 
-  // ── Renewals: an annual subscription comes round again a year after it was
-  //    won. Projected across the next WINDOW_MONTHS months, starting next month.
+  // ── Renewals: a subscription comes round again one TERM after it was won, not
+  //    always a year — a quarterly deal renews in three months. Projecting
+  //    everything at twelve months (as this did before terms existed) would hide
+  //    every quarterly renewal due this quarter.
   const renewals: RenewalBucket[] = [];
   for (let i = 1; i <= WINDOW_MONTHS; i++) {
     renewals.push({ month: addMonths(thisMonth, i), value: 0, count: 0 });
@@ -138,7 +144,9 @@ export function summarise(rows: ForecastRow[], now: Date = new Date()): Forecast
 
   for (const r of won) {
     if (!r.decided_at) continue;
-    const i = renewalIndex.get(addMonths(monthKey(r.decided_at), 12));
+    const i = renewalIndex.get(
+      addMonths(monthKey(r.decided_at), TERM_MONTHS[asTerm(r.billing_term)]),
+    );
     if (i === undefined) continue;
     renewals[i].value = round2(renewals[i].value + num(r.grand_total));
     renewals[i].count += 1;

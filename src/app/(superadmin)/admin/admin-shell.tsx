@@ -22,6 +22,7 @@ import {
   Mail,
   FileText,
   BarChart3,
+  Calculator,
 } from "lucide-react";
 import { isFounderEmail } from "@/lib/auth/founder";
 
@@ -45,6 +46,7 @@ const NAV_ITEMS = [
 // operations, so the link is hidden from every other superadmin. The pages and
 // the API 404 non-founders regardless — this only keeps the link out of sight.
 const FOUNDER_NAV_ITEMS = [
+  { href: "/admin/calculator", label: "Price Calculator", icon: Calculator },
   { href: "/admin/proposals", label: "Sales Proposals", icon: FileText },
   { href: "/admin/forecast", label: "Business Forecast", icon: BarChart3 },
 ];

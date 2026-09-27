@@ -15,10 +15,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getByPath, getTemplate, listTemplates, setByPath } from "@/lib/proposals/registry";
-import { changePlan } from "@/lib/proposals/change-plan";
+import {
+  getByPath,
+  getTemplate,
+  listRatePerMonth,
+  listTemplates,
+  setByPath,
+} from "@/lib/proposals/registry";
+import { changePlan, changeTerm } from "@/lib/proposals/change-plan";
 import { featuresForPlan } from "@/lib/proposals/plan-features";
 import { computeTotals, isPricePageCrowded } from "@/lib/proposals/totals";
+import {
+  BILLING_TERMS,
+  MIN_USERS,
+  TERM_LABEL,
+  TERM_MONTHS,
+  asTerm,
+  type BillingTerm,
+} from "@/lib/plans/pricing";
 import { inr } from "@/lib/proposals/format";
 import type { LineItem, ProposalData, ProposalField } from "@/lib/proposals/types";
 
@@ -46,19 +60,27 @@ export default function ProposalForm({ id }: { id: string }) {
 
   const template = getTemplate(plan);
 
+  const term = asTerm(data?.billingTerm);
+
   const totals = useMemo(
     () =>
       computeTotals(data?.lineItems ?? [], {
         gstEnabled: !!data?.gstEnabled,
         gstRate: Number(data?.gstRate) || 0,
+        term,
       }),
-    [data],
+    [data, term],
   );
 
+  // List price for THIS proposal's term, so "at list price" means at list for
+  // what is actually being sold rather than for the yearly rate.
+  const listRate = template ? listRatePerMonth(template.plan, term) : 0;
+
   const discountPct =
-    template && template.listRatePerYear > 0
-      ? (1 - totals.headlineRate / template.listRatePerYear) * 100
-      : 0;
+    listRate > 0 ? (1 - totals.headlineRate / listRate) * 100 : 0;
+
+  const minUsers = template ? MIN_USERS[template.plan] : 0;
+  const belowMinUsers = totals.usersTotal > 0 && totals.usersTotal < minUsers;
 
   /**
    * Switching plan rewrites pages 2-6 and re-labels the plan's own price rows
@@ -77,8 +99,8 @@ export default function ProposalForm({ id }: { id: string }) {
 ` +
         `The document's wording and its feature list become ${target.label}'s ` +
         `(${featuresForPlan(target.plan).length} features), and the ${target.label} ` +
-        `seat rows are re-priced to the list rate of ₹${inr(target.listRatePerYear)} ` +
-        `per user / year.
+        `seat rows are re-priced to the list rate of ₹${inr(listRatePerMonth(target.plan, term))} ` +
+        `per user / month.
 
 Your client details, team size and any rows you added ` +
         `yourself are kept.`,
@@ -87,6 +109,18 @@ Your client details, team size and any rows you added ` +
 
     setData((prev) => (prev ? changePlan(prev, plan, next) : prev));
     setPlan(next);
+    setDirty(true);
+  };
+
+  /**
+   * Switching the billing term re-prices every seat row at the new term's rate.
+   * Unlike switching plan this needs no confirmation: the price the client pays
+   * per month changes by design, and a hand-negotiated discount is carried over
+   * as a proportion rather than discarded.
+   */
+  const switchTerm = (next: BillingTerm) => {
+    if (!data || next === term) return;
+    setData((prev) => (prev ? changeTerm(prev, next) : prev));
     setDirty(true);
   };
 
@@ -196,13 +230,13 @@ Your client details, team size and any rows you added ` +
               <SelectTrigger className="h-8 w-[230px]">
                 {/* This Select renders the raw value unless given the label. */}
                 <SelectValue placeholder="Plan">
-                  {template.label} · ₹{inr(template.listRatePerYear)}/user/yr
+                  {template.label} · ₹{inr(listRate)}/user/mo
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {listTemplates().map((t) => (
                   <SelectItem key={t.plan} value={t.plan}>
-                    {t.label} · ₹{inr(t.listRatePerYear)}/user/yr
+                    {t.label} · ₹{inr(listRatePerMonth(t.plan, term))}/user/mo
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -211,6 +245,39 @@ Your client details, team size and any rows you added ` +
               {featuresForPlan(template.plan).length} features
             </span>
           </div>
+
+          {/* Billing term. Changing it re-prices the seat rows at the new term's
+              rate while keeping any discount proportional, so a negotiated price
+              survives the switch — see changeTerm(). */}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-sm text-muted-foreground">Billed</span>
+            <div className="flex gap-1">
+              {BILLING_TERMS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => switchTerm(t)}
+                  className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+                    term === t
+                      ? "bg-violet-600 text-white border-violet-600 font-semibold"
+                      : "bg-background border-border hover:bg-muted"
+                  }`}
+                >
+                  {TERM_LABEL[t]}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {TERM_MONTHS[term]} months per invoice
+            </span>
+          </div>
+
+          {belowMinUsers && (
+            <p className="text-xs text-amber-700 mt-2">
+              {template.label} has a minimum of {minUsers} users — this proposal quotes{" "}
+              {totals.usersTotal}.
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -350,10 +417,11 @@ Your client details, team size and any rows you added ` +
 
         {/* The catalog list price, so a discount is something you can see
             yourself giving rather than something you discover later. */}
-        {template.listRatePerYear > 0 && (
+        {listRate > 0 && (
           <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm flex flex-wrap items-center gap-x-2">
             <span className="text-muted-foreground">
-              {template.label} list price is <b>₹{inr(template.listRatePerYear)}</b> / user / year.
+              {template.label} on {TERM_LABEL[term].toLowerCase()} is{" "}
+              <b>₹{inr(listRate)}</b> / user / month.
             </span>
             {discountPct > 0.5 ? (
               <span className="text-amber-700">
@@ -374,7 +442,7 @@ Your client details, team size and any rows you added ` +
                         ...prev,
                         lineItems: prev.lineItems.map((li) => ({
                           ...li,
-                          rate: template.listRatePerYear,
+                          rate: listRate,
                         })),
                       }
                     : prev,
@@ -391,9 +459,13 @@ Your client details, team size and any rows you added ` +
             before the PDF is sent, not after. */}
         <div className="rounded-md bg-muted/40 p-3 text-sm space-y-1">
           <Row label="Total users" value={String(totals.usersTotal)} />
-          <Row label="Headline rate (price hero)" value={`₹${inr(totals.headlineRate)} / user / year`} />
-          <Row label="Shown as per month" value={`≈ ₹${inr(totals.perUserPerMonth)} / user / month`} />
-          <Row label="Annual subtotal" value={`₹${inr(totals.subtotal)}`} />
+          <Row label="Headline rate (price hero)" value={`₹${inr(totals.headlineRate)} / user / month`} />
+          <Row
+            label={`Per user for the ${TERM_LABEL[term].toLowerCase()} term`}
+            value={`₹${inr(totals.headlineRate * totals.months)} / user / ${totals.months} months`}
+          />
+          <Row label={`Subtotal per invoice (${totals.months} months)`} value={`₹${inr(totals.subtotal)}`} />
+          <Row label="Annualised run-rate" value={`₹${inr(totals.annualised)}`} />
           <Row
             label={data.gstEnabled ? `GST @ ${data.gstRate}% (charged)` : `GST @ ${data.gstRate}% (shown as saving)`}
             value={`₹${inr(totals.gstAmount)}`}

@@ -193,7 +193,7 @@ export const CRM_WFA_CONTENT: PlanContent = {
     heading: "One plan.",
     headingAccent: "Office and field.",
     headingTail: "No add-on modules.",
-    sub: "Your price of ₹{rate} per user, per year unlocks the entire OZZO CRM and Workforce feature set for every login — office or field. Nothing below is a paid extra.",
+    sub: "Your price of ₹{rate} per user, per {termnoun} unlocks the entire OZZO CRM and Workforce feature set for every login — office or field. Nothing below is a paid extra.",
   },
 
   why: [

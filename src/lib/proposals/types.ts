@@ -9,6 +9,10 @@
 // places and a stale copy is how a proposal ends up contradicting itself.
 // ============================================================
 
+import type { BillingTerm } from "@/lib/plans/pricing";
+
+export type { BillingTerm };
+
 /** A row of the Investment page price table. */
 export interface LineItem {
   /** Bold product line, e.g. "OZZO SFA — Field Salesman". */
@@ -16,7 +20,13 @@ export interface LineItem {
   /** Muted line beneath it, e.g. "Android app · full field toolkit". */
   subLabel: string;
   users: number;
-  /** Rate per user per year, in rupees. */
+  /**
+   * Rate per user per MONTH, in rupees, at the proposal's billing-term rate.
+   *
+   * Was per-year until terms existed. Per-month is the only basis that works
+   * across quarterly, half-yearly and yearly without the number changing
+   * meaning: the line amount is `users × rate × months in term`.
+   */
   rate: number;
 }
 
@@ -47,6 +57,15 @@ export interface ProposalPreparedBy {
 
 export interface ProposalData {
   ref: string;
+  /**
+   * Which billing term is being quoted. Drives the months every line amount is
+   * multiplied by, and the document's own wording.
+   *
+   * Optional because this is a stored JSONB payload: proposals written before
+   * terms existed have no such key, and `asTerm()` reads a missing one as
+   * yearly — the base rate, so an old proposal can never be silently up-priced.
+   */
+  billingTerm?: BillingTerm;
   /** ISO date (yyyy-mm-dd). Rendered in the account's own wording, not UTC. */
   proposalDate: string;
   validDays: number;
@@ -61,15 +80,23 @@ export interface ProposalData {
 
 export interface ProposalTotals {
   usersTotal: number;
+  /** Months covered by one invoice — 3, 6 or 12. */
+  months: number;
   /** Per line item, in the same order — `users × rate`. */
   lineAmounts: number[];
   subtotal: number;
   /** Always computed. Shown as the charge when GST is on, as the saving when off. */
   gstAmount: number;
   grandTotal: number;
-  /** Drives the price hero and the page-6 "₹300/user/month" bullet. */
+  /** Highest per-user-per-month rate anyone is charged. Drives the price hero. */
   headlineRate: number;
+  /** Same as headlineRate now that rates are monthly. Kept for the templates. */
   perUserPerMonth: number;
+  /**
+   * Net cost across twelve months on this term. What the forecast counts, and
+   * the only figure comparable between a quarterly and a yearly proposal.
+   */
+  annualised: number;
 }
 
 /**
@@ -101,6 +128,11 @@ export interface ProposalListRow {
   client_name: string;
   proposal_date: string;
   users_total: number;
+  /** Which term was quoted, so the list never implies everything is yearly. */
+  billing_term: string;
+  /** Net on one invoice — what the customer actually pays on that term. */
+  term_total: number;
+  /** Annualised run-rate, so quarterly and yearly rows are comparable. */
   annual_total: number;
   grand_total: number;
   gst_enabled: boolean;

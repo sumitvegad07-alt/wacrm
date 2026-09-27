@@ -22,8 +22,8 @@ const SHAAHI: ProposalData = {
   ref: "OZZO/2026/09/SNM-01",
   // The reference proposal was quoted at 3,600, below the catalog list price.
   lineItems: [
-    { label: "OZZO SFA — Field Salesman", subLabel: "Android app", users: 5, rate: 3600 },
-    { label: "OZZO SFA — Admin / Manager", subLabel: "Web dashboard", users: 1, rate: 3600 },
+    { label: "OZZO SFA — Field Salesman", subLabel: "Android app", users: 5, rate: 300 },
+    { label: "OZZO SFA — Admin / Manager", subLabel: "Web dashboard", users: 1, rate: 300 },
   ],
   client: {
     name: "Shaahi Niti Masale",
@@ -67,7 +67,7 @@ describe("SFA proposal document", () => {
       "A live stock ledger derives closing stock — no godown guessing.",
       "One system, updated in real time — no paper, no re-typing, no separate accounting software. The rest of this proposal shows exactly what you get and what it costs.",
       // Page 5
-      "Everything above is included in your ₹3,600 / user / year — there are no per-module charges and no hidden fees.",
+      "Everything above is included in your ₹300 / user / month — there are no per-module charges and no hidden fees.",
       // Page 6 — the why tiles
       "Built for FMCG distribution — trade levels, beats & schemes out of the box.",
       "No second software — outstanding & stock included, not extra.",
@@ -77,7 +77,7 @@ describe("SFA proposal document", () => {
       "Real support — over WhatsApp & email, from real people.",
       // Page 7 — terms
       "This proposal and its pricing are valid for 10 days from the date of issue (22 September 2026).",
-      "100% advance — the annual subscription is payable in full before onboarding begins.",
+      "100% advance — the year’s subscription is payable in full before onboarding begins.",
       "The field app is available on Android, with the admin dashboard on any web browser. An iOS (iPhone) app is not available at this time.",
       "The quoted amount includes software, server, maintenance, implementation, and training & support — there are no separate charges for any of these.",
       // Page 8
@@ -140,7 +140,7 @@ describe("SFA proposal document", () => {
 
     test("the per-month rate appears on the price hero and in the why tile", () => {
       // Both spellings of the same derived figure: the price hero and the tile.
-      expect(text).toContain("≈ ₹300 / user / month");
+      expect(text).toContain("₹3,600 / user / year");
       expect(text).toContain("₹300/user/month, all in");
     });
 
@@ -149,7 +149,7 @@ describe("SFA proposal document", () => {
 
       const t = renderText({
         ...SHAAHI,
-        lineItems: [{ label: "Field", subLabel: "", users: 25, rate: 3600 }],
+        lineItems: [{ label: "Field", subLabel: "", users: 25, rate: 300 }],
       });
       expect(t).toContain("your 25 logins are created");
     });
@@ -158,14 +158,14 @@ describe("SFA proposal document", () => {
       const t = renderText({
         ...SHAAHI,
         lineItems: [
-          { label: "Field", subLabel: "", users: 5, rate: 4800 },
-          { label: "Admin", subLabel: "", users: 1, rate: 4800 },
+          { label: "Field", subLabel: "", users: 5, rate: 400 },
+          { label: "Admin", subLabel: "", users: 1, rate: 400 },
         ],
       });
 
       expect(t).toContain("Your price of ₹4,800 per user, per year");
-      expect(t).toContain("≈ ₹400 / user / month");
-      expect(t).toContain("in your ₹4,800 / user / year");
+      expect(t).toContain("₹4,800 / user / year");
+      expect(t).toContain("in your ₹400 / user / month");
       expect(t).toContain("₹400/user/month, all in");
       expect(t).toContain("exactly ₹28,800 for the year");
       expect(t).not.toContain("3,600");

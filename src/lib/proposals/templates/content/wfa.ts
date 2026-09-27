@@ -195,7 +195,7 @@ export const WFA_CONTENT: PlanContent = {
     heading: "One plan.",
     headingAccent: "Every workforce feature.",
     headingTail: "No add-on modules.",
-    sub: "Your price of ₹{rate} per user, per year unlocks the entire OZZO WFA feature set for every login — field or admin. Nothing below is a paid extra.",
+    sub: "Your price of ₹{rate} per user, per {termnoun} unlocks the entire OZZO WFA feature set for every login — field or admin. Nothing below is a paid extra.",
   },
 
   why: [

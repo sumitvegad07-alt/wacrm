@@ -14,11 +14,12 @@ import { getTemplate } from "@/lib/proposals/registry";
 import { computeTotals } from "@/lib/proposals/totals";
 import { buildRef } from "@/lib/proposals/ref";
 import { todayInIndia } from "@/lib/proposals/today";
+import { asTerm } from "@/lib/plans/pricing";
 import type { ProposalData } from "@/lib/proposals/types";
 
 const LIST_COLUMNS =
-  "id, ref, plan, client_name, proposal_date, users_total, annual_total, grand_total, " +
-  "gst_enabled, status, sent_at, decided_at, updated_at";
+  "id, ref, plan, client_name, proposal_date, users_total, billing_term, term_total, " +
+  "annual_total, grand_total, gst_enabled, status, sent_at, decided_at, updated_at";
 
 export async function GET() {
   try {
@@ -91,9 +92,11 @@ export async function POST(req: NextRequest) {
  * disagree with the document.
  */
 export function denormalise(data: ProposalData, plan: string) {
+  const term = asTerm(data.billingTerm);
   const totals = computeTotals(data.lineItems ?? [], {
     gstEnabled: !!data.gstEnabled,
     gstRate: Number(data.gstRate) || 0,
+    term,
   });
 
   return {
@@ -103,7 +106,14 @@ export function denormalise(data: ProposalData, plan: string) {
     proposal_date: data.proposalDate,
     gst_enabled: !!data.gstEnabled,
     users_total: totals.usersTotal,
-    annual_total: totals.subtotal,
+    billing_term: term,
+    // What one invoice charges, pre-GST.
+    term_total: totals.subtotal,
+    // Annualised run-rate. Keeps its old meaning for a yearly proposal and makes
+    // a quarterly one comparable with it — the history list would otherwise put
+    // a ₹12,600 quarterly deal beside a ₹36,000 yearly one as if the second were
+    // three times the business.
+    annual_total: totals.annualised,
     grand_total: totals.grandTotal,
     data,
   };

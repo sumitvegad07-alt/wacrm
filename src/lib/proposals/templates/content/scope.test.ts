@@ -147,17 +147,17 @@ describe("plan content packs", () => {
         const data = template.defaults("2026-09-26");
         expect(data.lineItems.length).toBeGreaterThan(0);
         for (const item of data.lineItems) {
-          expect(item.rate).toBe(template.listRatePerYear);
+          expect(item.rate).toBe(template.listRatePerMonth);
         }
       });
     });
   }
 
-  test("list prices are the catalog's monthly price times twelve", () => {
-    expect(getTemplate("CRM")!.listRatePerYear).toBe(1200);
-    expect(getTemplate("WFA")!.listRatePerYear).toBe(1800);
-    expect(getTemplate("CRM_WFA")!.listRatePerYear).toBe(2400);
-    expect(getTemplate("SFA")!.listRatePerYear).toBe(3600);
-    expect(getTemplate("CRM_SFA")!.listRatePerYear).toBe(4800);
+  test("list prices are the catalog monthly price on the yearly term", () => {
+    expect(getTemplate("CRM")!.listRatePerMonth).toBe(100);
+    expect(getTemplate("WFA")!.listRatePerMonth).toBe(150);
+    expect(getTemplate("CRM_WFA")!.listRatePerMonth).toBe(200);
+    expect(getTemplate("SFA")!.listRatePerMonth).toBe(300);
+    expect(getTemplate("CRM_SFA")!.listRatePerMonth).toBe(400);
   });
 });
