@@ -284,6 +284,8 @@ export const PERMISSIONS = {
     CREATE_PIPELINES: 'create_pipelines', EDIT_PIPELINES: 'edit_pipelines', DELETE_PIPELINES: 'delete_pipelines',
     CREATE_TERRITORIES: 'create_territories', EDIT_TERRITORIES: 'edit_territories', DELETE_TERRITORIES: 'delete_territories',
     CREATE_GEOFENCES: 'create_geofences', EDIT_GEOFENCES: 'edit_geofences', DELETE_GEOFENCES: 'delete_geofences',
+    // Attendance Locations — the punch-in/punch-out geo-fence master (WFA).
+    CREATE_ATTENDANCE_LOCATIONS: 'create_attendance_locations', EDIT_ATTENDANCE_LOCATIONS: 'edit_attendance_locations', DELETE_ATTENDANCE_LOCATIONS: 'delete_attendance_locations',
     CREATE_LEAVE_TYPES: 'create_leave_types', EDIT_LEAVE_TYPES: 'edit_leave_types', DELETE_LEAVE_TYPES: 'delete_leave_types',
     CREATE_HOLIDAYS: 'create_holidays', EDIT_HOLIDAYS: 'edit_holidays', DELETE_HOLIDAYS: 'delete_holidays',
     CREATE_DOCUMENT_TEMPLATES: 'create_document_templates', EDIT_DOCUMENT_TEMPLATES: 'edit_document_templates', DELETE_DOCUMENT_TEMPLATES: 'delete_document_templates',

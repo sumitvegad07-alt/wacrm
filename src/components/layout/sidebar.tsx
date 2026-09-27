@@ -6,6 +6,7 @@ import { Suspense, useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { useExtraSettings, type AssignmentMode } from "@/hooks/use-extra-settings";
+import { attendanceFencingOn, readGeoFencing } from "@/lib/location/geofence-config";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useImplementationComplete } from "@/hooks/use-implementation-complete";
 import {
@@ -178,7 +179,11 @@ export type MenuNode =
  */
 export function getMenuStructure(
   moduleSettings: ModuleSettings | undefined,
-  assignmentMode: AssignmentMode
+  assignmentMode: AssignmentMode,
+  /** True when accounts.settings.geo_fencing has attendance fencing switched on.
+   *  Optional so callers that don't know (and can't show the master anyway)
+   *  compile unchanged; it only adds the Attendance Locations link. */
+  attendanceFencing = false
 ): MenuNode[] {
   return [
     // ── My Activity, Dashboard, WhatsApp ──
@@ -447,6 +452,11 @@ export function getMenuStructure(
         ...(assignmentMode === 'area' && (!moduleSettings || moduleSettings.territory !== false)
           ? [{ href: "/settings?tab=territories", label: "Territory Master", icon: Map, permission: "edit_territories" }]
           : []),
+        // Attendance Locations only makes sense once attendance geo-fencing is on —
+        // otherwise the master fences nobody and the link is noise.
+        ...(attendanceFencing
+          ? [{ href: "/settings?tab=attendance_locations", label: "Attendance Locations", icon: MapPin, permission: "edit_attendance_locations", line: "wfa" as const }]
+          : []),
         { href: "/settings?tab=api", label: "API Keys & Webhooks", icon: KeyRound, permission: "manage_api_keys" },
       ],
     },
@@ -479,14 +489,16 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     moduleSettings,
   } = useAuth();
   const { assignmentMode } = useExtraSettings();
+  // Whether the Attendance Locations master is worth offering at all.
+  const attendanceFencing = attendanceFencingOn(readGeoFencing(account?.settings));
   const totalUnread = useTotalUnread();
   // Once the account finishes onboarding, the "Getting Started" link leaves the
   // main menu entirely (founder decision).
   const implementationComplete = useImplementationComplete();
 
   const menuStructure = useMemo(
-    () => getMenuStructure(moduleSettings, assignmentMode),
-    [moduleSettings, assignmentMode]
+    () => getMenuStructure(moduleSettings, assignmentMode, attendanceFencing),
+    [moduleSettings, assignmentMode, attendanceFencing]
   );
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({

@@ -66,6 +66,11 @@ interface AccountSummary {
   industry: string;
   is_provisioned: boolean;
   subscription_expires_at: string | null;
+  /** The account-wide `settings` JSONB. Read on the same row as module_settings
+   *  (no extra round-trip) because the chrome needs one flag out of it: whether
+   *  attendance geo-fencing is on, which decides whether the Attendance
+   *  Locations master is offered in the nav at all. */
+  settings: Record<string, unknown> | null;
 }
 
 export interface ModuleSettings {
@@ -282,7 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // `module_settings` is selected here too (added in migration 090)
             // so we don't pay a second round-trip to the same row. Older
             // schemas without the column would error, so it's tolerated below.
-            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned, subscription_expires_at, module_settings")
+            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned, subscription_expires_at, module_settings, settings")
             .eq("id", data.account_id)
             .maybeSingle();
           if (accountErr) {
@@ -303,6 +308,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               industry: account.industry ?? 'Other',
               is_provisioned: account.is_provisioned ?? false,
               subscription_expires_at: (account as any).subscription_expires_at ?? null,
+              settings:
+                (account as { settings?: Record<string, unknown> | null }).settings ?? null,
             };
 
             // module_settings came back on the same accounts row above, so no

@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { allowedModules } from "@/lib/plans/catalog";
-import { CheckCircle2, Layers, GripVertical, Trash2, Plus, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, Layers, GripVertical, Trash2, Plus, Loader2, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DEFAULT_TRACKING,
   TRACKING_INTERVAL_OPTIONS,
@@ -16,6 +17,7 @@ import {
   normalizeTrackingSettings,
   formatHHMM,
 } from "@/lib/location/tracking-window";
+import { FENCE_RADII, normalizeGeoFencing } from "@/lib/location/geofence-config";
 
 interface HierarchyLevel {
   position: number;
@@ -194,7 +196,7 @@ function FeatureRow({
 // ── Main Component ────────────────────────────────────────────
 export function ModuleSettingsPanel() {
   const supabase = createClient();
-  const { accountId, account, moduleSettings, canEditSettings, refreshModuleSettings, hasSFA } = useAuth();
+  const { accountId, account, moduleSettings, canEditSettings, refreshModuleSettings, hasSFA, hasWFA } = useAuth();
 
   // Modules the account's plan includes. Legacy plans return the full set, so
   // those tenants keep every toggle. A module outside the plan is locked: the
@@ -223,9 +225,17 @@ export function ModuleSettingsPanel() {
   // Which field must be unique to block duplicates on save (per module).
   const [productUniqueKey, setProductUniqueKey] = useState<'name' | 'code'>('name');
   const [customerUniqueKey, setCustomerUniqueKey] = useState<'name' | 'code'>('name');
-  // Geo-Fencing: block visit check-in/out unless the rep is within `radius_m`
-  // of the customer's saved location. Read by the DB trigger + mobile app.
+  // Geo-Fencing: one parent switch, two independent sub-switches.
+  //   visit      — block visit check-in/out away from the customer's saved location
+  //   attendance — block punch-in/out away from an Attendance Location
+  // Both may be on at once; see @/lib/location/geofence-config for the shape and
+  // for why visit defaults ON and attendance OFF when the keys are absent.
   const [geoFencingEnabled, setGeoFencingEnabled] = useState(false);
+  const [geoVisitEnabled, setGeoVisitEnabled] = useState(true);
+  const [geoAttendanceEnabled, setGeoAttendanceEnabled] = useState(false);
+  // How many attendance locations exist, so we can warn that attendance fencing
+  // is on but fencing nothing. null = not known (table absent / read failed).
+  const [attendanceLocCount, setAttendanceLocCount] = useState<number | null>(null);
   const [geoEnforceCheckIn, setGeoEnforceCheckIn] = useState(true);
   const [geoEnforceCheckOut, setGeoEnforceCheckOut] = useState(false);
   const [geoRadius, setGeoRadius] = useState<number>(50);
@@ -265,11 +275,13 @@ export function ModuleSettingsPanel() {
         setCustomerUniqueKey(s.extra_settings?.customer_unique_key === 'code' ? 'code' : 'name');
         setAmountDiscountBasis(os.amount_discount_basis === 'base' ? 'base' : 'entered');
 
-        const gf = s.geo_fencing || {};
-        setGeoFencingEnabled(!!gf.enabled);
-        setGeoEnforceCheckIn(gf.enforce_check_in !== false); // default ON
-        setGeoEnforceCheckOut(!!gf.enforce_check_out);
-        setGeoRadius([50, 100, 250, 500, 1000].includes(Number(gf.radius_m)) ? Number(gf.radius_m) : 50);
+        const gf = normalizeGeoFencing(s.geo_fencing);
+        setGeoFencingEnabled(gf.enabled);
+        setGeoVisitEnabled(gf.visit_enabled);
+        setGeoAttendanceEnabled(gf.attendance_enabled);
+        setGeoEnforceCheckIn(gf.enforce_check_in);
+        setGeoEnforceCheckOut(gf.enforce_check_out);
+        setGeoRadius(gf.radius_m);
 
         const ts = normalizeTrackingSettings(s.tracking_settings);
             setTrackingStart(ts.start_time);
@@ -289,6 +301,27 @@ export function ModuleSettingsPanel() {
     })();
     return () => { active = false; };
   }, [accountId, supabase]);
+
+  // How many attendance locations exist. Re-counted whenever the admin flips the
+  // attendance switch, so the "nothing is fenced yet" warning shows up without a
+  // reload. A read error (most likely: the migration has not been applied yet)
+  // leaves the count unknown and simply hides the warning.
+  useEffect(() => {
+    if (!accountId || !geoAttendanceEnabled) {
+      setAttendanceLocCount(null);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { count, error } = await supabase
+        .from("attendance_locations")
+        .select("id", { count: "exact", head: true })
+        .eq("account_id", accountId)
+        .eq("status", "Active");
+      if (active) setAttendanceLocCount(error ? null : (count ?? 0));
+    })();
+    return () => { active = false; };
+  }, [accountId, supabase, geoAttendanceEnabled]);
 
   const handleModuleToggle = (key: keyof ModuleSettings, value: boolean) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -352,6 +385,10 @@ export function ModuleSettingsPanel() {
         },
         geo_fencing: {
           enabled: geoFencingEnabled,
+          // Written explicitly from here on. Absent keys keep their legacy
+          // meaning (visit on, attendance off) for tenants who never save.
+          visit_enabled: geoVisitEnabled,
+          attendance_enabled: geoAttendanceEnabled,
           enforce_check_in: geoEnforceCheckIn,
           enforce_check_out: geoEnforceCheckOut,
           radius_m: geoRadius,
@@ -390,7 +427,7 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, productUniqueKey, customerUniqueKey, amountDiscountBasis, geoFencingEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, productUniqueKey, customerUniqueKey, amountDiscountBasis, geoFencingEnabled, geoVisitEnabled, geoAttendanceEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
@@ -402,11 +439,13 @@ export function ModuleSettingsPanel() {
     setProductUniqueKey(originalSettings.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
     setCustomerUniqueKey(originalSettings.extra_settings?.customer_unique_key === 'code' ? 'code' : 'name');
     setAmountDiscountBasis(originalSettings.order_settings?.amount_discount_basis === 'base' ? 'base' : 'entered');
-    const gf = originalSettings.geo_fencing || {};
-    setGeoFencingEnabled(!!gf.enabled);
-    setGeoEnforceCheckIn(gf.enforce_check_in !== false);
-    setGeoEnforceCheckOut(!!gf.enforce_check_out);
-    setGeoRadius([50, 100, 250, 500, 1000].includes(Number(gf.radius_m)) ? Number(gf.radius_m) : 50);
+    const gf = normalizeGeoFencing(originalSettings.geo_fencing);
+    setGeoFencingEnabled(gf.enabled);
+    setGeoVisitEnabled(gf.visit_enabled);
+    setGeoAttendanceEnabled(gf.attendance_enabled);
+    setGeoEnforceCheckIn(gf.enforce_check_in);
+    setGeoEnforceCheckOut(gf.enforce_check_out);
+    setGeoRadius(gf.radius_m);
     const ts = normalizeTrackingSettings(originalSettings.tracking_settings);
     setTrackingStart(ts.start_time);
     setTrackingEnd(ts.end_time);
@@ -675,47 +714,103 @@ export function ModuleSettingsPanel() {
 
               <FeatureRow
                 label="Enable Geo-Fencing"
-                description="Off: a rep can start/finish a visit anywhere. On: reps must be near the customer's saved location or they see “You are not in customer Range”. Tag your customers first."
+                description="Off: a rep can start a visit or mark attendance from anywhere. On: choose what to fence — customer visits, attendance, or both."
                 enabled={geoFencingEnabled}
                 onChange={setGeoFencingEnabled}
                 disabled={!canEditSettings}
               >
-                <div className="space-y-4">
+                <div className="space-y-5">
+                  {/* ── Visits: the original fence, anchored on the customer ── */}
                   <div>
-                    <p className="text-sm font-medium text-foreground">Fence check-in</p>
-                    <KoopsRadioToggle enabled={geoEnforceCheckIn} onChange={setGeoEnforceCheckIn} disabled={!canEditSettings} />
+                    <p className="text-sm font-medium text-foreground">Geo-Fencing for Visit</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Reps must be near the customer&apos;s saved location or they see “You are not in
+                      customer Range”. Tag your customers first.
+                    </p>
+                    <KoopsRadioToggle
+                      enabled={geoVisitEnabled}
+                      onChange={setGeoVisitEnabled}
+                      disabled={!canEditSettings}
+                    />
+
+                    {geoVisitEnabled && (
+                      <div className="mt-4 space-y-4 border-l-2 border-border pl-4">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Fence check-in</p>
+                          <KoopsRadioToggle enabled={geoEnforceCheckIn} onChange={setGeoEnforceCheckIn} disabled={!canEditSettings} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Fence check-out</p>
+                          <KoopsRadioToggle enabled={geoEnforceCheckOut} onChange={setGeoEnforceCheckOut} disabled={!canEditSettings} />
+                        </div>
+                        {!geoEnforceCheckIn && !geoEnforceCheckOut && (
+                          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                            Visit fencing is on but neither check-in nor check-out is enforced — turn
+                            on at least one, otherwise nothing is blocked.
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Allowed radius</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            The phone&apos;s GPS accuracy is added automatically (up to 100 m) so honest
+                            reps aren&apos;t wrongly blocked.
+                          </p>
+                          <select
+                            value={geoRadius}
+                            onChange={(e) => setGeoRadius(Number(e.target.value))}
+                            disabled={!canEditSettings}
+                            aria-label="Geo-fence radius"
+                            className="mt-2 h-9 w-full max-w-xs rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                          >
+                            {FENCE_RADII.map((r) => (
+                              <option key={r} value={r}>
+                                {r >= 1000 ? `${r / 1000} km (${r} m)` : `${r} m`}
+                                {r === 50 ? " — default" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Fence check-out</p>
-                    <KoopsRadioToggle enabled={geoEnforceCheckOut} onChange={setGeoEnforceCheckOut} disabled={!canEditSettings} />
-                  </div>
-                  {!geoEnforceCheckIn && !geoEnforceCheckOut && (
-                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-                      Geo-fencing is on but neither check-in nor check-out is enforced — turn on at
-                      least one, otherwise nothing is blocked.
+
+                  {/* ── Attendance: anchored on Attendance Locations, not the customer.
+                      Independent of the visit switch — a tenant may fence both. Punch
+                      only exists on the WFA line, so a CRM-only plan never sees this. ── */}
+                  {hasWFA && (
+                    <div className="border-t border-border pt-4">
+                      <p className="text-sm font-medium text-foreground">Geo-Fencing for Attendance</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Reps must be at a work location you pin to punch in or out. Each location
+                        decides for itself whether it fences punch-in, punch-out or both.
+                      </p>
+                      <KoopsRadioToggle
+                        enabled={geoAttendanceEnabled}
+                        onChange={setGeoAttendanceEnabled}
+                        disabled={!canEditSettings}
+                      />
+
+                      {geoAttendanceEnabled && (
+                        <div className="mt-4 space-y-3 border-l-2 border-border pl-4">
+                          <p className="text-xs text-muted-foreground">
+                            Anyone with no location assigned keeps punching from anywhere, so turning
+                            this on can never lock your team out of its own attendance.
+                          </p>
+                          {attendanceLocCount === 0 && (
+                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                              No attendance locations yet, so nothing is fenced. Add one to start.
+                            </div>
+                          )}
+                          <Link
+                            href="/settings?tab=attendance_locations"
+                            className={buttonVariants({ variant: "outline", size: "sm" }) + " h-8 text-xs"}
+                          >
+                            <MapPin className="size-3 mr-1" /> Manage Attendance Locations
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   )}
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Allowed radius</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      The phone&apos;s GPS accuracy is added automatically (up to 100 m) so honest reps
-                      aren&apos;t wrongly blocked.
-                    </p>
-                    <select
-                      value={geoRadius}
-                      onChange={(e) => setGeoRadius(Number(e.target.value))}
-                      disabled={!canEditSettings}
-                      aria-label="Geo-fence radius"
-                      className="mt-2 h-9 w-full max-w-xs rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
-                    >
-                      {[50, 100, 250, 500, 1000].map((r) => (
-                        <option key={r} value={r}>
-                          {r >= 1000 ? `${r / 1000} km (${r} m)` : `${r} m`}
-                          {r === 50 ? " — default" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
               </FeatureRow>
             </div>

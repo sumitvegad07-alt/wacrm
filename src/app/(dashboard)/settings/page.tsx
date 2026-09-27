@@ -24,6 +24,7 @@ import { ModuleSettingsPanel } from '@/components/settings/module-settings';
 import { DealPipelinesSettings } from '@/components/settings/deal-pipelines-settings';
 import { TerritoryManager } from '@/components/territories/territory-manager';
 import { RouteSettings } from '@/components/settings/route-settings';
+import { AttendanceLocationsSettings } from '@/components/settings/attendance-locations-settings';
 import { PaymentSettings } from '@/components/settings/payments-settings';
 import {
   resolveSection,
@@ -98,6 +99,7 @@ function SettingsContent() {
     leave_types: <LeaveTypesSettings />,
     territories: <TerritoryManager />,
     route: <RouteSettings />,
+    attendance_locations: <AttendanceLocationsSettings />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,
     module_settings: <ModuleSettingsPanel />,

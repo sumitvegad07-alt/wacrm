@@ -21,6 +21,7 @@ import {
   Banknote,
   CalendarOff,
   Bell,
+  MapPin,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -55,6 +56,7 @@ export const SETTINGS_SECTIONS = [
   'leave_types',
   'territories',
   'route',
+  'attendance_locations',
   'module_settings',
 ] as const;
 
@@ -91,6 +93,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   leave_types: { id: 'leave_types', label: 'Leave Settings', icon: CalendarOff, group: 'workspace' },
   territories: { id: 'territories', label: 'Territory', icon: Map, group: 'workspace' },
   route: { id: 'route', label: 'Route Settings', icon: Route, group: 'workspace' },
+  attendance_locations: { id: 'attendance_locations', label: 'Attendance Locations', icon: MapPin, group: 'workspace' },
   members: { id: 'members', label: 'Team', icon: UsersRound, group: 'hidden' },
   api: { id: 'api', label: 'API Settings', icon: KeyRound, group: 'workspace' },
   module_settings: { id: 'module_settings', label: 'Organization Settings', icon: ToggleRight, group: 'workspace' },

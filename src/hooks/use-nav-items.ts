@@ -5,6 +5,7 @@ import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { useExtraSettings } from "@/hooks/use-extra-settings";
 import { getMenuStructure } from "@/components/layout/sidebar";
 import type { ProductLine } from "@/lib/plans/catalog";
+import { attendanceFencingOn, readGeoFencing } from "@/lib/location/geofence-config";
 
 export interface FlatNavItem {
   href: string;
@@ -22,6 +23,7 @@ export interface FlatNavItem {
  */
 export function useVisibleNavItems(): FlatNavItem[] {
   const {
+    account,
     hasPermission,
     hasAutomations,
     hasBroadcasts,
@@ -35,7 +37,11 @@ export function useVisibleNavItems(): FlatNavItem[] {
   const { assignmentMode } = useExtraSettings();
 
   return useMemo(() => {
-    const structure = getMenuStructure(moduleSettings, assignmentMode);
+    const structure = getMenuStructure(
+      moduleSettings,
+      assignmentMode,
+      attendanceFencingOn(readGeoFencing(account?.settings)),
+    );
 
     const lineEnabled = (line: ProductLine) =>
       line === "crm" ? hasCRM : line === "wfa" ? hasWFA : hasSFA;
@@ -100,6 +106,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
   }, [
     moduleSettings,
     assignmentMode,
+    account?.settings,
     hasPermission,
     hasAutomations,
     hasBroadcasts,

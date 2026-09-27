@@ -67,7 +67,14 @@ export async function POST(request: Request) {
 
     if (insertError) {
       console.error('Error starting session:', insertError)
-      return NextResponse.json({ error: 'Failed to start session' }, { status: 500 })
+      // Pass the database's own message through. With attendance geo-fencing on,
+      // a session started through this API carries no position and the fence
+      // trigger rejects it — an integrator needs to see that reason, not a
+      // generic failure.
+      return NextResponse.json(
+        { error: insertError.message || 'Failed to start session' },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json(data)

@@ -345,6 +345,11 @@ export const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.MASTERS.CREATE_GEOFENCES, label: "Create Geofences" },
       { id: PERMISSIONS.MASTERS.EDIT_GEOFENCES, label: "Edit Geofences" },
       { id: PERMISSIONS.MASTERS.DELETE_GEOFENCES, label: "Delete Geofences" },
+      // Attendance Locations fence punch-in / punch-out, which only exists on the
+      // WFA line — hidden on a CRM-only plan.
+      { id: PERMISSIONS.MASTERS.CREATE_ATTENDANCE_LOCATIONS, label: "Create Attendance Locations", line: "wfa" },
+      { id: PERMISSIONS.MASTERS.EDIT_ATTENDANCE_LOCATIONS, label: "Edit Attendance Locations", line: "wfa" },
+      { id: PERMISSIONS.MASTERS.DELETE_ATTENDANCE_LOCATIONS, label: "Delete Attendance Locations", line: "wfa" },
     ]
   },
   {
