@@ -130,8 +130,9 @@ CREATE INDEX IF NOT EXISTS customer_assets_phone_snapshot_idx
 -- get_next_asset_number() and has_permission() still see the REAL caller.
 --
 -- Guard summary for whoever debugs a rejected write:
---   42501  archive / restore without delete_service_assets      (block 4)
---   22023  asset_code changed, or account_id changed            (blocks 5, 6)
+--   42501  archive / restore / insert-archived without delete_service_assets (block 4)
+--   22023  account_id changed (top of the UPDATE path), or a LIVE asset's asset_code
+--          changed (block 5)
 --   23503  contact / asset type / product / territory / created_by not in this account
 --                                                                (blocks 2, 6)
 CREATE OR REPLACE FUNCTION public.customer_assets_defaults()
@@ -148,6 +149,7 @@ DECLARE
   v_phone       text;
   v_territory   uuid;
   v_inherited   boolean := false;
+  v_archiving   boolean := false;
   -- "Did this reference change?" flags, computed once. They are set from IF/ELSE
   -- rather than "TG_OP = 'INSERT' OR NEW.x IS DISTINCT FROM OLD.x", because OLD is
   -- unassigned on INSERT and SQL does not guarantee OR/AND short-circuits. Blocks 4-6
@@ -164,6 +166,17 @@ BEGIN
     c_product    := NEW.product_id    IS DISTINCT FROM OLD.product_id;
     c_territory  := NEW.territory_id  IS DISTINCT FROM OLD.territory_id;
     c_created_by := NEW.created_by    IS DISTINCT FROM OLD.created_by;
+
+    -- account_id is immutable, and this is the FIRST thing the UPDATE path does.
+    -- Every lookup and permission check below is scoped to NEW.account_id, so if a
+    -- changed account_id were allowed to reach them, they would run against the
+    -- TARGET tenant and report misleading errors (e.g. "contact does not exist in
+    -- account <target>"). Moving a row between tenants would also defeat every
+    -- tenant-integrity check, which is evaluated at write time for one account.
+    IF NEW.account_id IS DISTINCT FROM OLD.account_id THEN
+      RAISE EXCEPTION 'customer_assets: account_id cannot be changed'
+        USING ERRCODE = 'invalid_parameter_value';
+    END IF;
   END IF;
 
   -- ── 1. Asset code assignment (INSERT only, only when null/blank) ──
@@ -171,6 +184,12 @@ BEGIN
   -- importer may supply its own code; it is then kept as given (uniqueness is
   -- enforced by customer_assets_uniq_code). The prefix lives in account settings
   -- and only affects NEW codes; the counter itself is prefix-independent.
+  -- ASSUMPTION: the prefix is uppercase alphanumeric (no hyphen, no space). It is
+  -- only btrim/nullif'd here, so a hyphenated or spaced prefix would yield codes that
+  -- cannot be split on '-' by position (and that verify check 12's regex rejects).
+  -- normalizeServiceSettings() in src/lib/service/settings.ts is what enforces the
+  -- shape on the product path (upper-cases, strips non-alphanumerics, max 6 chars);
+  -- this trigger deliberately does not duplicate that rule.
   IF TG_OP = 'INSERT' AND (NEW.asset_code IS NULL OR btrim(NEW.asset_code) = '') THEN
     SELECT coalesce(nullif(btrim(a.settings->'service_settings'->>'asset_code_prefix'), ''), 'AST')
       INTO v_prefix
@@ -219,33 +238,51 @@ BEGIN
     NEW.customer_phone_snapshot := coalesce(NEW.customer_phone_snapshot, v_phone);
   END IF;
 
-  -- ── 4. Archive / restore guard (UPDATE, either direction of deleted_at) ──
+  -- ── 4. Archive / restore guard (any change to deleted_at, and INSERT-archived) ──
   -- Archiving is a soft delete, i.e. an UPDATE of deleted_at, so RLS alone would let
   -- anyone with edit_service_assets do it while delete_service_assets governs only a
   -- hard DELETE this product never performs. The database must refuse what the UI
-  -- refuses (spec section 11), so the delete right is enforced here. Restoring is
-  -- the same privilege as archiving. Bypassed when auth.uid() IS NULL (migrations,
-  -- service role), exactly like get_next_asset_number().
+  -- refuses (spec section 11), so the delete right is enforced here. It fires on:
+  --   * any change of deleted_at on UPDATE - archive, restore, AND rewriting the
+  --     timestamp of an already-archived row (comparing only null-ness would let an
+  --     agent falsify the archive date);
+  --   * an INSERT that arrives already archived (deleted_at NOT NULL), which would
+  --     otherwise be a way to archive with only create_service_assets.
+  -- Restoring is the same privilege as archiving. Bypassed when auth.uid() IS NULL
+  -- (migrations, service role), exactly like get_next_asset_number().
   -- delete_service_assets is not registered in the permission catalogue until Task 5;
   -- has_permission() returns true for owner/admin regardless, so this is correct in
   -- the meantime (non-admins are simply refused until the key exists and is granted).
-  IF TG_OP = 'UPDATE' THEN
-    IF (OLD.deleted_at IS NULL) IS DISTINCT FROM (NEW.deleted_at IS NULL)
-       AND v_uid IS NOT NULL
-       AND NOT public.has_permission(v_uid, NEW.account_id, 'delete_service_assets'::text) THEN
-      RAISE EXCEPTION 'customer_assets: archiving or restoring an asset requires delete_service_assets'
-        USING ERRCODE = 'insufficient_privilege';
-    END IF;
+  IF TG_OP = 'INSERT' THEN
+    v_archiving := NEW.deleted_at IS NOT NULL;
+  ELSE
+    v_archiving := OLD.deleted_at IS DISTINCT FROM NEW.deleted_at;
+  END IF;
+  IF v_archiving AND v_uid IS NOT NULL
+     AND NOT public.has_permission(v_uid, NEW.account_id, 'delete_service_assets'::text) THEN
+    RAISE EXCEPTION 'customer_assets: archiving or restoring an asset requires delete_service_assets'
+      USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  -- ── 5. asset_code is immutable after insert ──
+  -- ── 5. asset_code is immutable after insert - for LIVE assets ──
   -- The code is printed on labels and referenced through service history, and a
   -- later prefix change must affect new assets only, never issued codes. A genuine
   -- typo is fixed by archiving and recreating. Applies to everyone, including
-  -- migrations: integrity is not a permission question. (customer_assets_code_not_blank
-  -- guards a different thing: a blank code.)
+  -- migrations: integrity is not a permission question.
+  --
+  -- ARCHIVED rows are deliberately exempt (OLD.deleted_at IS NOT NULL). The code
+  -- unique index is partial (WHERE deleted_at IS NULL), so an archived asset's code
+  -- is free to be reissued: a member can rewind asset_seq through PostgREST and a
+  -- live asset takes it. Restoring the archived asset then fails 23505, and if its
+  -- code were also frozen there would be NO in-product way out (only direct database
+  -- surgery). Allowing a re-code while archived (optionally in the same UPDATE that
+  -- restores it) is that way out. DO NOT "tidy" this exemption away.
+  -- customer_assets_code_not_blank is unreachable for INSERTs (block 1 fills a null or
+  -- whitespace code) and for live rows (this block stops any change). Its only live
+  -- path is a blank re-code of an ARCHIVED row (23514, verify check 23(c)). It stays as
+  -- belt-and-braces against any future path that bypasses this trigger.
   IF TG_OP = 'UPDATE' THEN
-    IF NEW.asset_code IS DISTINCT FROM OLD.asset_code THEN
+    IF NEW.asset_code IS DISTINCT FROM OLD.asset_code AND OLD.deleted_at IS NULL THEN
       RAISE EXCEPTION 'customer_assets: asset_code is immutable (cannot change % to %)',
         OLD.asset_code, NEW.asset_code USING ERRCODE = 'invalid_parameter_value';
     END IF;
@@ -257,17 +294,9 @@ BEGIN
   -- checked only when non-NULL and, on UPDATE, only when it actually changed, so a
   -- bulk import or an unrelated edit does not re-pay for unchanged values. Applied
   -- unconditionally (not skipped for auth.uid() IS NULL): a cross-tenant row is
-  -- wrong for the service role too. (The contact was checked in block 2.)
+  -- wrong for the service role too. (The contact was checked in block 2, and account_id
+  -- immutability is enforced at the top of the UPDATE path.)
   -- Archived/inactive masters are still accepted: existing assets may keep them.
-  IF TG_OP = 'UPDATE' THEN
-    IF NEW.account_id IS DISTINCT FROM OLD.account_id THEN
-      -- Moving a row between tenants would bypass every check above, which are all
-      -- scoped to the account_id at write time.
-      RAISE EXCEPTION 'customer_assets: account_id cannot be changed'
-        USING ERRCODE = 'invalid_parameter_value';
-    END IF;
-  END IF;
-
   IF NEW.asset_type_id IS NOT NULL AND c_type
      AND NOT EXISTS (SELECT 1 FROM asset_types t
                       WHERE t.id = NEW.asset_type_id AND t.account_id = NEW.account_id) THEN

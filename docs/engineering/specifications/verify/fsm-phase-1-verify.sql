@@ -25,6 +25,10 @@
 --   \set foreign_territory  '<a territory uuid belonging to :nonfsm_acct>'      (check 36)
 --   :agent must be a member whose account_role is exactly 'agent' (NOT owner/admin)
 --   for check 29 to prove anything.
+--   :acct must be on an FSM plan (FSM | CRM_FSM | SFA_FSM); a legacy plan does NOT
+--   grant the fsm line (account_has_line's else branch is false for 'fsm'). Checks
+--   29(a), 32(b) and 32(c) depend on this: against a legacy-plan account they would
+--   fail with 42501, which is a correct plan-ceiling refusal, NOT a broken INSERT policy.
 -- Every check that writes to customer_assets / contacts / accounts / account_sequences
 -- is wrapped in BEGIN ... ROLLBACK, so nothing persists and no counter value is burnt.
 -- Run 12-36 AFTER 1-11 (check 13 rewinds account_sequences and expects the row that
@@ -41,7 +45,7 @@
 -- (auth.uid() IS NULL, so the membership guard is bypassed). Check 5 needs a role
 -- switch and CANNOT run as the migration owner. Checks that raise an error ON PURPOSE:
 -- 5(a) and 5(b) (both 42501), 7 (23505), and in the customer_assets set 19-24,
--- 28, 29(b), 30, 31, 32(a), 32(d), 33-36 (23505 / 23514 / 23503 / 42501 / 22023). Under psql -v ON_ERROR_STOP=1
+-- 28, 29(b), 30, 31, 32(a), 32(d)-(f), 33(a), 33(d), 34-36 (23505 / 23514 / 23503 / 42501 / 22023). Under psql -v ON_ERROR_STOP=1
 -- the first of these aborts the whole run, and for the BEGIN-wrapped ones it does so
 -- BEFORE their ROLLBACK (the open transaction is then discarded when the session
 -- ends). So run them one at a time, or with ON_ERROR_STOP off, in which case each
@@ -303,15 +307,29 @@ BEGIN;
   VALUES (:'acct', :'contact', 'too-far', current_date + 2);
 ROLLBACK;
 
--- 23. Blank name, and blank asset_code on UPDATE. Expect ERROR 23514
---     customer_assets_name_not_blank on the first block, then ERROR 23514
---     customer_assets_code_not_blank on the second. RAISES ON PURPOSE.
-BEGIN;
+-- 23. Blank name, and blank asset_code. RAISES ON PURPOSE.
+--     (a) blank name on INSERT   -> Expect ERROR 23514 customer_assets_name_not_blank.
+--     (b) blank asset_code on UPDATE of a LIVE row -> Expect ERROR 22023
+--         "asset_code is immutable (cannot change AST-... to  )". NOT 23514: BEFORE
+--         triggers run before CHECK constraints, and trigger block 5 refuses the change
+--         first. customer_assets_code_not_blank is unreachable for INSERT (block 1
+--         replaces a null or whitespace code) and for live rows (block 5), so this
+--         block does NOT exercise it. It is deliberate belt-and-braces against a future
+--         path that bypasses the trigger.
+--     (c) blank asset_code on UPDATE of an ARCHIVED row -> Expect ERROR 23514
+--         customer_assets_code_not_blank. This is the one live path to the constraint:
+--         archived rows are exempt from immutability (see check 33(c)) but not from it.
+BEGIN;                                                                    -- (a)
   INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', '   ');
 ROLLBACK;
-BEGIN;
+BEGIN;                                                                    -- (b)
   INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'blank-code-test');
   UPDATE public.customer_assets SET asset_code = ' ' WHERE name = 'blank-code-test' AND account_id = :'acct';
+ROLLBACK;
+BEGIN;                                                                    -- (c)
+  INSERT INTO public.customer_assets (account_id, contact_id, name, deleted_at)
+  VALUES (:'acct', :'contact', 'blank-code-archived', now());
+  UPDATE public.customer_assets SET asset_code = ' ' WHERE name = 'blank-code-archived' AND account_id = :'acct';
 ROLLBACK;
 
 -- 24. A contact that owns assets cannot be hard-deleted (ON DELETE RESTRICT).
@@ -355,22 +373,34 @@ SELECT with_check LIKE '%has_permission%'         AS uses_has_permission,
   FROM pg_policies
  WHERE schemaname = 'public' AND tablename = 'customer_assets' AND policyname = 'customer_assets_insert';
 
--- 28. Cross-tenant isolation. NEEDS A ROLE SWITCH. As :outsider (a member of a
---     DIFFERENT account) expect count = 0 (precondition: :acct already has at least
---     one committed asset, otherwise 0 proves nothing), then ERROR 42501 (row-level
---     security) on the insert. RAISES ON PURPOSE.
-BEGIN;
+-- 28. Cross-tenant isolation. NEEDS A ROLE SWITCH. THREE STEPS, because every other
+--     check here rolls back and there must be a COMMITTED asset for the outsider's
+--     count to mean anything.
+--     (i)   as the owner, COMMIT one fixture asset (explicit code, so no counter value
+--           is burnt);
+--     (ii)  as :outsider (a member of a DIFFERENT account): Expect count = 0, then
+--           ERROR 42501 "new row violates row-level security policy for table
+--           customer_assets". RAISES ON PURPOSE. The insert supplies an explicit
+--           asset_code so trigger block 1 is skipped: without it, block 1's call to
+--           get_next_asset_number() raises 42501 "Not a member of this account" FIRST
+--           (BEFORE triggers run before the RLS WITH CHECK), the SQLSTATE would still
+--           match, and the policy would never be exercised;
+--     (iii) as the owner, remove the fixture.
+INSERT INTO public.customer_assets (account_id, contact_id, name, asset_code)
+VALUES (:'acct', :'contact', 'xt-fixture', 'VERIFYFX-000001');            -- (i) autocommits
+BEGIN;                                                                    -- (ii)
   SET LOCAL ROLE authenticated;
   SELECT set_config('request.jwt.claims',
                     json_build_object('sub', :'outsider', 'role', 'authenticated')::text, true);
   SELECT count(*) FROM public.customer_assets WHERE account_id = :'acct';
-  INSERT INTO public.customer_assets (account_id, contact_id, name)
-  VALUES (:'acct', :'contact', 'Intruder');
+  INSERT INTO public.customer_assets (account_id, contact_id, name, asset_code)
+  VALUES (:'acct', :'contact', 'Intruder', 'VERIFYFX-000002');
 ROLLBACK;
+DELETE FROM public.customer_assets WHERE asset_code LIKE 'VERIFYFX-%';    -- (iii)
 
 -- 29. Permission-based INSERT. NEEDS A ROLE SWITCH and :agent = a plain 'agent'
---     (not owner/admin, who pass has_permission unconditionally). :acct must have
---     the fsm line or a legacy plan.
+--     (not owner/admin, who pass has_permission unconditionally). :acct must be on an
+--     FSM plan (see setup); a legacy plan does NOT grant the fsm line.
 --     (a) With create_service_assets granted to the agent's role: expect INSERT 0 1.
 --     (b) Without it, separate transaction: expect ERROR 42501. RAISES ON PURPOSE.
 --     create_service_assets is not registered in the permission catalogue until Task 5;
@@ -402,7 +432,9 @@ ROLLBACK;
 --     SWITCH: :nonfsm_member is an owner/admin of :nonfsm_acct, so role and permission
 --     are satisfied and ONLY the plan ceiling can refuse. :nonfsm_contact is a contact
 --     belonging to :nonfsm_acct.
---     Expect ERROR 42501 "new row violates row-level security policy". RAISES ON PURPOSE.
+--     Expect ERROR 42501 "new row violates row-level security policy for table
+--     customer_assets" (the member passes get_next_asset_number's guard, so the plan
+--     ceiling is what refuses). RAISES ON PURPOSE.
 BEGIN;
   SET LOCAL ROLE authenticated;
   SELECT set_config('request.jwt.claims',
@@ -412,13 +444,17 @@ BEGIN;
 ROLLBACK;
 
 -- 31. A viewer cannot write (agent-or-above floor). NEEDS A ROLE SWITCH as :viewer.
---     Expect ERROR 42501. RAISES ON PURPOSE.
+--     Expect ERROR 42501 "new row violates row-level security policy for table
+--     customer_assets". RAISES ON PURPOSE. The insert supplies an explicit asset_code so
+--     trigger block 1 is skipped; without it, get_next_asset_number()'s membership guard
+--     raises 42501 "Not a member of this account" first and the RLS policy is never
+--     the thing observed.
 BEGIN;
   SET LOCAL ROLE authenticated;
   SELECT set_config('request.jwt.claims',
                     json_build_object('sub', :'viewer', 'role', 'authenticated')::text, true);
-  INSERT INTO public.customer_assets (account_id, contact_id, name)
-  VALUES (:'acct', :'contact', 'viewer-denied');
+  INSERT INTO public.customer_assets (account_id, contact_id, name, asset_code)
+  VALUES (:'acct', :'contact', 'viewer-denied', 'VERIFYFX-000003');
 ROLLBACK;
 
 -- 32. Archive / restore is enforced at the database (trigger block 4), not only in
@@ -471,14 +507,64 @@ BEGIN;                                                                    -- (d)
   UPDATE public.customer_assets SET deleted_at = NULL WHERE name = 'arch-d' AND account_id = :'acct';
 ROLLBACK;
 
--- 33. asset_code is immutable after insert (trigger block 5).
+-- 32 (continued). Two more archive-guard paths. Same setup and role switch as above.
+--     (e) an agent with edit right only rewrites deleted_at of an ALREADY-ARCHIVED row to
+--         a different timestamp (falsifying the archive date) -> Expect ERROR 42501.
+--         (The guard compares the timestamp, not just null-ness.) RAISES ON PURPOSE.
+--     (f) an agent with create_service_assets only INSERTs an asset that is already
+--         archived (deleted_at NOT NULL) -> Expect ERROR 42501. RAISES ON PURPOSE.
+BEGIN;                                                                    -- (e)
+  INSERT INTO public.customer_assets (account_id, contact_id, name, deleted_at)
+  VALUES (:'acct', :'contact', 'arch-e', now() - interval '3 days');
+  UPDATE public.employee_roles er
+     SET permissions = (coalesce(er.permissions,'{}'::jsonb) || '{"edit_service_assets": true}'::jsonb) - 'delete_service_assets'
+    FROM public.profiles p
+   WHERE p.employee_role_id = er.id AND p.user_id = :'agent' AND p.account_id = :'acct';
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims',
+                    json_build_object('sub', :'agent', 'role', 'authenticated')::text, true);
+  UPDATE public.customer_assets SET deleted_at = now() WHERE name = 'arch-e' AND account_id = :'acct';
+ROLLBACK;
+BEGIN;                                                                    -- (f)
+  UPDATE public.employee_roles er
+     SET permissions = (coalesce(er.permissions,'{}'::jsonb) || '{"create_service_assets": true}'::jsonb) - 'delete_service_assets'
+    FROM public.profiles p
+   WHERE p.employee_role_id = er.id AND p.user_id = :'agent' AND p.account_id = :'acct';
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims',
+                    json_build_object('sub', :'agent', 'role', 'authenticated')::text, true);
+  INSERT INTO public.customer_assets (account_id, contact_id, name, deleted_at)
+  VALUES (:'acct', :'contact', 'arch-f', now());
+ROLLBACK;
+
+-- 33. asset_code is immutable after insert - for LIVE assets (trigger block 5).
 --     (b) re-writing the SAME value (a no-op edit) -> Expect UPDATE 1, no error.
---     (a) changing it to another value -> Expect ERROR 22023 "asset_code is immutable
---         (cannot change AST-... to AST-ZZZ)". RAISES ON PURPOSE.
+--     (a) changing a LIVE row's code to another value -> Expect ERROR 22023
+--         "asset_code is immutable (cannot change AST-... to AST-ZZZ)". RAISES ON PURPOSE.
+--     (c) ARCHIVED rows are exempt: re-coding an archived asset, then restoring it ->
+--         Expect UPDATE 1, UPDATE 1, no error. This is the way out of the restore
+--         collision: asset_seq rewound via PostgREST, a live asset took the archived
+--         asset's (now free) code, and restoring it would fail 23505. Run as the owner
+--         (auth.uid() NULL, so the archive guard is bypassed and only block 5 is tested).
+--     (d) that restore collision itself -> Expect ERROR 23505 customer_assets_uniq_code
+--         when restoring WITHOUT re-coding. RAISES ON PURPOSE.
 BEGIN;
   INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'immut');
   UPDATE public.customer_assets SET asset_code = asset_code WHERE name = 'immut' AND account_id = :'acct';   -- (b)
   UPDATE public.customer_assets SET asset_code = 'AST-ZZZ'  WHERE name = 'immut' AND account_id = :'acct';   -- (a)
+ROLLBACK;
+BEGIN;                                                                    -- (c)
+  INSERT INTO public.customer_assets (account_id, contact_id, name, deleted_at)
+  VALUES (:'acct', :'contact', 'immut-archived', now());
+  UPDATE public.customer_assets SET asset_code = 'RECODED-000001', deleted_at = NULL
+   WHERE name = 'immut-archived' AND account_id = :'acct';
+ROLLBACK;
+BEGIN;                                                                    -- (d)
+  INSERT INTO public.customer_assets (account_id, contact_id, name, asset_code, deleted_at)
+  VALUES (:'acct', :'contact', 'immut-old', 'COLLIDE-000001', now());
+  INSERT INTO public.customer_assets (account_id, contact_id, name, asset_code)
+  VALUES (:'acct', :'contact', 'immut-new', 'COLLIDE-000001');
+  UPDATE public.customer_assets SET deleted_at = NULL WHERE name = 'immut-old' AND account_id = :'acct';
 ROLLBACK;
 
 -- 34. A contact from another tenant is refused (trigger block 2, tenant integrity).
@@ -508,6 +594,9 @@ ROLLBACK;
 --     (a) foreign asset_type_id  -> Expect ERROR 23503 "asset_type_id ... does not exist".
 --     (b) foreign territory_id   -> Expect ERROR 23503 "territory_id ... does not exist".
 --     (c) UPDATE account_id      -> Expect ERROR 22023 "account_id cannot be changed".
+--         The statement also sets territory_id = NULL to prove the ORDER: account_id
+--         immutability is the first thing the UPDATE path does, so the error is 22023,
+--         NOT a misleading 23503 "contact ... does not exist in account <target>".
 BEGIN;
   INSERT INTO public.customer_assets (account_id, contact_id, name, asset_type_id)
   VALUES (:'acct', :'contact', 'xt-type', :'foreign_asset_type');
@@ -518,7 +607,8 @@ BEGIN;
 ROLLBACK;
 BEGIN;
   INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'xt-move');
-  UPDATE public.customer_assets SET account_id = :'nonfsm_acct' WHERE name = 'xt-move' AND account_id = :'acct';
+  UPDATE public.customer_assets SET account_id = :'nonfsm_acct', territory_id = NULL
+   WHERE name = 'xt-move' AND account_id = :'acct';
 ROLLBACK;
 
 -- MANUAL INSTRUCTION, NOT SQL. Idempotency of Task 4: re-apply
