@@ -248,6 +248,11 @@ BEGIN
   --     agent falsify the archive date);
   --   * an INSERT that arrives already archived (deleted_at NOT NULL), which would
   --     otherwise be a way to archive with only create_service_assets.
+  -- UI CONSTRAINT (Tasks 7 and 8): deleted_at is compared BY VALUE, so a client that
+  -- reads an archived row and writes the timestamp back - e.g. as a millisecond-precision
+  -- JS Date - registers a change and is refused (42501) for edit-only users. Ordinary
+  -- form saves must therefore NEVER post deleted_at. Archiving is a targeted action
+  -- (its own button/RPC call), not a form field.
   -- Restoring is the same privilege as archiving. Bypassed when auth.uid() IS NULL
   -- (migrations, service role), exactly like get_next_asset_number().
   -- delete_service_assets is not registered in the permission catalogue until Task 5;
@@ -277,6 +282,11 @@ BEGIN
   -- code were also frozen there would be NO in-product way out (only direct database
   -- surgery). Allowing a re-code while archived (optionally in the same UPDATE that
   -- restores it) is that way out. DO NOT "tidy" this exemption away.
+  -- Two consequences of this escape hatch are ACCEPTED, not oversights: (1) a user
+  -- holding delete_service_assets can archive, re-code and restore, which makes a live
+  -- code effectively changeable by that right; (2) an editor WITHOUT the delete right
+  -- can re-code archived rows (block 4 only fires on a deleted_at change). The delete
+  -- right is already the destructive privilege, so neither widens what it can do.
   -- customer_assets_code_not_blank is unreachable for INSERTs (block 1 fills a null or
   -- whitespace code) and for live rows (this block stops any change). Its only live
   -- path is a blank re-code of an ARCHIVED row (23514, verify check 23(c)). It stays as

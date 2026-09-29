@@ -27,8 +27,12 @@
 --   for check 29 to prove anything.
 --   :acct must be on an FSM plan (FSM | CRM_FSM | SFA_FSM); a legacy plan does NOT
 --   grant the fsm line (account_has_line's else branch is false for 'fsm'). Checks
---   29(a), 32(b) and 32(c) depend on this: against a legacy-plan account they would
---   fail with 42501, which is a correct plan-ceiling refusal, NOT a broken INSERT policy.
+--   29(a), 32(a), 32(b), 32(d), 32(e) and 32(f) depend on this (they run as a non-admin
+--   agent, through RLS). Against a legacy-plan account the plan ceiling refuses them
+--   instead: 29(a) fails with 42501; 32(b) and the UPDATEs in 32(a), (d), (e) report
+--   UPDATE 0 (an RLS USING filter hides the row, it does not raise), so the expected
+--   42501 never appears; and 32(f), an INSERT, raises 42501 from the plan ceiling and
+--   FALSELY PASSES. 32(c) runs as the owner and does not depend on the plan.
 -- Every check that writes to customer_assets / contacts / accounts / account_sequences
 -- is wrapped in BEGIN ... ROLLBACK, so nothing persists and no counter value is burnt.
 -- Run 12-36 AFTER 1-11 (check 13 rewinds account_sequences and expects the row that
@@ -373,7 +377,12 @@ SELECT with_check LIKE '%has_permission%'         AS uses_has_permission,
   FROM pg_policies
  WHERE schemaname = 'public' AND tablename = 'customer_assets' AND policyname = 'customer_assets_insert';
 
--- 28. Cross-tenant isolation. NEEDS A ROLE SWITCH. THREE STEPS, because every other
+-- 28. Cross-tenant isolation.
+--     IF THIS RUN ABORTS after step (i) (e.g. under ON_ERROR_STOP at the outsider insert),
+--     the committed fixture 'VERIFYFX-000001' is left behind: delete it before re-running,
+--     or the re-run fails 23505 on that code:
+--       DELETE FROM public.customer_assets WHERE account_id = :'acct' AND asset_code LIKE 'VERIFYFX-%';
+--     NEEDS A ROLE SWITCH. THREE STEPS, because every other
 --     check here rolls back and there must be a COMMITTED asset for the outsider's
 --     count to mean anything.
 --     (i)   as the owner, COMMIT one fixture asset (explicit code, so no counter value
@@ -385,7 +394,9 @@ SELECT with_check LIKE '%has_permission%'         AS uses_has_permission,
 --           get_next_asset_number() raises 42501 "Not a member of this account" FIRST
 --           (BEFORE triggers run before the RLS WITH CHECK), the SQLSTATE would still
 --           match, and the policy would never be exercised;
---     (iii) as the owner, remove the fixture.
+--     (iii) as the owner, remove the fixture. The DELETE carries account_id = :'acct':
+--           this script is run by hand against production, so no write outside a
+--           BEGIN ... ROLLBACK may be unscoped.
 INSERT INTO public.customer_assets (account_id, contact_id, name, asset_code)
 VALUES (:'acct', :'contact', 'xt-fixture', 'VERIFYFX-000001');            -- (i) autocommits
 BEGIN;                                                                    -- (ii)
@@ -396,7 +407,8 @@ BEGIN;                                                                    -- (ii
   INSERT INTO public.customer_assets (account_id, contact_id, name, asset_code)
   VALUES (:'acct', :'contact', 'Intruder', 'VERIFYFX-000002');
 ROLLBACK;
-DELETE FROM public.customer_assets WHERE asset_code LIKE 'VERIFYFX-%';    -- (iii)
+DELETE FROM public.customer_assets
+ WHERE account_id = :'acct' AND asset_code LIKE 'VERIFYFX-%';    -- (iii)
 
 -- 29. Permission-based INSERT. NEEDS A ROLE SWITCH and :agent = a plain 'agent'
 --     (not owner/admin, who pass has_permission unconditionally). :acct must be on an
@@ -542,7 +554,8 @@ ROLLBACK;
 --     (a) changing a LIVE row's code to another value -> Expect ERROR 22023
 --         "asset_code is immutable (cannot change AST-... to AST-ZZZ)". RAISES ON PURPOSE.
 --     (c) ARCHIVED rows are exempt: re-coding an archived asset, then restoring it ->
---         Expect UPDATE 1, UPDATE 1, no error. This is the way out of the restore
+--         Expect UPDATE 1 (a single statement: re-code and restore together), no error.
+--         This is the way out of the restore
 --         collision: asset_seq rewound via PostgREST, a live asset took the archived
 --         asset's (now free) code, and restoring it would fail 23505. Run as the owner
 --         (auth.uid() NULL, so the archive guard is bypassed and only block 5 is tested).
