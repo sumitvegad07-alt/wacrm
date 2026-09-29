@@ -43,12 +43,15 @@ CREATE TABLE IF NOT EXISTS public.asset_types (
   deleted_at   timestamptz NULL
 );
 
--- Both indexes lead with account_id, so they cover the account_id FK. The unique
--- one only constrains live rows, so a name is reusable after archive.
+-- The unique index is partial (live rows only) so a name is reusable after
+-- archive; because it is partial it can NOT serve the account_id FK, whose
+-- ON DELETE CASCADE scans every row (soft-deleted included). The FK is covered
+-- by the FULL (account_id, status) index below, by its leading column, so it is
+-- deliberately not partial.
 CREATE UNIQUE INDEX IF NOT EXISTS asset_types_uniq_name_per_account
   ON public.asset_types (account_id, lower(name)) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS asset_types_account_status_idx
-  ON public.asset_types (account_id, status) WHERE deleted_at IS NULL;
+  ON public.asset_types (account_id, status);
 
 -- Shared update_updated_at_column() trigger fn, trigger named set_updated_at
 -- (same as territories / product_categories).
@@ -62,7 +65,12 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.asset_types
 -- initplan-wrapped by 20260913120000_perf_rls_initplan_optimization.sql):
 --   SELECT                   : any account member
 --   INSERT / UPDATE / DELETE : agent-or-above member AND a permission key
--- The three write policies share the single key manage_service_settings.
+-- The three write policies share the single key manage_service_settings AND carry
+-- the plan ceiling account_has_line(account_id,'fsm'), so a tenant without the fsm
+-- line is refused at the database, not just hidden in the UI. SELECT is
+-- deliberately NOT plan-gated: the seed rows are plan-neutral by design.
+-- The seed trigger/helper and the backfill are SECURITY DEFINER / migration-owner
+-- and bypass RLS, so the ceiling does not affect seeding.
 -- auth.uid() is wrapped as (SELECT auth.uid()) so it is planned once, not per row.
 ALTER TABLE public.asset_types ENABLE ROW LEVEL SECURITY;
 
@@ -74,19 +82,22 @@ DROP POLICY IF EXISTS asset_types_insert ON public.asset_types;
 CREATE POLICY asset_types_insert ON public.asset_types
   FOR INSERT TO authenticated
   WITH CHECK (is_account_member(account_id, 'agent'::account_role_enum)
-              AND has_permission((SELECT auth.uid()), account_id, 'manage_service_settings'::text));
+              AND has_permission((SELECT auth.uid()), account_id, 'manage_service_settings'::text)
+              AND account_has_line(account_id, 'fsm'::text));
 
 DROP POLICY IF EXISTS asset_types_update ON public.asset_types;
 CREATE POLICY asset_types_update ON public.asset_types
   FOR UPDATE TO authenticated
   USING (is_account_member(account_id, 'agent'::account_role_enum)
-         AND has_permission((SELECT auth.uid()), account_id, 'manage_service_settings'::text));
+         AND has_permission((SELECT auth.uid()), account_id, 'manage_service_settings'::text)
+         AND account_has_line(account_id, 'fsm'::text));
 
 DROP POLICY IF EXISTS asset_types_delete ON public.asset_types;
 CREATE POLICY asset_types_delete ON public.asset_types
   FOR DELETE TO authenticated
   USING (is_account_member(account_id, 'agent'::account_role_enum)
-         AND has_permission((SELECT auth.uid()), account_id, 'manage_service_settings'::text));
+         AND has_permission((SELECT auth.uid()), account_id, 'manage_service_settings'::text)
+         AND account_has_line(account_id, 'fsm'::text));
 
 -- ── Per-account asset / job counters (reuse account_sequences) ──
 -- Existing policies on account_sequences are NOT touched. NOT NULL DEFAULT 0
@@ -99,9 +110,10 @@ ALTER TABLE public.account_sequences ADD COLUMN IF NOT EXISTS job_seq   bigint N
 -- an account with no account_sequences row yet still works.
 -- SECURITY DEFINER (unlike get_next_payment_number) so it works regardless of
 -- the caller's RLS on account_sequences. Because a definer function would let
--- any signed-in user burn another tenant's numbers, a signed-in caller must be a
--- member of p_account_id; service-role / internal callers (auth.uid() IS NULL)
--- are unrestricted.
+-- any signed-in user burn another tenant's numbers, a signed-in caller must be an
+-- agent-or-above member of p_account_id (a viewer cannot create assets, so cannot
+-- legitimately need a number and must not open gaps in the tenant's codes);
+-- service-role / internal callers (auth.uid() IS NULL) are unrestricted.
 CREATE OR REPLACE FUNCTION public.get_next_asset_number(p_account_id uuid)
 RETURNS bigint
 LANGUAGE plpgsql
@@ -110,7 +122,7 @@ SET search_path = public
 AS $$
 DECLARE v_seq bigint;
 BEGIN
-  IF (SELECT auth.uid()) IS NOT NULL AND NOT is_account_member(p_account_id) THEN
+  IF (SELECT auth.uid()) IS NOT NULL AND NOT is_account_member(p_account_id, 'agent'::account_role_enum) THEN
     RAISE EXCEPTION 'Not a member of this account' USING ERRCODE = 'insufficient_privilege';
   END IF;
 

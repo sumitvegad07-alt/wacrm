@@ -28,21 +28,21 @@ DELETE FROM public.asset_types WHERE account_id = '<ACCOUNT_ID>' AND is_seed_dat
 Run in this order. Run the whole block only if you accept losing every tenant's asset data.
 
 ```sql
--- 1. Policies (dropping the tables drops their policies too; explicit for clarity)
+-- 1. Seed-on-provision hook FIRST, so nothing writes to asset_types while it is being removed
+DROP TRIGGER  IF EXISTS trg_seed_new_account_asset_types ON public.accounts;
+DROP FUNCTION IF EXISTS public.seed_new_account_asset_types();
+DROP FUNCTION IF EXISTS public.seed_default_asset_types(uuid);
+
+-- 2. Policies (dropping the tables drops their policies too; explicit for clarity)
 DROP POLICY IF EXISTS asset_types_select ON public.asset_types;
 DROP POLICY IF EXISTS asset_types_insert ON public.asset_types;
 DROP POLICY IF EXISTS asset_types_update ON public.asset_types;
 DROP POLICY IF EXISTS asset_types_delete ON public.asset_types;
 -- customer_assets policies: Task 4 lists them here (dropped with the table below).
 
--- 2. Tables (customer_assets first: it references asset_types)
+-- 3. Tables (customer_assets first: it references asset_types)
 DROP TABLE IF EXISTS public.customer_assets;
 DROP TABLE IF EXISTS public.asset_types;
-
--- 3. Seed-on-provision hook and helpers
-DROP TRIGGER  IF EXISTS trg_seed_new_account_asset_types ON public.accounts;
-DROP FUNCTION IF EXISTS public.seed_new_account_asset_types();
-DROP FUNCTION IF EXISTS public.seed_default_asset_types(uuid);
 
 -- 4. Counter function, then the counter columns
 DROP FUNCTION IF EXISTS public.get_next_asset_number(uuid);
@@ -107,6 +107,9 @@ Then revert the web code: `src/lib/plans/catalog.ts` (`fsm` line, FSM plans, `se
 `src/lib/service/*`.
 
 ## Notes
-- The three migrations are idempotent, so re-applying after a Level 1–2 rollback is a no-op.
+- The three migrations are idempotent. Re-applying after a Level 1 rollback is a no-op. Re-applying after
+  Level 2 is NOT: Level 2 hard-deletes the seed rows, and the backfill in `20260929151000` reseeds all
+  eight default types into any account that is then left with no `asset_types` rows at all (an account
+  that still has any row, archived included, is skipped).
 - Backfill seeded 8 default asset types into every existing account (`is_seed_data = true`); Level 2 removes
   exactly those.
