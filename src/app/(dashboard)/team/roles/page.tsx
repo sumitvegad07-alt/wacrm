@@ -36,8 +36,8 @@ interface EmployeeRole {
 
 // Maps each rights section to the plan line that unlocks it. Groups not listed
 // here are base features shown on every plan. A group is only shown if the
-// account's purchased plan includes its line (CRM / SFA / WFA).
-const GROUP_LINE: Record<string, "crm" | "sfa" | "wfa"> = {
+// account's purchased plan includes its line (CRM / SFA / WFA / FSM).
+const GROUP_LINE: Record<string, PermLine> = {
   "Leads": "crm",
   "Deals / Pipeline": "crm",
   "WhatsApp Features": "crm",
@@ -57,6 +57,8 @@ const GROUP_LINE: Record<string, "crm" | "sfa" | "wfa"> = {
   "Mobile App & Field Force": "wfa",
   "Mobile Field Rules": "wfa",
   "Route Management": "wfa",
+  "Service Assets": "fsm",
+  "Service Settings": "fsm",
 };
 
 // Maps a rights section to an Organization-Settings module toggle. A section is
@@ -78,19 +80,25 @@ const GROUP_MODULE: Record<string, keyof ModuleSettings> = {
 };
 
 export default function RolesPage() {
-  const { accountId, isSuperadmin, hasPermission, hasCRM, hasSFA, hasWFA, isModuleEnabled, moduleSettingsLoaded } = useAuth();
+  const { accountId, isSuperadmin, hasPermission, hasCRM, hasSFA, hasWFA, hasFSM, isModuleEnabled, moduleSettingsLoaded } = useAuth();
 
   // Rights sections visible for this account: (1) the plan line must be owned,
   // and (2) the module must be enabled in Organization Settings. Login Access is
   // pinned first.
   const visibleGroups = useMemo(() => {
+    // One lookup for both checks below. Keyed by PermLine, so adding a fifth
+    // line is a compile error here until it is given an entitlement — an
+    // unrecognised line can no longer fall through to "shown to everyone".
+    const owns: Record<PermLine, boolean> = {
+      crm: hasCRM,
+      sfa: hasSFA,
+      wfa: hasWFA,
+      fsm: hasFSM,
+    };
     const lineOk = (cat: string) => {
       const line = GROUP_LINE[cat];
       if (!line) return true; // base feature — always shown
-      if (line === "crm") return hasCRM;
-      if (line === "sfa") return hasSFA;
-      if (line === "wfa") return hasWFA;
-      return true;
+      return owns[line];
     };
     const moduleOk = (cat: string) => {
       const mod = GROUP_MODULE[cat];
@@ -98,9 +106,7 @@ export default function RolesPage() {
     };
     const permLineOk = (line?: PermLine) => {
       if (!line) return true;
-      if (line === "crm") return hasCRM;
-      if (line === "sfa") return hasSFA;
-      return hasWFA;
+      return owns[line];
     };
     const shown = PERMISSION_GROUPS
       .filter((g) => lineOk(g.category) && moduleOk(g.category))
@@ -112,7 +118,7 @@ export default function RolesPage() {
     const rest = shown.filter((g) => g.category !== "Login Access");
     return [...top, ...rest];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCRM, hasSFA, hasWFA, isModuleEnabled, moduleSettingsLoaded]);
+  }, [hasCRM, hasSFA, hasWFA, hasFSM, isModuleEnabled, moduleSettingsLoaded]);
   // The permission list shows all groups (search removed — the module headers make
   // scanning easy, and the browser's own find works for a specific right).
   const rightsFilter = "";

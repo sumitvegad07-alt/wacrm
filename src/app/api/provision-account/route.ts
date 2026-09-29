@@ -316,6 +316,68 @@ export async function POST(req: Request) {
         },
       });
 
+    // Default FSM (field service) roles — seeded ONLY when the plan includes the
+    // FSM line, so no other tenant ever gets a service role. Same flat
+    // { key: true } permission shape as Sales Executive above.
+    //
+    // Phase 1 = customer assets + service settings, so that is all these carry.
+    // Deliberately NOT seeded: any WFA right (visits, expenses, location) even
+    // though an FSM plan includes the WFA line — service visits are Phase 3 —
+    // and any create_service_jobs right (grantable, but OFF by default, and
+    // there is nothing for a technician to create yet).
+    // view_contacts is on every role because an asset is always shown against
+    // its customer; without it the asset screens show a permission error.
+    // Technician is mobile-only (mirrors Sales Executive); the two office roles
+    // get both surfaces.
+    if (lines.fsm) {
+      await supabase
+        .from('employee_roles')
+        .insert([
+          {
+            account_id,
+            name: 'Service Manager',
+            description: 'Runs field service — manages customer assets and service settings.',
+            status: 'active',
+            permissions: {
+              web_access: true,
+              mobile_access: true,
+              view_contacts: true,
+              view_service_assets: true,
+              create_service_assets: true,
+              edit_service_assets: true,
+              delete_service_assets: true,
+              import_service_assets: true,
+              export_service_assets: true,
+              manage_service_settings: true,
+            },
+          },
+          {
+            account_id,
+            name: 'Dispatcher',
+            description: 'Office-side service coordinator — looks up customers and their assets.',
+            status: 'active',
+            permissions: {
+              web_access: true,
+              mobile_access: true,
+              view_contacts: true,
+              view_service_assets: true,
+            },
+          },
+          {
+            account_id,
+            name: 'Technician',
+            description: 'Mobile-only field technician — looks up customer assets on site.',
+            status: 'active',
+            permissions: {
+              web_access: false,
+              mobile_access: true,
+              view_contacts: true,
+              view_service_assets: true,
+            },
+          },
+        ]);
+    }
+
     // Load default Indian territories
     await supabase.rpc('territory_bulk_seed', {
       p_account_id: account_id,

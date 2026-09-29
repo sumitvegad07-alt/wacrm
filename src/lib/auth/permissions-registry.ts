@@ -352,4 +352,18 @@ export const PERMISSIONS = {
     RECEIVE_TEAM_ACTIVITY: 'receive_team_activity_notifications', // admin: rep created order/expense/etc (item 3)
     RECEIVE_PUNCH_ALARM: 'receive_punch_alarm',            // shift-time punch-in/out alarm (item 6)
   },
+
+  // Field Service Management (FSM line). Phase 1 = customer assets + service
+  // settings; job rights (SERVICE_JOBS) arrive with Phase 2, not before.
+  SERVICE_ASSETS: {
+    VIEW: 'view_service_assets',
+    CREATE: 'create_service_assets',
+    EDIT: 'edit_service_assets',
+    DELETE: 'delete_service_assets',
+    IMPORT: 'import_service_assets',
+    EXPORT: 'export_service_assets',
+  },
+  SERVICE_SETTINGS: {
+    MANAGE: 'manage_service_settings',
+  },
 } as const;

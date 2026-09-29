@@ -202,6 +202,8 @@ interface AuthContextValue {
   hasCRM: boolean;
   hasWFA: boolean;
   hasSFA: boolean;
+  /** FSM (field service) line. Legacy plans read false — see planLines(). */
+  hasFSM: boolean;
 
   /** Admin-configurable module toggles. All true while loading. */
   moduleSettings: ModuleSettings;
@@ -505,6 +507,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasCRM: lines.crm,
       hasWFA: lines.wfa,
       hasSFA: lines.sfa,
+      hasFSM: lines.fsm,
       permissions: profile?.employee_role?.permissions ?? null,
     };
   }, [profile, account?.subscription_plan]);
@@ -580,6 +583,7 @@ export function useAuth(): AuthContextValue {
       hasCRM: false,
       hasWFA: false,
       hasSFA: false,
+      hasFSM: false,
       moduleSettings: { ...DEFAULT_MODULE_SETTINGS },
       moduleSettingsLoaded: false,
       isModuleEnabled: () => true,

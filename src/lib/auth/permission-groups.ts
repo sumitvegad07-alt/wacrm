@@ -9,7 +9,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions-registry";
  * roles page re-imports `PERMISSION_GROUPS`, `PermGroup` and `PermLine` from
  * here; the palette uses the derived `PERMISSION_INDEX`.
  */
-export type PermLine = "crm" | "sfa" | "wfa";
+export type PermLine = "crm" | "sfa" | "wfa" | "fsm";
 
 export type PermGroup = {
   category: string;
@@ -391,6 +391,27 @@ export const PERMISSION_GROUPS: PermGroup[] = [
       { id: PERMISSIONS.SETTINGS.MANAGE_WHATSAPP_SETTINGS, label: "Manage WhatsApp Settings" },
       { id: PERMISSIONS.SETTINGS.MANAGE_TAGS, label: "Manage Tags" },
       { id: PERMISSIONS.ADMIN.BILLING, label: "Manage Subscription & Billing" },
+    ]
+  },
+  {
+    // FSM line — the roles page gates this on the account owning the FSM line
+    // (GROUP_LINE), so WFA / SFA / CRM tenants never see it.
+    category: "Service Assets",
+    note: WEB_ONLY_NOTE,
+    permissions: [
+      { id: PERMISSIONS.SERVICE_ASSETS.VIEW, label: "View Service Assets" },
+      { id: PERMISSIONS.SERVICE_ASSETS.CREATE, label: "Create Service Assets" },
+      { id: PERMISSIONS.SERVICE_ASSETS.EDIT, label: "Edit Service Assets" },
+      { id: PERMISSIONS.SERVICE_ASSETS.DELETE, label: "Delete / Archive Service Assets" },
+      { id: PERMISSIONS.SERVICE_ASSETS.IMPORT, label: "Import Service Assets" },
+      { id: PERMISSIONS.SERVICE_ASSETS.EXPORT, label: "Export Service Assets" },
+    ]
+  },
+  {
+    category: "Service Settings",
+    note: WEB_ONLY_NOTE,
+    permissions: [
+      { id: PERMISSIONS.SERVICE_SETTINGS.MANAGE, label: "Manage Service Settings (asset types, asset codes)" },
     ]
   },
   {
