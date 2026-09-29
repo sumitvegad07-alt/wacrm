@@ -7,34 +7,38 @@ import {
   clampModuleSettings,
   isNewPlan,
   MODULE_KEYS,
+  MODULE_LINE,
+  PLAN_IDS,
+  PLAN_LINES,
+  PLAN_PRICE,
 } from "./catalog";
 
 describe("plan catalog — line mapping", () => {
   it("CRM grants only the CRM line", () => {
-    expect(planLines("CRM")).toEqual({ crm: true, wfa: false, sfa: false });
+    expect(planLines("CRM")).toEqual({ crm: true, wfa: false, sfa: false, fsm: false });
   });
   it("WFA grants only the Workforce line", () => {
-    expect(planLines("WFA")).toEqual({ crm: false, wfa: true, sfa: false });
+    expect(planLines("WFA")).toEqual({ crm: false, wfa: true, sfa: false, fsm: false });
   });
   it("SFA includes Workforce but not CRM", () => {
-    expect(planLines("SFA")).toEqual({ crm: false, wfa: true, sfa: true });
+    expect(planLines("SFA")).toEqual({ crm: false, wfa: true, sfa: true, fsm: false });
   });
   it("CRM+SFA grants everything", () => {
-    expect(planLines("CRM_SFA")).toEqual({ crm: true, wfa: true, sfa: true });
+    expect(planLines("CRM_SFA")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
     expect(planHasLine("CRM_SFA", "sfa")).toBe(true);
   });
 });
 
 describe("plan catalog — legacy safety", () => {
   it("treats legacy Free/Enterprise as full access so nobody is locked out pre-migration", () => {
-    expect(planLines("Free")).toEqual({ crm: true, wfa: true, sfa: true });
-    expect(planLines("Enterprise")).toEqual({ crm: true, wfa: true, sfa: true });
+    expect(planLines("Free")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
+    expect(planLines("Enterprise")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
   });
   it("treats unknown/null as full access", () => {
-    expect(planLines(null)).toEqual({ crm: true, wfa: true, sfa: true });
-    expect(planLines("whatever")).toEqual({ crm: true, wfa: true, sfa: true });
+    expect(planLines(null)).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
+    expect(planLines("whatever")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
   });
-  it("only the five new ids + Trial are 'new' plans", () => {
+  it("only the eight new plan ids are 'new' plans", () => {
     expect(isNewPlan("CRM")).toBe(true);
     expect(isNewPlan("Free")).toBe(false);
     expect(isNewPlan("Enterprise")).toBe(false);
@@ -88,6 +92,7 @@ describe("plan catalog — default module settings on apply", () => {
       payment: false,
       scheme: false,
       stock: false,
+      service: false,
     });
   });
   it("optional/Available-Soon modules default OFF even when their line is on", () => {
@@ -100,7 +105,7 @@ describe("plan catalog — default module settings on apply", () => {
   it("CRM+SFA defaults every module on except the default-off ones", () => {
     const all = defaultModuleSettings("CRM_SFA");
     for (const k of MODULE_KEYS) {
-      const expected = k !== "route" && k !== "reporting_hierarchy" && k !== "scheme" && k !== "stock";
+      const expected = k !== "route" && k !== "reporting_hierarchy" && k !== "scheme" && k !== "stock" && k !== "service"; // service = FSM line, not on CRM+SFA
       expect(all[k]).toBe(expected);
     }
   });
@@ -123,5 +128,53 @@ describe("plan catalog — hard-lock clamp", () => {
   it("legacy plans allow everything through the clamp", () => {
     const clamped = clampModuleSettings("Enterprise", { payment: true });
     expect(clamped.payment).toBe(true);
+  });
+});
+
+describe('FSM product line', () => {
+  it('includes WFA on every FSM plan, exactly as SFA does', () => {
+    expect(PLAN_LINES.FSM.wfa).toBe(true);
+    expect(PLAN_LINES.CRM_FSM.wfa).toBe(true);
+    expect(PLAN_LINES.SFA_FSM.wfa).toBe(true);
+  });
+
+  it('turns the fsm line on for the three FSM plans and off for the rest', () => {
+    const withFsm = PLAN_IDS.filter((p) => PLAN_LINES[p].fsm);
+    expect([...withFsm].sort()).toEqual(['CRM_FSM', 'FSM', 'SFA_FSM']);
+  });
+
+  it('keeps CRM out of FSM-only and SFA_FSM plans', () => {
+    expect(PLAN_LINES.FSM.crm).toBe(false);
+    expect(PLAN_LINES.SFA_FSM.crm).toBe(false);
+    expect(PLAN_LINES.CRM_FSM.crm).toBe(true);
+  });
+
+  it('maps the service module to the fsm line', () => {
+    expect(MODULE_LINE.service).toBe('fsm');
+  });
+
+  it('unlocks the service module only on FSM plans', () => {
+    expect(allowedModules('FSM').has('service')).toBe(true);
+    expect(allowedModules('CRM_FSM').has('service')).toBe(true);
+    expect(allowedModules('SFA_FSM').has('service')).toBe(true);
+    expect(allowedModules('SFA').has('service')).toBe(false);
+    expect(allowedModules('CRM').has('service')).toBe(false);
+  });
+
+  it('does not change what pre-existing plans unlock', () => {
+    expect(allowedModules('SFA').has('route')).toBe(true);
+    expect(allowedModules('CRM').has('whatsapp')).toBe(true);
+  });
+
+  it('never grants fsm to legacy, unknown or missing plans', () => {
+    for (const raw of ['Free', 'Enterprise', 'whatever', null, undefined]) {
+      expect(planLines(raw).fsm).toBe(false);
+      expect(allowedModules(raw).has('service')).toBe(false);
+      expect(defaultModuleSettings(raw).service).toBe(false);
+    }
+  });
+
+  it('prices every plan', () => {
+    for (const id of PLAN_IDS) expect(PLAN_PRICE[id]).toBeGreaterThan(0);
   });
 });

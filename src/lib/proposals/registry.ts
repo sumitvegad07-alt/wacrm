@@ -33,7 +33,12 @@ export interface ProposalTemplate {
   defaults: (proposalDate: string) => ProposalData;
 }
 
-const CONTENT: Record<PlanId, PlanContent> = {
+// Partial on purpose: a plan is only proposable once someone has authored its
+// sales copy. The FSM plans are sellable but have no pack yet (the copy is the
+// founder's to write, and their prices are unapproved), so they are absent here
+// and therefore absent from getTemplate()/listTemplates() — the plan picker
+// cannot offer a plan that would render a broken proposal.
+const CONTENT: Partial<Record<PlanId, PlanContent>> = {
   CRM: CRM_CONTENT,
   WFA: WFA_CONTENT,
   CRM_WFA: CRM_WFA_CONTENT,
@@ -53,6 +58,10 @@ export function listRatePerMonth(plan: PlanId, term: BillingTerm = "yearly"): nu
 
 function buildTemplate(plan: PlanId): ProposalTemplate {
   const content = CONTENT[plan];
+  if (!content) {
+    // Unreachable through TEMPLATES, which only builds plans that have content.
+    throw new Error(`No proposal content pack for plan "${plan}"`);
+  }
   const rate = listRatePerMonth(plan, "yearly");
 
   return {
@@ -78,7 +87,7 @@ function buildTemplate(plan: PlanId): ProposalTemplate {
   };
 }
 
-const TEMPLATES: ProposalTemplate[] = PLAN_IDS.map(buildTemplate);
+const TEMPLATES: ProposalTemplate[] = PLAN_IDS.filter((p) => CONTENT[p]).map(buildTemplate);
 
 export function getTemplate(plan: string): ProposalTemplate | undefined {
   return TEMPLATES.find((t) => t.plan === plan);

@@ -7,16 +7,25 @@
 // use-auth all derive from here so the three can never drift.
 //
 // Commercial model (see OZZO Pricing & Feature Catalogue v1.0):
-//   Three product lines — CRM, WFA (Workforce Automation), SFA.
-//   SFA always includes WFA. A plan is a combination of lines.
+//   Four product lines — CRM, WFA (Workforce Automation), SFA, FSM (Field
+//   Service Management).
+//   SFA and FSM both always include WFA. A plan is a combination of lines.
 // ============================================================
 
-export type ProductLine = "crm" | "wfa" | "sfa";
+export type ProductLine = "crm" | "wfa" | "sfa" | "fsm";
 
-// The five sellable plans. There is no separate "Trial" plan: a paid trial is
+// The eight sellable plans. There is no separate "Trial" plan: a paid trial is
 // just a real plan (e.g. SFA) with a subscription_expires_at set to the trial
 // end date. New signups default to CRM.
-export type PlanId = "CRM" | "WFA" | "CRM_WFA" | "SFA" | "CRM_SFA";
+export type PlanId =
+  | "CRM"
+  | "WFA"
+  | "CRM_WFA"
+  | "SFA"
+  | "CRM_SFA"
+  | "FSM"
+  | "CRM_FSM"
+  | "SFA_FSM";
 
 export const PLAN_IDS: readonly PlanId[] = [
   "CRM",
@@ -24,6 +33,9 @@ export const PLAN_IDS: readonly PlanId[] = [
   "CRM_WFA",
   "SFA",
   "CRM_SFA",
+  "FSM",
+  "CRM_FSM",
+  "SFA_FSM",
 ] as const;
 
 /** Human label as shown in super-admin and on invoices. */
@@ -33,6 +45,9 @@ export const PLAN_LABEL: Record<PlanId, string> = {
   CRM_WFA: "CRM + WFA",
   SFA: "SFA",
   CRM_SFA: "CRM + SFA",
+  FSM: "FSM",
+  CRM_FSM: "CRM + FSM",
+  SFA_FSM: "SFA + FSM",
 };
 
 /** Per-user monthly price in INR (annual base). */
@@ -42,6 +57,11 @@ export const PLAN_PRICE: Record<PlanId, number> = {
   CRM_WFA: 200,
   SFA: 300,
   CRM_SFA: 400,
+  // PLACEHOLDERS — not founder-approved (FSM spec section 10 ruling 1).
+  // Do not publish these prices until they are confirmed.
+  FSM: 500,
+  CRM_FSM: 600,
+  SFA_FSM: 800,
 };
 
 /**
@@ -49,11 +69,15 @@ export const PLAN_PRICE: Record<PlanId, number> = {
  * has wfa:true.
  */
 export const PLAN_LINES: Record<PlanId, Record<ProductLine, boolean>> = {
-  CRM: { crm: true, wfa: false, sfa: false },
-  WFA: { crm: false, wfa: true, sfa: false },
-  CRM_WFA: { crm: true, wfa: true, sfa: false },
-  SFA: { crm: false, wfa: true, sfa: true },
-  CRM_SFA: { crm: true, wfa: true, sfa: true },
+  CRM: { crm: true, wfa: false, sfa: false, fsm: false },
+  WFA: { crm: false, wfa: true, sfa: false, fsm: false },
+  CRM_WFA: { crm: true, wfa: true, sfa: false, fsm: false },
+  SFA: { crm: false, wfa: true, sfa: true, fsm: false },
+  CRM_SFA: { crm: true, wfa: true, sfa: true, fsm: false },
+  // FSM includes WFA, exactly as SFA does.
+  FSM: { crm: false, wfa: true, sfa: false, fsm: true },
+  CRM_FSM: { crm: true, wfa: true, sfa: false, fsm: true },
+  SFA_FSM: { crm: false, wfa: true, sfa: true, fsm: true },
 };
 
 // ── The 9 admin-configurable module keys (existing module_settings shape) ──
@@ -68,7 +92,8 @@ export type ModuleKey =
   | "route"
   | "payment"
   | "scheme"
-  | "stock";
+  | "stock"
+  | "service";
 
 export const MODULE_KEYS: readonly ModuleKey[] = [
   "whatsapp",
@@ -82,6 +107,7 @@ export const MODULE_KEYS: readonly ModuleKey[] = [
   "payment",
   "scheme",
   "stock",
+  "service",
 ] as const;
 
 /** Which product line owns each configurable module. */
@@ -103,6 +129,8 @@ export const MODULE_LINE: Record<ModuleKey, ProductLine> = {
   payment: "sfa",
   scheme: "sfa",
   stock: "sfa",
+  // FSM line
+  service: "fsm",
 };
 
 /**
@@ -129,12 +157,15 @@ export function isNewPlan(raw: unknown): raw is PlanId {
 /**
  * Product lines granted by a stored subscription_plan value.
  * - A known new PlanId → its line map.
- * - A legacy/unknown value → full access (safe default; nothing locks out
- *   until the account is explicitly re-planned).
+ * - A legacy/unknown value → full access to crm/wfa/sfa (safe default; nothing
+ *   locks out until the account is explicitly re-planned). NOT fsm: that line
+ *   was invented after those tenants signed up, so it was never part of their
+ *   "full access", and granting it would switch the unfinished `service` module
+ *   on for every legacy tenant.
  */
 export function planLines(rawPlan: unknown): Record<ProductLine, boolean> {
   if (isNewPlan(rawPlan)) return { ...PLAN_LINES[rawPlan] };
-  return { crm: true, wfa: true, sfa: true };
+  return { crm: true, wfa: true, sfa: true, fsm: false };
 }
 
 /** True if the plan grants the given product line. */

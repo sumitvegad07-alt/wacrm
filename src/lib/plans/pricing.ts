@@ -65,11 +65,18 @@ export const TERM_UPLIFT: Record<BillingTerm, number> = {
  * for fewer users must still price out. The quote reports `belowRecommended` and
  * the UI says so loudly; the arithmetic charges exactly what was asked for.
  *
- * The counts themselves are derived, not chosen: at the quarterly rate every one
- * of them produces the *same* entry ticket of ₹5,040, which is what makes a
- * single "from ₹5,000" headline honest across all five plans. `entryTicket()`
- * exposes the figure, and a test pins the invariant, so changing a base rate
- * without re-deriving these counts fails the build rather than the marketing.
+ * The counts for the five legacy plans are derived, not chosen: at the quarterly
+ * rate every one of them produces the *same* entry ticket of ₹5,040, which is
+ * what makes a single "from ₹5,000" headline honest across those plans.
+ * `entryTicket()` exposes the figure, and a test pins the invariant, so changing
+ * a base rate without re-deriving these counts fails the build rather than the
+ * marketing.
+ *
+ * The three FSM counts (3 / 2 / 2) are PROVISIONAL. The FSM prices in
+ * `PLAN_PRICE` are unapproved placeholders, and no whole number of users turns
+ * ₹500 or ₹800 into ₹5,040, so FSM is not held to the uniform-ticket invariant;
+ * it only has to clear MIN_TICKET. When real FSM pricing is approved, re-derive
+ * both the prices and these counts together — restoring uniformity if desired.
  */
 export const MIN_USERS: Record<PlanId, number> = {
   CRM: 12,
@@ -77,6 +84,10 @@ export const MIN_USERS: Record<PlanId, number> = {
   CRM_WFA: 6,
   SFA: 4,
   CRM_SFA: 3,
+  // PROVISIONAL — see the note above. Quarterly tickets: 6,300 / 5,040 / 6,720.
+  FSM: 3,
+  CRM_FSM: 2,
+  SFA_FSM: 2,
 };
 
 /**

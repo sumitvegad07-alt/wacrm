@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PLAN_IDS, type PlanId } from "./catalog";
+import { PLAN_IDS, PLAN_LINES, type PlanId } from "./catalog";
 import {
   BILLING_TERMS,
   MIN_TICKET,
@@ -55,11 +55,26 @@ describe("term rates", () => {
 // This is the invariant the whole "from ₹5,000" campaign rests on. If a base
 // rate changes and the minimum user counts are not re-derived, the five plans
 // stop sharing an entry price and the headline becomes false for some of them.
+//
+// The uniform-ticket invariant covers the plans it was written for — every plan
+// without the FSM line. FSM prices are unapproved placeholders, so FSM plans are
+// only held to the minimum-ticket floor (see MIN_USERS).
+const LEGACY_PLANS = PLAN_IDS.filter((p) => !PLAN_LINES[p].fsm);
+const FSM_PLANS = PLAN_IDS.filter((p) => PLAN_LINES[p].fsm);
+
 describe("the ₹5,000 headline", () => {
-  it("every plan has the same quarterly entry ticket", () => {
-    const tickets = PLAN_IDS.map((p) => entryTicket(p, "quarterly"));
+  it("every non-FSM plan has the same quarterly entry ticket", () => {
+    const tickets = LEGACY_PLANS.map((p) => entryTicket(p, "quarterly"));
+    expect(tickets.length).toBe(5);
     expect(new Set(tickets).size).toBe(1);
     expect(tickets[0]).toBe(5040);
+  });
+
+  it("every FSM plan's quarterly entry ticket clears the advertised minimum", () => {
+    expect(FSM_PLANS.length).toBe(3);
+    for (const plan of FSM_PLANS) {
+      expect(entryTicket(plan, "quarterly")).toBeGreaterThanOrEqual(MIN_TICKET);
+    }
   });
 
   it("that ticket is at or above the advertised minimum", () => {
@@ -69,8 +84,8 @@ describe("the ₹5,000 headline", () => {
   });
 
   it("the longer terms share an entry ticket too", () => {
-    expect(new Set(PLAN_IDS.map((p) => entryTicket(p, "half_yearly"))).size).toBe(1);
-    expect(new Set(PLAN_IDS.map((p) => entryTicket(p, "yearly"))).size).toBe(1);
+    expect(new Set(LEGACY_PLANS.map((p) => entryTicket(p, "half_yearly"))).size).toBe(1);
+    expect(new Set(LEGACY_PLANS.map((p) => entryTicket(p, "yearly"))).size).toBe(1);
     expect(entryTicket("SFA", "half_yearly")).toBe(8640);
     expect(entryTicket("SFA", "yearly")).toBe(14400);
   });
