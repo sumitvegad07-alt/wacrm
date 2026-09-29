@@ -97,3 +97,36 @@ describe('defaults isolation', () => {
     expect(DEFAULT_SERVICE_SETTINGS.sla_hours.critical).toBe(4);
   });
 });
+
+describe('sla_hours bounds', () => {
+  it('rejects non-integer, over-cap and exponent-form values but keeps a legitimate one', () => {
+    const out = normalizeServiceSettings({ sla_hours: { low: 4.5, medium: 10000, high: 1e21, critical: 96 } });
+    expect(out.sla_hours.low).toBe(DEFAULT_SERVICE_SETTINGS.sla_hours.low);
+    expect(out.sla_hours.medium).toBe(DEFAULT_SERVICE_SETTINGS.sla_hours.medium);
+    expect(out.sla_hours.high).toBe(DEFAULT_SERVICE_SETTINGS.sla_hours.high);
+    expect(out.sla_hours.critical).toBe(96);
+  });
+
+  it('accepts the 8760-hour cap exactly and rejects 8761', () => {
+    expect(normalizeServiceSettings({ sla_hours: { low: 8760 } }).sla_hours.low).toBe(8760);
+    expect(normalizeServiceSettings({ sla_hours: { low: 8761 } }).sla_hours.low)
+      .toBe(DEFAULT_SERVICE_SETTINGS.sla_hours.low);
+  });
+});
+
+describe('warrantyState UTC-day semantics', () => {
+  const lateToday = new Date('2026-09-29T23:59:59Z');
+
+  it('treats the last second of the UTC day as still that day', () => {
+    expect(warrantyState({ warranty_end: '2026-09-29' }, lateToday)).toBe('expiring');
+    expect(warrantyState({ warranty_end: '2026-09-28' }, lateToday)).toBe('expired');
+  });
+
+  it('is none for an unparseable warranty end', () => {
+    expect(warrantyState({ warranty_end: 'garbage' }, new Date('2026-09-29T00:00:00Z'))).toBe('none');
+  });
+
+  it('is none for an invalid today rather than a confident active', () => {
+    expect(warrantyState({ warranty_end: '2027-01-01' }, new Date('nope'))).toBe('none');
+  });
+});

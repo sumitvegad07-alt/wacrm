@@ -5,6 +5,13 @@ export type AssignmentMode = 'manual' | 'area_based';
 export type ServiceSettings = {
   asset_code_prefix: string;
   job_no_prefix: string;
+  /**
+   * Target resolution hours per priority. Each value is a whole number in
+   * 1..8760 (one year); anything else falls back to the default. The cap and
+   * integer rule exist because Phase 2 casts these into a Postgres interval in
+   * a trigger, and a value like 1e21 serialises as "1e+21", which that cast
+   * cannot parse.
+   */
   sla_hours: Record<JobPriority, number>;
   default_assignment_mode: AssignmentMode;
   require_asset_on_assign: boolean;
@@ -18,6 +25,7 @@ export const DEFAULT_SERVICE_SETTINGS: ServiceSettings = {
   require_asset_on_assign: true,
 };
 
+const MAX_SLA_HOURS = 8760; // one year
 const PRIORITIES: JobPriority[] = ['low', 'medium', 'high', 'critical'];
 
 function normalizePrefix(value: unknown, fallback: string): string {
@@ -37,7 +45,7 @@ export function normalizeServiceSettings(raw: unknown): ServiceSettings {
   const sla_hours = { ...DEFAULT_SERVICE_SETTINGS.sla_hours };
   for (const p of PRIORITIES) {
     const v = slaRaw[p];
-    if (typeof v === 'number' && Number.isFinite(v) && v > 0) sla_hours[p] = v;
+    if (typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= MAX_SLA_HOURS) sla_hours[p] = v;
   }
 
   return {
@@ -70,6 +78,7 @@ export function warrantyState(
   if (Number.isNaN(end)) return 'none';
   const now = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
   const days = Math.floor((end - now) / DAY_MS);
+  if (Number.isNaN(days)) return 'none'; // invalid `today`: a safe answer beats a confidently wrong one
   if (days < 0) return 'expired';
   return days <= EXPIRING_WINDOW_DAYS ? 'expiring' : 'active';
 }
