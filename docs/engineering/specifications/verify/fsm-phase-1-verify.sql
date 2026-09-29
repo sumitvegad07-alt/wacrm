@@ -1,7 +1,21 @@
 -- FSM Phase 1 verification (checks 1-11 cover Task 3; checks 12-36 cover Task 4).
--- Run against a Supabase BRANCH, never production. There is no DB test harness in
--- this repo, so this checked-in script with stated expected results is the
--- verification artefact.
+-- There is no DB test harness in this repo, so this checked-in script with stated
+-- expected results is the verification artefact. Prefer a Supabase BRANCH.
+--
+-- SAFETY GUARANTEE: every check is either read-only or runs inside a BEGIN ... ROLLBACK,
+-- so the script leaves no data behind and is safe to run against production, with
+-- exactly ONE exception, named here rather than hidden:
+--   * Check 28 COMMITS one fixture asset (code VERIFYFX-000001) because an isolation check
+--     against an empty table proves nothing. It is removed by the scoped DELETE that
+--     immediately follows it, which MUST be run even if the check aborts.
+-- Two other items are not "script writes" and are flagged so they are not mistaken for
+-- one: check 11 and the final MANUAL INSTRUCTION ask the operator to RE-APPLY a migration
+-- (idempotent DDL, run by hand, outside this script).
+-- Rolled-back writes still hold row locks until the ROLLBACK, and a transaction that
+-- ABORTS mid-way under ON_ERROR_STOP is discarded when the session ends (see Run mode).
+-- No check leaves an account_sequences row behind for an account that had none: check 1
+-- rolls its counter upsert back, and check 28's fixture supplies an explicit asset_code so
+-- the trigger never calls get_next_asset_number.
 --
 -- Migrations under test:
 --   supabase/migrations/20260929151000_fsm_asset_masters.sql   (checks 1-11)
@@ -34,9 +48,10 @@
 --   42501 never appears; and 32(f), an INSERT, raises 42501 from the plan ceiling and
 --   FALSELY PASSES. 32(c) runs as the owner and does not depend on the plan.
 -- Every check that writes to customer_assets / contacts / accounts / account_sequences
--- is wrapped in BEGIN ... ROLLBACK, so nothing persists and no counter value is burnt.
--- Run 12-36 AFTER 1-11 (check 13 rewinds account_sequences and expects the row that
--- check 1 created).
+-- is wrapped in BEGIN ... ROLLBACK, so nothing persists and no counter value is burnt
+-- (the one exception is check 28's committed fixture: see SAFETY GUARANTEE above).
+-- Checks 1-11 leave no state behind, so 12-36 do not depend on 1-11 having run (check 13
+-- creates and rolls back its own account_sequences row).
 --
 -- To find an account with NO account_sequences row at all (needed by check 1,
 -- because rows are created lazily and that is the path check 1 must exercise):
@@ -61,13 +76,22 @@
 
 -- 1. Counter is sequential AND the lazy upsert works for an account with no
 --    account_sequences row. Precondition: :acct has no row (see setup query above).
---    Expect 1, then 2 (two result sets, type bigint).
-SELECT public.get_next_asset_number(:'acct');
-SELECT public.get_next_asset_number(:'acct');
-
--- 2. Counter state persisted in account_sequences (the row now exists).
---    Expect asset_seq = 2, job_seq = 0.
-SELECT asset_seq, job_seq FROM public.account_sequences WHERE account_id = :'acct';
+--    Runs in a transaction that ROLLS BACK, so the values it prints are NOT consumed and
+--    no account_sequences row is left behind.
+--    Expect 1, then 2 (two result sets, type bigint). If the account already has a row
+--    with asset_seq = N, expect N+1, then N+2.
+-- 2. Counter state persisted in account_sequences (the row exists WITHIN the
+--    transaction, so it is read before the ROLLBACK). Expect asset_seq = 2, job_seq = 0
+--    (N+2 and the row's current job_seq if the account already had a row).
+BEGIN;
+  SELECT public.get_next_asset_number(:'acct');                                          -- 1
+  SELECT public.get_next_asset_number(:'acct');                                          -- 1
+  SELECT asset_seq, job_seq FROM public.account_sequences WHERE account_id = :'acct';    -- 2
+ROLLBACK;
+-- 1/2 (after). The rollback left the counter untouched. Expect 0 rows if the account had
+--    no account_sequences row before (the precondition), otherwise the row's original
+--    asset_seq (N).
+SELECT asset_seq FROM public.account_sequences WHERE account_id = :'acct';
 
 -- 3. Counter columns exist and default to 0. Expect 2 rows:
 --      asset_seq | bigint | NO | 0
@@ -90,7 +114,9 @@ SELECT has_function_privilege('anon',          'public.get_next_asset_number(uui
 --    rolls back, so no counter value is consumed.
 --    (a) non-member  -> Expect: ERROR 42501 "Not a member of this account".
 --    (b) viewer      -> Expect: ERROR 42501 (guard requires agent-or-above).
---    (c) agent/above -> Expect: returns 3 (next value after check 2), then ROLLBACK.
+--    (c) agent/above -> Expect: returns asset_seq + 1 (1 if the account has no
+--                       account_sequences row), then ROLLBACK. Checks 1-2 rolled back, so
+--                       the counter is where it was before the script started.
 BEGIN;
   SET LOCAL ROLE authenticated;
   SELECT set_config('request.jwt.claims',
@@ -112,7 +138,7 @@ ROLLBACK;
 
 -- 6. Seeded types. Expect count = 8, bool_and = true, ONLY for an account that was
 --    backfilled by the migration or freshly provisioned after it and has not had any
---    asset type added/changed since. (If you ran check 8, expect 9 and bool_and = false.)
+--    asset type added/changed since. (Check 8 rolls back, so it does not change this.)
 --    Names: Water Purifier, Air Conditioner, Elevator, CCTV Camera,
 --           UPS / Inverter, Generator, Pump / Motor, Other.
 SELECT count(*), bool_and(is_seed_data) FROM public.asset_types WHERE account_id = :'acct';
@@ -120,13 +146,23 @@ SELECT count(*), bool_and(is_seed_data) FROM public.asset_types WHERE account_id
 -- 7. Duplicate type name (case-insensitive) is rejected.
 --    Expect: ERROR 23505 unique_violation on asset_types_uniq_name_per_account.
 --    THIS RAISES AN ERROR ON PURPOSE: it aborts a psql run under ON_ERROR_STOP, so
---    run it separately or with ON_ERROR_STOP off.
-INSERT INTO public.asset_types (account_id, name) VALUES (:'acct', 'water purifier');
+--    run it separately or with ON_ERROR_STOP off. Wrapped in a transaction that rolls
+--    back so that, if the unique index were missing, the duplicate would not persist.
+BEGIN;
+  INSERT INTO public.asset_types (account_id, name) VALUES (:'acct', 'water purifier');
+ROLLBACK;
 
--- 8. Name reusable after archive. Expect: UPDATE 1, then INSERT 0 1, no error.
-UPDATE public.asset_types SET deleted_at = now()
- WHERE account_id = :'acct' AND lower(name) = 'other';
-INSERT INTO public.asset_types (account_id, name) VALUES (:'acct', 'Other');
+-- 8. Name reusable after archive. Expect: UPDATE 1, then INSERT 0 1, no error, then the
+--    SELECT returns two 'Other' rows: one archived (is_live = false), one live (true).
+--    The whole block ROLLS BACK, so the tenant's real 'Other' type is NOT left archived
+--    and no duplicate remains.
+BEGIN;
+  UPDATE public.asset_types SET deleted_at = now()
+   WHERE account_id = :'acct' AND lower(name) = 'other';
+  INSERT INTO public.asset_types (account_id, name) VALUES (:'acct', 'Other');
+  SELECT name, deleted_at IS NULL AS is_live FROM public.asset_types
+   WHERE account_id = :'acct' AND lower(name) = 'other' ORDER BY is_live;
+ROLLBACK;
 
 -- 9. No bare auth.uid() in this migration's policies. Expect 0 rows.
 --    (Also covers customer_assets once Task 4 has been applied.)
@@ -150,12 +186,15 @@ SELECT policyname,
 
 -- 11. MANUAL INSTRUCTION, NOT SQL. Idempotency: re-apply
 --     supabase/migrations/20260929151000_fsm_asset_masters.sql a second time.
+--     (This is the one item that changes anything, and it is the migration re-running,
+--     not a script statement; do it on a branch if you want zero production writes.)
 --     Expect: no error, and nothing changes:
---       - check 2 still shows asset_seq = 2 (counter untouched);
---       - SELECT count(*) FROM public.asset_types WHERE account_id = :'acct'
---         returns the same number as before the re-apply (9 if check 8 ran: 8 seeded
---         + the re-created 'Other'; the archived 'Other' is not re-seeded because the
---         helper skips any account that already has asset_types rows, archived or not).
+--       - the counter is untouched: SELECT asset_seq FROM public.account_sequences
+--         WHERE account_id = :'acct' returns what it did before the re-apply;
+--       - SELECT count(*) FROM public.asset_types WHERE account_id = :'acct' returns the
+--         same number as before (8 for an untouched account: check 8 rolls back, so it no
+--         longer adds a ninth row; an account that already has any asset_types row, archived
+--         or not, is never re-seeded by the helper).
 
 
 -- ============================================================
@@ -163,8 +202,8 @@ SELECT policyname,
 -- ============================================================
 
 -- 12. Asset code auto-assigns as PREFIX-nnnnnn and matches the counter.
---     Expect one row: asset_code like 'AST-000003' (prefix AST unless the account
---     set one), format_ok = true, and code_number equal to seq.
+--     Expect one row: asset_code like 'AST-000001' (the account's next number; prefix AST
+--     unless the account set one), format_ok = true, and code_number equal to seq.
 BEGIN;
   INSERT INTO public.customer_assets (account_id, contact_id, name)
   VALUES (:'acct', :'contact', 'Verify RO Unit');
@@ -192,7 +231,8 @@ BEGIN;
   INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'pfx-b');
   UPDATE public.accounts SET settings = settings - 'service_settings' WHERE id = :'acct';
   INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'pfx-c');
-  UPDATE public.account_sequences SET asset_seq = 999999 WHERE account_id = :'acct';
+  INSERT INTO public.account_sequences (account_id, asset_seq) VALUES (:'acct', 999999)
+    ON CONFLICT (account_id) DO UPDATE SET asset_seq = 999999;   -- upsert: the row may not exist yet
   INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'pfx-d');
   SELECT name,
          CASE name
@@ -381,7 +421,7 @@ SELECT with_check LIKE '%has_permission%'         AS uses_has_permission,
 --     IF THIS RUN ABORTS after step (i) (e.g. under ON_ERROR_STOP at the outsider insert),
 --     the committed fixture 'VERIFYFX-000001' is left behind: delete it before re-running,
 --     or the re-run fails 23505 on that code:
---       DELETE FROM public.customer_assets WHERE account_id = :'acct' AND asset_code LIKE 'VERIFYFX-%';
+--       DELETE FROM public.customer_assets WHERE account_id = :'acct' AND asset_code = 'VERIFYFX-000001';
 --     NEEDS A ROLE SWITCH. THREE STEPS, because every other
 --     check here rolls back and there must be a COMMITTED asset for the outsider's
 --     count to mean anything.
@@ -407,8 +447,11 @@ BEGIN;                                                                    -- (ii
   INSERT INTO public.customer_assets (account_id, contact_id, name, asset_code)
   VALUES (:'acct', :'contact', 'Intruder', 'VERIFYFX-000002');
 ROLLBACK;
+-- >>> (iii) CLEANUP: RUN THIS STATEMENT EVEN IF THE CHECK ABOVE ABORTED. It removes the one
+-- >>> committed row this script creates: asset_code 'VERIFYFX-000001' (no other row is
+-- >>> touched). Scoped to :acct on purpose.
 DELETE FROM public.customer_assets
- WHERE account_id = :'acct' AND asset_code LIKE 'VERIFYFX-%';    -- (iii)
+ WHERE account_id = :'acct' AND asset_code = 'VERIFYFX-000001';
 
 -- 29. Permission-based INSERT. NEEDS A ROLE SWITCH and :agent = a plain 'agent'
 --     (not owner/admin, who pass has_permission unconditionally). :acct must be on an
