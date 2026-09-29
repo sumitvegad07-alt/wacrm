@@ -102,6 +102,41 @@ export function useReorderCustomers() {
   });
 }
 
+/**
+ * Toggle "must visit" on a single stop, optimistically.
+ *
+ * Marking is a rapid, exploratory action -- an admin runs down the list starring
+ * four of twenty customers -- so the star has to respond instantly rather than
+ * after a round-trip. Rolls back to the snapshot if the write fails.
+ */
+export function useSetCustomerMustVisit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { routeId: string; contactId: string; mustVisit: boolean }) =>
+      getRouteSdk().setCustomerMustVisit(vars.routeId, vars.contactId, vars.mustVisit),
+    onMutate: async (vars) => {
+      const key = routeKeys.customers(vars.routeId);
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<RouteCustomerWithContact[]>(key);
+      if (previous) {
+        qc.setQueryData(
+          key,
+          previous.map((c) =>
+            c.contact_id === vars.contactId ? { ...c, must_visit: vars.mustVisit } : c
+          )
+        );
+      }
+      return { previous, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(ctx.key, ctx.previous);
+    },
+    onSettled: (_res, _err, vars) => {
+      qc.invalidateQueries({ queryKey: routeKeys.customers(vars.routeId) });
+    },
+  });
+}
+
 export function useUpdateRouteStatus(accountId: string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({

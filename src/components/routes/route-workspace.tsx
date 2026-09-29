@@ -17,6 +17,7 @@ import {
 } from "@/hooks/route/use-routes";
 import {
   useReorderCustomers,
+  useSetCustomerMustVisit,
   useRemoveCustomer,
   useImportCustomers,
   useUpdateRouteStatus,
@@ -69,6 +70,7 @@ export function RouteWorkspace({ routeId, readOnly = false }: { routeId: string;
   const settings = useRouteSettings();
 
   const reorder = useReorderCustomers();
+  const setMustVisit = useSetCustomerMustVisit();
   const removeCustomer = useRemoveCustomer();
   const importCustomers = useImportCustomers(accountId);
   const setStatus = useUpdateRouteStatus(accountId);
@@ -106,6 +108,7 @@ export function RouteWorkspace({ routeId, readOnly = false }: { routeId: string;
       primary: c.company || c.name || "Unnamed",
       secondary: c.address,
       flagged: c.needs_territory_review,
+      mustVisit: c.must_visit,
     })),
     [custRows]
   );
@@ -341,6 +344,11 @@ export function RouteWorkspace({ routeId, readOnly = false }: { routeId: string;
               disabled={isArchived || readOnly || !canReorder}
               onReorder={(ids) => reorder.mutate({ routeId, orderedContactIds: ids })}
               onRemove={!isArchived && !readOnly && canRemoveCust && !selectMode ? (id) => removeCustomer.mutate({ routeId, contactId: id }) : undefined}
+              onToggleMustVisit={
+                !isArchived && !readOnly && canReorder
+                  ? (id, next) => setMustVisit.mutate({ routeId, contactId: id, mustVisit: next })
+                  : undefined
+              }
               selectable={selectMode}
               selectedIds={selected}
               onToggleSelect={(id) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })}

@@ -87,6 +87,12 @@ export interface RouteCustomer {
   route_id: string;
   contact_id: string;
   sequence: number;
+  /**
+   * Admin marked this stop as one the rep must not skip. `sequence` says what
+   * order to work in; this says what cannot be missed. False for every stop on
+   * every route that existed before the feature, which renders no badge at all.
+   */
+  must_visit: boolean;
   archived_at: string | null;
   created_at: string;
   updated_at: string;

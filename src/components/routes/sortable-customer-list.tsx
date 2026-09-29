@@ -21,7 +21,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, X, Check } from "lucide-react";
+import { GripVertical, X, Check, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface SortableCustomer {
@@ -29,6 +29,8 @@ export interface SortableCustomer {
   primary: string;
   secondary?: string | null;
   flagged?: boolean; // e.g. needs_territory_review / outside territory
+  /** Admin marked this stop as one the rep must not skip. */
+  mustVisit?: boolean;
 }
 
 function Row({
@@ -39,6 +41,7 @@ function Row({
   selectable,
   selected,
   onToggleSelect,
+  onToggleMustVisit,
 }: {
   item: SortableCustomer;
   index: number;
@@ -47,6 +50,7 @@ function Row({
   selectable?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
+  onToggleMustVisit?: (id: string, next: boolean) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -100,6 +104,29 @@ function Row({
         </p>
         {item.secondary && <p className="truncate text-xs text-muted-foreground">{item.secondary}</p>}
       </div>
+      {/*
+        Sits beside the sequence controls on purpose: order and "cannot be missed"
+        are the two things an admin decides about a stop, and they decide them in
+        the same pass. Unmarked is the resting state and shows only a faint
+        outline, so a route with none marked reads exactly as it did before.
+      */}
+      {onToggleMustVisit && (
+        <button
+          type="button"
+          onClick={() => onToggleMustVisit(item.id, !item.mustVisit)}
+          aria-pressed={Boolean(item.mustVisit)}
+          aria-label={item.mustVisit ? "Unmark as must visit" : "Mark as must visit"}
+          title={item.mustVisit ? "Must visit — click to unmark" : "Mark as must visit"}
+          className={cn(
+            "shrink-0 rounded-md p-1 transition-colors",
+            item.mustVisit
+              ? "text-amber-500 hover:bg-amber-500/10"
+              : "text-muted-foreground/40 hover:bg-muted hover:text-amber-500"
+          )}
+        >
+          <Star className={cn("h-4 w-4", item.mustVisit && "fill-current")} />
+        </button>
+      )}
       {onRemove && !disabled && (
         <button
           type="button"
@@ -122,6 +149,7 @@ export function SortableCustomerList({
   selectable,
   selectedIds,
   onToggleSelect,
+  onToggleMustVisit,
 }: {
   items: SortableCustomer[];
   onReorder: (orderedIds: string[]) => void;
@@ -130,6 +158,8 @@ export function SortableCustomerList({
   selectable?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
+  /** Omit to hide the star entirely (e.g. a read-only or unauthorised view). */
+  onToggleMustVisit?: (id: string, next: boolean) => void;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -159,6 +189,7 @@ export function SortableCustomerList({
               selectable={selectable}
               selected={selectedIds?.has(item.id)}
               onToggleSelect={onToggleSelect}
+              onToggleMustVisit={onToggleMustVisit}
             />
           ))}
         </ul>

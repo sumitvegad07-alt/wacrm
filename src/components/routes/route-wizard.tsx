@@ -13,6 +13,7 @@ import {
   useSaveRoute,
   useImportCustomers,
   useReorderCustomers,
+  useSetCustomerMustVisit,
   useRemoveCustomer,
   useUpdateRouteStatus,
 } from "@/hooks/route/use-route-mutations";
@@ -67,6 +68,7 @@ export function RouteWizard() {
   const saveRoute = useSaveRoute(accountId);
   const importCustomers = useImportCustomers(accountId);
   const reorder = useReorderCustomers();
+  const setMustVisit = useSetCustomerMustVisit();
   const removeCustomer = useRemoveCustomer();
   const setStatus = useUpdateRouteStatus(accountId);
   const customers = useRouteCustomers(created ? routeId : null);
@@ -89,6 +91,7 @@ export function RouteWizard() {
         primary: c.company || c.name || "Unnamed",
         secondary: c.address,
         flagged: c.needs_territory_review,
+        mustVisit: c.must_visit,
       })),
     [custRows]
   );
@@ -331,6 +334,8 @@ export function RouteWizard() {
             <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
               <strong className="text-foreground">Optional.</strong> Customers are visited top to bottom.
               Drag to reorder if you want a specific sequence — otherwise just continue.
+              Tap the star to mark a customer as <strong className="text-foreground">must visit</strong>;
+              the rep sees those highlighted and is asked to explain any they skip.
             </div>
             {custRows.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">No customers yet — go back and import some.</p>
@@ -339,6 +344,7 @@ export function RouteWizard() {
                 items={sortableItems}
                 onReorder={(ids) => reorder.mutate({ routeId, orderedContactIds: ids })}
                 onRemove={(id) => removeCustomer.mutate({ routeId, contactId: id })}
+                onToggleMustVisit={(id, next) => setMustVisit.mutate({ routeId, contactId: id, mustVisit: next })}
               />
             )}
             <div className="flex justify-between pt-2">

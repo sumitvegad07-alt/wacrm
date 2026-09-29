@@ -262,7 +262,7 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
       const { data, error } = await supabase
         .from('route_customers')
         .select(
-          'id, account_id, route_id, contact_id, sequence, archived_at, created_at, updated_at, ' +
+          'id, account_id, route_id, contact_id, sequence, must_visit, archived_at, created_at, updated_at, ' +
             'contacts ( company, name, latitude, longitude, address, territory_id, needs_territory_review )'
         )
         .eq('route_id', routeId)
@@ -278,6 +278,7 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
           route_id: row.route_id as string,
           contact_id: row.contact_id as string,
           sequence: row.sequence as number,
+          must_visit: Boolean(row.must_visit),
           archived_at: (row.archived_at as string | null) ?? null,
           created_at: row.created_at as string,
           updated_at: row.updated_at as string,
@@ -547,6 +548,31 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
     });
   }
 
+  /**
+   * Mark (or unmark) a stop as one the rep must not skip.
+   *
+   * A direct update rather than an RPC: `route_customers_write` already scopes
+   * writes to admins, the route's creator and its assignee, which is exactly who
+   * may change this. Reordering needs an RPC because it rewrites every row's
+   * sequence in one transaction; this touches a single row.
+   */
+  async function setCustomerMustVisit(
+    routeId: string,
+    contactId: string,
+    mustVisit: boolean
+  ): Promise<{ ok: boolean }> {
+    return withRetry(async () => {
+      const { error } = await supabase
+        .from('route_customers')
+        .update({ must_visit: mustVisit })
+        .eq('route_id', routeId)
+        .eq('contact_id', contactId)
+        .is('archived_at', null);
+      if (error) throw mapPostgrestError(error);
+      return { ok: true };
+    }, maxRetries);
+  }
+
   async function updateStatus(routeId: string, newStatus: RouteStatus, reason?: string | null) {
     return executor.runRpc<{ status: RouteStatus }>('route_update_status', {
       p_route_id: routeId,
@@ -691,6 +717,7 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
     addCustomers,
     removeCustomer,
     reorderCustomers,
+    setCustomerMustVisit,
     updateStatus,
     bulkUpdateStatus,
     submitRoute,
