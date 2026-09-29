@@ -38,7 +38,7 @@ as $$
     when 'FSM'     then (p_line in ('wfa','fsm'))
     when 'CRM_FSM' then (p_line in ('crm','wfa','fsm'))
     when 'SFA_FSM' then (p_line in ('wfa','sfa','fsm'))
-    else (p_line <> 'fsm')  -- legacy / unknown / null => full access EXCEPT fsm (matches catalog.ts planLines)
+    else (p_line is distinct from 'fsm')  -- legacy / unknown / null => full access EXCEPT fsm (matches catalog.ts planLines)
   end
   from public.accounts a
   where a.id = p_account_id;
