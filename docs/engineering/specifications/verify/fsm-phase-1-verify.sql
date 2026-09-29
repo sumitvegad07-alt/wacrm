@@ -1,11 +1,11 @@
--- FSM Phase 1 verification (checks 1-11 cover Task 3; checks 12-31 cover Task 4).
+-- FSM Phase 1 verification (checks 1-11 cover Task 3; checks 12-36 cover Task 4).
 -- Run against a Supabase BRANCH, never production. There is no DB test harness in
 -- this repo, so this checked-in script with stated expected results is the
 -- verification artefact.
 --
 -- Migrations under test:
 --   supabase/migrations/20260929151000_fsm_asset_masters.sql   (checks 1-11)
---   supabase/migrations/20260929152000_fsm_customer_assets.sql (checks 12-31)
+--   supabase/migrations/20260929152000_fsm_customer_assets.sql (checks 12-36)
 --
 -- Setup (psql):
 --   \set acct '<test account uuid>'
@@ -13,18 +13,21 @@
 --   \set viewer   '<uuid of a member of :acct whose role is viewer>'   (optional, check 5)
 --   \set agent    '<uuid of a member of :acct whose role is agent or above>' (optional, check 5)
 --
--- Extra setup for checks 12-31 (customer_assets):
+-- Extra setup for checks 12-36 (customer_assets):
 --   \set contact         '<contact uuid in :acct WHOSE territory_id IS NOT NULL>'
 --   \set second_contact  '<a second contact uuid in :acct>'                   (check 24)
 --   \set other_territory '<a territory uuid in :acct that is NOT that contact's territory>'
 --   \set nonfsm_acct     '<account on a CRM/WFA/SFA plan, i.e. no fsm line>'   (check 30)
 --   \set nonfsm_member   '<owner/admin user uuid of :nonfsm_acct>'             (check 30)
 --   \set nonfsm_contact  '<a contact uuid belonging to :nonfsm_acct>'          (check 30)
+--   \set foreign_product    '<a product uuid belonging to :nonfsm_acct>'        (check 35)
+--   \set foreign_asset_type '<an asset_types uuid belonging to :nonfsm_acct>'   (check 36)
+--   \set foreign_territory  '<a territory uuid belonging to :nonfsm_acct>'      (check 36)
 --   :agent must be a member whose account_role is exactly 'agent' (NOT owner/admin)
 --   for check 29 to prove anything.
 -- Every check that writes to customer_assets / contacts / accounts / account_sequences
 -- is wrapped in BEGIN ... ROLLBACK, so nothing persists and no counter value is burnt.
--- Run 12-31 AFTER 1-11 (check 13 rewinds account_sequences and expects the row that
+-- Run 12-36 AFTER 1-11 (check 13 rewinds account_sequences and expects the row that
 -- check 1 created).
 --
 -- To find an account with NO account_sequences row at all (needed by check 1,
@@ -38,7 +41,7 @@
 -- (auth.uid() IS NULL, so the membership guard is bypassed). Check 5 needs a role
 -- switch and CANNOT run as the migration owner. Checks that raise an error ON PURPOSE:
 -- 5(a) and 5(b) (both 42501), 7 (23505), and in the customer_assets set 19-24,
--- 28, 29(b), 30 and 31 (23505 / 23514 / 23503 / 42501). Under psql -v ON_ERROR_STOP=1
+-- 28, 29(b), 30, 31, 32(a), 32(d), 33-36 (23505 / 23514 / 23503 / 42501 / 22023). Under psql -v ON_ERROR_STOP=1
 -- the first of these aborts the whole run, and for the BEGIN-wrapped ones it does so
 -- BEFORE their ROLLBACK (the open transaction is then discarded when the session
 -- ends). So run them one at a time, or with ON_ERROR_STOP off, in which case each
@@ -416,6 +419,106 @@ BEGIN;
                     json_build_object('sub', :'viewer', 'role', 'authenticated')::text, true);
   INSERT INTO public.customer_assets (account_id, contact_id, name)
   VALUES (:'acct', :'contact', 'viewer-denied');
+ROLLBACK;
+
+-- 32. Archive / restore is enforced at the database (trigger block 4), not only in
+--     the UI. NEEDS A ROLE SWITCH for (a), (b) and (d); :agent must be a plain 'agent'.
+--     The agent is granted edit_service_assets so the RLS UPDATE policy passes and ONLY
+--     the archive guard can refuse. All grants happen before the role switch.
+--     (a) edit right only, set deleted_at      -> Expect ERROR 42501. RAISES ON PURPOSE.
+--     (b) edit + delete right, archive then restore -> Expect UPDATE 1, UPDATE 1.
+--     (c) owner / service role (auth.uid() NULL) archives -> Expect UPDATE 1 (bypass).
+--     (d) asset archived, agent with edit right only tries to RESTORE
+--                                              -> Expect ERROR 42501. RAISES ON PURPOSE.
+BEGIN;                                                                    -- (a)
+  INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'arch-a');
+  UPDATE public.employee_roles er
+     SET permissions = (coalesce(er.permissions,'{}'::jsonb) || '{"edit_service_assets": true}'::jsonb) - 'delete_service_assets'
+    FROM public.profiles p
+   WHERE p.employee_role_id = er.id AND p.user_id = :'agent' AND p.account_id = :'acct';
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims',
+                    json_build_object('sub', :'agent', 'role', 'authenticated')::text, true);
+  UPDATE public.customer_assets SET deleted_at = now() WHERE name = 'arch-a' AND account_id = :'acct';
+ROLLBACK;
+BEGIN;                                                                    -- (b)
+  INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'arch-b');
+  UPDATE public.employee_roles er
+     SET permissions = coalesce(er.permissions,'{}'::jsonb)
+                       || '{"edit_service_assets": true, "delete_service_assets": true}'::jsonb
+    FROM public.profiles p
+   WHERE p.employee_role_id = er.id AND p.user_id = :'agent' AND p.account_id = :'acct';
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims',
+                    json_build_object('sub', :'agent', 'role', 'authenticated')::text, true);
+  UPDATE public.customer_assets SET deleted_at = now()  WHERE name = 'arch-b' AND account_id = :'acct';
+  UPDATE public.customer_assets SET deleted_at = NULL   WHERE name = 'arch-b' AND account_id = :'acct';
+ROLLBACK;
+BEGIN;                                                                    -- (c)
+  INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'arch-c');
+  UPDATE public.customer_assets SET deleted_at = now() WHERE name = 'arch-c' AND account_id = :'acct';
+ROLLBACK;
+BEGIN;                                                                    -- (d)
+  INSERT INTO public.customer_assets (account_id, contact_id, name, deleted_at)
+  VALUES (:'acct', :'contact', 'arch-d', now());
+  UPDATE public.employee_roles er
+     SET permissions = (coalesce(er.permissions,'{}'::jsonb) || '{"edit_service_assets": true}'::jsonb) - 'delete_service_assets'
+    FROM public.profiles p
+   WHERE p.employee_role_id = er.id AND p.user_id = :'agent' AND p.account_id = :'acct';
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims',
+                    json_build_object('sub', :'agent', 'role', 'authenticated')::text, true);
+  UPDATE public.customer_assets SET deleted_at = NULL WHERE name = 'arch-d' AND account_id = :'acct';
+ROLLBACK;
+
+-- 33. asset_code is immutable after insert (trigger block 5).
+--     (b) re-writing the SAME value (a no-op edit) -> Expect UPDATE 1, no error.
+--     (a) changing it to another value -> Expect ERROR 22023 "asset_code is immutable
+--         (cannot change AST-... to AST-ZZZ)". RAISES ON PURPOSE.
+BEGIN;
+  INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'immut');
+  UPDATE public.customer_assets SET asset_code = asset_code WHERE name = 'immut' AND account_id = :'acct';   -- (b)
+  UPDATE public.customer_assets SET asset_code = 'AST-ZZZ'  WHERE name = 'immut' AND account_id = :'acct';   -- (a)
+ROLLBACK;
+
+-- 34. A contact from another tenant is refused (trigger block 2, tenant integrity).
+--     Run as the owner (no role switch): the trigger check is independent of RLS.
+--     (a) INSERT with :nonfsm_contact into :acct -> Expect ERROR 23503
+--         "contact ... does not exist in account ...". RAISES ON PURPOSE.
+--     (b) UPDATE an existing asset's contact_id to :nonfsm_contact -> Expect ERROR 23503.
+BEGIN;
+  INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'nonfsm_contact', 'xt-contact');
+ROLLBACK;
+BEGIN;
+  INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'xt-contact-b');
+  UPDATE public.customer_assets SET contact_id = :'nonfsm_contact' WHERE name = 'xt-contact-b' AND account_id = :'acct';
+ROLLBACK;
+
+-- 35. A product from another tenant is refused (trigger block 6). :foreign_product
+--     belongs to :nonfsm_acct. Expect ERROR 23503 "product_id ... does not exist in
+--     account ...". RAISES ON PURPOSE. Also confirm an in-account product is still
+--     accepted: run the same INSERT with a product of :acct and expect INSERT 0 1.
+BEGIN;
+  INSERT INTO public.customer_assets (account_id, contact_id, name, product_id)
+  VALUES (:'acct', :'contact', 'xt-product', :'foreign_product');
+ROLLBACK;
+
+-- 36. Asset type and territory from another tenant, and moving a row between
+--     tenants, are refused. Each is its own block. RAISES ON PURPOSE.
+--     (a) foreign asset_type_id  -> Expect ERROR 23503 "asset_type_id ... does not exist".
+--     (b) foreign territory_id   -> Expect ERROR 23503 "territory_id ... does not exist".
+--     (c) UPDATE account_id      -> Expect ERROR 22023 "account_id cannot be changed".
+BEGIN;
+  INSERT INTO public.customer_assets (account_id, contact_id, name, asset_type_id)
+  VALUES (:'acct', :'contact', 'xt-type', :'foreign_asset_type');
+ROLLBACK;
+BEGIN;
+  INSERT INTO public.customer_assets (account_id, contact_id, name, territory_id)
+  VALUES (:'acct', :'contact', 'xt-territory', :'foreign_territory');
+ROLLBACK;
+BEGIN;
+  INSERT INTO public.customer_assets (account_id, contact_id, name) VALUES (:'acct', :'contact', 'xt-move');
+  UPDATE public.customer_assets SET account_id = :'nonfsm_acct' WHERE name = 'xt-move' AND account_id = :'acct';
 ROLLBACK;
 
 -- MANUAL INSTRUCTION, NOT SQL. Idempotency of Task 4: re-apply

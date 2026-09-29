@@ -117,30 +117,23 @@ CREATE INDEX IF NOT EXISTS customer_assets_phone_snapshot_idx
   ON public.customer_assets (account_id, lower(customer_phone_snapshot))
   WHERE customer_phone_snapshot IS NOT NULL AND deleted_at IS NULL;
 
--- ── Defaults trigger ────────────────────────────────────────
+-- ── Defaults + guards trigger ───────────────────────────────
 -- BEFORE INSERT OR UPDATE, shaped like contacts_sync_geo_from_territory()
--- (20260916120000): do work only when it must. Three rules, each with a reason:
+-- (20260916120000): do work only when it must. One block per responsibility, in
+-- this order: (1) code assignment, (2) territory inheritance, (3) customer
+-- snapshots, (4) archive guard, (5) asset_code immutability, (6) tenant integrity.
 --
---  1. asset_code - INSERT only, only when null/blank. A code is printed on labels
---     and quoted to customers; it must never change after it is issued. An
---     importer may supply its own code; it is then kept as given.
+-- SECURITY DEFINER so the contact / accounts / master lookups are not filtered by
+-- the caller's RLS (that is exactly what lets us detect a foreign-tenant reference
+-- instead of silently seeing nothing). Every lookup is pinned to the asset's own
+-- account_id. auth.uid() is a request GUC, unchanged inside a definer function, so
+-- get_next_asset_number() and has_permission() still see the REAL caller.
 --
---  2. territory_id - inherit from the contact ONLY WHEN THE ASSET'S OWN VALUE IS
---     NULL. Never overwrite an explicit value: the machine may sit somewhere other
---     than the customer's registered address, and Phase 2 area-based assignment
---     must follow the MACHINE, not the billing address.
---
---  3. customer snapshots - INSERT only, never refreshed on UPDATE. A snapshot that
---     tracks the live record is not a snapshot: contacts get renamed, phones
---     change, duplicates get merged, and the asset's history must not rewrite
---     itself. coalesce(NEW.x, <contact value>) lets an importer supply the
---     historical name/phone from a file when they differ from today's contact.
---
--- SECURITY DEFINER so the contact/accounts lookups are not filtered by the
--- caller's RLS; every lookup is pinned to NEW.account_id, so a contact_id from
--- another tenant yields nothing (no cross-tenant read of name/phone/territory).
--- get_next_asset_number() still checks the REAL caller (auth.uid() is a request
--- GUC, unchanged inside a definer function).
+-- Guard summary for whoever debugs a rejected write:
+--   42501  archive / restore without delete_service_assets      (block 4)
+--   22023  asset_code changed, or account_id changed            (blocks 5, 6)
+--   23503  contact / asset type / product / territory / created_by not in this account
+--                                                                (blocks 2, 6)
 CREATE OR REPLACE FUNCTION public.customer_assets_defaults()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -148,41 +141,159 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_prefix    text;
-  v_seq       bigint;
-  v_name      text;
-  v_phone     text;
-  v_territory uuid;
+  v_uid         uuid := (SELECT auth.uid());   -- NULL for migrations / service role
+  v_prefix      text;
+  v_seq         bigint;
+  v_name        text;
+  v_phone       text;
+  v_territory   uuid;
+  v_inherited   boolean := false;
+  -- "Did this reference change?" flags, computed once. They are set from IF/ELSE
+  -- rather than "TG_OP = 'INSERT' OR NEW.x IS DISTINCT FROM OLD.x", because OLD is
+  -- unassigned on INSERT and SQL does not guarantee OR/AND short-circuits. Blocks 4-6
+  -- below use a nested IF for the same reason.
+  c_contact     boolean := true;
+  c_type        boolean := true;
+  c_product     boolean := true;
+  c_territory   boolean := true;
+  c_created_by  boolean := true;
 BEGIN
-  -- 1. Asset code (INSERT only).
+  IF TG_OP = 'UPDATE' THEN
+    c_contact    := NEW.contact_id    IS DISTINCT FROM OLD.contact_id;
+    c_type       := NEW.asset_type_id IS DISTINCT FROM OLD.asset_type_id;
+    c_product    := NEW.product_id    IS DISTINCT FROM OLD.product_id;
+    c_territory  := NEW.territory_id  IS DISTINCT FROM OLD.territory_id;
+    c_created_by := NEW.created_by    IS DISTINCT FROM OLD.created_by;
+  END IF;
+
+  -- ── 1. Asset code assignment (INSERT only, only when null/blank) ──
+  -- A code is printed on labels and quoted to customers, so it is issued once. An
+  -- importer may supply its own code; it is then kept as given (uniqueness is
+  -- enforced by customer_assets_uniq_code). The prefix lives in account settings
+  -- and only affects NEW codes; the counter itself is prefix-independent.
   IF TG_OP = 'INSERT' AND (NEW.asset_code IS NULL OR btrim(NEW.asset_code) = '') THEN
     SELECT coalesce(nullif(btrim(a.settings->'service_settings'->>'asset_code_prefix'), ''), 'AST')
       INTO v_prefix
       FROM accounts a WHERE a.id = NEW.account_id;
-    v_prefix := coalesce(v_prefix, 'AST');   -- no such account row: FK will reject the insert anyway
+    v_prefix := coalesce(v_prefix, 'AST');   -- no such account row: the FK rejects the insert anyway
     v_seq := public.get_next_asset_number(NEW.account_id);
     -- greatest(): lpad() TRUNCATES when the number is wider than the pad, which
     -- would wrap code 1,000,000 into 100000 and collide. Pad to at least 6.
     NEW.asset_code := v_prefix || '-' || lpad(v_seq::text, greatest(6, length(v_seq::text)), '0');
   END IF;
 
-  -- 2 + 3. One contact lookup serves both, and only when something needs it.
-  IF NEW.territory_id IS NULL OR TG_OP = 'INSERT' THEN
+  -- ── 2. Territory inheritance ──
+  -- Inherit from the contact ONLY WHEN THE ASSET'S OWN VALUE IS NULL. Never
+  -- overwrite an explicit value: the machine may sit somewhere other than the
+  -- customer's registered address, and Phase 2 area-based assignment must follow
+  -- the MACHINE, not the billing address.
+  --
+  -- The contact lookup is also the TENANT-INTEGRITY check for contact_id: it is
+  -- scoped to NEW.account_id, so a contact belonging to another tenant finds no row
+  -- and we RAISE instead of quietly leaving snapshots and territory empty. One query
+  -- serves inheritance, snapshots and that check, and it is skipped when nothing
+  -- needs it (an UPDATE that keeps its contact and already has a territory).
+  IF TG_OP = 'INSERT' OR c_contact OR NEW.territory_id IS NULL THEN
     SELECT c.territory_id, c.name, c.phone
       INTO v_territory, v_name, v_phone
       FROM contacts c
      WHERE c.id = NEW.contact_id AND c.account_id = NEW.account_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'customer_assets: contact % does not exist in account %',
+        NEW.contact_id, NEW.account_id USING ERRCODE = 'foreign_key_violation';
+    END IF;
 
-    -- 2. Territory: inherit only when the asset has none of its own.
-    IF NEW.territory_id IS NULL THEN
+    IF NEW.territory_id IS NULL AND v_territory IS NOT NULL THEN
       NEW.territory_id := v_territory;
+      v_inherited := true;    -- came from an in-account contact; block 6 need not re-check it
     END IF;
+  END IF;
 
-    -- 3. Snapshots: INSERT only, never refreshed on UPDATE.
-    IF TG_OP = 'INSERT' THEN
-      NEW.customer_name_snapshot  := coalesce(NEW.customer_name_snapshot,  v_name);
-      NEW.customer_phone_snapshot := coalesce(NEW.customer_phone_snapshot, v_phone);
+  -- ── 3. Customer snapshots (INSERT only, never refreshed on UPDATE) ──
+  -- A snapshot that tracks the live record is not a snapshot: contacts get renamed,
+  -- phones change, duplicates get merged, and the asset's history must not rewrite
+  -- itself. coalesce(NEW.x, contact value) lets an importer supply the historical
+  -- name/phone from a file when they differ from today's contact record.
+  IF TG_OP = 'INSERT' THEN
+    NEW.customer_name_snapshot  := coalesce(NEW.customer_name_snapshot,  v_name);
+    NEW.customer_phone_snapshot := coalesce(NEW.customer_phone_snapshot, v_phone);
+  END IF;
+
+  -- ── 4. Archive / restore guard (UPDATE, either direction of deleted_at) ──
+  -- Archiving is a soft delete, i.e. an UPDATE of deleted_at, so RLS alone would let
+  -- anyone with edit_service_assets do it while delete_service_assets governs only a
+  -- hard DELETE this product never performs. The database must refuse what the UI
+  -- refuses (spec section 11), so the delete right is enforced here. Restoring is
+  -- the same privilege as archiving. Bypassed when auth.uid() IS NULL (migrations,
+  -- service role), exactly like get_next_asset_number().
+  -- delete_service_assets is not registered in the permission catalogue until Task 5;
+  -- has_permission() returns true for owner/admin regardless, so this is correct in
+  -- the meantime (non-admins are simply refused until the key exists and is granted).
+  IF TG_OP = 'UPDATE' THEN
+    IF (OLD.deleted_at IS NULL) IS DISTINCT FROM (NEW.deleted_at IS NULL)
+       AND v_uid IS NOT NULL
+       AND NOT public.has_permission(v_uid, NEW.account_id, 'delete_service_assets'::text) THEN
+      RAISE EXCEPTION 'customer_assets: archiving or restoring an asset requires delete_service_assets'
+        USING ERRCODE = 'insufficient_privilege';
     END IF;
+  END IF;
+
+  -- ── 5. asset_code is immutable after insert ──
+  -- The code is printed on labels and referenced through service history, and a
+  -- later prefix change must affect new assets only, never issued codes. A genuine
+  -- typo is fixed by archiving and recreating. Applies to everyone, including
+  -- migrations: integrity is not a permission question. (customer_assets_code_not_blank
+  -- guards a different thing: a blank code.)
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.asset_code IS DISTINCT FROM OLD.asset_code THEN
+      RAISE EXCEPTION 'customer_assets: asset_code is immutable (cannot change % to %)',
+        OLD.asset_code, NEW.asset_code USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+  END IF;
+
+  -- ── 6. Tenant integrity of the remaining references ──
+  -- The FKs only prove a row exists SOMEWHERE, so a member of tenant A could store
+  -- tenant B's asset type, product or territory on their own asset. Each reference is
+  -- checked only when non-NULL and, on UPDATE, only when it actually changed, so a
+  -- bulk import or an unrelated edit does not re-pay for unchanged values. Applied
+  -- unconditionally (not skipped for auth.uid() IS NULL): a cross-tenant row is
+  -- wrong for the service role too. (The contact was checked in block 2.)
+  -- Archived/inactive masters are still accepted: existing assets may keep them.
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.account_id IS DISTINCT FROM OLD.account_id THEN
+      -- Moving a row between tenants would bypass every check above, which are all
+      -- scoped to the account_id at write time.
+      RAISE EXCEPTION 'customer_assets: account_id cannot be changed'
+        USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+  END IF;
+
+  IF NEW.asset_type_id IS NOT NULL AND c_type
+     AND NOT EXISTS (SELECT 1 FROM asset_types t
+                      WHERE t.id = NEW.asset_type_id AND t.account_id = NEW.account_id) THEN
+    RAISE EXCEPTION 'customer_assets: asset_type_id % does not exist in account %',
+      NEW.asset_type_id, NEW.account_id USING ERRCODE = 'foreign_key_violation';
+  END IF;
+
+  IF NEW.product_id IS NOT NULL AND c_product
+     AND NOT EXISTS (SELECT 1 FROM products p
+                      WHERE p.id = NEW.product_id AND p.account_id = NEW.account_id) THEN
+    RAISE EXCEPTION 'customer_assets: product_id % does not exist in account %',
+      NEW.product_id, NEW.account_id USING ERRCODE = 'foreign_key_violation';
+  END IF;
+
+  IF NEW.territory_id IS NOT NULL AND c_territory AND NOT v_inherited
+     AND NOT EXISTS (SELECT 1 FROM territories tr
+                      WHERE tr.id = NEW.territory_id AND tr.account_id = NEW.account_id) THEN
+    RAISE EXCEPTION 'customer_assets: territory_id % does not exist in account %',
+      NEW.territory_id, NEW.account_id USING ERRCODE = 'foreign_key_violation';
+  END IF;
+
+  IF NEW.created_by IS NOT NULL AND c_created_by
+     AND NOT EXISTS (SELECT 1 FROM profiles pr
+                      WHERE pr.id = NEW.created_by AND pr.account_id = NEW.account_id) THEN
+    RAISE EXCEPTION 'customer_assets: created_by % is not a member of account %',
+      NEW.created_by, NEW.account_id USING ERRCODE = 'foreign_key_violation';
   END IF;
 
   NEW.updated_at := now();
