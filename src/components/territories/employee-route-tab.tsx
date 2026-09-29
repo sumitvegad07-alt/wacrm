@@ -24,6 +24,7 @@ import {
   Clock,
   ArrowUpDown,
   Filter,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +70,7 @@ interface RouteCustomerItem {
   sequence: number;
   route_id: string;
   contact_id: string;
+  must_visit?: boolean;
   contacts?: any;
 }
 
@@ -375,7 +377,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       try {
         const { data: rcRows, error } = await supabase
           .from("route_customers")
-          .select("id, sequence, route_id, contact_id, contacts(id, name, company, address)")
+          .select("id, sequence, route_id, contact_id, must_visit, contacts(id, name, company, address)")
           .eq("route_id", routeId)
           .is("archived_at", null)
           .order("sequence", { ascending: true });
@@ -898,6 +900,24 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       fetchRouteCustomers(selectedRoute.id);
     } catch (err: any) {
       toast.error(err.message || "Failed to remove customer");
+    }
+  };
+
+  // Mark / unmark a stop the rep must not skip. Saves on the spot -- unlike the
+  // sequence it needs no re-approval, because it changes what the rep is told
+  // about a stop, not the order the route runs in.
+  const toggleMustVisit = async (rowId: string, next: boolean) => {
+    const before = routeCustomers;
+    setRouteCustomers((prev) =>
+      prev.map((rc) => (rc.id === rowId ? { ...rc, must_visit: next } : rc))
+    );
+    const { error } = await supabase
+      .from("route_customers")
+      .update({ must_visit: next })
+      .eq("id", rowId);
+    if (error) {
+      setRouteCustomers(before);
+      toast.error(error.message || "Failed to update must visit");
     }
   };
 
@@ -1766,7 +1786,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                   {/* Top Banner */}
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-muted-foreground">
-                      {routeCustomers.length} customers. Visited top to bottom. Drag or click arrows to order.
+                      {routeCustomers.length} customers. Visited top to bottom. Drag or click arrows to order. Tap the star to mark a customer as must visit.
                     </p>
                     <div className="flex items-center gap-3">
                       {selectedRouteArea && (
@@ -1857,6 +1877,24 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                                 <p className="text-sm text-muted-foreground truncate mt-0.5">{address}</p>
                               </div>
                             </div>
+
+                            {/* Must-visit toggle. Unmarked is the resting state and shows
+                                only a faint outline, so a route with none marked reads
+                                exactly as it did before. */}
+                            <button
+                              type="button"
+                              onClick={() => toggleMustVisit(rc.id, !rc.must_visit)}
+                              aria-pressed={Boolean(rc.must_visit)}
+                              aria-label={rc.must_visit ? "Unmark as must visit" : "Mark as must visit"}
+                              title={rc.must_visit ? "Must visit — click to unmark" : "Mark as must visit"}
+                              className={
+                                rc.must_visit
+                                  ? "p-2 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors"
+                                  : "p-2 rounded-lg text-muted-foreground/40 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
+                              }
+                            >
+                              <Star className={rc.must_visit ? "h-5 w-5 fill-current" : "h-5 w-5"} />
+                            </button>
 
                             {/* Remove Customer button */}
                             <button
