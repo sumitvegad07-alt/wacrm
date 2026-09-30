@@ -320,7 +320,7 @@ export async function POST(req: Request) {
     // FSM line, so no other tenant ever gets a service role. Same flat
     // { key: true } permission shape as Sales Executive above.
     //
-    // Phase 1 = customer assets + service settings, so that is all these carry.
+    // Phase 1 = customer assets, so that is all these carry.
     // Deliberately NOT seeded: any WFA right (visits, expenses, location) even
     // though an FSM plan includes the WFA line — service visits are Phase 3 —
     // and any create_service_jobs right (grantable, but OFF by default, and
@@ -348,7 +348,9 @@ export async function POST(req: Request) {
               delete_service_assets: true,
               import_service_assets: true,
               export_service_assets: true,
-              manage_service_settings: true,
+              // manage_service_settings is deliberately NOT seeded: spec §3 gives the
+              // Service Manager settings access only when granted (asset types are
+              // a master). Owner/admin resolve all-true; the right stays grantable.
             },
           },
           {

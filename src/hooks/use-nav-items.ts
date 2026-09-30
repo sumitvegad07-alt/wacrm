@@ -31,6 +31,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
     hasCRM,
     hasWFA,
     hasSFA,
+    hasFSM,
     isModuleEnabled,
     moduleSettings,
   } = useAuth();
@@ -43,8 +44,15 @@ export function useVisibleNavItems(): FlatNavItem[] {
       attendanceFencingOn(readGeoFencing(account?.settings)),
     );
 
-    const lineEnabled = (line: ProductLine) =>
-      line === "crm" ? hasCRM : line === "wfa" ? hasWFA : hasSFA;
+    // Keyed by ProductLine: a new line is a compile error here until it is given
+    // an entitlement, so an unrecognised line can never fall through to another.
+    const owns: Record<ProductLine, boolean> = {
+      crm: hasCRM,
+      wfa: hasWFA,
+      sfa: hasSFA,
+      fsm: hasFSM,
+    };
+    const lineEnabled = (line: ProductLine) => owns[line];
 
     const canView = (item: {
       href: string;
@@ -114,6 +122,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
     hasCRM,
     hasWFA,
     hasSFA,
+    hasFSM,
     isModuleEnabled,
   ]);
 }

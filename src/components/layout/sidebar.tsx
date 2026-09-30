@@ -484,6 +484,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     hasCRM,
     hasWFA,
     hasSFA,
+    hasFSM,
     hasPermission,
     isModuleEnabled,
     moduleSettings,
@@ -528,8 +529,15 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
-  const lineEnabled = (line: ProductLine) =>
-    line === "crm" ? hasCRM : line === "wfa" ? hasWFA : hasSFA;
+  // Keyed by ProductLine: a new line is a compile error here until it is given
+  // an entitlement, so an unrecognised line can never fall through to another.
+  const owns: Record<ProductLine, boolean> = {
+    crm: hasCRM,
+    wfa: hasWFA,
+    sfa: hasSFA,
+    fsm: hasFSM,
+  };
+  const lineEnabled = (line: ProductLine) => owns[line];
 
   const canViewItem = (item: NavItem): boolean => {
     // Getting Started disappears from the menu once implementation is complete.

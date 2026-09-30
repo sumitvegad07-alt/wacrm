@@ -14,7 +14,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 // never sees Orders / Outstanding / Opening Stock, etc. `configModule` further
 // hides opt-in modules that are toggled off. Entries with neither are base
 // features shown on every plan.
-type ProductLine = "crm" | "wfa" | "sfa";
+type ProductLine = "crm" | "wfa" | "sfa" | "fsm";
 const MODULES: {
   key: string;
   label: string;
@@ -35,11 +35,18 @@ const MODULES: {
 ];
 
 export default function ImportHubPage() {
-  const { hasPermission, hasCRM, hasWFA, hasSFA, isModuleEnabled } = useAuth();
+  const { hasPermission, hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled } = useAuth();
   const canImport = hasPermission(PERMISSIONS.IMPORT.DATA);
 
-  const lineEnabled = (line?: ProductLine) =>
-    !line || (line === "crm" ? hasCRM : line === "wfa" ? hasWFA : hasSFA);
+  // Keyed by ProductLine: a new line is a compile error here until it is given
+  // an entitlement, so an unrecognised line can never fall through to another.
+  const owns: Record<ProductLine, boolean> = {
+    crm: hasCRM,
+    wfa: hasWFA,
+    sfa: hasSFA,
+    fsm: hasFSM,
+  };
+  const lineEnabled = (line?: ProductLine) => !line || owns[line];
   const visibleModules = MODULES.filter(
     (m) => lineEnabled(m.line) && (!m.configModule || isModuleEnabled(m.configModule as never)),
   );
