@@ -12,7 +12,7 @@ import {
   Table2,
 } from "lucide-react";
 import { inr } from "@/lib/proposals/format";
-import { PLAN_IDS, PLAN_LABEL, type PlanId } from "@/lib/plans/catalog";
+import { PLAN_LABEL, type PlanId } from "@/lib/plans/catalog";
 import {
   BILLING_TERMS,
   MIN_TICKET,
@@ -23,13 +23,17 @@ import {
   entryTicket,
   quote,
   renewalDate,
-  termRatePerMonth,
   type BillingTerm,
 } from "@/lib/plans/pricing";
 import { getTemplate } from "@/lib/proposals/registry";
 import { todayInIndia } from "@/lib/proposals/today";
+import { TermCards } from "./term-cards";
+import { quotablePlans } from "./quotable-plans";
 
 const DISCOUNT_CHIPS = [0, 5, 10, 15, 20];
+
+/** Static: the approved-price plan list does not change at runtime. */
+const QUOTABLE = quotablePlans();
 type Tab = "table" | "quote";
 
 function Money({ value, className = "" }: { value: number; className?: string }) {
@@ -68,7 +72,7 @@ export default function CalculatorClient() {
   /** Every plan × every term, for the table view. */
   const grid = useMemo(
     () =>
-      PLAN_IDS.map((p) => ({
+      QUOTABLE.map((p) => ({
         plan: p,
         quotes: BILLING_TERMS.map((t) => quote({ plan: p, users, term: t, discountPct, gstRate })),
       })),
@@ -129,6 +133,36 @@ export default function CalculatorClient() {
     if (customer.trim()) params.set("customer", customer.trim());
     window.open(`/print/quote?${params.toString()}`, "_blank");
   }
+
+  /**
+   * The plan picker, on BOTH tabs.
+   *
+   * It used to exist only on "Build a quote", so the screen that opens first
+   * showed a table of every plan with no way to say which one was being
+   * quoted — which reads as a fixed price that ignores what you type.
+   */
+  const planPicker = (
+    <div>
+      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+        Plan
+      </label>
+      <div className="flex flex-wrap gap-2">
+        {QUOTABLE.map((p) => (
+          <button
+            key={p}
+            onClick={() => setPlan(p)}
+            className={`h-10 px-3 text-sm rounded-lg border transition-colors ${
+              plan === p
+                ? "bg-primary text-primary-foreground border-primary font-semibold"
+                : "bg-background border-border text-foreground hover:bg-muted"
+            }`}
+          >
+            {PLAN_LABEL[p]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   /** Users / discount / GST — the inputs both tabs share. */
   const dealInputs = (
@@ -234,7 +268,7 @@ export default function CalculatorClient() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
         <TabButton active={tab === "table"} onClick={() => setTab("table")} icon={<Table2 className="h-4 w-4" />}>
-          Price table
+          Quick price
         </TabButton>
         <TabButton active={tab === "quote"} onClick={() => setTab("quote")} icon={<FileText className="h-4 w-4" />}>
           Build a quote
@@ -242,9 +276,64 @@ export default function CalculatorClient() {
       </div>
 
       {tab === "table" ? (
-        /* ══════════ TAB 1 · the whole price list, priced for this deal ══════════ */
+        /* ══════════ TAB 1 · this plan on every term, then the whole price list ══════════ */
         <div className="space-y-4">
-          <div className="bg-card border border-border rounded-xl p-5">{dealInputs}</div>
+          <div className="bg-card border border-border rounded-xl p-5 space-y-5">
+            {planPicker}
+            {dealInputs}
+          </div>
+
+          {/* The headline answer: one plan, three terms, side by side. */}
+          <div className="bg-card border border-border rounded-xl p-5">
+            <TermCards
+              plan={plan}
+              users={users}
+              discountPct={discountPct}
+              gstEnabled={gstEnabled}
+              selectedTerm={term}
+              onPick={setTerm}
+            />
+
+            {q.belowRecommended && (
+              <div className="mt-4 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  {q.minUsers} users is the recommendation for {PLAN_LABEL[plan]}. Quoting{" "}
+                  {q.usersBilled} is your call — the figures above are for {q.usersBilled}, as
+                  entered.
+                </span>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                onClick={createProposal}
+                disabled={creating}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+              >
+                {creating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+                Create proposal from this
+              </button>
+              <button
+                onClick={openQuotePdf}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm font-semibold hover:bg-muted"
+              >
+                <Printer className="h-4 w-4" />
+                Open quote PDF
+              </button>
+              <button
+                onClick={() => setTab("quote")}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-background text-muted-foreground text-sm font-semibold hover:bg-muted"
+              >
+                Full breakdown
+              </button>
+            </div>
+            {err && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{err}</p>}
+          </div>
 
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-border">
@@ -355,26 +444,7 @@ export default function CalculatorClient() {
         /* ══════════ TAB 2 · one deal, quotation style ══════════ */
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5 space-y-5 h-fit">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Plan
-              </label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                {PLAN_IDS.map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setPlan(p)}
-                    className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-                      plan === p
-                        ? "bg-primary text-primary-foreground border-primary font-semibold"
-                        : "bg-background border-border text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {PLAN_LABEL[p]}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {planPicker}
 
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
