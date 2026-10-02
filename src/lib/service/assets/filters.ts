@@ -2,6 +2,7 @@
 // and reusable by both the list screen's URL handling and api.ts's query building.
 
 import type { AssetStatus } from '../types';
+import { EXPIRING_WINDOW_DAYS } from '../settings';
 
 export type WarrantyFilter = 'expiring' | 'expired';
 
@@ -156,9 +157,8 @@ export function buildAssetSearchOr(q: string): string {
 // warranty_end is a DATE, so the list filters on it in SQL (a post-filter would break pagination).
 // The definition of "expiring" / "expired" lives in warrantyState() (../settings), which decides
 // the pill colour; this function only expresses the SAME rule as date bounds so the filter and the
-// pill cannot disagree. The 30-day window is repeated here because settings.ts does not export it;
-// the test file checks the two against each other across every boundary day, so drift fails CI.
-const EXPIRING_WINDOW_DAYS = 30;
+// pill cannot disagree. The 30-day window is the one constant exported by settings.ts, and the test
+// file still checks the two against each other across every boundary day.
 const DAY_MS = 86_400_000;
 
 const isoDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);

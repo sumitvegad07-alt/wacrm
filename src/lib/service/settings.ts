@@ -64,7 +64,8 @@ export function normalizeServiceSettings(raw: unknown): ServiceSettings {
 }
 
 const DAY_MS = 86_400_000;
-const EXPIRING_WINDOW_DAYS = 30;
+/** Days before warranty_end at which a warranty reads as "expiring". Shared with the asset list filter. */
+export const EXPIRING_WINDOW_DAYS = 30;
 
 export function warrantyState(
   asset: { warranty_end: string | null },

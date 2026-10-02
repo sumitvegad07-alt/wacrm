@@ -33,6 +33,8 @@ export class AssetError extends Error {
   readonly serial?: string;
   /** duplicate_serial only: the asset that already has it, once api.ts has looked it up. */
   readonly conflict?: AssetConflict | null;
+  /** duplicate_code only: the asset code that collided, when known. */
+  readonly assetCode?: string;
   /** The raw database message, for logs. Never show this to a user. */
   readonly raw?: string;
   readonly retryable: boolean;
@@ -40,27 +42,47 @@ export class AssetError extends Error {
   constructor(
     kind: AssetErrorKind,
     message: string,
-    opts: { code?: string; serial?: string; conflict?: AssetConflict | null; raw?: string } = {},
+    opts: {
+      code?: string;
+      serial?: string;
+      assetCode?: string;
+      conflict?: AssetConflict | null;
+      raw?: string;
+    } = {},
   ) {
     super(message);
     this.name = 'AssetError';
     this.kind = kind;
     this.code = opts.code;
     this.serial = opts.serial;
+    this.assetCode = opts.assetCode;
     this.conflict = opts.conflict;
     this.raw = opts.raw;
     this.retryable = kind === 'network';
   }
 
-  /** duplicate_serial: a copy carrying the conflicting asset and the "already exists on asset X" message. */
+  /**
+   * duplicate_serial / duplicate_code: a copy carrying the conflicting asset. For a serial the
+   * message becomes "Serial 12345 already exists on asset AST-000091"; a code collision keeps its message.
+   */
   withConflict(conflict: AssetConflict | null): AssetError {
-    if (this.kind !== 'duplicate_serial') return this;
-    return new AssetError('duplicate_serial', duplicateSerialMessage(this.serial, conflict), {
-      code: this.code,
-      serial: this.serial,
-      conflict,
-      raw: this.raw,
-    });
+    if (this.kind === 'duplicate_serial') {
+      return new AssetError('duplicate_serial', duplicateSerialMessage(this.serial, conflict), {
+        code: this.code,
+        serial: this.serial,
+        conflict,
+        raw: this.raw,
+      });
+    }
+    if (this.kind === 'duplicate_code') {
+      return new AssetError('duplicate_code', this.message, {
+        code: this.code,
+        assetCode: this.assetCode,
+        conflict,
+        raw: this.raw,
+      });
+    }
+    return this;
   }
 }
 
@@ -90,8 +112,14 @@ function referenceLabel(text: string): string | null {
  * Convert a raw Supabase/Postgres error into a typed AssetError with a user-facing message.
  * `ctx.serial` is the serial the caller was saving; it cannot be read back reliably from the
  * database error (the unique index is on lower(serial_no), so the reported key is lower-cased).
+ * `ctx.assetCode` / `ctx.restoring` shape the code-collision message: when an archived asset is
+ * restored and its code has since been given to another live asset, the user needs to be told to
+ * give it a new code, not shown "try again".
  */
-export function mapAssetError(error: unknown, ctx: { serial?: string } = {}): AssetError {
+export function mapAssetError(
+  error: unknown,
+  ctx: { serial?: string; assetCode?: string; restoring?: boolean } = {},
+): AssetError {
   if (error instanceof AssetError) return error;
   const e = (error ?? {}) as RawPgError;
   const code = e.code || undefined;
@@ -116,11 +144,12 @@ export function mapAssetError(error: unknown, ctx: { serial?: string } = {}): As
         });
       }
       if (/customer_assets_uniq_code/.test(text)) {
-        return new AssetError(
-          'duplicate_code',
-          'That asset code is already in use. Please try saving again.',
-          { code, raw },
-        );
+        const message = ctx.restoring
+          ? `Asset code ${ctx.assetCode ?? 'of this asset'} has since been given to another asset. Give this asset a new code, then restore it.`
+          : ctx.assetCode
+            ? `Asset code ${ctx.assetCode} is already used by another asset.`
+            : 'That asset code is already in use. Please try saving again.';
+        return new AssetError('duplicate_code', message, { code, assetCode: ctx.assetCode, raw });
       }
       return new AssetError('unknown', raw, { code, raw });
 
@@ -158,4 +187,23 @@ export function mapAssetError(error: unknown, ctx: { serial?: string } = {}): As
     default:
       return new AssetError('unknown', raw, { code, raw });
   }
+}
+
+/**
+ * True when PostgREST refused a page because the offset is past the last row (HTTP 416, code
+ * PGRST103 "Requested range not satisfiable"). That is an empty page, not a failure.
+ */
+export function isRangeNotSatisfiable(error: unknown, status?: number): boolean {
+  if (status === 416) return true;
+  const e = (error ?? {}) as RawPgError;
+  return e.code === 'PGRST103' || /range not satisfiable/i.test(e.message ?? '');
+}
+
+/**
+ * The real row count PostgREST reports in a 416's details ("An offset of 100 was requested, but
+ * there are only 3 rows."), or null when it did not say.
+ */
+export function rangeRowCount(error: unknown): number | null {
+  const m = /only (\d+) rows?/i.exec(((error ?? {}) as RawPgError).details ?? '');
+  return m ? Number(m[1]) : null;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapAssetError, AssetError } from './errors';
+import { mapAssetError, AssetError, isRangeNotSatisfiable, rangeRowCount } from './errors';
 
 const pg = (code: string, message: string, extra: Record<string, string> = {}) => ({ code, message, ...extra });
 
@@ -88,5 +88,56 @@ describe('mapAssetError', () => {
     expect(mapAssetError(own)).toBe(own);
     expect(mapAssetError(pg('XX000', 'boom')).kind).toBe('unknown');
     expect(mapAssetError(null).kind).toBe('unknown');
+  });
+});
+
+describe('duplicate_code messages', () => {
+  const dup = pg('23505', 'duplicate key value violates unique constraint "customer_assets_uniq_code"');
+
+  it('tells the user to give the asset a new code when a restore collides', () => {
+    const e = mapAssetError(dup, { restoring: true, assetCode: 'AST-000012' });
+    expect(e.kind).toBe('duplicate_code');
+    expect(e.assetCode).toBe('AST-000012');
+    expect(e.message).toBe(
+      'Asset code AST-000012 has since been given to another asset. Give this asset a new code, then restore it.',
+    );
+  });
+
+  it('names the code on a collision that is not a restore', () => {
+    expect(mapAssetError(dup, { assetCode: 'AST-000099' }).message).toBe('Asset code AST-000099 is already used by another asset.');
+  });
+
+  it('withConflict keeps the message and attaches the holder of the code', () => {
+    const e = mapAssetError(dup, { restoring: true, assetCode: 'AST-000012' }).withConflict({ id: 'x', asset_code: 'AST-000012' });
+    expect(e.kind).toBe('duplicate_code');
+    expect(e.conflict).toEqual({ id: 'x', asset_code: 'AST-000012' });
+    expect(e.assetCode).toBe('AST-000012');
+    expect(e.message).toMatch(/Give this asset a new code, then restore it/);
+  });
+});
+
+describe('range helpers (offset past the last row)', () => {
+  const err = {
+    code: 'PGRST103',
+    message: 'Requested range not satisfiable',
+    details: 'An offset of 100 was requested, but there are only 3 rows.',
+  };
+
+  it('recognises a 416 by status, by code and by message', () => {
+    expect(isRangeNotSatisfiable({}, 416)).toBe(true);
+    expect(isRangeNotSatisfiable(err)).toBe(true);
+    expect(isRangeNotSatisfiable({ message: 'Requested range not satisfiable' })).toBe(true);
+  });
+
+  it('does not treat other errors as an empty page', () => {
+    expect(isRangeNotSatisfiable({ code: '42501', message: 'denied' }, 403)).toBe(false);
+    expect(isRangeNotSatisfiable(null)).toBe(false);
+  });
+
+  it('reads the real row count from the details, or null', () => {
+    expect(rangeRowCount(err)).toBe(3);
+    expect(rangeRowCount({ details: 'An offset of 5 was requested, but there are only 1 row.' })).toBe(1);
+    expect(rangeRowCount({ details: 'nothing useful' })).toBeNull();
+    expect(rangeRowCount(undefined)).toBeNull();
   });
 });

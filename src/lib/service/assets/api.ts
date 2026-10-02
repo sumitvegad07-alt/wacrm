@@ -15,7 +15,13 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AssetStatus, CustomerAsset } from '../types';
-import { AssetError, mapAssetError, type AssetConflict } from './errors';
+import {
+  AssetError,
+  mapAssetError,
+  isRangeNotSatisfiable,
+  rangeRowCount,
+  type AssetConflict,
+} from './errors';
 import { buildAssetSearchOr, warrantyDateBounds, type AssetFilters } from './filters';
 
 // ── Shapes ─────────────────────────────────────────────────────────────────────
@@ -128,11 +134,16 @@ export async function listAssets(
   const term = filters.q?.trim();
   if (term) q = q.or(buildAssetSearchOr(term));
 
-  const { data, error, count } = await q
+  const { data, error, count, status } = await q
     .order('created_at', { ascending: false })
     .order('id', { ascending: true })
     .range(offset, offset + limit - 1);
-  if (error) throw mapAssetError(error);
+  if (error) {
+    // An offset past the last row (e.g. a stale bookmarked page) is a 416 from PostgREST. That is an
+    // empty page, not a failure: report the real total when PostgREST gave one, otherwise zero.
+    if (isRangeNotSatisfiable(error, status)) return { rows: [], total: rangeRowCount(error) ?? 0 };
+    throw mapAssetError(error);
+  }
 
   // Untyped client: the select string is the contract, so the cast is the single place that states it.
   const rows = (data ?? []) as unknown as AssetListRow[];
@@ -198,33 +209,92 @@ function buildPayload(input: Partial<AssetFormFields>, mode: 'create' | 'update'
 /**
  * Look up the live asset that holds `serial` (case-insensitive, matching the unique index on
  * lower(serial_no)), so the form can say "Serial 12345 already exists on asset AST-000091".
+ *
+ * Tenant scope is enforced IN SQL with `.eq('account_id', ...)`. Row Level Security is not enough
+ * here: its policy is is_account_member(account_id), which admits EVERY account the caller belongs
+ * to, so an unscoped query could return another company's asset (and, with the limit applied in SQL
+ * before any JS check, push the real conflict out of the page). It fails closed: with no account id
+ * (and no `ownerId` to derive one from) it returns null rather than run an unscoped query. Because
+ * the SQL filter is authoritative there is deliberately no second account check in JS.
+ *
+ * Everything, including the account lookup used by updates, runs inside the try/catch: this is a
+ * decorator on an error that already happened, so it must never be able to replace that error.
  * Best effort: any failure returns null and the caller still reports the duplicate.
+ *
+ * scope.accountId: the account to search (create knows it).
+ * scope.ownerId: the asset being updated; its account is looked up when accountId is absent, and
+ *   the asset itself is excluded from the search.
  */
 async function findSerialConflict(
   supabase: SupabaseClient,
   serial: string,
-  scope: { accountId?: string | null; excludeId?: string },
+  scope: { accountId?: string | null; ownerId?: string },
 ): Promise<AssetConflict | null> {
   try {
+    const accountId = scope.accountId ?? (scope.ownerId ? await accountOf(supabase, scope.ownerId) : null);
+    if (!accountId) return null;
+
     // A plain (non-.or) filter, so only the LIKE layer needs escaping; `*` cannot be escaped
-    // (PostgREST rewrites it), so candidates are re-checked for an exact match below.
+    // (PostgREST rewrites it), so candidates are re-checked for an exact serial match below. The
+    // limit is generous because a star can widen the pattern to several near-miss serials.
     const pattern = serial.replace(/[\\%_]/g, '\\$&').replace(/\*/g, '_');
     let q = supabase
       .from('customer_assets')
-      .select('id, account_id, asset_code, serial_no')
+      .select('id, asset_code, serial_no')
+      .eq('account_id', accountId)
       .is('deleted_at', null)
       .ilike('serial_no', pattern)
-      .limit(10);
-    if (scope.excludeId) q = q.neq('id', scope.excludeId);
+      .limit(100);
+    if (scope.ownerId) q = q.neq('id', scope.ownerId);
     const { data, error } = await q;
     if (error) return null;
     const wanted = serial.toLowerCase();
-    const hit = ((data ?? []) as { id: string; account_id: string; asset_code: string; serial_no: string | null }[]).find(
-      (r) => r.serial_no?.toLowerCase() === wanted && (!scope.accountId || r.account_id === scope.accountId),
+    const hit = ((data ?? []) as { id: string; asset_code: string; serial_no: string | null }[]).find(
+      (r) => r.serial_no?.toLowerCase() === wanted,
     );
     return hit ? { id: hit.id, asset_code: hit.asset_code } : null;
   } catch {
     return null;
+  }
+}
+
+async function accountOf(supabase: SupabaseClient, assetId: string): Promise<string | null> {
+  const { data } = await supabase.from('customer_assets').select('account_id').eq('id', assetId).maybeSingle();
+  return (data as { account_id: string } | null)?.account_id ?? null;
+}
+
+/**
+ * After a failed restore: the code that collided and the live asset now holding it, both scoped to
+ * the archived asset's own account in SQL. Best effort (null on any failure).
+ */
+async function findCodeCollision(
+  supabase: SupabaseClient,
+  assetId: string,
+  newCode?: string,
+): Promise<{ assetCode: string | null; conflict: AssetConflict | null }> {
+  try {
+    const { data: own } = await supabase
+      .from('customer_assets')
+      .select('account_id, asset_code')
+      .eq('id', assetId)
+      .maybeSingle();
+    const row = own as { account_id: string; asset_code: string } | null;
+    if (!row) return { assetCode: newCode ?? null, conflict: null };
+    const assetCode = newCode ?? row.asset_code;
+    const { data, error } = await supabase
+      .from('customer_assets')
+      .select('id, asset_code')
+      .eq('account_id', row.account_id)
+      .eq('asset_code', assetCode)
+      .is('deleted_at', null)
+      .neq('id', assetId)
+      .limit(1)
+      .maybeSingle();
+    if (error) return { assetCode, conflict: null };
+    const hit = data as { id: string; asset_code: string } | null;
+    return { assetCode, conflict: hit ? { id: hit.id, asset_code: hit.asset_code } : null };
+  } catch {
+    return { assetCode: newCode ?? null, conflict: null };
   }
 }
 
@@ -268,10 +338,8 @@ export async function updateAsset(
     const serial = payload.serial_no ?? undefined;
     const mapped = mapAssetError(error, { serial });
     if (mapped.kind !== 'duplicate_serial' || !serial) throw mapped;
-    // The conflict lookup needs the asset's own account so a user in several accounts is not shown another tenant's asset.
-    const own = await supabase.from('customer_assets').select('account_id').eq('id', id).maybeSingle();
-    const accountId = (own.data as { account_id: string } | null)?.account_id ?? null;
-    throw mapped.withConflict(await findSerialConflict(supabase, serial, { accountId, excludeId: id }));
+    // ownerId: the helper derives the asset's own account (inside its try/catch) so the lookup is account-scoped.
+    throw mapped.withConflict(await findSerialConflict(supabase, serial, { ownerId: id }));
   }
   if (!data) {
     throw new AssetError('not_found', 'Asset not found, or you do not have permission to edit it.');
@@ -295,6 +363,45 @@ export async function archiveAsset(supabase: SupabaseClient, id: string): Promis
   if (error) throw mapAssetError(error);
   if (!data) {
     throw new AssetError('not_found', 'Asset not found, already archived, or you do not have permission to archive it.');
+  }
+  return data as CustomerAsset;
+}
+
+/**
+ * Restore an archived asset (clears deleted_at). Needs the delete_service_assets right, same as
+ * archiving (trigger, 42501). Guarded by `deleted_at IS NOT NULL`.
+ *
+ * If the archived asset's code was reissued to a live asset in the meantime, the restore trips the
+ * unique-code index; this throws kind `duplicate_code` whose message says what to do, with
+ * `.conflict` set to the asset now holding the code. The way out is to restore WITH a new code:
+ * `restoreAsset(supabase, id, { newCode })` sets asset_code in the same UPDATE. The trigger allows
+ * exactly that because archived rows are exempt from asset_code immutability. Omit `newCode` for a
+ * plain restore.
+ */
+export async function restoreAsset(
+  supabase: SupabaseClient,
+  id: string,
+  opts: { newCode?: string } = {},
+): Promise<CustomerAsset> {
+  const newCode = opts.newCode?.trim() || undefined;
+  const patch: WritePayload = { deleted_at: null };
+  if (newCode) patch.asset_code = newCode;
+
+  const { data, error } = await supabase
+    .from('customer_assets')
+    .update(patch)
+    .eq('id', id)
+    .not('deleted_at', 'is', null)
+    .select('*')
+    .maybeSingle();
+  if (error) {
+    const mapped = mapAssetError(error, { restoring: !newCode, assetCode: newCode });
+    if (mapped.kind !== 'duplicate_code') throw mapped;
+    const { assetCode, conflict } = await findCodeCollision(supabase, id, newCode);
+    throw mapAssetError(error, { restoring: !newCode, assetCode: assetCode ?? undefined }).withConflict(conflict);
+  }
+  if (!data) {
+    throw new AssetError('not_found', 'Asset not found, not archived, or you do not have permission to restore it.');
   }
   return data as CustomerAsset;
 }
