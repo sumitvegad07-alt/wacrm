@@ -17,6 +17,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { serviceRoleKey } from "@/lib/supabase/service-role-key";
 import { ForbiddenError, UnauthorizedError } from "./account";
 import { isFounderEmail } from "./founder";
 
@@ -73,7 +74,7 @@ export async function requireSuperadmin(): Promise<SuperadminContext> {
  */
 export function serviceClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = serviceRoleKey();
 
   if (!url || !key) {
     throw new Error(

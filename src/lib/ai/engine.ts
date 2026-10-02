@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { generateEmbedding, generateRagResponse } from './knowledge-base';
+import { serviceRoleKey } from '@/lib/supabase/service-role-key';
 
 // We need an admin client to bypass RLS in background worker contexts
 function supabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    serviceRoleKey()!
   );
 }
 

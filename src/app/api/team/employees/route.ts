@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { ForbiddenError, requireRole, toErrorResponse } from "@/lib/auth/account";
+import { serviceRoleKey } from "@/lib/supabase/service-role-key";
 
 // Columns that decide what a profile is allowed to do. They are never accepted
 // from the request body: this route runs with the service-role key, which
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     // Creating a login account needs the service-role key (admin API). If it's not
     // configured, fail with a clear, actionable message instead of the cryptic
     // "supabaseKey is required" that createClient throws.
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    if (!serviceRoleKey() || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
       return NextResponse.json(
         { error: "Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it to .env.local (Supabase → Project Settings → API → service_role key) and restart the dev server." },
         { status: 500 }
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
     // Initialize Supabase admin client
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      serviceRoleKey()!
     );
 
     // Fetch the account to get user_count limit
@@ -160,7 +161,7 @@ export async function PATCH(req: NextRequest) {
     // all, so a bare request could set is_superadmin or reset any password.
     const ctx = await requireRole("admin");
 
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    if (!serviceRoleKey() || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
       return NextResponse.json(
         { error: "Server is missing SUPABASE_SERVICE_ROLE_KEY." },
         { status: 500 }
@@ -169,7 +170,7 @@ export async function PATCH(req: NextRequest) {
 
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      serviceRoleKey()!
     );
 
     const { data: target } = await supabaseAdmin

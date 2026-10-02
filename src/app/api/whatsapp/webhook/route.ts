@@ -12,6 +12,7 @@ import {
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
 import { dispatchInboundToAI } from '@/lib/ai/engine'
+import { serviceRoleKey } from '@/lib/supabase/service-role-key'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -26,7 +27,7 @@ function supabaseAdmin() {
   if (!_adminClient) {
     _adminClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      serviceRoleKey()!
     )
   }
   return _adminClient

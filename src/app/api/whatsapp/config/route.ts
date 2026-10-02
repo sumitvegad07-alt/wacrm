@@ -7,6 +7,7 @@ import {
   verifyPhoneNumber,
 } from '@/lib/whatsapp/meta-api'
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
+import { serviceRoleKey } from '@/lib/supabase/service-role-key'
 
 /**
  * Resolve the caller's account_id from their profile. Inlined here
@@ -41,7 +42,7 @@ function supabaseAdmin() {
   if (!_adminClient) {
     _adminClient = createAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      serviceRoleKey()!
     )
   }
   return _adminClient

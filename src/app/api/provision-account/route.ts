@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { SEED_COUNTRIES, SEED_INDIA_STATES, SEED_INDIA_DISTRICTS } from "@/lib/territories/seed-data.generated";
 import { ForbiddenError, getCurrentAccount, toErrorResponse } from "@/lib/auth/account";
 import { planLines } from "@/lib/plans/catalog";
+import { serviceRoleKey } from "@/lib/supabase/service-role-key";
 
 export async function POST(req: Request) {
   try {
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
     // Use admin client to bypass RLS for provisioning
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      serviceRoleKey()!
     );
 
     // Atomically claim the provisioning rights
