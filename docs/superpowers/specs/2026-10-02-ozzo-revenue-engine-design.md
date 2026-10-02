@@ -47,7 +47,7 @@ Decided in the brainstorming session on 2026-10-02. If one of these is wrong, ch
 | D1 | **Founder-only internal tool**, inside `/admin` | No plan gating, no rights registry, no mobile work, no support burden. If it is ever sold, most of it is a rewrite — accepted. |
 | D2 | **Operator concept in the schema from day one** | Every company, activity and deal carries `owner_id`. Adding 2–3 telecallers later is granting access, not a migration. |
 | D3 | **Source Adapter boundary** — 7 adapters documented, 1 built in R1 | The data-source question never blocks the rest of the engine. |
-| D4 | **Database + AI brain first, channels later** | R1 researches and scores real companies; outreach is by hand. No automated sending in R1. |
+| D4 | **Database + AI brain first; generate messages in R1, send them later** | R1 researches, scores **and writes the outreach** — WhatsApp, email, call script, LinkedIn — which you send by hand. No automated sending and no deliverability infrastructure in R1. *Generation* carries none of sending's cost: no domain, no provider, no warm-up, no Meta policy. |
 | D5 | **Spend caps live in the database**, not in code comments | A bug cannot run up a Google or Anthropic bill. |
 | D6 | **No LinkedIn adapter. No CAPTCHA or bot-detection bypass, ever.** | Some directories are simply not viable. Written down now rather than discovered later. |
 | D7 | **`re_*` tables are fully separate from tenant tables** | Nothing here can touch `contacts`, `leads`, `deals` or any customer's data. This is the main payoff of D1. |
@@ -72,10 +72,12 @@ Decided in the brainstorming session on 2026-10-02. If one of these is wrong, ch
 | G4 | Research per company down from ~30 min to under 2 min | Founder's own timing, recorded in the activity log |
 | G5 | One morning screen that says who to contact today | Revenue Command Center, R1 |
 | G6 | Never contact someone who said no | `re_suppressions` checked on every outreach screen |
+| G7 | Never be stuck on what to say, or which product to pitch | Every qualified company has drafted outreach plus four product-fit scores |
+| G8 | Walk into every demo prepared | A meeting brief generated from verified claims — in R1 |
 
 ### Non-goals for Release 1
 
-No automated email or WhatsApp sending · no meeting booking, demo-prep agent or sales coach · no website-visitor intelligence · no content studio · no mobile surface (ever, unless D1 changes) · nothing tenant-facing — no customer sees any of this.
+No automated email or WhatsApp **sending** — messages are generated in R1 and sent by hand · no meeting **booking** (calendar links and reminders are R4; the meeting *brief* is in R1) · no sales coach · no website-visitor intelligence · no content studio · no mobile surface (ever, unless D1 changes) · nothing tenant-facing — no customer sees any of this.
 
 ---
 
@@ -106,11 +108,14 @@ Release 1 has one user. The matrix still defines three human roles and — impor
 | View research evidence | yes | yes | own only | — | no |
 | **Write research claims** | **no** | no | no | **yes — only principal that can** | no |
 | **Write scores** | override only | no | no | yes | no |
-| View score + reasons | yes | yes | own only | read | no |
+| View score + reasons (incl. the four fit scores) | yes | yes | own only | read | no |
+| Generate outreach drafts | yes | yes | own only | yes — writes drafts | no |
+| Edit / approve an outreach draft | yes | yes | own only | **no** | no |
+| Generate a meeting brief | yes | yes | own only | yes — writes briefs | no |
 | Log an activity | yes | yes | own only | **no** | no |
 | View deal value / pipeline total | yes | yes | **hidden** | no | no |
 | Create / edit deal | yes | yes | no | no | no |
-| Generate a proposal | yes | no | no | no | no |
+| Generate a proposal draft | yes | no | no | yes — prefill only | no |
 | Manage suppressions | yes | add only | add only | no | no |
 | Configure source adapters + caps | yes | no | no | no | no |
 | Run a source harvest | yes | no | no | no | no |
@@ -120,7 +125,7 @@ Release 1 has one user. The matrix still defines three human roles and — impor
 
 ### The three rules this matrix encodes
 
-1. **The AI agent can never write a business record.** It writes only to `re_research_runs`, `re_research_claims` and `re_scores`. It cannot create a company, edit a contact, move a deal, or send anything. If the model hallucinates, the damage is confined to a row that is clearly labelled AI output.
+1. **The AI agent can never write a business record — only evidence and drafts.** It writes to `re_research_runs`, `re_research_claims`, `re_scores`, `re_outreach_drafts` and `re_meeting_briefs`. It cannot create a company, edit a contact, move a deal, or send anything. Drafts and briefs are explicitly *drafts*: a human reads and approves before use, and `approved_at` records that. If the model hallucinates, the damage is confined to a row clearly labelled AI output that nobody has yet acted on.
 2. **The founder cannot write a research claim.** Claims are machine-authored and evidence-bearing. A human who disagrees adds a score *override* or a company note — the claim history stays honest.
 3. **Money is a separate permission from data.** The Agency role sees companies and logs calls, but `value_inr` and the pipeline screen are hidden — enforced in RLS through a restricted view, not by hiding a button.
 
@@ -232,7 +237,12 @@ The unit of work. **A company, not a contact** — a company has many contacts, 
 | `icp_score` | integer | 0–100, denormalised from latest `re_scores` |
 | `icp_band` | text | `hot` \| `warm` \| `cold` |
 | `score_computed_at` | timestamptz | |
-| `ozzo_fit` | jsonb | `{crm, wfa, sfa, fsm}` booleans + a one-line reason each |
+| `fit_crm` / `fit_wfa` / `fit_sfa` / `fit_fsm` | integer | **0–100 each.** Four first-class scores, not booleans — they tell you *what to pitch* |
+| `best_fit_line` | text | `crm` \| `wfa` \| `sfa` \| `fsm`, the highest of the four; the single most actionable field on the record |
+| `dealer_count` / `distributor_count` | integer | from research — **better buying signals than employee count** (§5.1a) |
+| `branch_count` / `depot_count` | integer | from research |
+| `field_force_estimate` | integer | from research |
+| `territory_states` | text[] | states/regions the company visibly operates in |
 | `tags` | text[] | |
 | `notes` | text | |
 | `dedup_key` | text not null | **unique** — `domain`, falling back to `slug(name)` + `city` |
@@ -288,7 +298,7 @@ One immutable row per AI research pass. Never updated.
 | `id` | uuid pk | |
 | `research_run_id` | uuid not null | |
 | `company_id` | uuid not null | |
-| `claim_key` | text not null | `field_force_estimate`, `distributor_network`, `pain_point`, `products`, `locations`, `team_size`, `crm_fit`, `sfa_fit`, … |
+| `claim_key` | text not null | from the closed list in §5.1a — an unknown key fails the run rather than being stored |
 | `claim_value` | text not null | |
 | `confidence` | numeric | 0–1, model-reported |
 | `evidence_url` | text | **null means it is a guess** |
@@ -296,7 +306,24 @@ One immutable row per AI research pass. Never updated.
 | `is_verified` | boolean | generated: `evidence_url IS NOT NULL AND evidence_quote IS NOT NULL` |
 | `created_at` | timestamptz | |
 
-> **The evidence-or-flag rule.** The UI renders a claim as a fact only when `is_verified` is true, showing the quote and a link. When it is false the claim renders as **"AI guess — unverified"** in muted styling and is excluded from scoring. Without this rule the Research Agent becomes a confident liar and you pitch on invented numbers. It is the same discipline already applied to ROI figures in the brochures.
+> **The evidence-or-flag rule.** The UI renders a claim as a fact only when `is_verified` is true, showing the quote and a link. When it is false the claim renders as **"AI guess — unverified"** in muted styling and is excluded from scoring, from outreach drafts and from meeting briefs. Without this rule the Research Agent becomes a confident liar: it writes "I see you have 125 field reps", the prospect says "we have 11", and the meeting is over. It is the same discipline already applied to ROI figures in the brochures.
+
+### 5.1a Claim keys — distributor and territory intelligence
+
+A closed list, because OZZO's buyers are agri, seeds, fertiliser, pumps and manufacturing — **not SaaS**. For these companies, employee count is a poor signal and often actively misleading: a 40-person fertiliser business with 200 dealers and 25 field reps is a far better SFA prospect than a 300-person software firm. The claim keys are therefore built around **distribution and field presence**, not headcount.
+
+| Group | Claim keys | Why it matters |
+|---|---|---|
+| **Distribution** | `dealer_count`, `distributor_count`, `channel_model` (direct / dealer / distributor / hybrid), `distributor_named` | The core OZZO buying signal. Dealers imply field reps, which imply SFA. |
+| **Field presence** | `field_force_estimate`, `branch_count`, `depot_count`, `warehouse_count` | Reps to manage = the product. |
+| **Territory** | `territory_states`, `territory_districts`, `export_markets` | Multi-state operation implies territory hierarchy and route planning. |
+| **Service footprint** | `installed_base_signal`, `service_network`, `amc_offered`, `spare_parts_network` | **The FSM signal.** A pump or machinery maker with an installed base needs FSM — something employee count would never reveal. |
+| **Workforce** | `team_size`, `shift_work_signal`, `attendance_pain_signal` | The WFA signal. |
+| **Company** | `products`, `locations`, `industry_detail`, `turnover_signal`, `existing_software` | Context; `existing_software` flags an incumbent to displace. |
+| **Pain** | `pain_point` (repeatable) | Each one needs its own evidence quote. |
+| **Fit** | `crm_fit_reason`, `wfa_fit_reason`, `sfa_fit_reason`, `fsm_fit_reason` | One sentence per line, explaining that line's score |
+
+Numeric claims are mirrored onto `re_companies` (`dealer_count`, `field_force_estimate`, …) **only when `is_verified` is true**, so the list view can filter and sort on them without re-reading claims.
 
 #### `re_scores`
 Scoring history, so you can see a company heating up rather than only its score today.
@@ -309,15 +336,61 @@ Scoring history, so you can see a company heating up rather than only its score 
 | `firmographic` | integer | 0–50 |
 | `behavioural` | integer | 0–30 |
 | `engagement` | integer | 0–20 |
-| `total` | integer | 0–100 |
+| `total` | integer | 0–100 — the **ICP score**: is this worth my time at all? |
 | `band` | text | `hot` ≥ 70 \| `warm` 40–69 \| `cold` < 40 |
+| `fit_crm` / `fit_wfa` / `fit_sfa` / `fit_fsm` | integer | 0–100 each — the **fit scores**: what do I pitch? Computed in the same pass, so history stays in one row |
+| `best_fit_line` | text | the highest of the four |
 | `inputs` | jsonb | every input value, so a score is reproducible |
 | `is_override` | boolean | true when the founder set it by hand |
 | `override_reason` | text | |
 | `computed_at` | timestamptz | |
 
+#### `re_outreach_drafts`
+What to say. Generated on demand per company, **never sent by the engine in R1** — you copy it out and send it yourself.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid pk | |
+| `company_id` | uuid not null | |
+| `contact_id` | uuid | who it is addressed to |
+| `channel` | text not null | `whatsapp` \| `email` \| `call_script` \| `linkedin` |
+| `variant` | text | `first_touch` \| `follow_up_1` \| `follow_up_2` \| `breakup` |
+| `pitch_line` | text | which product line this draft pitches — from `best_fit_line` |
+| `subject` | text | email only |
+| `body` | text not null | |
+| `claims_used` | uuid[] | **the exact verified claims this draft leaned on** — so you can check every sentence back to its source |
+| `research_run_id` | uuid | which research this came from |
+| `model` / `prompt_version` | text | |
+| `cost_usd` | numeric(10,4) | |
+| `approved_at` | timestamptz | null until a human approves it |
+| `approved_by` | uuid | |
+| `edited_body` | text | the human's edit, kept separately from the AI's original |
+| `sent_manually_at` | timestamptz | set when you mark it sent; writes a `re_activities` row |
+| `created_at` | timestamptz | |
+
+Rules: a draft may cite **only** claims where `is_verified = true`. The generator is also handed the suppression list and the contact's `opted_out_at`, and refuses to draft for a suppressed contact. **A WhatsApp draft is free text for manual sending — it is not a Meta-approved template** (see §6.6).
+
+#### `re_meeting_briefs`
+Moved into R1 from the original phase 8, because it reads only data R1 already holds.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid pk | |
+| `company_id` | uuid not null | |
+| `deal_id` | uuid | |
+| `summary` | text | company in three lines |
+| `pain_points` | jsonb | each with its evidence |
+| `likely_objections` | jsonb | objection + suggested response |
+| `demo_flow` | jsonb | ordered screens to show, driven by `best_fit_line` |
+| `questions_to_ask` | jsonb | discovery questions |
+| `claims_used` | uuid[] | verified claims only |
+| `model` / `prompt_version` | text | |
+| `cost_usd` | numeric(10,4) | |
+| `generated_for` | timestamptz | the meeting it was prepared for |
+| `created_at` | timestamptz | |
+
 #### `re_activities`
-Every touch. In R1 these are hand-logged; from R2 the channels write here too.
+Every touch. In R1 these are hand-logged, or written automatically when you mark a draft as sent; from R2 the channels write here too.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -381,7 +454,8 @@ The adapter registry and the spend cap from D5.
 | File | Contents |
 |---|---|
 | `20261002120000_revenue_engine_core.sql` | `re_operators`, `re_companies`, `re_contacts`, indexes, `updated_at` triggers, the `re_can_read()` helper, RLS policies |
-| `20261002120100_revenue_engine_research.sql` | `re_research_runs`, `re_research_claims`, `re_scores`, the `is_verified` generated column, narrowed service-role grants |
+| `20261002120100_revenue_engine_research.sql` | `re_research_runs`, `re_research_claims` (closed claim-key check per §5.1a), `re_scores` incl. the four fit scores, the `is_verified` generated column, narrowed service-role grants |
+| `20261002120150_revenue_engine_generation.sql` | `re_outreach_drafts`, `re_meeting_briefs`, the verified-claims-only constraint, service-role grants |
 | `20261002120200_revenue_engine_activity.sql` | `re_activities`, `re_deals`, `re_suppressions` |
 | `20261002120300_revenue_engine_sources.sql` | `re_source_configs`, `re_source_runs`, the cap-check function, seed rows for the 7 adapters (only `import` and `inbound` enabled) |
 | `ROLLBACK-revenue-engine.md` | Matching rollback notes, as every other module in this repo has |
@@ -456,11 +530,40 @@ Where caching genuinely pays: the multi-step runs (fetch → analyse → score w
 | Model refusal | `re_research_runs.status = 'refused'` is a first-class outcome, surfaced in the UI, not retried in a loop |
 | Silent model drift | `model` + `prompt_version` + `effort` on every run; a weekly verification-rate figure on the Spend screen |
 
-### 6.5 Later AI features, with their honest shape
+### 6.5 The four agents in Release 1
 
-- **Lead Scoring (R1)** is **deterministic code, not an LLM.** Firmographic points come from MCA capital, NIC code, city and employee band; behavioural and engagement from activity counts. A score must be reproducible and explainable — an LLM score that changes between runs is useless for deciding who to call. The LLM contributes *verified claims* as inputs; it does not assign the number.
-- **Demo Prep (R4)** reads only the company's verified claims and activity history. It cannot web-search at call time.
+All four share one hard rule: **they read only claims where `is_verified = true`.** This is what makes the evidence rule protect the outreach, not just the research screen.
+
+| Agent | Runs | Reads | Writes | Cost |
+|---|---|---|---|---|
+| **Research Agent** | Overnight batch, per new company | `web_search` + `web_fetch` | runs + claims | ~$0.08 / company (batched) |
+| **Scoring Engine** | After every research run | verified claims + MCA fields + activity counts | `re_scores` | **$0 — no LLM** |
+| **Outreach Generator** | On demand, per company you choose to work | verified claims + `best_fit_line` + suppressions | `re_outreach_drafts` | ~$0.02 per set of 4 channels |
+| **Meeting Brief Generator** | On demand, before a meeting | verified claims + activity history | `re_meeting_briefs` | ~$0.02 per brief |
+
+**Cost impact of the three additions is small**, because generation is on demand per company you actually work, and you will work far fewer companies than you research. Research remains the bulk of the bill.
+
+#### Scoring: two different questions, two different scores
+
+The Scoring Engine is **deterministic code, not an LLM** — a score must be reproducible and explainable. An LLM score that changes between runs is useless for deciding who to call. The LLM supplies *verified claims* as inputs; it never assigns a number.
+
+| Score | Question it answers | Inputs |
+|---|---|---|
+| **ICP score** (0–100) | Is this worth my time at all? | MCA paid-up capital, NIC code, city/state, dealer and distributor counts, field force, activity and engagement counts |
+| **Fit scores** (4 × 0–100) | **What do I pitch?** | Per §5.1a: dealer/distributor counts and field force → **SFA**; installed base, service network, AMC → **FSM**; team size, shift and attendance signals → **WFA**; everything else plus `existing_software` → **CRM** |
+
+Each fit score carries its `*_fit_reason` claim, so the screen shows *why* it says SFA 92 / CRM 35 / FSM 80. `best_fit_line` drives the demo flow in the meeting brief and the pitch line in every outreach draft — one decision propagating to everything downstream.
+
+### 6.6 One constraint on generated WhatsApp messages
+
+A generated WhatsApp draft is **free text for you to send by hand**. It is *not* a Meta-approved template. Outside the 24-hour customer-service window, the Cloud API requires a pre-approved template with variables, not free text.
+
+That is fine for R1 — you copy and send. But **R3 cannot simply automate these drafts**: the messages will have to be restructured as approved templates with variable slots, then submitted for Meta review. Recording it now so nobody assumes R1's output is R3-ready. The existing `src/lib/whatsapp/template-*` code already handles template structure and the approval lifecycle, so this is a known, bounded piece of work — not a surprise.
+
+### 6.7 Later AI features, with their honest shape
+
 - **Sales Coach (R4)** is a prompt over verified claims plus the battlecards. No new data access.
+- **Meeting *booking* (R4)** — calendar links, reminders, scheduling — is the part that needs new infrastructure. Only the *brief* moved to R1.
 - **Content Studio (R6)** writes marketing copy. Nothing it produces publishes without founder review — the existing brochure discipline.
 
 ---
@@ -469,21 +572,25 @@ Where caching genuinely pays: the multi-step runs (fetch → analyse → score w
 
 Entries join the **founder-only** group in `src/app/(superadmin)/admin/admin-shell.tsx` (the group that already holds Price Calculator, Data Retention, Sales Proposals and Business Forecast), under a `Revenue Engine` heading.
 
-| Path | Screen | Release |
-|---|---|---|
-| `/admin/revenue` | **Command Center** — today's priorities | R1 |
-| `/admin/revenue/companies` | Company list: filter by band, status, owner, city, source | R1 |
-| `/admin/revenue/companies/[id]` | Company detail: facts, evidence, contacts, score, timeline, deal | R1 |
-| `/admin/revenue/companies/import` | Spreadsheet import (Universal Import Framework) | R1 |
-| `/admin/revenue/pipeline` | Deals by stage, value from the pricing engine | R1 |
-| `/admin/revenue/suppressions` | Do-not-contact list | R1 |
-| `/admin/revenue/sources` | Adapters, caps, run history | R1 (read-only) → R2 (runnable) |
-| `/admin/revenue/spend` | AI + API spend, claim-verification rate | R1 |
-| `/admin/revenue/sequences` | Sequence builder | R3 |
-| `/admin/revenue/campaigns` | Email + WhatsApp campaigns and analytics | R3 |
-| `/admin/revenue/battlecards` | Competitor intelligence | R5 |
+Module names follow the founder's review: **Prospect Hub · Research Agent · Outreach Studio · Pipeline · Campaign Center · Revenue Command Center.** Routes stay under `/admin/revenue/*`.
 
-Company detail is the workhorse, in five tabs: **Facts** (verified claims with quotes, guesses clearly separated) · **Contacts** · **Score** (the breakdown and why) · **Timeline** (activities) · **Deal**.
+| Module | Path | Screen | Release |
+|---|---|---|---|
+| Revenue Command Center | `/admin/revenue` | Today's priorities | R1 |
+| Prospect Hub | `/admin/revenue/companies` | List: filter by band, **fit line**, status, owner, city, dealer count, source | R1 |
+| Prospect Hub | `/admin/revenue/companies/[id]` | Company detail — the workhorse, six tabs | R1 |
+| Prospect Hub | `/admin/revenue/companies/import` | Spreadsheet import (Universal Import Framework) | R1 |
+| Outreach Studio | `/admin/revenue/companies/[id]/outreach` | Generate and edit the 4 channel drafts | R1 |
+| Outreach Studio | `/admin/revenue/companies/[id]/brief` | Meeting brief | R1 |
+| Pipeline | `/admin/revenue/pipeline` | Deals by stage, value from the pricing engine | R1 |
+| Pipeline | `/admin/revenue/suppressions` | Do-not-contact list | R1 |
+| Research Agent | `/admin/revenue/sources` | Adapters, caps, run history | R1 read-only → R2 runnable |
+| Research Agent | `/admin/revenue/spend` | AI + API spend, claim-verification rate | R1 |
+| Campaign Center | `/admin/revenue/sequences` | Sequence builder | R3 |
+| Campaign Center | `/admin/revenue/campaigns` | Email + WhatsApp campaigns and analytics | R3 |
+| Campaign Center | `/admin/revenue/battlecards` | Competitor intelligence | R5 |
+
+**Company detail, six tabs:** **Facts** (verified claims with quotes; guesses clearly separated below) · **Fit** (the four scores with their reasons, and what to pitch) · **Contacts** · **Outreach** (the drafts) · **Timeline** (activities) · **Deal**.
 
 ---
 
@@ -498,23 +605,29 @@ Founder has a spreadsheet of 200 companies. Upload at `/admin/revenue/companies/
 ### J3 — Research runs overnight (R1)
 The nightly job takes every `status = new` company with a website, submits one Batch request, and writes runs and claims on completion. Morning: `status = researching → qualified`, with a score. **Failures are visible, never silent.**
 
-### J4 — Judge a company (R1)
-Open the company. The Facts tab shows verified claims each with its quote and source link — "field force ~40 reps" next to the sentence it came from. Guesses sit below, greyed, labelled unverified. The Score tab shows the breakdown. Founder either starts working it, or disqualifies with a reason. **No number appears without a source.**
+### J4 — Judge a company, and know what to pitch (R1)
+Open the company. The Facts tab shows verified claims each with its quote and source link — "200 dealers across 6 states" next to the sentence it came from. Guesses sit below, greyed, labelled unverified. The Fit tab shows **SFA 92 · FSM 80 · CRM 35 · WFA 20**, each with its one-line reason. Founder either starts working it, or disqualifies with a reason. **No number appears without a source.**
 
-### J5 — First contact, by hand (R1)
-Founder calls the decision maker, logs an activity with an outcome. If interested, status → `working` and a follow-up task. **The suppression list is checked and shown on this screen before the call.**
+### J5 — Generate the outreach (R1) *(added in the founder review)*
+One click on the Outreach tab produces four drafts — WhatsApp, email, cold-call script, LinkedIn message — all pitching `best_fit_line` and citing only verified claims. Each draft lists the claims it used, so every sentence traces back to a source. Founder edits what they want (the edit is stored separately from the AI's original), copies it out, and sends it personally. Marking it sent writes a `re_activities` row. **A suppressed contact cannot be drafted for at all.**
 
-### J6 — Someone says no (R1)
-Outcome `not_interested` prompts a one-click suppression add. That phone, email and domain are off every future list permanently, including every later channel.
+### J6 — First contact, by hand (R1)
+Founder calls the decision maker using the generated script, logs an activity with an outcome. If interested, status → `working` and a follow-up task. **The suppression list is checked and shown on this screen before the call.**
 
-### J7 — Deal and proposal (R1)
-Create a deal: pick plan and user count; `value_inr` comes from `quote()` in the existing pricing engine, so the number in the pipeline and the number in the proposal cannot disagree. One click hands off to `/admin/proposals`.
+### J6b — Prepare for the demo (R1) *(moved up from R4 in the founder review)*
+Before a scheduled demo, one click generates the brief: company in three lines, pain points with evidence, likely objections with suggested responses, a demo flow ordered by `best_fit_line`, and discovery questions. Founder reads it in two minutes on the way to the call. **Verified claims only — so nothing in the brief can be an invention.**
 
-### J8 — Weekly review (R1)
+### J7 — Someone says no (R1)
+Outcome `not_interested` prompts a one-click suppression add. That phone, email and domain are off every future list permanently, including every later channel — and the Outreach Generator will refuse to draft for them.
+
+### J8 — Deal and proposal draft (R1) *(extended in the founder review)*
+Create a deal: `plan_id` **defaults to `best_fit_line`**, so the research decides what you quote. Pick the user count; `value_inr` comes from `quote()` in the existing pricing engine, so the pipeline number and the proposal number cannot disagree. Then **"Generate proposal draft"** hands off to `/admin/proposals` with the plan, term, user count, company details and the verified pain points already filled in — you review and send. The existing builder does the rendering; the Revenue Engine only supplies the inputs.
+
+### J9 — Weekly review (R1)
 `/admin/revenue/spend`: companies added, researched, qualified; activities logged; pipeline value; AI spend against budget; **claim-verification rate** — the health metric for the whole AI layer.
 
 ### Later journeys
-J9 enrol in a sequence (R3) · J10 handle an email reply and auto-pause the sequence (R3) · J11 demo-prep brief before a meeting (R4) · J12 identify an inbound visitor's company (R5).
+J10 enrol in a sequence (R3) · J11 handle an email reply and auto-pause the sequence (R3) · J12 book a meeting with calendar links and reminders (R4) · J13 identify an inbound visitor's company (R5).
 
 ---
 
@@ -560,22 +673,25 @@ Each release is independently useful and independently abandonable. Sizes are en
 
 ### Release 1 — Prospect database + AI brain *(the only release specified to build depth)*
 
-**Goal:** research and score real companies, and work them by hand.
+**Goal:** research and score real companies, know what to pitch each one, have the message already written, and work them by hand.
 
-1. Four migrations (§5.3) with rollback notes
-2. `/admin/revenue` Command Center
-3. Company list + detail with the five tabs
+1. Five migrations (§5.3) with rollback notes
+2. Revenue Command Center at `/admin/revenue`
+3. Prospect Hub: list + detail with the six tabs
 4. Spreadsheet import adapter (A1) and inbound-form adapter (A2)
-5. Research Agent: batch job, live single-company button, strict schema, evidence-or-flag
-6. Deterministic scoring engine
-7. Activities, deals (wired to `quote()`), suppressions
-8. Sources screen, read-only — shows the 7 seeded adapters and their caps; only `import` and `inbound` are enabled
-9. Spend + verification-rate screen
-10. Tests per §9
+5. Research Agent: batch job, live single-company button, strict schema, evidence-or-flag, **the full distributor and territory claim set (§5.1a)**
+6. Deterministic scoring engine: **ICP score + the four fit scores with reasons**
+7. **Outreach Generator — 4 channels, verified claims only, human approval, manual send** *(added in review)*
+8. **Meeting Brief Generator** *(moved up from R4 in review)*
+9. Activities, deals (wired to `quote()`, plan defaulting to `best_fit_line`), suppressions
+10. **Proposal draft handoff into the existing `/admin/proposals` builder** *(added in review)*
+11. Sources screen, read-only — the 7 seeded adapters and their caps; only `import` and `inbound` enabled
+12. Spend + verification-rate screen
+13. Tests per §9, plus: the generators must refuse unverified claims, and must refuse suppressed contacts
 
 **Blocker on you:** `ANTHROPIC_API_KEY` must be set in the web project's environment. ASK OZZO is still blocked on it, and nothing AI-powered in R1 can run until it is set. Everything else in R1 is on me.
 
-**Estimate:** 3–4 weeks.
+**Estimate: 5–6 weeks** — revised up from 3–4 weeks by the founder review. The five additions cost roughly 10 working days: outreach generator 3, fit scores 2, meeting brief 2, proposal handoff 2, distributor claim set 1. Stated plainly rather than absorbed silently; cutting any of them back is the founder's call.
 
 ### Release 2 — Real data sources + email foundations
 MCA adapter (A3, free), Google Places adapter (A4) with caps, Apify adapter (A5/A6/A7) with per-actor config; sending domain, provider, mailboxes and warm-up; `re_email_identities` / `_messages` / `_events`; email verification to protect bounce rate. **Covers brief phases 4 and part of 5. ~4 weeks plus 2–3 weeks of warm-up waiting, which runs in parallel.**
@@ -583,8 +699,8 @@ MCA adapter (A3, free), Google Places adapter (A4) with caps, Apify adapter (A5/
 ### Release 3 — Sequences and campaigns
 Sequence builder over the existing automations engine; email + WhatsApp campaigns (WhatsApp follow-up only, per §1); reply detection that auto-pauses a sequence; the EU/Germany enrolment gate; campaign analytics on the existing report engine. **Covers phases 5, 6, 11. ~4 weeks.**
 
-### Release 4 — Meetings, demo prep, coach
-Calendar links and reminders; demo-prep brief from verified claims; sales coach. **Covers phases 7, 8, 9. ~3 weeks.**
+### Release 4 — Meeting booking and coach
+Calendar links, demo scheduling and auto-reminders; sales coach over verified claims and battlecards. **The demo-prep brief is no longer here — it shipped in R1.** **Covers phases 7 and 9. ~2 weeks.**
 
 ### Release 5 — Intelligence
 Competitor battlecards (seeded from the 12 existing `/compare` pages); website intelligence as **analytics and lead capture, not visitor identification** — the brief's own caution, kept. **Covers phases 12, 14. ~2 weeks.**
@@ -600,10 +716,10 @@ Campaign, LinkedIn, blog and case-study drafting, with founder review before any
 | 2. AI Research Agent | R1 |
 | 3. Lead Scoring | R1 |
 | 4. Pipeline | R1 |
-| 5. Email Campaigns | R2 → R3 |
-| 6. WhatsApp Campaigns | R3 |
+| 5. Email Campaigns | **message generation R1** · sending R2 → R3 |
+| 6. WhatsApp Campaigns | **message generation R1** · sending R3 |
 | 7. Sales Sequences | R3 |
-| 8. Demo Preparation | R4 |
+| 8. Demo Preparation | **brief R1** (moved up in review) · booking R4 |
 | 9. Revenue Dashboard | **R1** (moved up — it is the daily screen) |
 | 10. Sales Coach | R4 |
 | 11. Website Intelligence | R5 |
@@ -645,13 +761,37 @@ These do not block Release 1. They need answers before the release named.
 
 ---
 
-## 13. Approval
+## 13. Review log
+
+### Revision 2 — 2026-10-02, founder review
+
+Approved: separate `re_*` tables · the evidence-or-flag rule · the AI-cannot-write-records rule · the email/domain warning · Research Agent · scoring · email foundation · campaign engine · revenue dashboard.
+
+Five changes requested, **all five accepted**:
+
+| # | Change | Where it landed | Assessment |
+|---|---|---|---|
+| 1 | **AI Outreach Generator in R1** (generate only, no sending) | §5.1 `re_outreach_drafts`, §6.5, J5, R1 item 7 | **Correct, and my omission.** D4 conflated *generation* with *sending*. Generation has no domain, provider, warm-up or Meta policy cost. Research without a message is a research project, not a revenue engine. |
+| 2 | **Proposal draft generator in R1** | §8 J8, R1 item 10 | **Correct and nearly free.** `re_deals.proposal_id` was already in the schema and `/admin/proposals` already holds all 5 plans as content packs. A prefill and a handoff, not a module. |
+| 3 | **Meeting brief in R1, not R4** | §5.1 `re_meeting_briefs`, J6b, R1 item 8 | **Correct, with a split.** The brief reads only data R1 already holds. Meeting *booking* needs new infrastructure and stays in R4. |
+| 4 | **OZZO Fit Score as first class, per line** | §5.1 four integer columns + `best_fit_line`, §6.5 | **Better than what I had.** A boolean "SFA fit: true" does not tell you what to pitch; `SFA 92 / CRM 35 / FSM 80` does. `best_fit_line` now drives the demo flow, the outreach pitch line and the deal's default plan. |
+| 5 | **Distributor & territory intelligence in the Research Agent** | §5.1a, the closed claim-key list | **The strongest point in the review.** Employee count is misleading for agri, seeds, fertiliser, pumps and manufacturing. Dealer network, field force, branch and depot counts are the real signals — and the service-footprint keys surface FSM prospects that headcount would never reveal. |
+
+Module names adopted: **Prospect Hub · Research Agent · Outreach Studio · Pipeline · Campaign Center · Revenue Command Center** (§7).
+
+Two things added that the review implied but did not state:
+
+- **All generators read only `is_verified = true` claims** (§6.5). This makes the evidence rule protect the outreach, not just the research screen — otherwise the generator writes "I see you have 125 reps" from a guess, which is exactly the dead-meeting scenario the review described.
+- **A generated WhatsApp draft is free text, not a Meta-approved template** (§6.6). Fine for R1's manual sending; R3 must restructure them into approved templates with variables. Recorded so nobody assumes R1's output is R3-ready.
+
+**Consequence, stated not absorbed: Release 1 moves from 3–4 weeks to 5–6 weeks** (§10). Cutting any addition back is the founder's call.
+
+## 14. Approval
 
 No code will be written until this document is approved. On approval the next step is the implementation plan for **Release 1 only**.
 
-Open questions to confirm explicitly:
+Remaining open items:
 
-1. Separate `re_*` tables rather than reusing the live `leads` / `deals` tables — **yes or no?**
-2. The evidence-or-flag rule on AI claims — **yes or no?**
-3. Release 1 scope as listed in §10 — **anything to add or cut?**
-4. O1–O3 (API key, budget, model) — your answers.
+1. Revision 2 above — **does it capture the review correctly?**
+2. **5–6 weeks for Release 1** — accepted, or cut something back?
+3. O1–O3 in §11 (API key, monthly AI budget, model choice) — your answers.
