@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { useExtraSettings, type AssignmentMode } from "@/hooks/use-extra-settings";
 import { attendanceFencingOn, readGeoFencing } from "@/lib/location/geofence-config";
+import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useImplementationComplete } from "@/hooks/use-implementation-complete";
 import {
@@ -70,6 +71,7 @@ import {
   Clock,
   TrendingUp,
   Rocket,
+  Wrench,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -294,6 +296,26 @@ export function getMenuStructure(
     { type: "link", href: "/dispatches", label: "Dispatch", icon: Truck, module: "orders", configModule: "dispatch" as const },
     { type: "link", href: "/pending-dispatch", label: "Pending Dispatch", icon: PackageCheck, module: "orders", configModule: "pending_dispatch" as const },
     { type: "link", href: "/payments", label: "Payment", icon: Banknote, module: "payments", configModule: "payment" as const },
+
+    // ── Service (FSM line): customer assets today, jobs later ──
+    // Gated by `line` + `permission` only. NOT `module` (it would check a `view_service` right
+    // that does not exist, so the entry would never render) and NOT `configModule` (ModuleSettings
+    // has no `service` key until the settings task adds one, so it would not type-check).
+    {
+      type: "group",
+      label: "Service",
+      icon: Wrench,
+      line: "fsm" as const,
+      items: [
+        {
+          href: "/service/assets",
+          label: "Assets",
+          icon: Package,
+          permission: PERMISSIONS.SERVICE_ASSETS.VIEW,
+          line: "fsm" as const,
+        },
+      ],
+    },
 
     { type: "spacer" },
 

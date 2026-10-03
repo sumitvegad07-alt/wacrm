@@ -56,6 +56,7 @@ const pageTitles: Record<string, string> = {
   "/activities": "Activity Report",
   "/approval-queue": "Approval Queue",
   "/monthly-planner": "Monthly Planner",
+  "/service/assets": "Assets",
 };
 
 function getPageTitle(pathname: string | null | undefined): string {

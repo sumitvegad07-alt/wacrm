@@ -42,6 +42,22 @@ interface DataTableProps<T> {
    * (e.g. Import Products, Hide Inactive toggle, etc.)
    */
   menuActions?: React.ReactNode;
+  /**
+   * Server-driven paging. Omit it and the table pages `data` itself (every existing screen).
+   * When set, `data` is ONE page that the server has already sliced, so the table must not slice
+   * or count it again: `total` is the row count across ALL pages, `page` is 1-based, and the
+   * footer's Prev / Next / rows-per-page controls call back instead of paging locally.
+   * Export CSV is left out in this mode because it could only export the loaded page.
+   */
+  serverPagination?: {
+    total: number;
+    page: number;
+    pageSize: number;
+    /** Choices for the rows-per-page select. Defaults to 10 / 20 / 50 / 100. */
+    pageSizeOptions?: number[];
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }
 
 export function DataTable<T>({
@@ -57,6 +73,7 @@ export function DataTable<T>({
   selection,
   actions,
   menuActions,
+  serverPagination,
 }: DataTableProps<T>) {
   const [isManageColumnsOpen, setIsManageColumnsOpen] = useState(false);
   const [activeColumnIds, setActiveColumnIds] = useState<string[]>([]);
@@ -113,14 +130,18 @@ export function DataTable<T>({
     localStorage.setItem(storageKey, JSON.stringify({ active, visible }));
   };
 
-  const totalRecords = safeData.length;
-  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalRecords);
+  // Local mode pages `safeData` here; server mode trusts the page it was handed.
+  const effectivePageSize = serverPagination ? serverPagination.pageSize : pageSize;
+  const totalRecords = serverPagination ? serverPagination.total : safeData.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / effectivePageSize));
+  const safePage = Math.min(serverPagination ? serverPagination.page : currentPage, totalPages);
+  const startIndex = (safePage - 1) * effectivePageSize;
+  const endIndex = serverPagination
+    ? Math.min(startIndex + safeData.length, totalRecords)
+    : Math.min(startIndex + pageSize, totalRecords);
   const paginatedData = useMemo(() => {
-    return safeData.slice(startIndex, endIndex);
-  }, [safeData, startIndex, endIndex]);
+    return serverPagination ? safeData : safeData.slice(startIndex, endIndex);
+  }, [safeData, startIndex, endIndex, serverPagination]);
 
   if (!isMounted) return null; // Avoid hydration mismatch
 
@@ -164,14 +185,16 @@ export function DataTable<T>({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 text-xs">
                 {menuActions}
-                {menuActions && <DropdownMenuSeparator />}
-                <DropdownMenuItem
-                  onClick={() => exportToCsv(safeData, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
-                  className="cursor-pointer gap-2"
-                >
-                  <Download className="size-3.5" />
-                  Export CSV
-                </DropdownMenuItem>
+                {menuActions && !serverPagination && <DropdownMenuSeparator />}
+                {!serverPagination && (
+                  <DropdownMenuItem
+                    onClick={() => exportToCsv(safeData, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
+                    className="cursor-pointer gap-2"
+                  >
+                    <Download className="size-3.5" />
+                    Export CSV
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -270,17 +293,21 @@ export function DataTable<T>({
           <div className="flex items-center gap-1.5 font-medium">
             <span>Show</span>
             <select
-              value={pageSize}
+              value={effectivePageSize}
               onChange={(e) => {
-                setPageSize(Number(e.target.value));
+                const next = Number(e.target.value);
+                if (serverPagination) {
+                  serverPagination.onPageSizeChange(next);
+                  return;
+                }
+                setPageSize(next);
                 setCurrentPage(1);
               }}
               className="h-7 rounded border border-border bg-background px-2 text-xs font-medium text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
             >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
+              {(serverPagination?.pageSizeOptions ?? [10, 20, 50, 100]).map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
             </select>
             <span>rows per page</span>
           </div>
@@ -307,7 +334,11 @@ export function DataTable<T>({
               variant="outline"
               size="sm"
               disabled={safePage <= 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() =>
+                serverPagination
+                  ? serverPagination.onPageChange(Math.max(1, safePage - 1))
+                  : setCurrentPage((p) => Math.max(1, p - 1))
+              }
               className="h-7 px-2.5 text-xs bg-background hover:bg-muted font-medium"
             >
               <ChevronLeft className="size-3.5 mr-1" />
@@ -318,7 +349,11 @@ export function DataTable<T>({
               variant="outline"
               size="sm"
               disabled={safePage >= totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() =>
+                serverPagination
+                  ? serverPagination.onPageChange(Math.min(totalPages, safePage + 1))
+                  : setCurrentPage((p) => Math.min(totalPages, p + 1))
+              }
               className="h-7 px-2.5 text-xs bg-background hover:bg-muted font-medium"
             >
               Next

@@ -35,6 +35,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasCRM,
     hasWFA,
     hasSFA,
+    hasFSM,
     isModuleEnabled,
     moduleSettingsLoaded,
     hasPermission,
@@ -89,6 +90,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       (pathname.startsWith("/deals") && !hasCRM) ||
       (pathname.startsWith("/orders") && !hasSFA) ||
       (pathname.startsWith("/pending-dispatch") && !hasSFA) ||
+      (pathname.startsWith("/service") && !hasFSM) ||
       (pathname.startsWith("/location-tracking") && !hasWFA && !isBaseLocationPage) ||
       (pathname.startsWith("/reports/leads") && !hasCRM) ||
       (pathname.startsWith("/reports/deals") && !hasCRM) ||
@@ -111,6 +113,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasCRM,
     hasWFA,
     hasSFA,
+    hasFSM,
     isModuleEnabled,
     moduleSettingsLoaded,
     router,
