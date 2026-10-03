@@ -90,6 +90,8 @@ export interface ImportDescriptor {
   /** Recommended max rows before the (future) async tier; advisory in Wave 0. */
   maxRows?: number;
 
+  /** A plain-language note shown under the upload box and on the mapping step. */
+  help?: string;
   /** Whole-file switches shown on the preview step. All default to off. */
   options?: ImportOption[];
   /** Insert-only: an existing record is never updated, so the Skip/Update choice is

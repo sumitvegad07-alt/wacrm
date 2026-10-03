@@ -6,7 +6,8 @@
 --
 -- WHAT THE COMMIT BRANCH DOES (see the branch comments for the reasoning)
 --   * Insert-only. Customer, product and asset type are RESOLVED, never invented: a customer
---     is matched by customer code, then phone digits, then exact name; a product by code then
+--     is matched by customer code, then phone digits (exact, then a UNIQUE last-10-digits match),
+--     then exact name; a product by code then
 --     name; an asset type by name (created ONLY when the rows carry opt_create_asset_types).
 --     There is no territory input: the customer_assets_defaults() trigger owns asset_code, both
 --     customer snapshots and territory inheritance, and the INSERT never mentions them.
@@ -442,6 +443,21 @@ BEGIN
                 IF cardinality(v_ids) > 1 THEN
                   v_failed:=v_failed+1; v_errors := v_errors || jsonb_build_object('row',i,'message',format('customer_ambiguous: "%s" matches more than one customer phone', v_cust)); CONTINUE; END IF;
                 v_contact := v_ids[1];
+              END IF;
+              -- No exact hit: a file often has the plain 10-digit number while the customer is stored
+              -- with a country code (91 + 10 digits), or the other way round. Compare the LAST 10 DIGITS
+              -- on both sides, inside this account only, and accept ONLY a single match. Two or more
+              -- customers sharing those 10 digits is never resolved by picking one (a complaint logged
+              -- against someone else's machine): the row fails customer_not_found.
+              IF v_contact IS NULL AND length(v_digits) >= 10 THEN
+                SELECT array_agg(id) INTO v_ids FROM (
+                  SELECT id FROM contacts WHERE account_id=v_account AND is_active
+                    AND length(phone_normalized) >= 10 AND right(phone_normalized,10)=right(v_digits,10) LIMIT 2) s;
+                IF v_ids IS NOT NULL THEN
+                  IF cardinality(v_ids) > 1 THEN
+                    v_failed:=v_failed+1; v_errors := v_errors || jsonb_build_object('row',i,'message',format('customer_not_found: more than one customer has a phone number ending in %s, so "%s" cannot be matched safely; use the customer code', right(v_digits,10), v_cust)); CONTINUE; END IF;
+                  v_contact := v_ids[1];
+                END IF;
               END IF;
             END IF;
           END IF;

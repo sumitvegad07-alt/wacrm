@@ -1,5 +1,5 @@
 -- FSM Phase 1 verification (checks 1-11 cover Task 3; checks 12-36 cover Task 4;
--- checks 37-45 cover Task 11, the asset import, and have their own setup block at the end).
+-- checks 37-46 cover Task 11, the asset import, and have their own setup block at the end).
 -- There is no DB test harness in this repo, so this checked-in script with stated
 -- expected results is the verification artefact. Prefer a Supabase BRANCH.
 --
@@ -21,7 +21,7 @@
 -- Migrations under test:
 --   supabase/migrations/20260929151000_fsm_asset_masters.sql   (checks 1-11)
 --   supabase/migrations/20260929152000_fsm_customer_assets.sql (checks 12-36)
---   supabase/migrations/20260929155000_fsm_import_customer_assets.sql (checks 37-45)
+--   supabase/migrations/20260929155000_fsm_import_customer_assets.sql (checks 37-46)
 --
 -- Setup (psql):
 --   \set acct '<test account uuid>'
@@ -678,10 +678,13 @@ ROLLBACK;
 
 
 -- ============================================================================
--- TASK 11: ASSET IMPORT (checks 37-45)
+-- TASK 11: ASSET IMPORT (checks 37-46)
 -- Migration: supabase/migrations/20260929155000_fsm_import_customer_assets.sql
 -- Sample files for the click-through: fsm-asset-import-sample.csv and fsm-asset-import-customers.csv
--- (both in this directory).
+-- (both in this directory). Date rule for those files (also shown in the import wizard): use
+-- yyyy-mm-dd, dd-mm-yyyy or dd/mm/yyyy; a two-digit year is rejected rather than guessed; from Excel,
+-- format date columns as yyyy-mm-dd first, or save as CSV. (The sentence is not a comment line inside
+-- the CSV: the importer reads the first row as the column headers, so any extra line would break it.)
 --
 -- SAFETY: checks 37-39 and 43 are read-only. Checks 40-42 are each ONE BEGIN ... ROLLBACK
 -- transaction that inserts its own fixtures (contacts VFY-IMP-1/-2, product VFY-IMP-PROD,
@@ -942,3 +945,42 @@ SELECT position('WHEN foreign_key_violation THEN' IN def) > 0                   
 --     supabase/migrations/20260929155000_fsm_import_customer_assets.sql a second time.
 --     Expect: no error and no change (CREATE OR REPLACE; the guard still passes because the markers
 --     it looks for are still in the new body). Then re-run check 37 (all true) and check 38.
+
+-- 46. Phone matching: exact digits first; if none, the LAST 10 DIGITS on both sides, in this account
+--     only, accepted ONLY when exactly one customer matches. One transaction, ROLLED BACK.
+--     Fixtures (digits): A=9811000001 (10 digits), B=919811000002 (91 + 10), C=9811000003 and
+--     D=919811000003 (share their last 10). The five file rows give ONE import_commit result:
+--       imported 4, failed 1, skipped 0, and a single error, for ROW 5 (the +44 one):
+--       "customer_not_found: more than one customer has a phone number ending in 9811000003 ..."
+--       (two customers share the last 10 digits: never pick one). The four that import are:
+--         1  9811000001      exact hit
+--         2  +91 9811000001  unique last-10 hit (stored without the 91)
+--         3  9811000002      unique last-10 hit (stored WITH the 91)
+--         4  9811000003      exact hit on C (the shared last 10 is not even consulted)
+--       The follow-up query lists asset -> matched_name; expect exactly:
+--         vfy phone a1 -> Verify Phone A | vfy phone a2 -> Verify Phone A
+--         vfy phone b  -> Verify Phone B | vfy phone c  -> Verify Phone C
+--     If a real customer in :acct already has one of these numbers the fixture INSERT fails 23505
+--     and the transaction aborts harmlessly: change the digits and re-run.
+BEGIN;
+  INSERT INTO public.contacts (user_id, account_id, phone, name) VALUES
+    (:'importer', :'acct', '9811000001',   'Verify Phone A'),
+    (:'importer', :'acct', '919811000002', 'Verify Phone B'),
+    (:'importer', :'acct', '9811000003',   'Verify Phone C'),
+    (:'importer', :'acct', '919811000003', 'Verify Phone D');
+  INSERT INTO public.import_jobs (id, account_id, user_id, module, target_table, file_name)
+  VALUES ('7e57f0f0-0000-4000-8000-0000000000a6', :'acct', :'importer', 'customer_assets', 'customer_assets', 'verify-check-46.csv');
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims',
+                    json_build_object('sub', :'importer', 'role', 'authenticated')::text, true);
+  SELECT public.import_commit('7e57f0f0-0000-4000-8000-0000000000a6', $rows$[
+    {"customer":"9811000001","name":"vfy phone a1"},
+    {"customer":"+91 9811000001","name":"vfy phone a2"},
+    {"customer":"9811000002","name":"vfy phone b"},
+    {"customer":"9811000003","name":"vfy phone c"},
+    {"customer":"+44 9811000003","name":"vfy phone ambiguous"}
+  ]$rows$::jsonb, true);
+  SELECT a.name AS asset, c.name AS matched_name
+    FROM public.customer_assets a JOIN public.contacts c ON c.id = a.contact_id
+   WHERE a.account_id = :'acct' AND a.name LIKE 'vfy phone%' ORDER BY a.name;
+ROLLBACK;

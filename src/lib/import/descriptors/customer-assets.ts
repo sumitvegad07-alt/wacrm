@@ -7,8 +7,8 @@ import { ASSET_STATUSES } from "@/lib/service/assets/filters";
 // STRICT LOOKUPS. A previous importer silently created 15 bogus Country-level
 // territories for one tenant, which had to be reparented by hand. So this importer
 // resolves, it never invents:
-//   * customer   -> an EXISTING customer, by customer code, then phone (digits only),
-//                   then exact name. A customer is NEVER created. No match fails the
+//   * customer   -> an EXISTING customer, by customer code, then phone (digits only; exact,
+//                   then a last-10-digits match accepted ONLY when it is unique), then exact name. A customer is NEVER created. No match fails the
 //                   row (customer_not_found); two matches fail it too (customer_ambiguous).
 //   * asset_type -> by name, case-insensitive. Created ONLY when the user ticks
 //                   "Create missing asset types" (off by default); otherwise a missing
@@ -35,6 +35,9 @@ export const customerAssetsDescriptor: ImportDescriptor = {
   undoable: true,
   dedupeKeys: ["serial_no"],
   insertOnly: true,
+  // Shown in the wizard (upload and mapping steps). The .xlsx reader hands date cells over as
+  // formatted text, usually m/d/yy, which this importer refuses to guess.
+  help: "Dates: use yyyy-mm-dd, dd-mm-yyyy or dd/mm/yyyy. A two-digit year is rejected rather than guessed. If you are uploading from Excel, format date columns as yyyy-mm-dd first, or save as CSV.",
   // 10x the chunk size. Each 500-row chunk is its own transaction, which is what keeps the
   // tenant's single account_sequences row lock short (see run.ts CHUNK_SIZE).
   maxRows: 5000,

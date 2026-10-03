@@ -81,6 +81,12 @@ describe('customer assets import descriptor', () => {
     expect(d.options![0].key).toBe('create_asset_types');
   });
 
+  it('tells the user the date rule in the wizard help, including the Excel advice', () => {
+    expect(d.help).toContain('yyyy-mm-dd, dd-mm-yyyy or dd/mm/yyyy');
+    expect(d.help).toContain('A two-digit year is rejected rather than guessed');
+    expect(d.help).toContain('format date columns as yyyy-mm-dd first, or save as CSV');
+  });
+
   it('uses the strict day-first date type for all three dates', () => {
     for (const k of ['installation_date', 'warranty_start', 'warranty_end']) {
       expect(field(k)!.type).toBe('date_dmy');

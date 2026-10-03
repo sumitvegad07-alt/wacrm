@@ -391,6 +391,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                 <p className="text-sm font-medium">{descLoading ? "Loading this module's fields…" : busy ? "Reading file…" : "Click to choose a CSV or XLSX file"}</p>
                 <p className="text-xs text-muted-foreground">First row = column headers · one record per row below</p>
               </div>
+              {descriptor.help && <p className="text-xs text-muted-foreground">{descriptor.help}</p>}
               <input
                 ref={fileRef}
                 type="file"
@@ -462,6 +463,8 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                   })}
                 </div>
               </div>
+
+              {descriptor.help && <p className="text-xs text-muted-foreground">{descriptor.help}</p>}
 
               {missingRequired.length > 0 && (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-600 dark:text-amber-400">
