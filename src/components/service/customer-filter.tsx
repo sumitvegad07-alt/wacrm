@@ -13,6 +13,16 @@ interface CustomerFilterProps {
   value: CustomerOption | null;
   onChange: (next: CustomerOption | null) => void;
   className?: string;
+  /** Text shown when nothing is picked. Defaults to "Customer" (the list filter). */
+  placeholder?: string;
+  /** Show the little X that clears the pick. The list filter wants it; a required form field does not. */
+  clearable?: boolean;
+  /** Accessible name for the X. */
+  clearLabel?: string;
+  /** Lets a <label htmlFor> point at the trigger. */
+  id?: string;
+  /** Red outline, for a failed validation. */
+  invalid?: boolean;
 }
 
 /**
@@ -22,8 +32,20 @@ interface CustomerFilterProps {
  *
  * Queries run in the browser under the user's session, so contacts data scoping (RLS) applies:
  * a rep only finds customers they can see.
+ *
+ * Also the customer field of the asset form (same reasons), which passes its own `className`,
+ * `placeholder`, `clearable={false}` and `invalid`. The defaults keep the list filter unchanged.
  */
-export function CustomerFilter({ value, onChange, className }: CustomerFilterProps) {
+export function CustomerFilter({
+  value,
+  onChange,
+  className,
+  placeholder = "Customer",
+  clearable = true,
+  clearLabel = "Clear customer filter",
+  id,
+  invalid = false,
+}: CustomerFilterProps) {
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
   const [hits, setHits] = useState<CustomerOption[]>([]);
@@ -63,19 +85,22 @@ export function CustomerFilter({ value, onChange, className }: CustomerFilterPro
       }}
     >
       <PopoverTrigger
+        id={id}
+        aria-invalid={invalid || undefined}
         className={cn(
           "relative flex h-8 w-48 items-center justify-between gap-1 rounded-md border border-border bg-background px-2.5 text-xs font-normal text-foreground outline-none hover:bg-muted focus:ring-1 focus:ring-primary",
+          invalid && "border-destructive focus:ring-destructive",
           className,
         )}
       >
         <span className={cn("flex-1 truncate text-left", !value && "text-muted-foreground")}>
-          {value ? value.label : "Customer"}
+          {value ? value.label : placeholder}
         </span>
-        {value && (
+        {value && clearable && (
           <span
             role="button"
             tabIndex={0}
-            aria-label="Clear customer filter"
+            aria-label={clearLabel}
             className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={(e) => {
               e.stopPropagation();
@@ -125,7 +150,8 @@ export function CustomerFilter({ value, onChange, className }: CustomerFilterPro
                     value?.id === c.id && "font-medium",
                   )}
                   onClick={() => {
-                    onChange(value?.id === c.id ? null : c);
+                    // Re-picking the chosen customer clears a filter, but must not blank a required form field.
+                    onChange(clearable && value?.id === c.id ? null : c);
                     setOpen(false);
                     setTerm("");
                   }}
