@@ -35,6 +35,25 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+/**
+ * Fail early and by name when ENCRYPTION_KEY is missing.
+ *
+ * Without this, the first thing an admin sees after clicking Allow is a
+ * createCipheriv crash from deep inside node:crypto, which names nothing and
+ * looks like an OZZO outage. The variable is already required by the
+ * WhatsApp integration, so a deployment that has one has the other — but a
+ * local or preview environment may not.
+ */
+function assertEncryptionConfigured(): void {
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key || !key.trim()) {
+    throw new Error(
+      "ENCRYPTION_KEY is not set, so the OZZO connection cannot be stored securely. " +
+        "Set it in this environment (it is the same key the WhatsApp integration uses).",
+    );
+  }
+}
+
 function newToken(): string {
   return `${MCP_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
 }
@@ -100,6 +119,7 @@ export async function createAuthCode(input: {
   codeChallengeMethod: string;
   sbRefreshToken: string;
 }): Promise<string> {
+  assertEncryptionConfigured();
   const db = supabaseAdmin();
   const code = randomBytes(32).toString("base64url");
   const { error } = await db.from("mcp_oauth_codes").insert({
@@ -169,6 +189,7 @@ export async function createConnection(input: {
   clientName: string;
   sbRefreshToken: string;
 }): Promise<IssuedTokens> {
+  assertEncryptionConfigured();
   const db = supabaseAdmin();
   const accessToken = newToken();
   const refreshToken = newToken();

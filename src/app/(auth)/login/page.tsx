@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { safeNextPath } from "@/lib/auth/safe-next-path";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -36,6 +37,10 @@ function LoginPageInner() {
   // account. After a successful sign-in we send them to the join
   // page to accept rather than to /dashboard.
   const inviteToken = searchParams.get("invite");
+  // Where to return after sign-in. Used by the MCP OAuth consent screen,
+  // which sends a signed-out admin here and needs them back on the same
+  // /authorize URL with its query intact.
+  const nextPath = safeNextPath(searchParams.get("next"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -79,13 +84,13 @@ function LoginPageInner() {
         .eq("user_id", currentUser.id)
         .maybeSingle();
 
-      if (profile?.is_superadmin) {
+      if (profile?.is_superadmin && !nextPath) {
         window.location.href = "/admin";
         return;
       }
     }
 
-    window.location.href = "/dashboard";
+    window.location.href = nextPath ?? "/dashboard";
   };
 
 
