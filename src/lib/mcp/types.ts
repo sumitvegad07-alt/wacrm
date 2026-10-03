@@ -1,0 +1,53 @@
+// ============================================================
+// Catalog vocabulary: what a data set IS.
+//
+// Only the descriptor types live here. The other types in this module sit
+// beside the code that owns them — McpContext in session.ts, FetchArgs /
+// FetchResult in fetch.ts, TenantContext in gating.ts — so a reader looking
+// at one of those files finds its own shapes without a detour.
+// ============================================================
+import type { ProductLine } from "@/lib/plans/catalog";
+
+export type { ProductLine };
+
+export interface FieldDef {
+  key: string;
+  label: string;
+  type: "text" | "number" | "currency" | "date" | "datetime" | "boolean";
+}
+
+export interface FilterDef {
+  key: string;
+  label: string;
+  type: "id" | "text" | "select" | "date_range" | "time_of_day";
+  options?: string[];
+}
+
+export interface DataSetDescriptor {
+  /** The name the AI uses, e.g. "visits". */
+  name: string;
+  /** Human label, as the dashboard spells it. */
+  title: string;
+  route: "report" | "reader";
+  /** Plan line required to see this at all. */
+  line: ProductLine;
+  /** accounts.settings module-toggle key, where the module is optional. */
+  requiredModule?: string;
+  /** Behind the mcp_allow_workforce_data privacy switch. */
+  sensitive?: boolean;
+  /** route "report": the execute_report module name. */
+  reportModule?: string;
+  /** route "reader": base table. */
+  table?: string;
+  /** ALLOW-LIST of readable columns. No select *, ever. */
+  fields: FieldDef[];
+  filters: FilterDef[];
+  /** group_by options. */
+  dimensions: FieldDef[];
+  measures: FieldDef[];
+  /** Business rules, in prose, for the AI. Without these it invents its own
+   *  definitions and reports a confidently wrong number. */
+  notes: string;
+  /** Worked example calls. Without these the AI fumbles its first two tries. */
+  examples: string[];
+}
