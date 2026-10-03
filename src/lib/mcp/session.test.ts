@@ -10,6 +10,15 @@ const store = vi.hoisted(() => ({
   findConnectionByAccessToken: vi.fn(),
   touchConnection: vi.fn(async () => {}),
   updateStoredSbRefresh: vi.fn(async () => {}),
+  claimRefresh: vi.fn(async () => true),
+  readStoredSession: vi.fn(
+    async (): Promise<{ accessToken: string | null; expiresAt: string | null }> => ({
+      accessToken: null,
+      expiresAt: null,
+    }),
+  ),
+  storeRefreshedSession: vi.fn(async () => {}),
+  releaseRefreshClaim: vi.fn(async () => {}),
 }));
 vi.mock("./oauth/store", () => store);
 
@@ -63,6 +72,10 @@ const CONNECTION = {
   client_name: "Claude",
   sb_refresh_token: "sb-refresh-stored",
   access_expires_at: new Date(Date.now() + 3600_000).toISOString(),
+  last_used_at: new Date().toISOString(),
+  // No shared session yet, so the happy path performs a refresh.
+  sb_access_token: null as string | null,
+  sb_access_expires_at: null as string | null,
 };
 
 const req = (headers: Record<string, string> = {}) =>
@@ -74,9 +87,12 @@ function happyPath(
   over: {
     profile?: Record<string, unknown> | null;
     account?: Record<string, unknown> | null;
+    connection?: Record<string, unknown>;
   } = {},
 ) {
-  store.findConnectionByAccessToken.mockResolvedValue(CONNECTION);
+  store.findConnectionByAccessToken.mockResolvedValue({ ...CONNECTION, ...(over.connection ?? {}) });
+  store.claimRefresh.mockResolvedValue(true);
+  store.readStoredSession.mockResolvedValue({ accessToken: null, expiresAt: null });
   sdk.refreshSession.mockResolvedValue({
     data: {
       session: {
@@ -317,15 +333,84 @@ describe("requireMcpContext — succeeding", () => {
 });
 
 describe("refresh-token handling", () => {
-  it("persists the rotated refresh token", async () => {
-    // Supabase rotates on every use. Not writing this back bricks the
-    // connection on the very next call.
+  it("stores the rotated refresh token together with its access token", async () => {
+    // Supabase rotates on every use. Writing the refresh token without the
+    // access token is what let instances redeem an already-spent token.
     happyPath();
     await requireMcpContext(authed());
-    expect(store.updateStoredSbRefresh).toHaveBeenCalledWith(
-      "conn-1",
-      "sb-refresh-rotated",
+    expect(store.storeRefreshedSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: "conn-1",
+        sbAccessToken: "sb-access-fresh",
+        sbRefreshToken: "sb-refresh-rotated",
+      }),
     );
+  });
+
+  it("uses the shared stored session instead of refreshing at all", async () => {
+    // The fix for the dead-connection bug: a warm shared token means a cold
+    // instance never redeems the single-use refresh token.
+    happyPath({
+      connection: {
+        sb_access_token: "sb-access-shared",
+        sb_access_expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+      },
+    });
+    await requireMcpContext(authed());
+    expect(sdk.refreshSession).not.toHaveBeenCalled();
+    expect(store.claimRefresh).not.toHaveBeenCalled();
+  });
+
+  it("refreshes when the shared session is nearly spent", async () => {
+    happyPath({
+      connection: {
+        sb_access_token: "sb-access-shared",
+        sb_access_expires_at: new Date(Date.now() + 10_000).toISOString(),
+      },
+    });
+    await requireMcpContext(authed());
+    expect(sdk.refreshSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a shared session with an unreadable expiry", async () => {
+    happyPath({
+      connection: { sb_access_token: "sb-access-shared", sb_access_expires_at: "not-a-date" },
+    });
+    await requireMcpContext(authed());
+    expect(sdk.refreshSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not redeem the refresh token when another instance holds the claim", async () => {
+    // The race that killed the first real connection: two instances each
+    // redeeming the same single-use token.
+    happyPath();
+    store.claimRefresh.mockResolvedValue(false);
+    store.readStoredSession.mockResolvedValue({
+      accessToken: "sb-access-from-winner",
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    });
+    await requireMcpContext(authed());
+    expect(sdk.refreshSession).not.toHaveBeenCalled();
+  });
+
+  it("refreshes anyway if the claim holder never stores a session", async () => {
+    // Better to risk one wasted refresh than to fail the admin's question
+    // because another instance crashed mid-refresh.
+    happyPath();
+    store.claimRefresh.mockResolvedValue(false);
+    store.readStoredSession.mockResolvedValue({ accessToken: null, expiresAt: null });
+    await expect(requireMcpContext(authed())).resolves.toBeTruthy();
+    expect(sdk.refreshSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the claim when the refresh fails, so it cannot wedge", async () => {
+    happyPath();
+    sdk.refreshSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: "boom" },
+    });
+    await expect(requireMcpContext(authed())).rejects.toThrow(RECONNECT_MESSAGE);
+    expect(store.releaseRefreshClaim).toHaveBeenCalledWith("conn-1");
   });
 
   it("refreshes exactly once for two concurrent calls on one connection", async () => {

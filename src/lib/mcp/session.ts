@@ -25,9 +25,13 @@ import {
 import type { TenantContext } from "./gating";
 import { assertDailyBudget } from "./limits";
 import {
+  claimRefresh,
   findConnectionByAccessToken,
+  readStoredSession,
+  releaseRefreshClaim,
+  storeRefreshedSession,
   touchConnection,
-  updateStoredSbRefresh,
+  type ConnectionRow,
 } from "./oauth/store";
 
 /** Message the admin sees, via their AI tool, when the session is dead.
@@ -73,9 +77,19 @@ interface CachedSession {
   expiresAtMs: number;
 }
 
-/** connectionId -> the in-flight or completed refresh. Serialises point 2. */
+/**
+ * A small per-instance cache on top of the shared one, so repeated calls on a
+ * warm instance skip even the read. The database remains the source of truth.
+ */
 const sessionCache = new Map<string, CachedSession>();
-const inFlight = new Map<string, Promise<CachedSession>>();
+
+/**
+ * Concurrent calls on THIS instance share one attempt. Two layers are needed:
+ * this one keeps a warm instance from making N database round trips, and the
+ * claim in the database keeps N instances from redeeming one single-use
+ * refresh token. Neither replaces the other.
+ */
+const inFlight = new Map<string, Promise<string>>();
 
 /** Test seam: clears the per-process session cache. */
 export function __resetMcpSessionCacheForTests(): void {
@@ -93,59 +107,117 @@ function bearerFrom(request: Request): string | null {
 }
 
 /**
- * Exchange the stored refresh token for a live access token, at most once at
- * a time per connection, persisting the rotated refresh token.
+ * Get a live Supabase access token for this connection.
+ *
+ * The hard constraint: a Supabase refresh token is invalidated the moment it
+ * is used, and this runs on serverless instances that share nothing. The
+ * previous design refreshed on every cold start and serialised that in
+ * process memory, which protects one instance and no others — two instances
+ * racing the same stored token meant one failed, and a lost write could
+ * leave an already-spent token stored for everyone, permanently killing the
+ * connection. That is not theoretical; it happened within an hour of the
+ * first real connection.
+ *
+ * So the live access token lives in the database, shared by every instance:
+ *
+ *   1. Use the stored access token while it has life left. Refreshes drop
+ *      from once per cold start to about once an hour per connection.
+ *   2. When it is spent, claim the refresh with a conditional UPDATE, so
+ *      exactly one instance redeems the refresh token.
+ *   3. An instance that loses the claim re-reads what the winner stored
+ *      rather than redeeming the same token in parallel.
  */
-async function refreshAdminSession(
-  connectionId: string,
-  storedRefreshToken: string,
-): Promise<CachedSession> {
-  const cached = sessionCache.get(connectionId);
-  if (cached && cached.expiresAtMs - REFRESH_SKEW_MS > Date.now()) return cached;
+async function liveAccessToken(connection: ConnectionRow): Promise<string> {
+  const cached = usable(connection.sb_access_token, connection.sb_access_expires_at);
+  if (cached) return cached;
 
-  const existing = inFlight.get(connectionId);
+  const inProcess = sessionCache.get(connection.id);
+  if (inProcess && inProcess.expiresAtMs - REFRESH_SKEW_MS > Date.now()) {
+    return inProcess.accessToken;
+  }
+
+  const existing = inFlight.get(connection.id);
   if (existing) return existing;
 
-  const promise = (async (): Promise<CachedSession> => {
-    const anon = createSupabaseClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    );
-
-    const { data, error } = await anon.auth.refreshSession({
-      refresh_token: storedRefreshToken,
-    });
-    if (error || !data.session) {
-      // A password change, a sign-out-everywhere, or a token already spent
-      // all land here. There is nothing the admin can do but reconnect.
-      throw new McpAuthError(401, "session_expired", RECONNECT_MESSAGE);
-    }
-
-    // Write the rotated refresh token back before anyone can use the session,
-    // so a crash mid-request cannot leave the stored token behind the real one.
-    if (data.session.refresh_token) {
-      await updateStoredSbRefresh(connectionId, data.session.refresh_token);
-    }
-
-    const expiresAtMs = data.session.expires_at
-      ? data.session.expires_at * 1000
-      : Date.now() + (data.session.expires_in ?? 3600) * 1000;
-
-    const fresh: CachedSession = {
-      accessToken: data.session.access_token,
-      expiresAtMs,
-    };
-    sessionCache.set(connectionId, fresh);
-    return fresh;
-  })();
-
-  inFlight.set(connectionId, promise);
+  const attempt = acquireAndRefresh(connection);
+  inFlight.set(connection.id, attempt);
   try {
-    return await promise;
+    return await attempt;
   } finally {
-    inFlight.delete(connectionId);
+    inFlight.delete(connection.id);
   }
+}
+
+async function acquireAndRefresh(connection: ConnectionRow): Promise<string> {
+  const won = await claimRefresh(connection.id);
+  if (!won) {
+    // Another instance is refreshing. Give it a moment, then use its result.
+    const stored = await waitForStoredSession(connection.id);
+    if (stored) return stored;
+    // It never landed one — fall through and refresh ourselves rather than
+    // failing the admin's question.
+  }
+
+  try {
+    return await refreshAndStore(connection);
+  } catch (err) {
+    await releaseRefreshClaim(connection.id).catch(() => {});
+    throw err;
+  }
+}
+
+function usable(token: string | null, expiresAt: string | null): string | null {
+  if (!token || !expiresAt) return null;
+  const ms = new Date(expiresAt).getTime();
+  if (!Number.isFinite(ms)) return null;
+  return ms - REFRESH_SKEW_MS > Date.now() ? token : null;
+}
+
+/** Poll briefly for the winning instance's stored session. */
+async function waitForStoredSession(connectionId: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await new Promise((r) => setTimeout(r, 200));
+    const { accessToken, expiresAt } = await readStoredSession(connectionId);
+    const token = usable(accessToken, expiresAt);
+    if (token) return token;
+  }
+  return null;
+}
+
+async function refreshAndStore(connection: ConnectionRow): Promise<string> {
+  const anon = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+
+  const { data, error } = await anon.auth.refreshSession({
+    refresh_token: connection.sb_refresh_token,
+  });
+  if (error || !data.session) {
+    // A password change, a sign-out-everywhere, or a token already spent all
+    // land here. There is nothing the admin can do but reconnect.
+    throw new McpAuthError(401, "session_expired", RECONNECT_MESSAGE);
+  }
+
+  const expiresAtMs = data.session.expires_at
+    ? data.session.expires_at * 1000
+    : Date.now() + (data.session.expires_in ?? 3600) * 1000;
+
+  // Both tokens in one write: storing the rotated refresh token without its
+  // access token is what left instances redeeming a spent token.
+  await storeRefreshedSession({
+    connectionId: connection.id,
+    sbAccessToken: data.session.access_token,
+    sbRefreshToken: data.session.refresh_token ?? connection.sb_refresh_token,
+    accessExpiresAt: new Date(expiresAtMs).toISOString(),
+  });
+
+  sessionCache.set(connection.id, {
+    accessToken: data.session.access_token,
+    expiresAtMs,
+  });
+  return data.session.access_token;
 }
 
 /** A Supabase client that sends the admin's access token on every request. */
@@ -182,11 +254,8 @@ export async function requireMcpContext(request: Request): Promise<McpContext> {
     throw new McpAuthError(401, "invalid_token", RECONNECT_MESSAGE);
   }
 
-  const session = await refreshAdminSession(
-    connection.id,
-    connection.sb_refresh_token,
-  );
-  const supabase = clientForAccessToken(session.accessToken);
+  const accessToken = await liveAccessToken(connection);
+  const supabase = clientForAccessToken(accessToken);
 
   // Re-read the role through the admin's OWN client, so RLS applies and a
   // demotion takes effect on the very next call.

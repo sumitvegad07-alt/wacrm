@@ -81,6 +81,9 @@ export interface ConnectionRow {
   access_expires_at: string;
   /** Lets the caller skip a write when it is already recent. */
   last_used_at: string | null;
+  /** The shared live Supabase access token, decrypted, or null. */
+  sb_access_token: string | null;
+  sb_access_expires_at: string | null;
 }
 
 // ── Clients (RFC 7591) ──────────────────────────────────────
@@ -227,7 +230,7 @@ export async function findConnectionByAccessToken(
   const { data } = await db
     .from("mcp_connections")
     .select(
-      "id, account_id, profile_id, client_id, client_name, sb_refresh_encrypted, access_expires_at, last_used_at, revoked_at",
+      "id, account_id, profile_id, client_id, client_name, sb_refresh_encrypted, access_expires_at, last_used_at, revoked_at, sb_access_encrypted, sb_access_expires_at",
     )
     .eq("access_token_hash", sha256(token))
     .maybeSingle();
@@ -251,6 +254,10 @@ export async function findConnectionByAccessToken(
     sb_refresh_token: decrypt(row.sb_refresh_encrypted as string),
     access_expires_at: row.access_expires_at,
     last_used_at: (row.last_used_at as string | null) ?? null,
+    sb_access_token: row.sb_access_encrypted
+      ? safeDecrypt(row.sb_access_encrypted as string)
+      : null,
+    sb_access_expires_at: (row.sb_access_expires_at as string | null) ?? null,
   };
 }
 
@@ -286,6 +293,89 @@ export async function rotateByRefreshToken(
 
 /** Persist the rotated Supabase refresh token. Supabase rotates it on every
  *  use, so failing to write it back bricks the connection on the next call. */
+/** A stored value encrypted under a different key must not break the call. */
+function safeDecrypt(value: string): string | null {
+  try {
+    return decrypt(value);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Try to become the one instance that refreshes this connection.
+ *
+ * The UPDATE only succeeds when nobody else holds the claim, or when a
+ * previous holder is older than the stale window (so a crashed instance
+ * cannot wedge the connection forever). Returns true when this caller won.
+ */
+export async function claimRefresh(
+  connectionId: string,
+  staleAfterMs = 20_000,
+): Promise<boolean> {
+  const db = supabaseAdmin();
+  const cutoff = new Date(Date.now() - staleAfterMs).toISOString();
+  const { data } = await db
+    .from("mcp_connections")
+    .update({ sb_refresh_lock_at: new Date().toISOString() })
+    .eq("id", connectionId)
+    .or(`sb_refresh_lock_at.is.null,sb_refresh_lock_at.lt.${cutoff}`)
+    .select("id")
+    .maybeSingle();
+  return Boolean(data);
+}
+
+/** Re-read just the shared session, for an instance that lost the claim. */
+export async function readStoredSession(
+  connectionId: string,
+): Promise<{ accessToken: string | null; expiresAt: string | null }> {
+  const db = supabaseAdmin();
+  const { data } = await db
+    .from("mcp_connections")
+    .select("sb_access_encrypted, sb_access_expires_at")
+    .eq("id", connectionId)
+    .maybeSingle();
+  const row = (data ?? {}) as Record<string, string | null>;
+  return {
+    accessToken: row.sb_access_encrypted ? safeDecrypt(row.sb_access_encrypted) : null,
+    expiresAt: row.sb_access_expires_at ?? null,
+  };
+}
+
+/**
+ * Persist a freshly refreshed session and release the claim, in ONE write.
+ *
+ * Both tokens move together: storing the rotated refresh token without its
+ * access token is what left instances redeeming an already-spent token.
+ */
+export async function storeRefreshedSession(input: {
+  connectionId: string;
+  sbAccessToken: string;
+  sbRefreshToken: string;
+  accessExpiresAt: string;
+}): Promise<void> {
+  assertEncryptionConfigured();
+  const db = supabaseAdmin();
+  await db
+    .from("mcp_connections")
+    .update({
+      sb_access_encrypted: encrypt(input.sbAccessToken),
+      sb_access_expires_at: input.accessExpiresAt,
+      sb_refresh_encrypted: encrypt(input.sbRefreshToken),
+      sb_refresh_lock_at: null,
+    })
+    .eq("id", input.connectionId);
+}
+
+/** Release the claim without storing anything, after a failed refresh. */
+export async function releaseRefreshClaim(connectionId: string): Promise<void> {
+  const db = supabaseAdmin();
+  await db
+    .from("mcp_connections")
+    .update({ sb_refresh_lock_at: null })
+    .eq("id", connectionId);
+}
+
 export async function updateStoredSbRefresh(
   connectionId: string,
   sbRefreshToken: string,
