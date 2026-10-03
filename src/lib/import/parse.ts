@@ -89,11 +89,19 @@ function rewriteDateCellsToIso(ws: XLSX.WorkSheet): void {
  * from ordinary numbers and rewritten to ISO (see rewriteDateCellsToIso). It only
  * populates `z`; no cell value changes because of it.
  *
- * That rewrite is deliberately limited to spreadsheets. In a CSV there are no cell
- * formats to read, so SheetJS guesses dates from the text, month-first: it reads
- * `2/1/26` as 1 February. Converting those guesses to ISO would silently commit to
- * a reading the import rules refuse to guess at, so CSV text is passed through
- * verbatim and left to ./dates, which is day-first and rejects a two-digit year.
+ * Both of those are for spreadsheets only. A date in a CSV is not a date cell at
+ * all, just text, so SheetJS *guesses*: it recognises `2024-03-15`, converts it to a
+ * serial, stamps it with the format `m/d/yy`, and `raw: false` renders that back as
+ * `3/15/24`. ISO text went in and an ambiguous two-digit year came out, which
+ * ./dates rightly refused. The serial is no better, because the guess is also
+ * month-first — SheetJS reads `2/1/26` as 1 February, where the import rules are
+ * day-first and refuse to pick at all.
+ *
+ * So CSV is read with `raw: true`, which turns that guessing off at the source:
+ * every cell arrives as the literal characters from the file, dates included, and
+ * ./dates decides. Leading zeros and long numbers are safe for the same reason —
+ * `0044123` stays `0044123` instead of becoming the number 44123 — so `raw: false`
+ * is kept for .xlsx, where its formatted text is the thing protecting them.
  */
 export async function parseFile(file: File): Promise<ParsedFile> {
   const buf = await file.arrayBuffer();
@@ -101,7 +109,8 @@ export async function parseFile(file: File): Promise<ParsedFile> {
 
   const wb = XLSX.read(new Uint8Array(buf), {
     type: "array",
-    raw: false,
+    // CSV: literal text, no date guessing. XLSX: formatted text (see above).
+    raw: format === "csv",
     cellDates: false,
     cellNF: true,
   });

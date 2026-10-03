@@ -113,12 +113,45 @@ describe('parseFile — the whole point', () => {
 });
 
 describe('parseFile — CSV is untouched', () => {
+  it('hands the importers a CSV yyyy-mm-dd date they will accept', async () => {
+    // The bug: a CSV carries no cell formats, so SheetJS guessed "2024-03-15" was a
+    // date, stored it as a serial formatted m/d/yy, and `raw: false` rendered that
+    // back as "3/15/24" — a two-digit year, which ./dates refuses. Every row failed,
+    // on the very format the importers list first.
+    const r = await parseFile(csvFile('installation_date\n2024-03-15\n'));
+    expect(r.rows[0]?.[0]).toBe('2024-03-15');
+    expect(parseDmyDate(r.rows[0]![0]!)).toBe('2024-03-15');
+  });
+
   it('leaves CSV dates exactly as they arrive today', async () => {
     const r = await parseFile(
       csvFile('service_date,slashed,phone,big\n15-03-2024,15/03/2024,09876543210,123456789012345\n'),
     );
     expect(r.rows[0]).toEqual(['15-03-2024', '15/03/2024', '09876543210', '123456789012345']);
     expect(r.format).toBe('csv');
+  });
+
+  it('keeps the day-first CSV forms readable by the importers', async () => {
+    const r = await parseFile(csvFile('a,b\n15-03-2024,15/03/2024\n'));
+    expect(r.rows[0]!.map((v) => parseDmyDate(v))).toEqual(['2024-03-15', '2024-03-15']);
+  });
+
+  it('never resolves an ambiguous CSV date month-first', async () => {
+    // SheetJS's own guess here is 1 February. The import rules are day-first and
+    // refuse a two-digit year outright, so this text must survive verbatim and be
+    // rejected downstream — not be silently settled as February on the way in.
+    const r = await parseFile(csvFile('service_date\n2/1/26\n'));
+    expect(r.rows[0]?.[0]).toBe('2/1/26');
+    expect(parseDmyDate(r.rows[0]![0]!)).toBeNull();
+  });
+
+  it('leaves CSV leading zeros, long numbers and plain numbers unchanged', async () => {
+    // 0044123 is stored by SheetJS as the number 44123; it only survives intact
+    // because the display text is what reaches us. That must keep working.
+    const r = await parseFile(
+      csvFile('phone,padded,big,qty,price\n09876543210,0044123,123456789012345,42,1234.5\n'),
+    );
+    expect(r.rows[0]).toEqual(['09876543210', '0044123', '123456789012345', '42', '1234.5']);
   });
 });
 

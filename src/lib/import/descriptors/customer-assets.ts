@@ -35,9 +35,10 @@ export const customerAssetsDescriptor: ImportDescriptor = {
   undoable: true,
   dedupeKeys: ["serial_no"],
   insertOnly: true,
-  // Shown in the wizard (upload and mapping steps). The shared reader converts real .xlsx date
-  // cells to ISO before validation (see lib/import/parse), so this only has to state the rule
-  // for dates typed as text — where a two-digit year stays genuinely ambiguous.
+  // Shown in the wizard (upload and mapping steps). All three forms now work on both paths:
+  // the shared reader converts real .xlsx date cells to ISO and reads CSV cells as the literal
+  // text that was typed (see lib/import/parse). A two-digit year is the one case left
+  // genuinely ambiguous, so it stays the only caveat worth the user's attention.
   help: "Dates: use yyyy-mm-dd, dd-mm-yyyy or dd/mm/yyyy. A two-digit year is rejected rather than guessed.",
   // 10x the chunk size. Each 500-row chunk is its own transaction, which is what keeps the
   // tenant's single account_sequences row lock short (see run.ts CHUNK_SIZE).
