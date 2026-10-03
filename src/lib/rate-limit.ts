@@ -156,6 +156,12 @@ export const RATE_LIMITS = {
    *  this bounds cost/abuse: 20 questions / 5 min is well above a human
    *  reading answers, while stopping a runaway loop from burning tokens. */
   askOzzo: { limit: 20, windowMs: 5 * 60_000 },
+  /** MCP Dynamic Client Registration (public, per-IP). This endpoint is
+   *  unauthenticated by design — RFC 7591 is how an AI tool introduces
+   *  itself before any login exists — so it needs its own ceiling. A real
+   *  connect flow registers once; 20/hour leaves room for a few retries
+   *  while stopping a script from filling mcp_oauth_clients. */
+  mcpRegister: { limit: 20, windowMs: 60 * 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't
