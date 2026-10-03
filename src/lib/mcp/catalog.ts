@@ -27,7 +27,7 @@ const REPORT_SETS: Array<{
     reportModule: "visit",
     line: "wfa",
     notes:
-      "Customer visits logged by field employees. A visit is 'productive' only if it produced an order — never infer productivity from duration or from a photo being attached. Check-in and check-out are separate timestamps; an open visit has no check-out.",
+      "Customer visits logged by field employees. To count visits FOR one customer, first find that customer in the `customers` data set, then pass its id as the `customer` filter here — do not filter by `user`, which is the employee who made the visit, not the customer who received it. A visit is 'productive' only if it produced an order — never infer productivity from duration or from a photo being attached. Check-in and check-out are separate timestamps; an open visit has no check-out.",
     examples: [
       'fetch_data({ dataset: "visits", period: "last_180_days", filters: { customer: "<id>" }, measures: ["visit_count"] })',
       'fetch_data({ dataset: "visits", period: "today", group_by: ["user"], measures: ["visit_count"] })',
@@ -217,6 +217,10 @@ function fromReportConfig(entry: (typeof REPORT_SETS)[number]): DataSetDescripto
       type: (f.type === "select" || f.type === "multiselect" ? "select" : "id") as
         FilterDef["type"],
       options: f.options?.map((o) => o.value),
+      // A 'customer' filter is the one shape execute_report expects nested.
+      // The dashboard's own drawer sends { contact_id: val } for it and a
+      // bare value for every other type; see report-filter-drawer.tsx.
+      wrapIn: f.type === "customer" ? "contact_id" : undefined,
     }));
 
   return {
@@ -284,7 +288,7 @@ const READER_SETS: DataSetDescriptor[] = [
     ],
     measures: [{ key: "customer_count", label: "Customers", type: "number" }],
     notes:
-      "The customer master. Start here whenever a question names a company — use the `search` filter to turn a name into an id, then pass that id to another data set. City, state, country and area are denormalised from the territory hierarchy by a database trigger, so they are filled even for customers created with only a Territory. Inactive customers are soft-deleted, not removed; filter is_active unless the question is about history. There is no outstanding balance on this table — money owed is derived, so use the `outstanding` data set for that. Who owns a customer resolves in three steps: `employee_id` if set (a direct assignment, in the profiles.id space), otherwise whoever covers its territory, otherwise `user_id`, which is only the salesman who created the record and is in the auth-user id space, NOT profiles.id.",
+      "The customer master — the people and firms this business SELLS TO. Start here whenever a question names a company OR a person who is not staff. Indian B2B customers are very often recorded under an individual's name rather than a company name, so a person-sounding name is at least as likely to be a customer as an employee: if a question says \"customer\", search here, and if a name is not found in one master, search the other before saying it does not exist. Use the `search` filter to turn a name into an id — use the `search` filter to turn a name into an id, then pass that id to another data set. City, state, country and area are denormalised from the territory hierarchy by a database trigger, so they are filled even for customers created with only a Territory. Inactive customers are soft-deleted, not removed; filter is_active unless the question is about history. There is no outstanding balance on this table — money owed is derived, so use the `outstanding` data set for that. Who owns a customer resolves in three steps: `employee_id` if set (a direct assignment, in the profiles.id space), otherwise whoever covers its territory, otherwise `user_id`, which is only the salesman who created the record and is in the auth-user id space, NOT profiles.id.",
     examples: [
       'fetch_data({ dataset: "customers", filters: { search: "Shah Traders" }, fields: ["id","name","city","employee_id"] })',
       'fetch_data({ dataset: "customers", group_by: ["city"], measures: ["customer_count"] })',
@@ -356,7 +360,7 @@ const READER_SETS: DataSetDescriptor[] = [
     ],
     measures: [{ key: "employee_count", label: "Employees", type: "number" }],
     notes:
-      "The employee roster. Start here whenever a question names a person. IMPORTANT id trap: this data set's `id` is profiles.id, which is NOT the same as the auth user id. Visits, deals and expenses key on profiles.id; leads, payments and some task columns key on the auth user id. Always pass the id this data set returns and let OZZO map it. `manager_id` is the reporting-hierarchy parent and is only meaningful when that module is switched on.",
+      "The employee roster — the staff who WORK FOR this business, not the people it sells to. A person-sounding name is not evidence of an employee: in Indian B2B most customers are recorded under an individual's name, so check the `customers` data set too before reporting that someone does not exist. IMPORTANT id trap: this data set's `id` is profiles.id, which is NOT the same as the auth user id. Visits, deals and expenses key on profiles.id; leads, payments and some task columns key on the auth user id. Always pass the id this data set returns and let OZZO map it. `manager_id` is the reporting-hierarchy parent and is only meaningful when that module is switched on.",
     examples: [
       'fetch_data({ dataset: "employees", filters: { search: "Ramesh" }, fields: ["id","full_name","employee_code","designation"] })',
       'fetch_data({ dataset: "employees", group_by: ["department"], measures: ["employee_count"] })',

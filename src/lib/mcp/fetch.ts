@@ -102,6 +102,29 @@ function validate(s: DataSetDescriptor, args: FetchArgs) {
   }
 }
 
+/**
+ * Put a filter value into the shape the report engine expects.
+ *
+ * Most filters take a bare value, but a `customer` filter wants
+ * `{ contact_id: <id> }`. The engine does not complain about the wrong
+ * shape — it simply matches nothing and returns 0, which is indistinguishable
+ * from a genuine "no visits" and therefore far more dangerous than an error.
+ */
+function wrapFilterValue(
+  s: DataSetDescriptor,
+  key: string,
+  value: unknown,
+): unknown {
+  const def = s.filters.find((f) => f.key === key);
+  if (!def?.wrapIn) return value;
+  // Already nested (an AI that copied the dashboard's shape): leave it be
+  // rather than double-wrapping it into oblivion.
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  return { [def.wrapIn]: value };
+}
+
 /** The period to apply: what was asked for, or the report's own default. */
 function periodFor(
   s: DataSetDescriptor,
@@ -167,7 +190,8 @@ async function runReportRoute(
 ): Promise<FetchResult> {
   const filters: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(args.filters ?? {})) {
-    if (!SYNTHETIC_FILTERS.has(k)) filters[k] = v;
+    if (SYNTHETIC_FILTERS.has(k)) continue;
+    filters[k] = wrapFilterValue(s, k, v);
   }
   if (period) {
     filters.date_range = { start_date: period.start_date, end_date: period.end_date };

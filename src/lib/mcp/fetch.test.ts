@@ -212,6 +212,43 @@ describe("fetchData — report route", () => {
     expect(r.note).toBeUndefined();
   });
 
+  // Regression: the report engine wants `customer` as { contact_id: <id> }.
+  // A flat id matches nothing and execute_report returns 0 WITHOUT erroring,
+  // so "how many visits for Laxmi Mittal" answered 0 against 5 real visits.
+  // Eight report data sets share this filter.
+  it("sends the customer filter in the shape the report engine expects", async () => {
+    await fetchData(
+      { dataset: "visits", period: "last_180_days", filters: { customer: "cust-1" }, measures: ["visit_count"] },
+      ctx(),
+    );
+    const filters = rpc.runReport.mock.calls[0][5];
+    expect(filters.customer).toEqual({ contact_id: "cust-1" });
+  });
+
+  it("accepts the nested shape too, rather than double-wrapping it", async () => {
+    await fetchData(
+      { dataset: "visits", filters: { customer: { contact_id: "cust-1" } }, measures: ["visit_count"] },
+      ctx(),
+    );
+    expect(rpc.runReport.mock.calls[0][5].customer).toEqual({ contact_id: "cust-1" });
+  });
+
+  it.each(["orders", "sales", "quotations", "payments", "outstanding", "deals", "tasks"])(
+    "wraps the customer filter on %s too",
+    async (dataset) => {
+      await fetchData({ dataset, filters: { customer: "cust-1" } }, ctx());
+      expect(rpc.runReport.mock.calls[0][5].customer).toEqual({ contact_id: "cust-1" });
+    },
+  );
+
+  it("leaves flat filters alone", async () => {
+    await fetchData(
+      { dataset: "visits", filters: { visit_for: "Customer" }, measures: ["visit_count"] },
+      ctx(),
+    );
+    expect(rpc.runReport.mock.calls[0][5].visit_for).toBe("Customer");
+  });
+
   it("stamps as_of so the AI can say when the answer was true", async () => {
     const r = await fetchData(
       { dataset: "visits", measures: ["visit_count"] },

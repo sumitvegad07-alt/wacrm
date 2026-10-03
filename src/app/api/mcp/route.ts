@@ -167,7 +167,13 @@ export async function POST(request: Request) {
         isError: true,
       });
     } finally {
-      void logCall({
+      // AWAITED, not fire-and-forget. A serverless function can be frozen
+      // the moment it returns a response, killing any promise still in
+      // flight — which is exactly what happened on 2026-10-04: the slower
+      // `visits` calls left no audit row while faster ones did. The audit
+      // log is the only way a leaked token would ever be noticed, so an
+      // unreliable one is worse than none. logCall never throws.
+      await logCall({
         connectionId: ctx.connectionId,
         accountId: ctx.accountId,
         profileId: ctx.profileId,

@@ -21,6 +21,17 @@ export interface FilterDef {
   label: string;
   type: "id" | "text" | "select" | "date_range" | "time_of_day";
   options?: string[];
+  /**
+   * The report engine wants this filter's value wrapped in an object under
+   * this property, e.g. `{ contact_id: "<id>" }` rather than a bare id.
+   *
+   * Carried on the descriptor rather than special-cased in fetch.ts, because
+   * the whole point of the catalog is that the engine's expectations live in
+   * one place. Getting this wrong is silent: execute_report matches nothing
+   * and returns 0 instead of erroring, which is how "how many visits for
+   * this customer" answered 0 against 5 real visits.
+   */
+  wrapIn?: string;
 }
 
 export interface DataSetDescriptor {

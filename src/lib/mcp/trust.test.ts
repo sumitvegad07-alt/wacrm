@@ -177,6 +177,70 @@ describe.skipIf(!canRun)("connector matches dashboard", () => {
     expect(a.rows).toEqual(b.rows);
   });
 
+  // Regression, found in production on 2026-10-04: asking for one customer's
+  // visits returned 0 against 5 real ones, because the report engine wants
+  // `customer` nested as { contact_id } and a flat id matches nothing without
+  // erroring. A unit test on the call shape is not enough — only real data
+  // distinguishes "correctly zero" from "silently zero".
+  it("counts a real customer's visits instead of silently returning zero", async () => {
+    const { data } = await db
+      .from("site_visits")
+      .select("contact_id")
+      .eq("account_id", accountId)
+      .not("contact_id", "is", null)
+      .limit(200);
+    const counts = new Map<string, number>();
+    for (const row of (data ?? []) as { contact_id: string }[]) {
+      counts.set(row.contact_id, (counts.get(row.contact_id) ?? 0) + 1);
+    }
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    if (!ranked.length) return; // account has no customer-linked visits
+    const [contactId] = ranked[0];
+
+    const r = await fetchData(
+      {
+        dataset: "visits",
+        period: "last_365_days",
+        filters: { customer: contactId },
+        measures: ["visit_count"],
+      },
+      ctx(),
+    );
+    const total = r.rows.reduce((n, row) => n + Number(row.visit_count ?? 0), 0);
+    expect(total, "a customer with visits reported zero").toBeGreaterThan(0);
+  });
+
+  it("does not report every customer's visits when one is asked for", async () => {
+    // The other half of the same bug: a filter that is silently dropped
+    // returns the whole account's total, which reads as plausible.
+    const all = await fetchData(
+      { dataset: "visits", period: "last_365_days", measures: ["visit_count"] },
+      ctx(),
+    );
+    const { data } = await db
+      .from("site_visits")
+      .select("contact_id")
+      .eq("account_id", accountId)
+      .not("contact_id", "is", null)
+      .limit(1);
+    const contactId = ((data ?? [])[0] as { contact_id: string } | undefined)?.contact_id;
+    if (!contactId) return;
+
+    const one = await fetchData(
+      {
+        dataset: "visits",
+        period: "last_365_days",
+        filters: { customer: contactId },
+        measures: ["visit_count"],
+      },
+      ctx(),
+    );
+    const sum = (rows: Record<string, unknown>[]) =>
+      rows.reduce((n, r) => n + Number(r.visit_count ?? 0), 0);
+    expect(sum(one.rows)).toBeLessThanOrEqual(sum(all.rows));
+    if (sum(all.rows) > sum(one.rows)) expect(sum(one.rows)).toBeGreaterThan(0);
+  });
+
   it("reports the period it actually used, in account time", async () => {
     const r = await fetchData(
       { dataset: "orders", period: "this_month", group_by: ["user"], measures: ["net_amount"] },

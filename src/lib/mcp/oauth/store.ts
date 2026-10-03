@@ -79,6 +79,8 @@ export interface ConnectionRow {
   /** Decrypted — callers get the usable Supabase refresh token. */
   sb_refresh_token: string;
   access_expires_at: string;
+  /** Lets the caller skip a write when it is already recent. */
+  last_used_at: string | null;
 }
 
 // ── Clients (RFC 7591) ──────────────────────────────────────
@@ -248,6 +250,7 @@ export async function findConnectionByAccessToken(
     client_name: row.client_name as string,
     sb_refresh_token: decrypt(row.sb_refresh_encrypted as string),
     access_expires_at: row.access_expires_at,
+    last_used_at: (row.last_used_at as string | null) ?? null,
   };
 }
 

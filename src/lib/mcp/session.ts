@@ -249,8 +249,18 @@ export async function requireMcpContext(request: Request): Promise<McpContext> {
     allowWorkforceData: settings.mcp_allow_workforce_data === true,
   };
 
-  // Fire-and-forget: a failed touch must not fail the question.
-  void touchConnection(connection.id).catch(() => {});
+  // Awaited for the same reason as the audit write: a promise left in flight
+  // when a serverless function returns can simply be killed. If this never
+  // lands, last_used_at goes stale and the 90-day idle rule eventually kills
+  // a connection that is in daily use. Only written when it is actually
+  // stale, so the common case costs nothing.
+  if (isStale(connection.last_used_at)) {
+    try {
+      await touchConnection(connection.id);
+    } catch {
+      // A failed bookkeeping write must not fail the admin's question.
+    }
+  }
 
   return {
     connectionId: connection.id,
@@ -262,6 +272,15 @@ export async function requireMcpContext(request: Request): Promise<McpContext> {
     tenant,
     timezone,
   };
+}
+
+/** Only refresh last_used_at when it has drifted, to avoid a write per call. */
+const TOUCH_AFTER_MS = 15 * 60_000;
+
+function isStale(lastUsedAt: string | null): boolean {
+  if (!lastUsedAt) return true;
+  const t = new Date(lastUsedAt).getTime();
+  return !Number.isFinite(t) || Date.now() - t > TOUCH_AFTER_MS;
 }
 
 /** Module toggles live in the top-level accounts.module_settings column. */
