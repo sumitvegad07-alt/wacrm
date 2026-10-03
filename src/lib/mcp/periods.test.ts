@@ -138,9 +138,49 @@ describe("dashboard parity", () => {
   });
 });
 
+describe("short windows", () => {
+  // Added after "last 15 days total visits by Dhaval" could not be answered:
+  // no preset matched, so a perfectly ordinary question got a range instead
+  // of a number.
+  it.each([
+    ["last_7_days", "2026-09-28"],
+    ["last_15_days", "2026-09-20"],
+    ["last_30_days", "2026-09-05"],
+    ["last_60_days", "2026-08-06"],
+  ])("%s counts exactly that many days, ending today", (period, start) => {
+    const r = resolvePeriod(period, IST, new Date("2026-10-04T06:00:00Z"));
+    expect(r.start_date).toBe(start);
+    expect(r.end_date).toBe("2026-10-04");
+  });
+
+  it.each([
+    ["last_7_days", 7],
+    ["last_15_days", 15],
+    ["last_30_days", 30],
+    ["last_60_days", 60],
+  ])("%s spans exactly %i calendar days inclusive", (period, days) => {
+    const r = resolvePeriod(period, IST, new Date("2026-10-04T06:00:00Z"));
+    const span =
+      (Date.parse(r.end_date) - Date.parse(r.start_date)) / 86_400_000 + 1;
+    expect(span).toBe(days);
+  });
+
+  it("keeps the legacy windows off-by-one, for dashboard parity", () => {
+    // Deliberate: last_90_days must keep agreeing with the dashboard.
+    const r = resolvePeriod("last_90_days", IST, new Date("2026-10-04T06:00:00Z"));
+    const span = (Date.parse(r.end_date) - Date.parse(r.start_date)) / 86_400_000 + 1;
+    expect(span).toBe(91);
+  });
+
+  it("resolves them in account time, not UTC", () => {
+    const r = resolvePeriod("last_15_days", IST, new Date("2026-10-03T19:30:00Z"));
+    expect(r.end_date).toBe("2026-10-04");
+  });
+});
+
 describe("MCP_PERIODS", () => {
-  it("offers the 13 dashboard presets and excludes custom", () => {
-    expect(MCP_PERIODS).toHaveLength(13);
+  it("offers the dashboard presets plus the short windows, and excludes custom", () => {
+    expect(MCP_PERIODS).toHaveLength(17);
     expect(MCP_PERIODS).not.toContain("custom");
     expect(MCP_PERIODS).toContain("last_180_days");
   });

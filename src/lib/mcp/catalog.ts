@@ -27,7 +27,7 @@ const REPORT_SETS: Array<{
     reportModule: "visit",
     line: "wfa",
     notes:
-      "Customer visits logged by field employees. To count visits FOR one customer, first find that customer in the `customers` data set, then pass its id as the `customer` filter here — do not filter by `user`, which is the employee who made the visit, not the customer who received it. A visit is 'productive' only if it produced an order — never infer productivity from duration or from a photo being attached. Check-in and check-out are separate timestamps; an open visit has no check-out.",
+      "Customer visits logged by field employees. Group by `day` for a date-by-date breakdown; the `date` dimension buckets by MONTH, not by day. To count visits FOR one customer, first find that customer in the `customers` data set, then pass its id as the `customer` filter here — do not filter by `user`, which is the employee who made the visit, not the customer who received it. A visit is 'productive' only if it produced an order — never infer productivity from duration or from a photo being attached. Check-in and check-out are separate timestamps; an open visit has no check-out.",
     examples: [
       'fetch_data({ dataset: "visits", period: "last_180_days", filters: { customer: "<id>" }, measures: ["visit_count"] })',
       'fetch_data({ dataset: "visits", period: "today", group_by: ["user"], measures: ["visit_count"] })',
@@ -182,6 +182,16 @@ function toggleForReport(requiredModule: unknown): string | undefined {
   return requiredModule;
 }
 
+/**
+ * Report modules whose engine honours a `day` dimension.
+ *
+ * Verified against production one module at a time, because the others do NOT
+ * reject it — they silently ignore it and return a single ungrouped total.
+ * An AI that asked for a daily breakdown of payments would get one row and
+ * present it as a day's figure. Only these three are safe.
+ */
+const DAY_DIMENSION_MODULES = new Set(["visit", "order", "sales"]);
+
 const asField = (
   x: { key: string; label: string },
   type: FieldDef["type"],
@@ -201,6 +211,12 @@ function fromReportConfig(entry: (typeof REPORT_SETS)[number]): DataSetDescripto
   if (!def) return null;
 
   const dimensions = def.dimensions.map((d) => asField(d, "text"));
+  if (DAY_DIMENSION_MODULES.has(entry.reportModule)) {
+    // The config's own `date` dimension buckets by MONTH ("September 2026"),
+    // which is why "how many visits in the last 15 days" could not be
+    // answered even once a 15-day period existed.
+    dimensions.push({ key: "day", label: "Day", type: "date" });
+  }
   const measures = def.measures.map((m) =>
     asField(m, m.type === "currency" ? "currency" : "number"),
   );

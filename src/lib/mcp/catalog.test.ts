@@ -147,6 +147,26 @@ describe("report-config derivation", () => {
 });
 
 
+describe("day dimension", () => {
+  // The report engine silently IGNORES an unsupported `day` dimension and
+  // returns one ungrouped total, so offering it where it does not work would
+  // have an AI present an all-time figure as a single day's.
+  it.each(["visits", "orders", "sales"])("%s can be grouped by day", (name) => {
+    expect(getDataSet(name)!.dimensions.map((d) => d.key)).toContain("day");
+  });
+
+  it.each(["payments", "quotations", "outstanding", "leads", "deals", "expenses", "tasks", "daily_summary"])(
+    "%s does not offer day, because the engine ignores it there",
+    (name) => {
+      expect(getDataSet(name)!.dimensions.map((d) => d.key)).not.toContain("day");
+    },
+  );
+
+  it("tells the AI that the `date` dimension is monthly", () => {
+    expect(getDataSet("visits")!.notes).toMatch(/buckets by MONTH/);
+  });
+});
+
 describe("reader descriptors", () => {
   it("customers can be searched by name, and points elsewhere for money owed", () => {
     const s = getDataSet("customers")!;

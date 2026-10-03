@@ -25,6 +25,10 @@ const LABELS: Record<string, string> = {
   previous_quarter: "Previous Quarter",
   current_year: "Current Year",
   previous_year: "Previous Year",
+  last_7_days: "Last 7 Days",
+  last_15_days: "Last 15 Days",
+  last_30_days: "Last 30 Days",
+  last_60_days: "Last 60 Days",
   last_90_days: "Last 90 Days",
   last_180_days: "Last 180 Days",
   last_365_days: "Last 365 Days",
@@ -140,6 +144,20 @@ export function resolvePeriod(
       return wrap(fmt(y, 1, 1), fmt(y, 12, 31));
     case "previous_year":
       return wrap(fmt(y - 1, 1, 1), fmt(y - 1, 12, 31));
+    // The short windows below have NO dashboard counterpart, so unlike
+    // last_90_days they are exact: "last 15 days" is 15 calendar days ending
+    // today, which is what a person means by it. The legacy windows keep
+    // their off-by-one because the trust test requires them to agree with the
+    // dashboard, and silently changing a figure an admin already knows would
+    // be worse than the inconsistency.
+    case "last_7_days":
+      return wrap(shiftDays(today, -6), today);
+    case "last_15_days":
+      return wrap(shiftDays(today, -14), today);
+    case "last_30_days":
+      return wrap(shiftDays(today, -29), today);
+    case "last_60_days":
+      return wrap(shiftDays(today, -59), today);
     case "last_90_days":
       return wrap(shiftDays(today, -90), today);
     case "last_180_days":
