@@ -1,0 +1,162 @@
+import { describe, expect, it } from "vitest";
+import { MCP_PERIODS, isMcpPeriod, resolvePeriod, todayInZone } from "./periods";
+
+const IST = "Asia/Kolkata";
+
+describe("todayInZone", () => {
+  it("returns the Indian date, not the UTC date, late in the UTC evening", () => {
+    // 2026-10-03T19:30:00Z is 2026-10-04T01:00 IST.
+    expect(todayInZone(IST, new Date("2026-10-03T19:30:00Z"))).toBe("2026-10-04");
+  });
+
+  it("returns the Indian date just after midnight IST", () => {
+    // 2026-10-03T18:35:00Z is 2026-10-04T00:05 IST.
+    expect(todayInZone(IST, new Date("2026-10-03T18:35:00Z"))).toBe("2026-10-04");
+  });
+
+  it("honours a non-Indian account timezone", () => {
+    expect(todayInZone("America/New_York", new Date("2026-10-03T02:00:00Z"))).toBe("2026-10-02");
+  });
+});
+
+describe("resolvePeriod", () => {
+  it("resolves today in account time, not UTC", () => {
+    const r = resolvePeriod("today", IST, new Date("2026-10-03T19:30:00Z"));
+    expect(r.start_date).toBe("2026-10-04");
+    expect(r.end_date).toBe("2026-10-04");
+  });
+
+  it("resolves yesterday relative to the account's today", () => {
+    const r = resolvePeriod("yesterday", IST, new Date("2026-10-03T19:30:00Z"));
+    expect(r.start_date).toBe("2026-10-03");
+    expect(r.end_date).toBe("2026-10-03");
+  });
+
+  it("resolves this_month across a month boundary in account time", () => {
+    // 2026-09-30T19:00:00Z is 2026-10-01 00:30 IST — October, not September.
+    const r = resolvePeriod("this_month", IST, new Date("2026-09-30T19:00:00Z"));
+    expect(r.start_date).toBe("2026-10-01");
+    expect(r.end_date).toBe("2026-10-31");
+  });
+
+  it("resolves last_month", () => {
+    const r = resolvePeriod("last_month", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.start_date).toBe("2026-09-01");
+    expect(r.end_date).toBe("2026-09-30");
+  });
+
+  it("resolves last_180_days inclusive of today, matching the dashboard", () => {
+    const r = resolvePeriod("last_180_days", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.end_date).toBe("2026-10-03");
+    expect(r.start_date).toBe("2026-04-06"); // 180 days before 2026-10-03
+  });
+
+  it("resolves this_quarter", () => {
+    const r = resolvePeriod("this_quarter", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.start_date).toBe("2026-10-01");
+    expect(r.end_date).toBe("2026-12-31");
+  });
+
+  it("resolves current_year", () => {
+    const r = resolvePeriod("current_year", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.start_date).toBe("2026-01-01");
+    expect(r.end_date).toBe("2026-12-31");
+  });
+
+  it("carries the timezone and a human label for the AI to quote", () => {
+    const r = resolvePeriod("last_180_days", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.timezone).toBe(IST);
+    expect(r.label).toBe("Last 180 Days");
+  });
+
+  it("rejects an unknown period rather than silently returning everything", () => {
+    expect(() => resolvePeriod("last_fortnight", IST)).toThrow(/unknown period/i);
+  });
+
+  it("rejects custom ranges — the AI must not send raw dates", () => {
+    expect(() => resolvePeriod("custom", IST)).toThrow(/unknown period/i);
+  });
+});
+
+// The dashboard resolves periods with date-fns in the BROWSER's timezone.
+// These cases pin the connector to the same calendar semantics (quirks
+// included) so the Task 15 trust test can assert the two agree.
+describe("dashboard parity", () => {
+  it("starts the week on Sunday, as date-fns startOfWeek does by default", () => {
+    // 2026-10-03 is a Saturday, so the week runs Sun 27 Sep – Sat 3 Oct.
+    const r = resolvePeriod("this_week", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.start_date).toBe("2026-09-27");
+    expect(r.end_date).toBe("2026-10-03");
+  });
+
+  it("resolves last_week as the whole previous Sunday-to-Saturday week", () => {
+    const r = resolvePeriod("last_week", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.start_date).toBe("2026-09-20");
+    expect(r.end_date).toBe("2026-09-26");
+  });
+
+  it("keeps the dashboard's 91-day last_90_days quirk rather than fixing it", () => {
+    // subDays(now, 90) through end-of-today is 91 calendar days inclusive.
+    const r = resolvePeriod("last_90_days", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.start_date).toBe("2026-07-05");
+    expect(r.end_date).toBe("2026-10-03");
+  });
+
+  it("resolves previous_quarter", () => {
+    const r = resolvePeriod("previous_quarter", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.start_date).toBe("2026-07-01");
+    expect(r.end_date).toBe("2026-09-30");
+  });
+
+  it("rolls previous_quarter back into last year from Q1", () => {
+    const r = resolvePeriod("previous_quarter", IST, new Date("2026-02-14T06:00:00Z"));
+    expect(r.start_date).toBe("2025-10-01");
+    expect(r.end_date).toBe("2025-12-31");
+  });
+
+  it("resolves previous_year", () => {
+    const r = resolvePeriod("previous_year", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.start_date).toBe("2025-01-01");
+    expect(r.end_date).toBe("2025-12-31");
+  });
+
+  it("rolls last_month back into last year from January", () => {
+    const r = resolvePeriod("last_month", IST, new Date("2026-01-10T06:00:00Z"));
+    expect(r.start_date).toBe("2025-12-01");
+    expect(r.end_date).toBe("2025-12-31");
+  });
+
+  it("gets February right in a leap year", () => {
+    const r = resolvePeriod("this_month", IST, new Date("2028-02-10T06:00:00Z"));
+    expect(r.end_date).toBe("2028-02-29");
+  });
+
+  it("resolves last_365_days", () => {
+    const r = resolvePeriod("last_365_days", IST, new Date("2026-10-03T06:00:00Z"));
+    expect(r.start_date).toBe("2025-10-03");
+    expect(r.end_date).toBe("2026-10-03");
+  });
+});
+
+describe("MCP_PERIODS", () => {
+  it("offers the 13 dashboard presets and excludes custom", () => {
+    expect(MCP_PERIODS).toHaveLength(13);
+    expect(MCP_PERIODS).not.toContain("custom");
+    expect(MCP_PERIODS).toContain("last_180_days");
+  });
+
+  it("type-narrows known names only", () => {
+    expect(isMcpPeriod("today")).toBe(true);
+    expect(isMcpPeriod("custom")).toBe(false);
+    expect(isMcpPeriod(42)).toBe(false);
+  });
+
+  it("resolves every advertised period without throwing", () => {
+    for (const p of MCP_PERIODS) {
+      const r = resolvePeriod(p, IST, new Date("2026-10-03T06:00:00Z"));
+      expect(r.start_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(r.end_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(r.start_date <= r.end_date).toBe(true);
+    }
+  });
+});
