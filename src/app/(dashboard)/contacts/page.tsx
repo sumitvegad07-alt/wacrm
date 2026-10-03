@@ -290,7 +290,12 @@ export default function ContactsPage() {
 
   const columns: ColumnDef<ContactWithData>[] = [
     {
+      // The id stays "name" so saved column preferences keep working, but the
+      // column renders `contact.company`, so its heading and visibility are
+      // governed by the 'company' field — not by 'name', which is the contact
+      // person. Without systemKey this heading read "Contact Person".
       id: "name",
+      systemKey: "company",
       label: "Company Name",
       type: "text",
       render: (contact) => (
@@ -299,6 +304,7 @@ export default function ContactsPage() {
     },
     {
       id: "contact_person",
+      systemKey: "name",
       label: "Contact Person",
       type: "text",
       // Shown by default: FMCG list scans as "Company → Contact Person".

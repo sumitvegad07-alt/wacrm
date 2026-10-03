@@ -367,7 +367,10 @@ export function getVisibleTableColumns<T extends Record<string, any>>(
   const visibleColumns = baseColumns.filter((col) => {
     // Actions column is always shown
     if (col.id === 'actions') return true;
-    const sysField = systemFieldMap.get(col.id);
+    // `systemKey` where the column says which field governs it, otherwise its
+    // id. A column whose id differs from the field it renders must declare
+    // one, or it inherits another field's label and visibility.
+    const sysField = systemFieldMap.get(col.systemKey ?? col.id);
     if (sysField && (sysField.show_in_table === false || sysField.is_active === false)) {
       return false;
     }

@@ -61,7 +61,7 @@ export default function CustomerVisitsPage() {
         check_in_lng,
         check_out_lat,
         check_out_lng,
-        contacts ( name ),
+        contacts ( name, company ),
         profiles ( full_name )
       `)
       .order('check_in_at', { ascending: false })
@@ -88,19 +88,33 @@ export default function CustomerVisitsPage() {
         .filter(v => (v as any).target_type === 'Lead' && (v as any).target_id)
         .map(v => (v as any).target_id);
       const leadNames: Record<string, string> = {};
+      const leadPeople: Record<string, string> = {};
       if (leadIds.length > 0) {
         const { data: leadRows } = await supabase
           .from('leads')
-          .select('id, name')
+          .select('id, name, company, contact_person')
           .in('id', leadIds);
-        leadRows?.forEach(l => { leadNames[l.id] = l.name; });
+        leadRows?.forEach(l => {
+          // Lead the row with the firm, as the customers list does.
+          leadNames[l.id] = (l as any).company || l.name;
+          leadPeople[l.id] = (l as any).contact_person || "";
+        });
       }
 
       const formatted = data.map(v => ({
         id: v.id,
+        // Show the COMPANY here, not the contact person. A visit listed as
+        // "Laxmi mittal" when the customer is "Brahmani casting" is the same
+        // record under two names, and nobody can tell which one to ask about.
+        // Falls back to the person when a record has no company.
         name: (v as any).target_type === 'Lead'
           ? (leadNames[(v as any).target_id] ? `[${leadNames[(v as any).target_id]}]` : "Unknown")
-          : ((v.contacts as any)?.name ? `[${(v.contacts as any).name}]` : "Unknown"),
+          : (((v.contacts as any)?.company || (v.contacts as any)?.name)
+              ? `[${(v.contacts as any).company || (v.contacts as any).name}]`
+              : "Unknown"),
+        contactPerson: (v as any).target_type === 'Lead'
+          ? (leadPeople[(v as any).target_id] || "-")
+          : ((v.contacts as any)?.name || "-"),
         targetType: (v as any).target_type === 'Lead' ? 'Lead' : 'Customer',
         rawCheckIn: v.check_in_at,
         rawCheckOut: v.check_out_at,
@@ -145,6 +159,14 @@ export default function CustomerVisitsPage() {
             {row.targetType}
           </Badge>
         </span>
+      )
+    },
+    {
+      id: "contactPerson",
+      label: "Contact Person",
+      type: "text",
+      render: (row) => (
+        <span className="text-sm text-muted-foreground whitespace-nowrap">{row.contactPerson}</span>
       )
     },
     {

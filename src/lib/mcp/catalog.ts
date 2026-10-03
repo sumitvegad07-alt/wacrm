@@ -250,10 +250,14 @@ const READER_SETS: DataSetDescriptor[] = [
     route: "reader",
     line: "crm",
     table: "contacts",
-    searchFields: ["name", "customer_code"],
+    // `company` first: the reports display the company name, so that is the
+    // name an admin will quote back.
+    searchFields: ["company", "name", "customer_code"],
     fields: [
       { key: "id", label: "Customer ID", type: "text" },
-      { key: "name", label: "Customer Name", type: "text" },
+      // contacts.company is the FIRM, contacts.name is the PERSON at it.
+      { key: "company", label: "Company Name", type: "text" },
+      { key: "name", label: "Contact Person", type: "text" },
       { key: "customer_code", label: "Customer Code", type: "text" },
       { key: "phone", label: "Phone", type: "text" },
       { key: "email", label: "Email", type: "text" },
@@ -272,8 +276,9 @@ const READER_SETS: DataSetDescriptor[] = [
       { key: "created_at", label: "Created", type: "datetime" },
     ],
     filters: [
-      { key: "search", label: "Name or code contains", type: "text" },
+      { key: "search", label: "Company, contact person or code contains", type: "text" },
       { key: "id", label: "Customer ID", type: "id" },
+      { key: "company", label: "Company Name", type: "text" },
       { key: "city", label: "City", type: "text" },
       { key: "state", label: "State", type: "text" },
       { key: "area", label: "Area", type: "text" },
@@ -288,9 +293,9 @@ const READER_SETS: DataSetDescriptor[] = [
     ],
     measures: [{ key: "customer_count", label: "Customers", type: "number" }],
     notes:
-      "The customer master — the people and firms this business SELLS TO. Start here whenever a question names a company OR a person who is not staff. Indian B2B customers are very often recorded under an individual's name rather than a company name, so a person-sounding name is at least as likely to be a customer as an employee: if a question says \"customer\", search here, and if a name is not found in one master, search the other before saying it does not exist. Use the `search` filter to turn a name into an id — use the `search` filter to turn a name into an id, then pass that id to another data set. City, state, country and area are denormalised from the territory hierarchy by a database trigger, so they are filled even for customers created with only a Territory. Inactive customers are soft-deleted, not removed; filter is_active unless the question is about history. There is no outstanding balance on this table — money owed is derived, so use the `outstanding` data set for that. Who owns a customer resolves in three steps: `employee_id` if set (a direct assignment, in the profiles.id space), otherwise whoever covers its territory, otherwise `user_id`, which is only the salesman who created the record and is in the auth-user id space, NOT profiles.id.",
+      "The customer master — the firms and people this business SELLS TO. EACH RECORD HAS TWO NAMES: `company` is the firm (\"Brahmani casting\") and `name` is the contact person at it (\"Laxmi mittal\"). Every report — visits, orders, payments, outstanding — displays the COMPANY, so that is the name an answer should use. The `search` filter looks in both, so either name finds the record; say which you matched if they differ, because the admin may know the customer by only one of them. Start here whenever a question names a company OR a person who is not staff. Indian B2B customers are very often recorded under an individual's name rather than a company name, so a person-sounding name is at least as likely to be a customer as an employee: if a question says \"customer\", search here, and if a name is not found in one master, search the other before saying it does not exist. Use the `search` filter to turn a name into an id — use the `search` filter to turn a name into an id, then pass that id to another data set. City, state, country and area are denormalised from the territory hierarchy by a database trigger, so they are filled even for customers created with only a Territory. Inactive customers are soft-deleted, not removed; filter is_active unless the question is about history. There is no outstanding balance on this table — money owed is derived, so use the `outstanding` data set for that. Who owns a customer resolves in three steps: `employee_id` if set (a direct assignment, in the profiles.id space), otherwise whoever covers its territory, otherwise `user_id`, which is only the salesman who created the record and is in the auth-user id space, NOT profiles.id.",
     examples: [
-      'fetch_data({ dataset: "customers", filters: { search: "Shah Traders" }, fields: ["id","name","city","employee_id"] })',
+      'fetch_data({ dataset: "customers", filters: { search: "Shah Traders" }, fields: ["id","company","name","city"] })',
       'fetch_data({ dataset: "customers", group_by: ["city"], measures: ["customer_count"] })',
     ],
   },

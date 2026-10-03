@@ -170,6 +170,29 @@ describe("reader descriptors", () => {
     expect(s.notes).toMatch(/auth-user id space/i);
   });
 
+  // Found in production 2026-10-04: the reports display the COMPANY name
+  // ("Brahmani casting") while this data set returned only the contact person
+  // ("Laxmi mittal") and could not be searched by company at all. The AI saw
+  // one record under two names and could not match them.
+  it("exposes both the company and the contact person", () => {
+    const s = getDataSet("customers")!;
+    const keys = s.fields.map((f) => f.key);
+    expect(keys).toContain("company");
+    expect(keys).toContain("name");
+    expect(s.fields.find((f) => f.key === "company")!.label).toBe("Company Name");
+    expect(s.fields.find((f) => f.key === "name")!.label).toBe("Contact Person");
+  });
+
+  it("finds a customer by its company name, which is what reports show", () => {
+    expect(getDataSet("customers")!.searchFields).toContain("company");
+  });
+
+  it("warns the AI that a customer has two different names", () => {
+    const notes = getDataSet("customers")!.notes;
+    expect(notes).toMatch(/two names/i);
+    expect(notes).toMatch(/contact person/i);
+  });
+
   it("employees exposes the roster but never a credential-ish column", () => {
     const s = getDataSet("employees")!;
     expect(s.table).toBe("profiles");
