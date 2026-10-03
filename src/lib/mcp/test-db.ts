@@ -63,7 +63,34 @@ export function testDbTarget(): { target: TestDbTarget } | { reason: string } {
         `set MCP_TEST_SUPABASE_URL and MCP_TEST_SERVICE_ROLE_KEY to run this`,
     };
   }
+
+  // The URL and the key are separate variables, so they can disagree — and
+  // did: repointing the URL at Mumbai while a Singapore service-role key was
+  // still in place would turn a clean skip into an opaque "invalid JWT" on
+  // every assertion. A legacy key carries its project in the `ref` claim, so
+  // check it. Modern sb_secret_ keys are opaque and cannot be checked here.
+  const keyRef = legacyKeyRef(key);
+  if (keyRef && keyRef !== EXPECTED_PROJECT_REF) {
+    return {
+      reason:
+        `the service-role key belongs to project "${keyRef}" but the URL points at ` +
+        `"${ref}" — update SUPABASE_SERVICE_ROLE_KEY in .env.local to the ${EXPECTED_PROJECT_REF} key`,
+    };
+  }
+
   return { target: { url, key, ref } };
+}
+
+/** The project ref inside a legacy JWT API key, or null if it is not one. */
+function legacyKeyRef(key: string): string | null {
+  const payload = key.split(".")[1];
+  if (!payload) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64").toString("utf8"));
+    return typeof claims?.ref === "string" ? claims.ref : null;
+  } catch {
+    return null;
+  }
 }
 
 /** True when a live test may run. Used with vitest's describe.skipIf. */
