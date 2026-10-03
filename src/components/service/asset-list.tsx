@@ -50,6 +50,7 @@ import { DataTable } from "@/components/ui/data-table/data-table";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import type { ColumnDef } from "@/components/ui/data-table/data-table-types";
 import { ImportWizard } from "@/components/import/import-wizard";
+import { isImportModule } from "@/lib/import/registry";
 import { ConfirmDialog, EmptyState, PageLayout, PageToolbar, StatusBadge } from "@/components/shared";
 import { WarrantyPill } from "@/components/service/warranty-pill";
 import { CustomerFilter, type CustomerOption } from "@/components/service/customer-filter";
@@ -289,7 +290,11 @@ export function AssetList({
       <Plus className="size-3.5" /> Add Asset
     </Button>
   ) : null;
-  const importButton = canImport ? (
+  // Also gated on the module actually being registered in the import framework.
+  // Phase 1 Task 11 adds the `customer_assets` descriptor; until then ImportWizard
+  // would open and render nothing, so the button would silently do nothing. Keying
+  // on the registry rather than a flag means it appears by itself once Task 11 lands.
+  const importButton = canImport && isImportModule("customer_assets") ? (
     <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => setImportOpen(true)}>
       <Upload className="size-3.5" /> Import Assets
     </Button>
