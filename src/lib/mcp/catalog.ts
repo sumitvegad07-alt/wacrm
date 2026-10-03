@@ -246,6 +246,7 @@ const READER_SETS: DataSetDescriptor[] = [
     route: "reader",
     line: "crm",
     table: "contacts",
+    searchFields: ["name", "customer_code"],
     fields: [
       { key: "id", label: "Customer ID", type: "text" },
       { key: "name", label: "Customer Name", type: "text" },
@@ -295,6 +296,7 @@ const READER_SETS: DataSetDescriptor[] = [
     route: "reader",
     line: "crm",
     table: "products",
+    searchFields: ["name", "sku"],
     fields: [
       { key: "id", label: "Product ID", type: "text" },
       { key: "name", label: "Product Name", type: "text" },
@@ -326,6 +328,7 @@ const READER_SETS: DataSetDescriptor[] = [
     route: "reader",
     line: "wfa",
     table: "profiles",
+    searchFields: ["full_name", "employee_code"],
     fields: [
       { key: "id", label: "Employee ID", type: "text" },
       { key: "full_name", label: "Name", type: "text" },

@@ -39,6 +39,14 @@ export interface DataSetDescriptor {
   reportModule?: string;
   /** route "reader": base table. */
   table?: string;
+  /**
+   * route "reader": the columns the `search` filter looks in.
+   *
+   * Explicit rather than inferred, because guessing "any text column" would
+   * quietly search a GSTIN or an address when the admin asked for a company
+   * name, and the AI would report a confident match on the wrong record.
+   */
+  searchFields?: string[];
   /** ALLOW-LIST of readable columns. No select *, ever. */
   fields: FieldDef[];
   filters: FilterDef[];
