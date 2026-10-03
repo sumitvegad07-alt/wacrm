@@ -14,16 +14,17 @@
 // following src/tests/reporting/report_accuracy_certification.test.ts.
 // ============================================================
 import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
 import { beforeAll, describe, expect, it } from "vitest";
 import { allDataSets } from "./catalog";
+import { testDbTarget } from "./test-db";
 
-dotenv.config({ path: ".env.local" });
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const key =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.service_role ?? "";
-const canRun = Boolean(url && key);
+const target = testDbTarget();
+const canRun = "target" in target;
+if (!canRun) {
+  console.warn(`[mcp] skipping live schema test: ${target.reason}`);
+}
+const url = canRun ? target.target.url : "";
+const key = canRun ? target.target.key : "";
 
 describe.skipIf(!canRun)("reader descriptors match the live schema", () => {
   /** table -> set of real column names. */
