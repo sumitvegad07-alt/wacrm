@@ -57,8 +57,9 @@ describe("visibleDataSets", () => {
   });
 
   it("respects a module toggle that is switched off", () => {
-    // quotationReportConfig declares requiredModule 'quotations' (plural).
-    const off: TenantContext = { ...sfa, moduleSettings: { quotations: false } };
+    // The real accounts.module_settings key is 'quotation' (singular); the
+    // report config's 'quotations' is translated in the catalog.
+    const off: TenantContext = { ...sfa, moduleSettings: { quotation: false } };
     expect(visibleDataSets(off).map((s) => s.name)).not.toContain("quotations");
     expect(visibleDataSets(sfa).map((s) => s.name)).toContain("quotations");
   });
@@ -109,6 +110,41 @@ describe("visibleDataSets", () => {
   });
 });
 
+// Production holds an account on the legacy plan "Enterprise", which is not
+// in PLAN_IDS. The product rule is that legacy plans get full access, so
+// these must not come back empty.
+describe("legacy and malformed plans", () => {
+  const legacy: TenantContext = {
+    plan: "Enterprise",
+    moduleSettings: {},
+    allowWorkforceData: false,
+  };
+
+  it("gives a legacy plan full access rather than an empty menu", () => {
+    const names = visibleDataSets(legacy).map((s) => s.name);
+    expect(names).toContain("orders");
+    expect(names).toContain("visits");
+    expect(names).toContain("customers");
+    expect(names.length).toBeGreaterThan(5);
+  });
+
+  it("treats a null or missing plan as legacy, not as no access", () => {
+    for (const plan of [null, undefined, ""]) {
+      const ctx: TenantContext = { plan, moduleSettings: {}, allowWorkforceData: false };
+      expect(visibleDataSets(ctx).length, `plan=${String(plan)}`).toBeGreaterThan(5);
+    }
+  });
+
+  it("still withholds FSM data sets from a legacy plan", () => {
+    // planLines() grants crm/wfa/sfa to legacy plans but NOT fsm.
+    expect(visibleDataSets(legacy, STUBS).map((s) => s.name)).not.toContain("fsm_thing");
+  });
+
+  it("still hides sensitive data sets from a legacy plan", () => {
+    expect(visibleDataSets(legacy, STUBS).map((s) => s.name)).not.toContain("secret_thing");
+  });
+});
+
 describe("assertDataSetAllowed", () => {
   it("returns the descriptor when allowed", () => {
     expect(assertDataSetAllowed("orders", crmOnly).name).toBe("orders");
@@ -131,7 +167,7 @@ describe("assertDataSetAllowed", () => {
   });
 
   it("refuses a data set whose module is switched off", () => {
-    const off: TenantContext = { ...sfa, moduleSettings: { quotations: false } };
+    const off: TenantContext = { ...sfa, moduleSettings: { quotation: false } };
     expect(() => assertDataSetAllowed("quotations", off)).toThrow(/switched off/i);
   });
 

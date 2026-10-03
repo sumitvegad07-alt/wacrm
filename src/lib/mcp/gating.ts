@@ -16,18 +16,27 @@
 // catalog; the parameter exists so each gate can be tested on its own
 // instead of through whichever real data set happens to carry the flag.
 // ============================================================
-import { PLAN_LINES, type PlanId } from "@/lib/plans/catalog";
+import { planLines } from "@/lib/plans/catalog";
 import { allDataSets } from "./catalog";
 import type { DataSetDescriptor } from "./types";
 
 export interface TenantContext {
-  plan: PlanId;
+  /**
+   * The raw accounts.subscription_plan value, NOT a validated PlanId.
+   *
+   * Production holds at least one legacy plan ("Enterprise") that is not in
+   * PLAN_IDS, and the product rule is that legacy plans get full access.
+   * Indexing PLAN_LINES directly returns undefined for those and would hide
+   * every data set, so that tenant's AI would report an empty menu rather
+   * than the full one they are entitled to. planLines() encodes the rule.
+   */
+  plan: unknown;
   moduleSettings: Record<string, boolean>;
   allowWorkforceData: boolean;
 }
 
 function lineAllowed(s: DataSetDescriptor, ctx: TenantContext): boolean {
-  return PLAN_LINES[ctx.plan]?.[s.line] === true;
+  return planLines(ctx.plan)[s.line] === true;
 }
 
 function moduleAllowed(s: DataSetDescriptor, ctx: TenantContext): boolean {

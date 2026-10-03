@@ -10,6 +10,7 @@
 // these descriptors, so they cannot drift apart.
 // ============================================================
 import { getReportByModule } from "@/lib/reports/registry";
+import type { ModuleKey } from "@/lib/plans/catalog";
 import type { DataSetDescriptor, FieldDef, FilterDef, ProductLine } from "./types";
 import { MCP_PERIODS } from "./periods";
 
@@ -144,6 +145,43 @@ const REPORT_SETS: Array<{
   },
 ];
 
+/**
+ * Report-config `requiredModule` -> the real accounts.module_settings key.
+ *
+ * These have to be translated, not passed through. ReportDefinition.
+ * requiredModule is declared on eight report configs but consumed nowhere in
+ * the app, so its values were never checked against the real module keys —
+ * and most of them are not real keys at all. Production has exactly eleven:
+ * whatsapp, quotation, expense, dispatch, pending_dispatch, territory,
+ * reporting_hierarchy, route, payment, scheme, stock. There is no "orders",
+ * "quotations", "payments", "leads" or "deals".
+ *
+ * Passing the raw value through would make the module gate a silent no-op:
+ * a tenant who switched Quotations off would still see quotations in their
+ * AI, because nothing would ever match the key "quotations". null means the
+ * module is core and has no toggle.
+ */
+const REPORT_MODULE_TOGGLE: Record<string, ModuleKey | null> = {
+  orders: null, // core — no toggle exists
+  leads: null, // core
+  deals: null, // core
+  quotations: "quotation",
+  payments: "payment",
+  expense: "expense",
+};
+
+/** Translate a report config's requiredModule, or undefined when it has none. */
+function toggleForReport(requiredModule: unknown): string | undefined {
+  if (typeof requiredModule !== "string") return undefined;
+  const mapped = REPORT_MODULE_TOGGLE[requiredModule];
+  if (mapped === null) return undefined;
+  if (mapped) return mapped;
+  // An unmapped value is a new report config we have not triaged. Treating it
+  // as "no toggle" is the safe default (the plan line still gates it) and the
+  // catalog test fails loudly so it gets mapped.
+  return requiredModule;
+}
+
 const asField = (
   x: { key: string; label: string },
   type: FieldDef["type"],
@@ -186,8 +224,7 @@ function fromReportConfig(entry: (typeof REPORT_SETS)[number]): DataSetDescripto
     title: def.label,
     route: "report",
     line: entry.line,
-    requiredModule:
-      typeof def.requiredModule === "string" ? def.requiredModule : undefined,
+    requiredModule: toggleForReport(def.requiredModule),
     reportModule: entry.reportModule,
     // For a report data set the readable "fields" are its dimensions plus its
     // measures — exactly what execute_report can return, so the allow-list and

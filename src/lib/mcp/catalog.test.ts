@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MODULE_KEYS } from "@/lib/plans/catalog";
 import { allDataSets, getDataSet } from "./catalog";
 import { MCP_PERIODS } from "./periods";
 
@@ -107,11 +108,35 @@ describe("report-config derivation", () => {
     );
   });
 
-  it("carries the module toggle through from the report config", () => {
-    // orderReportConfig declares requiredModule: 'orders'.
-    expect(getDataSet("orders")!.requiredModule).toBe("orders");
-    // quotationReportConfig declares the PLURAL 'quotations'.
-    expect(getDataSet("quotations")!.requiredModule).toBe("quotations");
+  it("translates the report config's module key to a real one", () => {
+    // ReportDefinition.requiredModule is consumed nowhere in the app, so its
+    // values were never checked against accounts.module_settings. Most are
+    // not real keys: there is no "orders" or "quotations" toggle.
+    expect(getDataSet("quotations")!.requiredModule).toBe("quotation");
+    expect(getDataSet("payments")!.requiredModule).toBe("payment");
+    expect(getDataSet("expenses")!.requiredModule).toBe("expense");
+  });
+
+  it("gives core modules no toggle rather than an unmatchable one", () => {
+    // orderReportConfig says requiredModule: 'orders', which does not exist.
+    // Keeping it would make the gate a no-op that looks like it works.
+    expect(getDataSet("orders")!.requiredModule).toBeUndefined();
+    expect(getDataSet("sales")!.requiredModule).toBeUndefined();
+    expect(getDataSet("outstanding")!.requiredModule).toBeUndefined();
+    expect(getDataSet("leads")!.requiredModule).toBeUndefined();
+    expect(getDataSet("deals")!.requiredModule).toBeUndefined();
+  });
+
+  // The guard against this whole class of bug returning.
+  it("only ever names a module toggle that really exists", () => {
+    for (const s of allDataSets()) {
+      if (!s.requiredModule) continue;
+      expect(
+        MODULE_KEYS as readonly string[],
+        `${s.name} requires module "${s.requiredModule}", which is not a real ` +
+          `accounts.module_settings key — map it in REPORT_MODULE_TOGGLE`
+      ).toContain(s.requiredModule);
+    }
   });
 
   it("types currency measures as currency so the AI formats them as money", () => {
