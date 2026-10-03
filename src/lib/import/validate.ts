@@ -8,6 +8,7 @@ import type {
   ValidationSummary,
 } from "./types";
 import { normalizeKey } from "./parse";
+import { parseDmyDate } from "./dates";
 
 /** Turn parsed rows + a column mapping into field-keyed rows, keeping the
  *  1-based source row number (header is row 1, so first data row is row 2). */
@@ -43,6 +44,10 @@ function typeError(field: ImportDescriptor["fields"][number], value: string): st
         : "must be yes/no";
     case "date":
       return Number.isNaN(Date.parse(value)) ? "invalid date" : null;
+    case "date_dmy":
+      return parseDmyDate(value)
+        ? null
+        : "must be a real date as dd-mm-yyyy, dd/mm/yyyy or yyyy-mm-dd (a two-digit year is not accepted)";
     case "latlng":
       return Number.isFinite(Number(value)) ? null : "must be a coordinate";
     default:
@@ -125,7 +130,11 @@ export function validateRows(
 /**
  * Build the commit payload. In Skip mode we send only genuinely-new (valid)
  * rows. In Update mode we also send duplicates so existing rows get refreshed.
- * Invalid rows are never sent.
+ * Invalid rows are never sent. An `insertOnly` descriptor also sends duplicates in
+ * either mode: it never updates, so the server rejects each one with a named reason.
+ *
+ * `options` are the user's whole-file switches; a TRUE one is stamped on every row as
+ * `opt_<key>: "true"`, a false one is not sent at all.
  *
  * Custom (admin-defined) fields are split into a `__custom` object keyed by
  * custom_field_id, which the commit RPC writes to the module's EAV table.
@@ -135,13 +144,18 @@ export function buildCommitRows(
   summary: ValidationSummary,
   mode: "skip" | "update",
   descriptor: ImportDescriptor,
+  options: Record<string, boolean> = {},
 ): CommitRow[] {
   const customFieldIdByKey = new Map(
     descriptor.fields.filter((f) => f.customFieldId).map((f) => [f.key, f.customFieldId as string]),
   );
 
   return summary.rows
-    .filter((r) => r.status === "valid" || (mode === "update" && r.status === "duplicate"))
+    .filter(
+      (r) =>
+        r.status === "valid" ||
+        (r.status === "duplicate" && (mode === "update" || descriptor.insertOnly === true)),
+    )
     .map((r) => {
       const out: CommitRow = { __row: r.row };
       const custom: Record<string, string> = {};
@@ -154,6 +168,7 @@ export function buildCommitRows(
         }
       }
       if (Object.keys(custom).length) out.__custom = custom;
+      for (const [k, on] of Object.entries(options)) if (on) out[`opt_${k}`] = "true";
       return out;
     });
 }

@@ -1,4 +1,5 @@
--- FSM Phase 1 verification (checks 1-11 cover Task 3; checks 12-36 cover Task 4).
+-- FSM Phase 1 verification (checks 1-11 cover Task 3; checks 12-36 cover Task 4;
+-- checks 37-45 cover Task 11, the asset import, and have their own setup block at the end).
 -- There is no DB test harness in this repo, so this checked-in script with stated
 -- expected results is the verification artefact. Prefer a Supabase BRANCH.
 --
@@ -20,6 +21,7 @@
 -- Migrations under test:
 --   supabase/migrations/20260929151000_fsm_asset_masters.sql   (checks 1-11)
 --   supabase/migrations/20260929152000_fsm_customer_assets.sql (checks 12-36)
+--   supabase/migrations/20260929155000_fsm_import_customer_assets.sql (checks 37-45)
 --
 -- Setup (psql):
 --   \set acct '<test account uuid>'
@@ -673,3 +675,270 @@ ROLLBACK;
 -- and policies are dropped and re-created identically). Then confirm ANALYZE ran:
 --   SELECT relname, last_analyze FROM pg_stat_user_tables
 --    WHERE relname IN ('customer_assets','asset_types');
+
+
+-- ============================================================================
+-- TASK 11: ASSET IMPORT (checks 37-45)
+-- Migration: supabase/migrations/20260929155000_fsm_import_customer_assets.sql
+-- Sample files for the click-through: fsm-asset-import-sample.csv and fsm-asset-import-customers.csv
+-- (both in this directory).
+--
+-- SAFETY: checks 37-39 and 43 are read-only. Checks 40-42 are each ONE BEGIN ... ROLLBACK
+-- transaction that inserts its own fixtures (contacts VFY-IMP-1/-2, product VFY-IMP-PROD,
+-- asset VFY-EXIST, an import job), runs the import, and rolls everything back. Nothing is
+-- committed by this section. Fixture phone numbers are +999000000001 and +999000000002:
+-- if a real customer in :acct already has one of those numbers the INSERT fails 23505 and
+-- the transaction aborts harmlessly; pick other digits and re-run.
+--
+-- Extra setup for checks 40-42 (in addition to the setup above):
+--   \set importer '<user_id (auth uid) of an OWNER or ADMIN member of :acct>'
+--   :acct must be on an FSM plan and have asset types seeded (it does once Task 3 is applied).
+--   :contact (setup above) must have a non-null territory_id: check 40 uses it to prove
+--   territory inheritance.
+--   Checks 42(a) and 42(b) reuse :agent (a PLAIN agent, not owner/admin) and 42(c) reuses
+--   :nonfsm_acct / :nonfsm_member.
+-- Rolled-back writes burn nothing: the asset counter increments are rolled back with them.
+-- psql: checks 40 uses \gset, so run this section with psql, not a SQL console that lacks it.
+-- ============================================================================
+
+-- 37. BEFORE APPLYING THE MIGRATION: confirm the live function is the one the migration was
+--     built on. The migration was rebuilt from the pg_dump in tools/migration/01-schema.sql
+--     (2026-09-27), NOT from supabase/migrations/20260823140000, because the live function
+--     carries later changes (customer_code matching; optional phone/name rules on Customers,
+--     Products, Leads and Tasks imports) that the repo file does not. The migration aborts
+--     with a clear message if these markers are missing; run this first so you know why.
+--     Expect ONE row, all five columns = true (before AND after applying).
+--     The markers are coarse, so ALSO diff the live body against the dump before you apply:
+--     save the output of
+--       SELECT pg_get_functiondef('public.import_commit(uuid,jsonb,boolean)'::regprocedure);
+--     and compare it with lines 2925-3228 of tools/migration/01-schema.sql. Expect differences
+--     ONLY in the formatting of the CREATE line. Any other difference means the live function
+--     changed after 27 Sep: STOP and tell the developer so the migration can be rebased.
+WITH d AS (SELECT pg_get_functiondef('public.import_commit(uuid,jsonb,boolean)'::regprocedure) AS def)
+SELECT position('Row needs a phone number, a name, or a customer code' IN def) > 0 AS contacts_rules,
+       position('Row needs a product name or product code'              IN def) > 0 AS products_rules,
+       position('Row needs a lead name or a phone/WhatsApp number'      IN def) > 0 AS leads_rules,
+       position('Row needs a task title or description'                 IN def) > 0 AS tasks_rules,
+       position('Opening stock is required'                             IN def) > 0 AS stock_branch
+  FROM d;
+
+-- 38. AFTER APPLYING: both functions carry the new branch, are SECURITY INVOKER (RLS still
+--     applies to every write) and pin their search_path; the date helper is not callable by anon.
+--     Expect three rows:
+--       import_commit             | has_assets_branch = true  | security_definer = false | search_path = true
+--       import_parse_service_date | has_assets_branch = false | security_definer = false | search_path = true
+--       import_undo               | has_assets_branch = true  | security_definer = false | search_path = true
+--     (the helper never mentions customer_assets, so false is correct for it)
+--     and a second result: anon = false, authenticated = true.
+SELECT p.proname,
+       position('customer_assets' IN pg_get_functiondef(p.oid)) > 0 AS has_assets_branch,
+       p.prosecdef                                                  AS security_definer,
+       coalesce(p.proconfig::text LIKE '%search_path%', false)      AS search_path
+  FROM pg_proc p
+ WHERE p.pronamespace = 'public'::regnamespace
+   AND p.proname IN ('import_commit','import_undo','import_parse_service_date')
+ ORDER BY p.proname;
+SELECT has_function_privilege('anon',          'public.import_parse_service_date(text)', 'EXECUTE') AS anon,
+       has_function_privilege('authenticated', 'public.import_parse_service_date(text)', 'EXECUTE') AS authenticated;
+
+-- 39. The server date reader accepts exactly what src/lib/import/dates.ts accepts.
+--     (a) Expect: 2024-03-15 | 2024-03-15 | 2024-03-15 | 2026-02-01 | 2024-04-03 | NULL
+SELECT public.import_parse_service_date('15-03-2024')  AS dmy_dash,
+       public.import_parse_service_date('15/03/2024')  AS dmy_slash,
+       public.import_parse_service_date('2024-03-15')  AS iso,
+       public.import_parse_service_date('1-2-2026')    AS single_digits,
+       public.import_parse_service_date('03/04/2024')  AS day_first_not_month_first,
+       public.import_parse_service_date('   ')         AS blank_is_null;
+--     (b) A two-digit year is REFUSED, never guessed. Expect ERROR 22007 "unrecognised date: 01-02-26".
+--         RAISES ON PURPOSE.
+SELECT public.import_parse_service_date('01-02-26');
+--     (c) An impossible calendar date. Expect ERROR 22008 (date field value out of range). RAISES ON PURPOSE.
+SELECT public.import_parse_service_date('31-02-2026');
+
+-- 40. END TO END through import_commit and import_undo, as the importer, in ONE transaction that
+--     ROLLS BACK. Nine rows: three good, six rejected, each with a named reason; then an undo.
+--     Row numbers in "errors" are 1-BASED WITHIN THE CHUNK (the client adds the chunk offset),
+--     and here the chunk is the nine rows below, so the first row is 1.
+--
+--     (a) Expect from the import_commit result (jsonb):
+--       imported 3, failed 6, skipped 0, updated 0 and these errors, in order:
+--         row 3  customer_not_found: no active customer matches "Nobody Known Ltd" ...
+--         row 4  duplicate_serial: serial number "VFY-SN-1" is already used by asset <code of row 1's asset>
+--         row 5  duplicate_serial: serial number "VFY-EXIST" is already used by asset <code of the fixture asset>
+--         row 6  warranty_end_before_start: Warranty End 09-01-2025 is earlier than Warranty Start 10-01-2025
+--         row 7  invalid_date: Installation Date "01-02-26" is not a real date ...
+--         row 8  product_not_found: no product matches "VFY-NO-SUCH" by product code or name
+--       skipped = 0 is the point: NOTHING is dropped silently.
+--     (b) VFY-SN-1: no_territory = true (its contact has none). VFY-SN-2: inherited = true (the file's
+--         bogus "territory", "asset_code" and "customer_name_snapshot" keys were all ignored). VFY-SN-7:
+--         inherited = true as well. code_ok = true on all three. The snapshots are the CONTACT's values
+--         (Verify Import One/Two, +999000000001/2). creator_ok = true (created_by is the importer's
+--         profiles.id, not the auth user id).
+--     (c) contacts_unchanged, products_unchanged, types_unchanged, territories_unchanged: all true
+--         (the import created no customer, product, asset type or territory).
+--     (d) import_jobs: status completed | imported_rows 3 | failed_rows 6 | skipped_rows 0 |
+--         undoable true | errors 6.
+--     (e) import_undo: {"removed": 3, "blocked": 0, "asset_types_removed": 0}. Afterwards
+--         imported_left = 0 and fixture_still_there = 1: an undo removes exactly what the job made.
+BEGIN;
+  INSERT INTO public.contacts (user_id, account_id, phone, name, customer_code)
+  VALUES (:'importer', :'acct', '+999000000001', 'Verify Import One', 'VFY-IMP-1');
+  INSERT INTO public.contacts (user_id, account_id, phone, name, customer_code, territory_id)
+  VALUES (:'importer', :'acct', '+999000000002', 'Verify Import Two', 'VFY-IMP-2',
+          (SELECT territory_id FROM public.contacts WHERE id = :'contact'));
+  INSERT INTO public.products (user_id, account_id, name, sku)
+  VALUES (:'importer', :'acct', 'Verify Import Product', 'VFY-IMP-PROD');
+  INSERT INTO public.customer_assets (account_id, contact_id, name, serial_no)
+  VALUES (:'acct', (SELECT id FROM public.contacts WHERE account_id = :'acct' AND customer_code = 'VFY-IMP-1'),
+          'Verify existing asset', 'VFY-EXIST');
+  INSERT INTO public.import_jobs (id, account_id, user_id, module, target_table, file_name)
+  VALUES ('7e57f0f0-0000-4000-8000-0000000000a1', :'acct', :'importer', 'customer_assets', 'customer_assets', 'verify-check-40.csv');
+  SELECT count(*) AS c0 FROM public.contacts     WHERE account_id = :'acct' \gset
+  SELECT count(*) AS p0 FROM public.products     WHERE account_id = :'acct' \gset
+  SELECT count(*) AS t0 FROM public.asset_types  WHERE account_id = :'acct' \gset
+  SELECT count(*) AS r0 FROM public.territories  WHERE account_id = :'acct' \gset
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims',
+                    json_build_object('sub', :'importer', 'role', 'authenticated')::text, true);
+  SELECT jsonb_pretty(public.import_commit('7e57f0f0-0000-4000-8000-0000000000a1', $rows$[
+    {"__row":2,"customer":"VFY-IMP-1","name":"vfy ok by code","serial_no":"VFY-SN-1","installation_date":"15-03-2024"},
+    {"__row":3,"customer":"+999000000002","name":"vfy ok by phone","serial_no":"VFY-SN-2","installation_date":"15/03/2024",
+       "territory":"IGNORED","asset_code":"FORGED","customer_name_snapshot":"Forged Name"},
+    {"__row":4,"customer":"Nobody Known Ltd","name":"vfy unknown customer","serial_no":"VFY-SN-3"},
+    {"__row":5,"customer":"VFY-IMP-1","name":"vfy dup of row 1","serial_no":"VFY-SN-1"},
+    {"__row":6,"customer":"VFY-IMP-1","name":"vfy dup of existing","serial_no":"VFY-EXIST"},
+    {"__row":7,"customer":"VFY-IMP-1","name":"vfy bad warranty","serial_no":"VFY-SN-4","warranty_start":"10-01-2025","warranty_end":"09-01-2025"},
+    {"__row":8,"customer":"VFY-IMP-1","name":"vfy two-digit year","serial_no":"VFY-SN-5","installation_date":"01-02-26"},
+    {"__row":9,"customer":"VFY-IMP-1","name":"vfy unknown product","serial_no":"VFY-SN-6","product":"VFY-NO-SUCH"},
+    {"__row":10,"customer":"VFY-IMP-2","name":"vfy ok with product","serial_no":"VFY-SN-7","product":"VFY-IMP-PROD"}
+  ]$rows$::jsonb, true));                                                                    -- (a)
+  SELECT a.serial_no,
+         (a.territory_id IS NULL)                                                  AS no_territory,
+         (a.territory_id = (SELECT territory_id FROM public.contacts WHERE id = :'contact')) AS inherited,
+         (a.asset_code ~ '^[A-Z0-9]+-[0-9]{6,}$' AND a.asset_code <> 'FORGED')     AS code_ok,
+         a.customer_name_snapshot, a.customer_phone_snapshot,
+         (a.created_by = (SELECT id FROM public.profiles WHERE user_id = :'importer' AND account_id = :'acct')) AS creator_ok
+    FROM public.customer_assets a
+   WHERE a.account_id = :'acct' AND a.serial_no IN ('VFY-SN-1','VFY-SN-2','VFY-SN-7')
+   ORDER BY a.serial_no;                                                                       -- (b)
+  SELECT (SELECT count(*) FROM public.contacts    WHERE account_id = :'acct') = :c0 AS contacts_unchanged,
+         (SELECT count(*) FROM public.products    WHERE account_id = :'acct') = :p0 AS products_unchanged,
+         (SELECT count(*) FROM public.asset_types WHERE account_id = :'acct') = :t0 AS types_unchanged,
+         (SELECT count(*) FROM public.territories WHERE account_id = :'acct') = :r0 AS territories_unchanged; -- (c)
+  SELECT status, imported_rows, failed_rows, skipped_rows, undoable, jsonb_array_length(error_sample) AS errors
+    FROM public.import_jobs WHERE id = '7e57f0f0-0000-4000-8000-0000000000a1';                -- (d)
+  SELECT public.import_undo('7e57f0f0-0000-4000-8000-0000000000a1');                          -- (e)
+  SELECT (SELECT count(*) FROM public.customer_assets WHERE account_id = :'acct' AND serial_no LIKE 'VFY-SN-%') AS imported_left,
+         (SELECT count(*) FROM public.customer_assets WHERE account_id = :'acct' AND serial_no = 'VFY-EXIST')   AS fixture_still_there;
+ROLLBACK;
+-- 40 (after). Nothing persisted. Expect 0.
+SELECT count(*) FROM public.customer_assets WHERE account_id = :'acct' AND serial_no LIKE 'VFY-%';
+
+-- 41. "Create missing asset types" is OFF unless the rows carry opt_create_asset_types, and an
+--     undo removes the types that job created. One transaction, ROLLED BACK.
+--     Expect:
+--       (a) import_commit with the option absent: failed 1, imported 0, message
+--           asset_type_not_found: asset type "Vfy Brand New Type" does not exist (tick ...)
+--       (b) type_exists_after_a = 0   (nothing was created)
+--       (c) import_commit with opt_create_asset_types = "true" on two rows whose type differs only
+--           in letter case: imported 2, failed 0
+--       (d) types_named = 1   (created ONCE, reused case-insensitively)
+--       (e) import_undo: removed 2, asset_types_removed 1
+--       (f) types_named_after_undo = 0
+BEGIN;
+  INSERT INTO public.contacts (user_id, account_id, phone, name, customer_code)
+  VALUES (:'importer', :'acct', '+999000000001', 'Verify Import One', 'VFY-IMP-1');
+  INSERT INTO public.import_jobs (id, account_id, user_id, module, target_table, file_name)
+  VALUES ('7e57f0f0-0000-4000-8000-0000000000a2', :'acct', :'importer', 'customer_assets', 'customer_assets', 'verify-check-41.csv');
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims',
+                    json_build_object('sub', :'importer', 'role', 'authenticated')::text, true);
+  SELECT public.import_commit('7e57f0f0-0000-4000-8000-0000000000a2',
+    '[{"customer":"VFY-IMP-1","name":"vfy type off","asset_type":"Vfy Brand New Type"}]'::jsonb, false);   -- (a)
+  SELECT count(*) AS type_exists_after_a FROM public.asset_types
+   WHERE account_id = :'acct' AND lower(name) = 'vfy brand new type';                                      -- (b)
+  SELECT public.import_commit('7e57f0f0-0000-4000-8000-0000000000a2', $rows$[
+    {"customer":"VFY-IMP-1","name":"vfy type on 1","asset_type":"Vfy Brand New Type","opt_create_asset_types":"true"},
+    {"customer":"VFY-IMP-1","name":"vfy type on 2","asset_type":"vfy brand new type","opt_create_asset_types":"true"}
+  ]$rows$::jsonb, true);                                                                                   -- (c)
+  SELECT count(*) AS types_named FROM public.asset_types
+   WHERE account_id = :'acct' AND lower(name) = 'vfy brand new type';                                      -- (d)
+  SELECT public.import_undo('7e57f0f0-0000-4000-8000-0000000000a2');                                       -- (e)
+  SELECT count(*) AS types_named_after_undo FROM public.asset_types
+   WHERE account_id = :'acct' AND lower(name) = 'vfy brand new type';                                      -- (f)
+ROLLBACK;
+
+-- 42. Refusals are ONE clear error, up front, with nothing written (not an RLS failure per row that
+--     would abort the chunk). Each block is its own transaction and RAISES ON PURPOSE; the job row is
+--     inserted as the owner BEFORE the role switch.
+--     (a) A plain agent holding import_data and create_service_assets but NOT import_service_assets.
+--         Expect ERROR 42501 "You do not have permission to import assets".
+--     (b) The same agent holding import_service_assets but NOT create_service_assets.
+--         Expect ERROR 42501 "You do not have permission to create assets".
+--     (c) An owner/admin of an account WITHOUT the fsm line.
+--         Expect ERROR 42501 "Your plan does not include Service Assets".
+BEGIN;
+  UPDATE public.employee_roles er
+     SET permissions = (coalesce(er.permissions, '{}'::jsonb) - 'import_service_assets')
+                       || '{"import_data": true, "create_service_assets": true}'::jsonb
+    FROM public.profiles p
+   WHERE p.employee_role_id = er.id AND p.user_id = :'agent' AND p.account_id = :'acct';
+  INSERT INTO public.import_jobs (id, account_id, user_id, module, target_table, file_name)
+  VALUES ('7e57f0f0-0000-4000-8000-0000000000a3', :'acct', :'agent', 'customer_assets', 'customer_assets', 'verify-check-42a.csv');
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims', json_build_object('sub', :'agent', 'role', 'authenticated')::text, true);
+  SELECT public.import_commit('7e57f0f0-0000-4000-8000-0000000000a3',
+    '[{"customer":"x","name":"x"}]'::jsonb, true);                                                         -- (a)
+ROLLBACK;
+BEGIN;
+  UPDATE public.employee_roles er
+     SET permissions = (coalesce(er.permissions, '{}'::jsonb) - 'create_service_assets')
+                       || '{"import_data": true, "import_service_assets": true}'::jsonb
+    FROM public.profiles p
+   WHERE p.employee_role_id = er.id AND p.user_id = :'agent' AND p.account_id = :'acct';
+  INSERT INTO public.import_jobs (id, account_id, user_id, module, target_table, file_name)
+  VALUES ('7e57f0f0-0000-4000-8000-0000000000a4', :'acct', :'agent', 'customer_assets', 'customer_assets', 'verify-check-42b.csv');
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims', json_build_object('sub', :'agent', 'role', 'authenticated')::text, true);
+  SELECT public.import_commit('7e57f0f0-0000-4000-8000-0000000000a4',
+    '[{"customer":"x","name":"x"}]'::jsonb, true);                                                         -- (b)
+ROLLBACK;
+BEGIN;
+  INSERT INTO public.import_jobs (id, account_id, user_id, module, target_table, file_name)
+  VALUES ('7e57f0f0-0000-4000-8000-0000000000a5', :'nonfsm_acct', :'nonfsm_member', 'customer_assets', 'customer_assets', 'verify-check-42c.csv');
+  SET LOCAL ROLE authenticated;
+  SELECT set_config('request.jwt.claims', json_build_object('sub', :'nonfsm_member', 'role', 'authenticated')::text, true);
+  SELECT public.import_commit('7e57f0f0-0000-4000-8000-0000000000a5',
+    '[{"customer":"x","name":"x"}]'::jsonb, true);                                                         -- (c)
+ROLLBACK;
+
+-- 43. STATIC: the per-row exception handling. The outer handler gained exactly one clause
+--     (foreign_key_violation) and its unique_violation clause is UNCHANGED, so every other import
+--     target still skips a duplicate silently. Expect ONE row, all three = true.
+--     The foreign_key_violation clause cannot be reached by a real file today (every reference is
+--     resolved before the INSERT, and the asset branch has its own nested handler); it exists so a
+--     race, or any later import target, fails ONE row instead of aborting a chunk of 500.
+WITH d AS (SELECT pg_get_functiondef('public.import_commit(uuid,jsonb,boolean)'::regprocedure) AS def)
+SELECT position('WHEN foreign_key_violation THEN' IN def) > 0                                   AS outer_fk_clause,
+       position('WHEN unique_violation THEN v_skipped := v_skipped + 1;' IN def) > 0            AS outer_unique_still_silent_skip,
+       (length(def) - length(replace(def, 'WHEN unique_violation THEN', '')))
+         / length('WHEN unique_violation THEN') = 2                                            AS outer_plus_assets_handlers_only
+  FROM d;
+
+-- 44. MANUAL, END TO END, IN THE UI (the founder's click-through: steps 79-97 in task-11-report.md, which continues the script of task-9-report.md and task-10-report.md).
+--     Create the five customers from fsm-asset-import-customers.csv (Import > Customers), give
+--     "Asset Import Test 3" a Territory, create the product AIT-PROD-1 and one asset for AIT-01 with
+--     serial AIT-EXISTING-1, then import fsm-asset-import-sample.csv (Import > Service Assets).
+--     Expect: 15 imported; 4 failed with these reasons and 1 invalid in the preview:
+--       customer_not_found / duplicate_serial (naming the existing asset's code) /
+--       warranty_end_before_start / product_not_found, and the "01-02-26" row invalid before any write.
+--     The asset "Cassette AC" (the row that has a Territory value in the file) sits in "Asset Import
+--     Test 3"'s territory, NOT in "Gujarat". Undo removes exactly 15; no customer, product, asset type
+--     or territory was created. Confirm with this scoped read-only query (replace the account):
+--       SELECT count(*) FROM public.customer_assets WHERE account_id = :'acct' AND serial_no LIKE 'AIT-SN-%';
+--     -> 15 after the import, 0 after the undo.
+
+-- 45. MANUAL INSTRUCTION, NOT SQL. Idempotency of Task 11: re-apply
+--     supabase/migrations/20260929155000_fsm_import_customer_assets.sql a second time.
+--     Expect: no error and no change (CREATE OR REPLACE; the guard still passes because the markers
+--     it looks for are still in the new body). Then re-run check 37 (all true) and check 38.

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Upload, Boxes, Users, Package, UserPlus, ShoppingCart, Banknote, CheckSquare, MapPin } from "lucide-react";
+import { Upload, Boxes, Users, Package, UserPlus, ShoppingCart, Banknote, CheckSquare, MapPin, Wrench } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getImportDescriptor } from "@/lib/import/registry";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
@@ -32,6 +32,7 @@ const MODULES: {
   { key: "tasks", label: "Tasks", icon: CheckSquare },
   { key: "territories", label: "Territories", icon: MapPin, line: "wfa", configModule: "territory" },
   { key: "stock", label: "Opening Stock", icon: Boxes, line: "sfa", configModule: "stock" },
+  { key: "customer_assets", label: "Service Assets", icon: Wrench, line: "fsm" },
 ];
 
 export default function ImportHubPage() {

@@ -126,6 +126,8 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
   const [parsed, setParsed] = useState<ParsedFile | null>(null);
   const [mappings, setMappings] = useState<ColumnMapping[]>([]);
   const [mode, setMode] = useState<ImportMode>("skip");
+  // Whole-file switches a descriptor offers (e.g. "Create missing asset types"). Always start off.
+  const [optionValues, setOptionValues] = useState<Record<string, boolean>>({});
   const [summary, setSummary] = useState<ValidationSummary | null>(null);
   const [resolveGroups, setResolveGroups] = useState<LookupResolveGroup[]>([]);
   const [resolveSel, setResolveSel] = useState<ResolveSelections>({});
@@ -141,6 +143,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
     setParsed(null);
     setMappings([]);
     setMode("skip");
+    setOptionValues({});
     setSummary(null);
     setResolveGroups([]);
     setResolveSel({});
@@ -251,7 +254,10 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
     }
   }
 
-  const importableCount = summary ? summary.valid + (mode === "update" ? summary.duplicate : 0) : 0;
+  // An insert-only module sends its duplicates too: the server rejects each with a named reason.
+  const importableCount = summary
+    ? summary.valid + (mode === "update" || descriptor.insertOnly ? summary.duplicate : 0)
+    : 0;
 
   // A "create" in a parent-required group (a customer's territory below the root
   // level) can't proceed until a parent is chosen — otherwise the value would be
@@ -292,7 +298,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
 
   async function runImport() {
     if (!summary || !descriptor || !accountId || !user || !parsed || !file) return;
-    const rows = buildCommitRows(summary, mode, descriptor);
+    const rows = buildCommitRows(summary, mode, descriptor, optionValues);
     if (rows.length === 0) {
       toast.info(mode === "skip" ? "Nothing new to import." : "No rows to import or update.");
       return;
@@ -490,6 +496,11 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                 <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
                   This import <span className="font-medium text-foreground">updates existing records only</span> — each valid row is matched and updated. Rows that don&apos;t match anything are shown as invalid.
                 </div>
+              ) : descriptor.insertOnly ? (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  This import <span className="font-medium text-foreground">only adds new records</span> and never changes existing ones.
+                  A row that matches a record you already have is listed with the reason after the import.
+                </div>
               ) : (
                 <div>
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -511,6 +522,24 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                   </div>
                 </div>
               )}
+
+              {descriptor.options?.map((o) => (
+                <label
+                  key={o.key}
+                  className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-card p-3"
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 size-4 accent-primary"
+                    checked={!!optionValues[o.key]}
+                    onChange={(e) => setOptionValues((prev) => ({ ...prev, [o.key]: e.target.checked }))}
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium">{o.label}</span>
+                    {o.description && <span className="mt-0.5 block text-xs text-muted-foreground">{o.description}</span>}
+                  </span>
+                </label>
+              ))}
 
               <div className="overflow-hidden rounded-lg border border-border">
                 <div className="max-h-64 overflow-y-auto">

@@ -17,6 +17,9 @@ export type FieldType =
   | "phone"
   | "boolean"
   | "date"
+  /** A date in dd-mm-yyyy, dd/mm/yyyy or yyyy-mm-dd. Stricter than "date": never
+   *  month-first, never a two-digit year (see ./dates). */
+  | "date_dmy"
   | "latlng";
 
 export interface FieldDescriptor {
@@ -60,6 +63,15 @@ export interface LookupDescriptor {
   hierarchical?: boolean;
 }
 
+/** A yes/no choice the user makes once for the whole file (default always OFF).
+ *  A ticked option is sent on every row as `opt_<key>: "true"`; an unticked one is
+ *  not sent at all, so the server can only ever see an explicit yes. */
+export interface ImportOption {
+  key: string;
+  label: string;
+  description?: string;
+}
+
 export interface ImportDescriptor {
   /** Registry key + import_jobs.module, e.g. 'product_units'. */
   module: string;
@@ -77,6 +89,14 @@ export interface ImportDescriptor {
   lookups?: LookupDescriptor[];
   /** Recommended max rows before the (future) async tier; advisory in Wave 0. */
   maxRows?: number;
+
+  /** Whole-file switches shown on the preview step. All default to off. */
+  options?: ImportOption[];
+  /** Insert-only: an existing record is never updated, so the Skip/Update choice is
+   *  hidden. Rows that match an existing record are STILL sent to the server (not
+   *  dropped as a client-side "duplicate"), so the server can reject each with a
+   *  named reason instead of the file silently losing it. */
+  insertOnly?: boolean;
 
   // ---- Config-driven ("form-backed") modules ----
   /** When true, the importer's fields are generated at runtime from the same

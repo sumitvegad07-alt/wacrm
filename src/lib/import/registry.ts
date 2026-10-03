@@ -1,12 +1,13 @@
 import type { ImportDescriptor } from "./types";
 import { productUnitsDescriptor } from "./descriptors/product-units";
 import { WAVE1_DESCRIPTORS } from "./descriptors/masters";
+import { customerAssetsDescriptor } from "./descriptors/customer-assets";
 
 // Central registry: module key -> descriptor. Adding a module to the import
 // framework = registering its descriptor here (and adding the matching branch to
 // the import_commit / import_undo RPCs). Mirrors the report-engine registry pattern.
 const DESCRIPTORS: Record<string, ImportDescriptor> = Object.fromEntries(
-  [productUnitsDescriptor, ...WAVE1_DESCRIPTORS].map((d) => [d.module, d]),
+  [productUnitsDescriptor, ...WAVE1_DESCRIPTORS, customerAssetsDescriptor].map((d) => [d.module, d]),
 );
 
 export function getImportDescriptor(module: string): ImportDescriptor | null {
