@@ -6,6 +6,76 @@ export function normalizeKey(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/** Excel's day zero. Serials count whole days from here, so doing the arithmetic in
+ *  UTC and reading it back with getUTC* is exact — it never shifts by a day with the
+ *  machine's timezone, which is what `cellDates: true` and `toISOString()` both do. */
+const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30);
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * An Excel date serial as `yyyy-mm-dd`, or null when the number is not a date we
+ * will vouch for.
+ *
+ * Serials below 61 are refused: Excel keeps a fictional 29 Feb 1900 at serial 60, so
+ * everything at or below it is off by one, and a value under 1 is a time of day with
+ * no date at all. Nothing under 61 is a plausible imported date (it would be January
+ * or February 1900), so those cells are left on the existing formatted-text path
+ * rather than converted to something subtly wrong.
+ */
+export function excelSerialToIsoDate(serial: number): string | null {
+  if (!Number.isFinite(serial) || serial < 61) return null;
+  const d = new Date(EXCEL_EPOCH_UTC + Math.floor(serial) * MS_PER_DAY);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${String(d.getUTCFullYear()).padStart(4, "0")}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+/**
+ * Does this number format mean the cell holds a calendar date?
+ *
+ * A day or year token (`d`/`y`) is the test. Excel number formats only carry a bare
+ * `d` or `y` as a date token — a literal one has to be quoted or backslash-escaped —
+ * so those are stripped first, along with `[...]` sections (`[Red]`, `[$-409]`, and
+ * the `[h]` elapsed-time marker).
+ *
+ * Requiring `d` or `y` rather than any date token is deliberate: it excludes
+ * time-only formats like `h:mm`, where `m` means minutes, not month. Those cells
+ * carry no date — converting one would invent 30 Dec 1899.
+ */
+export function isDateNumberFormat(fmt: string): boolean {
+  const bare = fmt
+    .replace(/\\./g, "") // backslash-escaped literal characters
+    .replace(/"[^"]*"/g, "") // quoted literal runs
+    .replace(/\[[^\]]*\]/g, ""); // locale, colour and elapsed-time sections
+  return /[dy]/i.test(bare);
+}
+
+/**
+ * Rewrite every genuine date cell in the sheet to an ISO date string, in place.
+ *
+ * A date in a spreadsheet is a plain number plus a date number format. Under
+ * `raw: false` it reaches us as its *display* text, so a cell holding 1 Feb 2026
+ * arrives as whatever the author's format said — often `2/1/26`, which the
+ * importers reject because a two-digit year is ambiguous (see ./dates). Replacing
+ * the cell with an ISO text cell hands the rest of the pipeline an unambiguous
+ * date while every other cell stays on the formatted-text path untouched.
+ */
+function rewriteDateCellsToIso(ws: XLSX.WorkSheet): void {
+  for (const addr of Object.keys(ws)) {
+    if (addr.startsWith("!")) continue; // !ref, !margins, !merges, …
+    const cell: XLSX.CellObject | undefined = ws[addr];
+    // Only numeric cells carrying a date format. Text cells — including text that
+    // merely looks like a date — are left exactly as they are.
+    if (!cell || cell.t !== "n" || typeof cell.v !== "number") continue;
+    if (typeof cell.z !== "string" || !isDateNumberFormat(cell.z)) continue;
+    const iso = excelSerialToIsoDate(cell.v);
+    if (iso === null) continue;
+    cell.t = "s";
+    cell.v = iso;
+    cell.w = iso; // `raw: false` reads `w`, so set both
+  }
+}
+
 /**
  * Single shared reader for CSV and XLSX, built on the already-installed `xlsx`
  * (SheetJS) — no new parser dependency. Reads the first sheet, returns a
@@ -14,15 +84,32 @@ export function normalizeKey(s: string): string {
  * `raw: false` forces cell values to their *formatted text*, which is what stops
  * Excel from handing us phone numbers in scientific notation or dropping leading
  * zeros — every value arrives as a string.
+ *
+ * `cellNF: true` adds each cell's number format so date cells can be told apart
+ * from ordinary numbers and rewritten to ISO (see rewriteDateCellsToIso). It only
+ * populates `z`; no cell value changes because of it.
+ *
+ * That rewrite is deliberately limited to spreadsheets. In a CSV there are no cell
+ * formats to read, so SheetJS guesses dates from the text, month-first: it reads
+ * `2/1/26` as 1 February. Converting those guesses to ISO would silently commit to
+ * a reading the import rules refuse to guess at, so CSV text is passed through
+ * verbatim and left to ./dates, which is day-first and rejects a two-digit year.
  */
 export async function parseFile(file: File): Promise<ParsedFile> {
   const buf = await file.arrayBuffer();
   const format: ParsedFile["format"] = /\.xlsx?$/i.test(file.name) ? "xlsx" : "csv";
 
-  const wb = XLSX.read(new Uint8Array(buf), { type: "array", raw: false, cellDates: false });
+  const wb = XLSX.read(new Uint8Array(buf), {
+    type: "array",
+    raw: false,
+    cellDates: false,
+    cellNF: true,
+  });
   const firstSheetName = wb.SheetNames[0];
   if (!firstSheetName) return { headers: [], rows: [], format };
   const ws = wb.Sheets[firstSheetName];
+
+  if (format === "xlsx") rewriteDateCellsToIso(ws);
 
   const matrix = XLSX.utils.sheet_to_json<string[]>(ws, {
     header: 1,

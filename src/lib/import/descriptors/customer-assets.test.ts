@@ -81,10 +81,15 @@ describe('customer assets import descriptor', () => {
     expect(d.options![0].key).toBe('create_asset_types');
   });
 
-  it('tells the user the date rule in the wizard help, including the Excel advice', () => {
+  it('tells the user the date rule in the wizard help', () => {
     expect(d.help).toContain('yyyy-mm-dd, dd-mm-yyyy or dd/mm/yyyy');
     expect(d.help).toContain('A two-digit year is rejected rather than guessed');
-    expect(d.help).toContain('format date columns as yyyy-mm-dd first, or save as CSV');
+  });
+
+  it('no longer tells the user to reformat Excel dates or switch to CSV', () => {
+    // The shared reader now hands .xlsx date cells over as ISO (see lib/import/parse),
+    // so the workaround this importer used to print is obsolete.
+    expect(d.help).not.toMatch(/save as CSV|format date columns|from Excel/i);
   });
 
   it('uses the strict day-first date type for all three dates', () => {
