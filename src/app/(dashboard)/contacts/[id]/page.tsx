@@ -15,12 +15,14 @@ import { ContactForm } from "@/components/contacts/contact-form";
 import { Timeline } from "@/components/shared/timeline";
 import { CustomerFinancialCard } from "@/components/payments/customer-financial-card";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
+import { CustomerAssetsPanel } from "@/components/service/customer-assets-panel";
+import { shouldShowCustomerAssets } from "@/lib/service/assets/customer-panel";
 
 export default function ContactDetailsPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const supabase = createClient();
-  const { defaultCurrency, accountId, isModuleEnabled, hasPermission } = useAuth();
+  const { defaultCurrency, accountId, isModuleEnabled, hasPermission, hasFSM } = useAuth();
   const paymentEnabled = isModuleEnabled('payment');
   
   const canViewFinancials = hasPermission(PERMISSIONS.CUSTOMERS.VIEW_FINANCIALS);
@@ -328,6 +330,20 @@ export default function ContactDetailsPage() {
                </div>
              )}
           </div>
+
+          {/* FSM only: not mounted (so nothing is fetched) unless the plan has the fsm line and the user can view assets. */}
+          {shouldShowCustomerAssets({
+            hasFSM,
+            canView: hasPermission(PERMISSIONS.SERVICE_ASSETS.VIEW),
+            accountId,
+            contactId: id,
+          }) && accountId && (
+            <CustomerAssetsPanel
+              contactId={id}
+              accountId={accountId}
+              canCreate={hasPermission(PERMISSIONS.SERVICE_ASSETS.CREATE)}
+            />
+          )}
         </div>
 
         {/* Right Column: Timeline */}

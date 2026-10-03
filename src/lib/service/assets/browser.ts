@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   archiveAsset,
   createAsset,
+  listAssets,
   restoreAsset,
   updateAsset,
   type CreateAssetInput,
@@ -27,3 +28,7 @@ export const searchCustomersAsUser = (term: string): Promise<CustomerOption[]> =
 export const createAssetAsUser = (input: CreateAssetInput) => createAsset(createClient(), input);
 
 export const updateAssetAsUser = (id: string, input: UpdateAssetInput) => updateAsset(createClient(), id, input);
+
+/** The customer page's Assets panel: one customer's LIVE assets (archived never included), newest first. */
+export const listCustomerAssetsAsUser = (contactId: string, accountId: string, limit: number) =>
+  listAssets(createClient(), { contactId }, { accountId, limit });
