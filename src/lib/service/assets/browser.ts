@@ -17,7 +17,9 @@ export type { CustomerOption } from './lookups';
 
 export const archiveAssetAsUser = (id: string) => archiveAsset(createClient(), id);
 
-export const restoreAssetAsUser = (id: string) => restoreAsset(createClient(), id);
+/** Plain restore, or restore WITH a new code when the old one was reissued to another asset. */
+export const restoreAssetAsUser = (id: string, opts: { newCode?: string } = {}) =>
+  restoreAsset(createClient(), id, opts);
 
 export const searchCustomersAsUser = (term: string): Promise<CustomerOption[]> =>
   searchCustomers(createClient(), term);

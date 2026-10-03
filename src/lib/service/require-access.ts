@@ -7,8 +7,10 @@
 // close to its data. `cache()` makes the two calls share one result per request, so the repeat
 // costs nothing.
 //
-// The decision itself is canViewServiceAssets (access.ts), a pure function with its own tests.
+// The decision itself is serviceAssetRights (access.ts), a pure function with its own tests.
 // This file only gathers its inputs: the plan, the account role and the employee-role permissions.
+// Success carries the viewer's rights (view is always true there; create/edit/delete decide which
+// buttons and forms a screen shows), so no page needs to ask the browser what the server can say.
 
 import { cache } from 'react';
 import {
@@ -18,10 +20,10 @@ import {
   type AccountContext,
 } from '@/lib/auth/account';
 import type { RolePermissions } from '@/lib/auth/rbac';
-import { canViewServiceAssets } from './access';
+import { serviceAssetRights, type ServiceAssetRights } from './access';
 
 export type ServiceAccess =
-  | { ok: true; ctx: AccountContext }
+  | { ok: true; ctx: AccountContext; rights: ServiceAssetRights }
   | { ok: false; redirectTo: '/login' | '/dashboard' };
 
 /**
@@ -54,10 +56,10 @@ export const resolveServiceAssetsAccess = cache(async (): Promise<ServiceAccess>
   const roleRow = Array.isArray(embedded) ? embedded[0] : embedded;
   const permissions = ((roleRow as { permissions?: unknown } | null | undefined)?.permissions ?? null) as RolePermissions | null;
 
-  const allowed = canViewServiceAssets({
+  const rights = serviceAssetRights({
     plan: accountRes.data?.subscription_plan,
     accountRole: ctx.role,
     permissions,
   });
-  return allowed ? { ok: true, ctx } : { ok: false, redirectTo: '/dashboard' };
+  return rights.view ? { ok: true, ctx, rights } : { ok: false, redirectTo: '/dashboard' };
 });

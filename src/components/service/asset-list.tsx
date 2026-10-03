@@ -195,10 +195,17 @@ export function AssetList({
         toast.success("Asset re-activated");
         refresh();
       } catch (err) {
+        // A reissued code needs a new one typed in, which the asset's own page has a dialog for.
+        if (err instanceof AssetError && err.kind === "duplicate_code") {
+          toast.error(err.message, {
+            action: { label: "Open asset", onClick: () => router.push(`/service/assets/${row.id}`) },
+          });
+          return;
+        }
         toast.error(err instanceof AssetError ? err.message : "Could not re-activate the asset.");
       }
     },
-    [refresh],
+    [refresh, router],
   );
 
   // NOTE: DataTable re-reads its saved column layout whenever `columns` changes identity, so this

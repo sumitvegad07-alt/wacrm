@@ -34,6 +34,7 @@ export default async function NewAssetPage({ searchParams }: { searchParams: Sea
     <AssetForm
       accountId={accountId}
       lookups={lookups}
+      canSaveOnServer={access.rights.create}
       lockedContactId={customer?.id}
       lockedContactLabel={customer?.label}
     />

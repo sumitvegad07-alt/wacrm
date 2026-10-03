@@ -22,16 +22,22 @@ export interface TimelineEvent {
 }
 
 interface TimelineProps {
-  moduleName: 'contact' | 'deal' | 'quotation' | 'product' | 'scheme' | 'lead' | 'expense' | 'order' | 'dispatch' | 'user' | 'payment' | 'leave';
+  moduleName: 'contact' | 'deal' | 'quotation' | 'product' | 'scheme' | 'lead' | 'expense' | 'order' | 'dispatch' | 'user' | 'payment' | 'leave' | 'customer_asset';
   recordId: string;
   tasks: any[];
   notes?: any[];
   activities?: any[];
   canViewPaymentHistory?: boolean;
+  /**
+   * History only: no Planned section, no ADD button, no task form. For records that tasks cannot be
+   * attached to (the task form has no link for them, so an ADD button would create a task that
+   * belongs to nothing). Default false: every existing screen is unchanged.
+   */
+  readOnly?: boolean;
   onRefresh: () => void;
 }
 
-export function Timeline({ moduleName, recordId, tasks, notes = [], activities = [], canViewPaymentHistory = true, onRefresh }: TimelineProps) {
+export function Timeline({ moduleName, recordId, tasks, notes = [], activities = [], canViewPaymentHistory = true, readOnly = false, onRefresh }: TimelineProps) {
   const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [filter, setFilter] = useState('all'); // all, activities, notes, changelog
@@ -235,20 +241,23 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
   });
 
   return (
-    <div className="bg-card border border-border rounded-lg flex flex-col overflow-hidden h-[calc(100vh-140px)] sticky top-6">
+    <div className={cn("bg-card border border-border rounded-lg flex flex-col overflow-hidden", !readOnly && "h-[calc(100vh-140px)] sticky top-6")}>
       <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
         <h3 className="font-semibold flex items-center gap-2">
           <Calendar className="size-4" />
           Timeline
         </h3>
-        <Button variant="outline" size="sm" onClick={() => { setSelectedTask(null); setTaskFormOpen(true); }} className="h-7 text-xs px-2 gap-1">
-          <Plus className="size-3" />
-          ADD
-        </Button>
+        {!readOnly && (
+          <Button variant="outline" size="sm" onClick={() => { setSelectedTask(null); setTaskFormOpen(true); }} className="h-7 text-xs px-2 gap-1">
+            <Plus className="size-3" />
+            ADD
+          </Button>
+        )}
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {/* Planned Section */}
+        {!readOnly && (
         <div>
           <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 bg-muted/50 p-2 rounded">
             Planned
@@ -320,11 +329,13 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
           )}
         </div>
 
+        )}
+
         {/* Past Section */}
         <div>
           <div className="flex items-center justify-between mb-3 bg-muted/50 p-2 rounded">
             <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              Past
+              {readOnly ? 'History' : 'Past'}
             </h4>
             <DropdownMenu>
               <DropdownMenuTrigger className="text-xs text-muted-foreground hover:text-foreground">
@@ -342,7 +353,7 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
           </div>
           
           {filteredPast.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic px-2">No past activities found.</p>
+            <p className="text-sm text-muted-foreground italic px-2">{readOnly ? 'No history recorded yet.' : 'No past activities found.'}</p>
           ) : (
             <div className="divide-y divide-border opacity-75">
               {filteredPast.map((event) => {
@@ -451,6 +462,7 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
         </div>
       </div>
       
+      {!readOnly && (
       <TaskForm
         open={taskFormOpen}
         onOpenChange={setTaskFormOpen}
@@ -472,6 +484,7 @@ export function Timeline({ moduleName, recordId, tasks, notes = [], activities =
           onRefresh();
         }}
       />
+      )}
     </div>
   );
 }

@@ -12,6 +12,10 @@
 // snapshots (migration 20260929152000). So the write functions build their payload from an
 // allowlist and NEVER send asset_code, customer_name_snapshot, customer_phone_snapshot, account_id
 // (on update) or deleted_at (except archiveAsset), and never send a blank territory_id.
+//
+// Each successful write also records a row in module_activities (see activity.ts) for the detail
+// screen's Timeline. That call is fire-and-forget: it is never awaited, so a slow or failing log
+// can neither delay nor fail the save. Failed writes log nothing.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AssetStatus, CustomerAsset } from '../types';
@@ -23,6 +27,7 @@ import {
   type AssetConflict,
 } from './errors';
 import { buildAssetSearchOr, warrantyDateBounds, type AssetFilters } from './filters';
+import { logAssetActivity } from './activity';
 
 // ── Shapes ─────────────────────────────────────────────────────────────────────
 
@@ -315,7 +320,9 @@ export async function createAsset(supabase: SupabaseClient, input: CreateAssetIn
     if (mapped.kind !== 'duplicate_serial' || !serial) throw mapped;
     throw mapped.withConflict(await findSerialConflict(supabase, serial, { accountId: input.account_id }));
   }
-  return data as CustomerAsset;
+  const created = data as CustomerAsset;
+  logAssetActivity(supabase, { kind: 'created', asset: created });
+  return created;
 }
 
 /**
@@ -344,7 +351,9 @@ export async function updateAsset(
   if (!data) {
     throw new AssetError('not_found', 'Asset not found, or you do not have permission to edit it.');
   }
-  return data as CustomerAsset;
+  const updated = data as CustomerAsset;
+  logAssetActivity(supabase, { kind: 'updated', asset: updated, changed: Object.keys(payload) });
+  return updated;
 }
 
 /**
@@ -364,7 +373,9 @@ export async function archiveAsset(supabase: SupabaseClient, id: string): Promis
   if (!data) {
     throw new AssetError('not_found', 'Asset not found, already archived, or you do not have permission to archive it.');
   }
-  return data as CustomerAsset;
+  const archived = data as CustomerAsset;
+  logAssetActivity(supabase, { kind: 'archived', asset: archived });
+  return archived;
 }
 
 /**
@@ -403,5 +414,7 @@ export async function restoreAsset(
   if (!data) {
     throw new AssetError('not_found', 'Asset not found, not archived, or you do not have permission to restore it.');
   }
-  return data as CustomerAsset;
+  const restored = data as CustomerAsset;
+  logAssetActivity(supabase, { kind: 'restored', asset: restored, recoded: Boolean(newCode) });
+  return restored;
 }

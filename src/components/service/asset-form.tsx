@@ -51,11 +51,17 @@ export interface AssetFormProps {
   /** Picker data, loaded on the server by loadAssetFormLookups. */
   lookups: AssetFormLookups;
   /**
-   * Called with the saved row instead of navigating. Omit it and the form goes back to the asset
-   * list. A host that embeds the form (a panel, a dialog) passes this and `onCancel`.
+   * Whether the SERVER says this viewer may save (create_service_assets / edit_service_assets, from
+   * resolveServiceAssetsAccess). `false` refuses at once with no loader. The browser-side check below
+   * still runs after it, as defence in depth, never instead of it.
+   */
+  canSaveOnServer?: boolean;
+  /**
+   * Called with the saved row instead of navigating. Omit it and the form opens the saved asset's
+   * detail page. A host that embeds the form (a panel, a dialog) passes this and `onCancel`.
    */
   onSaved?: (asset: CustomerAsset) => void;
-  /** Called by Cancel and the back arrow. Defaults to the asset list. */
+  /** Called by Cancel and the back arrow. Defaults to the asset's detail page (edit) or the asset list (add). */
   onCancel?: () => void;
 }
 
@@ -116,6 +122,7 @@ export function AssetForm({
   lockedContactLabel,
   accountId,
   lookups,
+  canSaveOnServer,
   onSaved,
   onCancel,
 }: AssetFormProps) {
@@ -123,7 +130,10 @@ export function AssetForm({
   const { hasPermission, profile, profileLoading } = useAuth();
 
   const isEdit = Boolean(asset);
-  const canSave = hasPermission(isEdit ? PERMISSIONS.SERVICE_ASSETS.EDIT : PERMISSIONS.SERVICE_ASSETS.CREATE);
+  // The browser's own answer (defence in depth). The server's answer, when given, is checked first.
+  const canSave =
+    canSaveOnServer !== false &&
+    hasPermission(isEdit ? PERMISSIONS.SERVICE_ASSETS.EDIT : PERMISSIONS.SERVICE_ASSETS.CREATE);
 
   const [values, setValues] = useState<AssetFormValues>(() => initialValues(asset, lockedContactId));
   const [customer, setCustomer] = useState<CustomerOption | null>(() => {
@@ -173,7 +183,9 @@ export function AssetForm({
     if (field === "serial_no") setSerialClash(null);
   };
 
-  const goBack = () => (onCancel ? onCancel() : router.push(LIST_HREF));
+  // Cancel returns to where the user came from: the asset's own page when editing, the list when adding.
+  const homeHref = asset ? `/service/assets/${asset.id}` : LIST_HREF;
+  const goBack = () => (onCancel ? onCancel() : router.push(homeHref));
 
   const handleSave = async () => {
     if (saving || !canSave) return;
@@ -212,7 +224,8 @@ export function AssetForm({
       // let a fast second click create the same asset twice.
       if (onSaved) onSaved(saved);
       else {
-        router.push(LIST_HREF);
+        // Land on the asset itself: the new code, the saved values and the Timeline entry are all there.
+        router.push(`/service/assets/${saved.id}`);
         router.refresh();
       }
     } catch (err) {
@@ -256,7 +269,8 @@ export function AssetForm({
 
   // `profileLoading` first: until the role loads, hasPermission() is false for everyone, and a
   // legitimate user must not see a flash of "no permission" (or a Save they cannot yet use).
-  if (profileLoading) return shell(<PageLoader text="Loading..." minHeight="min-h-[160px]" />);
+  // Skipped when the server has already said no: that answer needs no waiting.
+  if (profileLoading && canSaveOnServer !== false) return shell(<PageLoader text="Loading..." minHeight="min-h-[160px]" />);
 
   if (!canSave) {
     return shell(

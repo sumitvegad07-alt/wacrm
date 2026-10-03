@@ -33,5 +33,5 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
   // one, so an asset of another account must not open here.
   if (!asset || asset.account_id !== accountId) notFound();
 
-  return <AssetForm asset={asset} accountId={accountId} lookups={lookups} />;
+  return <AssetForm asset={asset} accountId={accountId} lookups={lookups} canSaveOnServer={access.rights.edit} />;
 }

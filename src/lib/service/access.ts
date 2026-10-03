@@ -25,8 +25,37 @@ export interface ServiceAccessInput {
   permissions: RolePermissions | null;
 }
 
-export function canViewServiceAssets({ plan, accountRole, permissions }: ServiceAccessInput): boolean {
+/** One right, decided the same way for every action: plan line first (never bypassed), then owner/admin, then the permission. */
+function holds({ plan, accountRole, permissions }: ServiceAccessInput, right: string): boolean {
   if (!planHasLine(plan, 'fsm')) return false;
   if (accountRole === 'owner' || accountRole === 'admin') return true;
-  return hasPermission(permissions, PERMISSIONS.SERVICE_ASSETS.VIEW);
+  return hasPermission(permissions, right);
+}
+
+export function canViewServiceAssets(input: ServiceAccessInput): boolean {
+  return holds(input, PERMISSIONS.SERVICE_ASSETS.VIEW);
+}
+
+/**
+ * What the caller may DO to assets, resolved on the server so a screen can refuse early and say why
+ * instead of showing a form or button that cannot succeed. The database stays authoritative (RLS and
+ * the archive/restore triggers key on the same rights plus the plan ceiling); this only mirrors it.
+ *
+ * Every right is false without the `fsm` plan line, owner and admin included.
+ */
+export interface ServiceAssetRights {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  /** Archive AND restore: the database requires `delete_service_assets` for both. */
+  delete: boolean;
+}
+
+export function serviceAssetRights(input: ServiceAccessInput): ServiceAssetRights {
+  return {
+    view: holds(input, PERMISSIONS.SERVICE_ASSETS.VIEW),
+    create: holds(input, PERMISSIONS.SERVICE_ASSETS.CREATE),
+    edit: holds(input, PERMISSIONS.SERVICE_ASSETS.EDIT),
+    delete: holds(input, PERMISSIONS.SERVICE_ASSETS.DELETE),
+  };
 }
