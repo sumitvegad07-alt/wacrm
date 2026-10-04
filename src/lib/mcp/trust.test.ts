@@ -253,3 +253,161 @@ describe.skipIf(!canRun)("connector matches dashboard", () => {
     });
   });
 });
+
+// ============================================================
+// The questions an admin actually asked that could not be answered.
+// Kept as tests so they stay answerable.
+// ============================================================
+describe.skipIf(!canRun)("questions from real use", () => {
+  let db: SupabaseClient;
+  let accountId: string;
+  let employee: string;
+
+  function ctx(): McpContext {
+    return {
+      connectionId: "test",
+      accountId,
+      profileId: "test",
+      clientName: "vitest",
+      accountName: "vitest",
+      supabase: db,
+      timezone: IST,
+      tenant: { plan: "Enterprise", moduleSettings: {}, allowWorkforceData: true },
+    } as McpContext;
+  }
+
+  beforeAll(async () => {
+    const t = (target as { target: { url: string; key: string } }).target;
+    db = createClient(t.url, t.key, { auth: { persistSession: false } });
+    const { data } = await db
+      .from("mcp_visit_details")
+      .select("account_id, employee_name")
+      .not("employee_name", "is", null)
+      .limit(500);
+    const counts = new Map<string, number>();
+    const people = new Map<string, string>();
+    for (const r of (data ?? []) as { account_id: string; employee_name: string }[]) {
+      counts.set(r.account_id, (counts.get(r.account_id) ?? 0) + 1);
+      people.set(r.account_id, r.employee_name);
+    }
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    if (!ranked.length) throw new Error("no visits to test against");
+    accountId = ranked[0][0];
+    employee = people.get(accountId)!;
+  });
+
+  // "Pls share me last 15 days total customer visits done by Dhaval"
+  it("answers an arbitrary-length window with a number, not a range", async () => {
+    const r = await fetchData(
+      { dataset: "visits", days_back: 15, group_by: ["user"], measures: ["visit_count"] },
+      ctx(),
+    );
+    expect(r.period_resolved!.label).toBe("Last 15 Days");
+    const span =
+      (Date.parse(r.period_resolved!.end_date) -
+        Date.parse(r.period_resolved!.start_date)) /
+        86_400_000 +
+      1;
+    expect(span).toBe(15);
+
+    // Cross-check one employee's figure against plain SQL.
+    const { from, end } = {
+      from: r.period_resolved!.start_date,
+      end: r.period_resolved!.end_date,
+    };
+    const { data } = await db
+      .from("mcp_visit_details")
+      .select("id, employee_name, check_in_at")
+      .eq("account_id", accountId)
+      .eq("employee_name", employee);
+    const expected = (data ?? []).filter((v) => {
+      const day = new Intl.DateTimeFormat("en-CA", {
+        timeZone: IST,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date((v as { check_in_at: string }).check_in_at));
+      return day >= from && day <= end;
+    }).length;
+    const row = r.rows.find((x) => x.user === employee);
+    expect(Number(row?.visit_count ?? 0)).toBe(expected);
+  });
+
+  it("answers the same question for an odd number of days", async () => {
+    const r = await fetchData(
+      { dataset: "visits", days_back: 9, group_by: ["user"], measures: ["visit_count"] },
+      ctx(),
+    );
+    expect(r.period_resolved!.label).toBe("Last 9 Days");
+  });
+
+  it("answers an explicit calendar range", async () => {
+    const r = await fetchData(
+      {
+        dataset: "visits",
+        start_date: "2026-09-20",
+        end_date: "2026-10-04",
+        group_by: ["user"],
+        measures: ["visit_count"],
+      },
+      ctx(),
+    );
+    expect(r.period_resolved!.start_date).toBe("2026-09-20");
+  });
+
+  // "show me visit spend time and feedback of those visits in last 15 days"
+  it("shows time spent and feedback for individual visits", async () => {
+    const r = await fetchData(
+      {
+        dataset: "visit_log",
+        days_back: 15,
+        fields: [
+          "customer_company",
+          "employee_name",
+          "check_in_at",
+          "duration_minutes",
+          "feedback_type",
+        ],
+      },
+      ctx(),
+    );
+    expect(r.mode).toBe("detail");
+    expect(r.rows.length).toBeGreaterThan(0);
+    for (const row of r.rows) {
+      expect(Object.keys(row).sort()).toEqual([
+        "check_in_at",
+        "customer_company",
+        "duration_minutes",
+        "employee_name",
+        "feedback_type",
+      ]);
+    }
+  });
+
+  it("keeps the visit log inside the window it was asked for", async () => {
+    const r = await fetchData(
+      { dataset: "visit_log", days_back: 15, fields: ["check_in_at"] },
+      ctx(),
+    );
+    const p = r.period_resolved!;
+    for (const row of r.rows) {
+      const day = new Intl.DateTimeFormat("en-CA", {
+        timeZone: IST,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date(row.check_in_at as string));
+      expect(day >= p.start_date && day <= p.end_date).toBe(true);
+    }
+  });
+
+  it("breaks a window down day by day", async () => {
+    const r = await fetchData(
+      { dataset: "visits", days_back: 15, group_by: ["day"], measures: ["visit_count"] },
+      ctx(),
+    );
+    for (const row of r.rows) {
+      expect(String(row.day)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+});
