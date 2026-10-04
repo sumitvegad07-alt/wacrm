@@ -66,6 +66,23 @@ export interface DataSetDescriptor {
    * real answer.
    */
   dateColumn?: string;
+  /**
+   * route "reader": post-process rows instead of returning them.
+   *
+   * "dwell" clusters GPS pings into stops. A six-hour tracked day is roughly
+   * 4,000 pings, which no AI can read and which answer the question far worse
+   * than a dozen places with times.
+   */
+  transform?: "dwell";
+  /**
+   * route "reader" with a transform: the columns to READ.
+   *
+   * `fields` describes what the AI gets back, which for a transformed data
+   * set is not what the table holds — location_trail returns "from" and
+   * "minutes", which are worked out, not stored. Selecting the output shape
+   * asks Postgres for columns that do not exist.
+   */
+  sourceFields?: string[];
   /** ALLOW-LIST of readable columns. No select *, ever. */
   fields: FieldDef[];
   filters: FilterDef[];

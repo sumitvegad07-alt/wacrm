@@ -18,6 +18,7 @@
 //    worst thing this feature could produce.
 // ============================================================
 import { runReport } from "@/lib/dashboard/report-rpc";
+import { clusterPings, type Ping } from "./dwell";
 import { assertDataSetAllowed } from "./gating";
 import { clampLimit, wasTruncated } from "./limits";
 import {
@@ -338,10 +339,14 @@ async function runReaderRoute(
   };
   const wantsSummary = Boolean(args.group_by?.length);
 
-  // Never `*`: the allow-list is the security boundary.
-  const columns = wantsSummary
-    ? (args.group_by as string[])
-    : (args.fields?.length ? args.fields : s.fields.map((f) => f.key));
+  // Never `*`: the allow-list is the security boundary. A transformed data
+  // set reads its source columns, because its `fields` are the shape of the
+  // ANSWER rather than anything stored.
+  const columns = s.transform
+    ? (s.sourceFields ?? s.fields.map((f) => f.key))
+    : wantsSummary
+      ? (args.group_by as string[])
+      : (args.fields?.length ? args.fields : s.fields.map((f) => f.key));
 
   const page = Math.max(1, Math.floor(args.page ?? 1));
   const offset = (page - 1) * limit;
@@ -391,7 +396,11 @@ async function runReaderRoute(
     period,
   );
 
-  const sortColumn = args.sort ?? (wantsSummary ? columns[0] : defaultSort(s));
+  // A transform must see the trail in time order and, when the ceiling bites,
+  // must keep the most recent readings rather than an arbitrary thousand.
+  const sortColumn = s.transform
+    ? s.dateColumn
+    : (args.sort ?? (wantsSummary ? columns[0] : defaultSort(s)));
   if (sortColumn) query = query.order(sortColumn, { ascending: !args.sort });
 
   const { data, error } = await query.range(offset, offset + limit - 1);
@@ -401,7 +410,21 @@ async function runReaderRoute(
     fail(`"${s.name}" could not be read: ${error.message}`);
   }
 
-  const rows = data ?? [];
+  let rows = data ?? [];
+
+  if (s.transform === "dwell") {
+    const trail = buildTrail(rows, args, period, ctx.timezone);
+    return {
+      dataset: s.name,
+      mode: "detail",
+      rows: trail.rows,
+      row_count: trail.rows.length,
+      truncated: wasTruncated((data ?? []).length, limit),
+      period_resolved: period,
+      as_of: new Date().toISOString(),
+      note: trail.note,
+    };
+  }
 
   if (wantsSummary) {
     const measure = args.measures?.[0] ?? s.measures[0]?.key ?? "count";
@@ -455,4 +478,114 @@ function groupRows(
     buckets.set(key, base);
   }
   return [...buckets.values()];
+}
+
+
+// ── GPS trail ───────────────────────────────────────────────
+
+interface PingRow {
+  employee_name?: string | null;
+  recorded_at?: string;
+  lat?: number;
+  lng?: number;
+  is_mocked?: boolean;
+}
+
+/**
+ * Turn raw pings into per-employee stops.
+ *
+ * Clustered per employee, because two reps in the same street at the same
+ * time are two trails, and merging them would invent a stop neither made.
+ */
+function buildTrail(
+  rows: Record<string, unknown>[],
+  args: FetchArgs,
+  period: ResolvedPeriod | undefined,
+  timezone: string,
+): { rows: Record<string, unknown>[]; note?: string } {
+  const window = args.time_of_day ?? readTimeOfDay(args.filters?.time_of_day);
+  const byEmployee = new Map<string, Ping[]>();
+
+  for (const raw of rows as PingRow[]) {
+    if (!raw.recorded_at) continue;
+    if (window && !withinLocalWindow(raw.recorded_at, window, timezone)) continue;
+    const who = raw.employee_name ?? "Unknown";
+    const list = byEmployee.get(who) ?? [];
+    list.push({
+      lat: Number(raw.lat),
+      lng: Number(raw.lng),
+      recorded_at: raw.recorded_at,
+      is_mocked: Boolean(raw.is_mocked),
+    });
+    byEmployee.set(who, list);
+  }
+
+  const out: Record<string, unknown>[] = [];
+  for (const [employee, pings] of byEmployee) {
+    const trail = clusterPings(pings);
+    for (const stop of trail.stops) {
+      out.push({
+        employee_name: employee,
+        from: stop.from,
+        to: stop.to,
+        minutes: stop.minutes,
+        lat: stop.lat,
+        lng: stop.lng,
+        ping_count: stop.ping_count,
+      });
+    }
+    if (trail.mocked_count > 0) {
+      out.push({
+        employee_name: employee,
+        from: null,
+        to: null,
+        minutes: null,
+        lat: null,
+        lng: null,
+        ping_count: trail.mocked_count,
+        note: `${trail.mocked_count} reading(s) reported a faked location and were excluded from the stops above.`,
+      });
+    }
+  }
+
+  out.sort((a, b) => String(a.from ?? "").localeCompare(String(b.from ?? "")));
+
+  return {
+    rows: out,
+    note:
+      "These are stops worked out from GPS readings, not the readings themselves. " +
+      "Tracking only runs while an employee is punched in, so a gap means they were not punched in, not that they stopped moving.",
+  };
+}
+
+interface TimeWindow {
+  from: string;
+  to: string;
+}
+
+function readTimeOfDay(value: unknown): TimeWindow | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as { from?: unknown; to?: unknown };
+  if (typeof v.from !== "string" || typeof v.to !== "string") return undefined;
+  if (!/^\d{2}:\d{2}$/.test(v.from) || !/^\d{2}:\d{2}$/.test(v.to)) {
+    fail('time_of_day must look like { from: "11:00", to: "17:00" }.');
+  }
+  return { from: v.from, to: v.to };
+}
+
+/** Is this instant inside the local HH:mm window? */
+function withinLocalWindow(
+  iso: string,
+  window: TimeWindow,
+  timezone: string,
+): boolean {
+  const local = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+  // Intl renders midnight as 24:00 in some locales.
+  const hhmm = local === "24:00" ? "00:00" : local;
+  return hhmm >= window.from && hhmm <= window.to;
 }

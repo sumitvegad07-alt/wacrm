@@ -18,6 +18,7 @@ import {
   formatHHMM,
 } from "@/lib/location/tracking-window";
 import { FENCE_RADII, normalizeGeoFencing } from "@/lib/location/geofence-config";
+import { McpWorkforceAccessCard } from "@/components/settings/mcp-workforce-access";
 
 /** The shape of accounts.settings this panel merges into. Only the nested blobs
  *  it re-spreads are named; everything else rides along untouched. */
@@ -987,6 +988,10 @@ export function ModuleSettingsPanel() {
           </div>
         )}
       </div>
+
+      {/* Owner-only. Separate card because this is the one setting here about
+          PEOPLE rather than about the business. */}
+      <McpWorkforceAccessCard />
     </div>
   );
 }

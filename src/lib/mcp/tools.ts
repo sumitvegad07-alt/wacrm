@@ -111,6 +111,15 @@ export const MCP_TOOLS: ToolDefinition[] = [
           items: { type: "string" },
           description: "Columns to return, for a record listing.",
         },
+        time_of_day: {
+          type: "object",
+          description:
+            'Local time-of-day window for the location trail, e.g. { "from": "11:00", "to": "17:00" }.',
+          properties: {
+            from: { type: "string" },
+            to: { type: "string" },
+          },
+        },
         sort: { type: "string", description: "Column or measure to sort by." },
         limit: {
           type: "integer",

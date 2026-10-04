@@ -247,12 +247,38 @@ describe("reader descriptors", () => {
   });
 });
 
-// Phase 2 to-do list, visible in the test output rather than failing the
-// suite (the founder rule is that tests pass before every commit). These are
-// un-skipped as the descriptors land — Task 17 for the sensitive three,
-// Task 18 for routes, Task 19 for stock and schemes.
 describe("Phase 2 coverage", () => {
-  it.todo("marks exactly the three workforce data sets as sensitive");
-  it.todo("exposes routes, route_runs, route_stops, territories and leave");
-  it.todo("exposes stock and schemes");
+  it("marks exactly the three workforce data sets as sensitive", () => {
+    // These three describe PEOPLE rather than the business, so they sit behind
+    // the owner-only switch. Anything else appearing here would leak past it.
+    expect(
+      allDataSets().filter((s) => s.sensitive).map((s) => s.name).sort(),
+    ).toEqual(["attendance", "device_health", "location_trail"]);
+  });
+
+  it("exposes routes, route_runs, route_stops, territories and leave", () => {
+    for (const name of ["routes", "route_runs", "route_stops", "territories", "leave"]) {
+      expect(getDataSet(name), `${name} is missing`).toBeTruthy();
+    }
+  });
+
+  it("exposes stock and schemes", () => {
+    expect(getDataSet("stock")).toBeTruthy();
+    expect(getDataSet("schemes")).toBeTruthy();
+  });
+
+  it("gates route data on the SFA line, not WFA", () => {
+    for (const name of ["routes", "route_runs", "route_stops"]) {
+      expect(getDataSet(name)!.line, `${name} is on the wrong line`).toBe("sfa");
+    }
+  });
+
+  it("returns stops rather than raw pings for the location trail", () => {
+    const s = getDataSet("location_trail")!;
+    expect(s.transform).toBe("dwell");
+    // Its fields are the ANSWER shape, so it must declare what to read.
+    expect(s.sourceFields).toBeTruthy();
+    expect(s.fields.map((f) => f.key)).not.toContain("accuracy_m");
+    expect(s.notes).toMatch(/not punched in/i);
+  });
 });

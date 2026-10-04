@@ -411,3 +411,125 @@ describe.skipIf(!canRun)("questions from real use", () => {
     }
   });
 });
+
+// ============================================================
+// Phase 2, against real data.
+// ============================================================
+describe.skipIf(!canRun)("phase 2 data sets", () => {
+  let db: SupabaseClient;
+  let accountId: string;
+
+  function ctx(): McpContext {
+    return {
+      connectionId: "test",
+      accountId,
+      profileId: "test",
+      clientName: "vitest",
+      accountName: "vitest",
+      supabase: db,
+      timezone: IST,
+      tenant: { plan: "Enterprise", moduleSettings: {}, allowWorkforceData: true },
+    } as McpContext;
+  }
+
+  beforeAll(async () => {
+    const t = (target as { target: { url: string; key: string } }).target;
+    db = createClient(t.url, t.key, { auth: { persistSession: false } });
+    const { data } = await db.from("location_pings").select("account_id").limit(2000);
+    const counts = new Map<string, number>();
+    for (const r of (data ?? []) as { account_id: string }[]) {
+      counts.set(r.account_id, (counts.get(r.account_id) ?? 0) + 1);
+    }
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    if (!ranked.length) throw new Error("no location pings to test against");
+    accountId = ranked[0][0];
+  });
+
+  it("turns a day of GPS readings into a handful of stops", async () => {
+    const r = await fetchData({ dataset: "location_trail", days_back: 60 }, ctx());
+    // The point of the whole exercise: far fewer rows than readings.
+    expect(r.rows.length).toBeLessThan(200);
+    for (const row of r.rows) {
+      if (row.minutes === null) continue; // the mocked-reading note row
+      expect(typeof row.minutes).toBe("number");
+      expect(row.employee_name).toBeTruthy();
+    }
+    expect(r.note).toMatch(/not punched in/i);
+  });
+
+  it("never returns a raw GPS reading column", async () => {
+    const r = await fetchData({ dataset: "location_trail", days_back: 60 }, ctx());
+    for (const row of r.rows) {
+      expect(Object.keys(row)).not.toContain("accuracy_m");
+      expect(Object.keys(row)).not.toContain("speed_mps");
+    }
+  });
+
+  it("refuses the trail outright when the workforce switch is off", async () => {
+    const locked = {
+      ...ctx(),
+      tenant: { plan: "Enterprise", moduleSettings: {}, allowWorkforceData: false },
+    } as McpContext;
+    for (const name of ["location_trail", "attendance", "device_health"]) {
+      await expect(fetchData({ dataset: name }, locked)).rejects.toThrow(/not enabled/i);
+    }
+  });
+
+  it("answers route adherence from one data set", async () => {
+    const r = await fetchData(
+      { dataset: "route_stops", days_back: 365, fields: ["employee_name", "customer_company", "status", "skip_reason"] },
+      ctx(),
+    );
+    for (const row of r.rows) {
+      expect(row).toHaveProperty("status");
+    }
+  });
+
+  it("gives per-product value from the order lines, not the order total", async () => {
+    const r = await fetchData(
+      {
+        dataset: "order_items",
+        days_back: 365,
+        fields: ["product_name", "quantity", "line_value", "order_number"],
+      },
+      ctx(),
+    );
+    if (!r.rows.length) return;
+    for (const row of r.rows) {
+      expect(row.product_name).toBeTruthy();
+      expect(Number(row.line_value)).not.toBeNaN();
+    }
+
+    // The bug this data set exists to prevent: an order's total must not be
+    // the sum of its lines repeated, so for a multi-line order the lines must
+    // sum to roughly the order's own total rather than a multiple of it.
+    const anyOrder = r.rows.find((x) => x.order_number);
+    const { data: lines } = await db
+      .from("mcp_order_item_details")
+      .select("line_value")
+      .eq("account_id", accountId)
+      .eq("order_number", anyOrder!.order_number as string);
+    const lineSum = (lines ?? []).reduce(
+      (n, l) => n + Number((l as { line_value: number }).line_value ?? 0),
+      0,
+    );
+    const { data: order } = await db
+      .from("mcp_order_details")
+      .select("total_amount")
+      .eq("account_id", accountId)
+      .eq("order_number", anyOrder!.order_number as string)
+      .maybeSingle();
+    const total = Number((order as { total_amount: number } | null)?.total_amount ?? 0);
+    if (total > 0) {
+      expect(Math.abs(lineSum - total) / total).toBeLessThan(0.5);
+    }
+  });
+
+  it.each(["routes", "route_runs", "leave", "stock", "schemes", "territories", "attendance", "device_health"])(
+    "%s reads without error",
+    async (name) => {
+      const r = await fetchData({ dataset: name, limit: 20 }, ctx());
+      expect(Array.isArray(r.rows)).toBe(true);
+    },
+  );
+});

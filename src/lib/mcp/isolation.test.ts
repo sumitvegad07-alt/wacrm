@@ -75,7 +75,12 @@ describe.skipIf(!canRun)("tenant isolation", () => {
     expect(accountA).not.toBe(accountB);
   });
 
-  it.each(READER_SETS.map((s) => [s.name, s.table!] as const))(
+  /** Data sets whose rows carry a real table id we can trace to an owner. */
+  const OWNABLE = READER_SETS.filter(
+    (s) => !s.transform && s.fields.some((f) => f.key === "id"),
+  );
+
+  it.each(OWNABLE.map((s) => [s.name, s.table!] as const))(
     "%s returns no row belonging to another account",
     async (name, table) => {
       const result = await fetchData(
@@ -85,24 +90,24 @@ describe.skipIf(!canRun)("tenant isolation", () => {
       const ids = result.rows.map((r) => r.id).filter(Boolean) as string[];
       if (ids.length === 0) return; // nothing to leak
 
-      // Ask the database, with RLS off, who actually owns these rows.
-      const { data, error } = await db
-        .from(table)
-        .select("id, account_id")
-        .in("id", ids);
-      expect(error).toBeNull();
-
-      const foreign = ((data ?? []) as { id: string; account_id: string }[]).filter(
-        (r) => r.account_id !== accountA,
-      );
-      expect(
-        foreign.map((r) => r.id),
-        `${name} returned rows owned by another account`,
-      ).toEqual([]);
+      // Ask the database, with RLS off, who actually owns these rows. Chunked
+      // because a 1,000-id `in` list overflows the request URL.
+      const foreign: string[] = [];
+      for (let i = 0; i < ids.length; i += 150) {
+        const { data, error } = await db
+          .from(table)
+          .select("id, account_id")
+          .in("id", ids.slice(i, i + 150));
+        expect(error, `${name}: ${error?.message}`).toBeNull();
+        for (const r of (data ?? []) as { id: string; account_id: string }[]) {
+          if (r.account_id !== accountA) foreign.push(r.id);
+        }
+      }
+      expect(foreign, `${name} returned rows owned by another account`).toEqual([]);
     },
   );
 
-  it.each(READER_SETS.map((s) => [s.name] as const))(
+  it.each(OWNABLE.map((s) => [s.name] as const))(
     "%s returns a different set for a different account",
     async (name) => {
       const a = await fetchData({ dataset: name, fields: ["id"], limit: 1000 }, ctxFor(accountA));
@@ -113,6 +118,25 @@ describe.skipIf(!canRun)("tenant isolation", () => {
       expect(overlap, `${name} returned the same rows for two accounts`).toEqual([]);
     },
   );
+
+  // stock is grouped per product and location_trail is derived from pings, so
+  // neither carries a row id. They still must not mix accounts, so compare
+  // them on the identity they do have.
+  it.each(
+    READER_SETS.filter((s) => s.transform || !s.fields.some((f) => f.key === "id"))
+      .map((s) => [s.name, s] as const),
+  )("%s keeps two accounts apart even without a row id", async (name, s) => {
+    const key = s.transform ? "employee_name" : (s.dimensions[0]?.key ?? s.fields[0].key);
+    const a = await fetchData({ dataset: name, limit: 1000 }, ctxFor(accountA));
+    const b = await fetchData({ dataset: name, limit: 1000 }, ctxFor(accountB));
+    if (!a.rows.length || !b.rows.length) return;
+    // Identical row sets would mean the account filter never ran.
+    const sig = (rows: Record<string, unknown>[]) =>
+      JSON.stringify(rows.map((r) => r[key]).sort());
+    expect(sig(a.rows), `${name} returned identical rows for two accounts`).not.toBe(
+      sig(b.rows),
+    );
+  });
 
   it("never leaks another account's customer through a search", async () => {
     // Take a real customer name from account B, then search for it as A.

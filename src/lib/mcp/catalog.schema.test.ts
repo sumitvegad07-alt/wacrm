@@ -53,7 +53,22 @@ describe.skipIf(!canRun)("reader descriptors match the live schema", () => {
 
   const readerSets = allDataSets().filter((s) => s.route === "reader" && s.table);
 
-  it.each(readerSets.map((s) => [s.name, s] as const))(
+  // A transformed data set's `fields` describe what the AI gets back, not the
+  // table it reads. location_trail returns stops worked out from pings, so
+  // "from"/"minutes" are rightly absent from the view; what matters is that
+  // the view carries what the transform needs.
+  it.each(
+    readerSets.filter((s) => s.transform).map((s) => [s.name, s] as const),
+  )("%s: the view carries what the transform needs", async (_name, s) => {
+    const real = columns.get(s.table as string)!;
+    for (const needed of ["employee_name", "recorded_at", "lat", "lng", "is_mocked"]) {
+      expect(real, `${s.name} view is missing ${needed}`).toContain(needed);
+    }
+  });
+
+  it.each(
+    readerSets.filter((s) => !s.transform).map((s) => [s.name, s] as const),
+  )(
     "%s: every allow-listed field is a real column",
     async (_name, s) => {
       const real = columns.get(s.table as string)!;
