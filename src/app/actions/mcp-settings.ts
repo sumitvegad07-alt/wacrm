@@ -21,14 +21,17 @@ export interface WorkforceAccessState {
   canChange: boolean;
 }
 
-export class McpSettingsError extends Error {}
+// A "use server" file may export ONLY async functions — every export becomes a
+// callable server endpoint. Exporting an error class here broke the entire
+// production build, not just this setting. Plain Errors instead; the caller
+// shows err.message, which is all it ever used.
 
 async function loadContext() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new McpSettingsError("Please sign in again.");
+  if (!user) throw new Error("Please sign in again.");
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -41,7 +44,7 @@ async function loadContext() {
     account_role: string | null;
   } | null;
   if (!row?.account_id) {
-    throw new McpSettingsError("This sign-in is not attached to an account.");
+    throw new Error("This sign-in is not attached to an account.");
   }
   return {
     supabase,
@@ -71,7 +74,7 @@ export async function getMcpWorkforceAccess(): Promise<WorkforceAccessState> {
 export async function setMcpWorkforceAccess(enabled: boolean): Promise<void> {
   const { supabase, accountId, isOwner } = await loadContext();
   if (!isOwner) {
-    throw new McpSettingsError(
+    throw new Error(
       "Only the account owner can change what an AI tool may read about employees.",
     );
   }
@@ -92,7 +95,7 @@ export async function setMcpWorkforceAccess(enabled: boolean): Promise<void> {
     .update({ settings: { ...settings, mcp_allow_workforce_data: enabled === true } })
     .eq("id", accountId);
   if (error) {
-    throw new McpSettingsError("Could not save that setting. Please try again.");
+    throw new Error("Could not save that setting. Please try again.");
   }
 
   revalidatePath("/settings");
