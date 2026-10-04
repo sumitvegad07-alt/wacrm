@@ -302,3 +302,46 @@ function zoneOffsetMs(timezone: string, at: Date): number {
   );
   return asUtc - at.getTime();
 }
+
+/**
+ * Render a UTC instant in the account's timezone, with its offset.
+ *
+ * The connector used to hand the AI raw UTC and leave it to convert — and it
+ * said so out loud: "the timestamps are stored in UTC, and I converted them
+ * to IST". That is exactly the work this module exists to take away, and one
+ * slip turns a 6pm visit into a midnight one. An offset-bearing string is
+ * both unambiguous and still machine-readable:
+ *
+ *   2026-10-02T19:13:55Z  ->  2026-10-03T00:43:55+05:30
+ *
+ * Returns the input unchanged if it is not a timestamp we can read, because a
+ * display concern must never lose data.
+ */
+export function toAccountLocalIso(value: string, timezone: string): string {
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return value;
+  const at = new Date(ms);
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(at);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  const hour = get("hour") === "24" ? "00" : get("hour");
+  const local = `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}:${get("second")}`;
+
+  const offsetMin = Math.round(
+    (Date.parse(`${local}Z`) - at.getTime()) / 60_000,
+  );
+  const sign = offsetMin < 0 ? "-" : "+";
+  const abs = Math.abs(offsetMin);
+  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+  const mm = String(abs % 60).padStart(2, "0");
+  return `${local}${sign}${hh}:${mm}`;
+}

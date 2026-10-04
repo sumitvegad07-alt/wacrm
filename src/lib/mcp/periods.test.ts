@@ -5,6 +5,7 @@ import {
   resolveCustomRange,
   resolveDaysBack,
   resolvePeriod,
+  toAccountLocalIso,
   todayInZone,
 } from "./periods";
 
@@ -289,5 +290,54 @@ describe("resolveCustomRange", () => {
 
   it("refuses an unreasonable span", () => {
     expect(() => resolveCustomRange("2000-01-01", "2026-10-04", IST)).toThrow(/limit/i);
+  });
+});
+
+describe("toAccountLocalIso", () => {
+  it("renders a UTC instant in Indian time with its offset", () => {
+    // The exact case that confused a real answer: a 19:13 UTC ping is
+    // 00:43 the NEXT DAY in India.
+    expect(toAccountLocalIso("2026-10-02T19:13:55.349Z", IST)).toBe(
+      "2026-10-03T00:43:55+05:30",
+    );
+  });
+
+  it("keeps the same calendar day when it should", () => {
+    expect(toAccountLocalIso("2026-10-02T06:00:00Z", IST)).toBe(
+      "2026-10-02T11:30:00+05:30",
+    );
+  });
+
+  it("handles a zone behind UTC, including the day rolling back", () => {
+    expect(toAccountLocalIso("2026-10-03T02:00:00Z", "America/New_York")).toBe(
+      "2026-10-02T22:00:00-04:00",
+    );
+  });
+
+  it("uses the offset in force on that date, not a fixed one", () => {
+    expect(toAccountLocalIso("2026-01-15T17:00:00Z", "America/New_York")).toBe(
+      "2026-01-15T12:00:00-05:00",
+    );
+    expect(toAccountLocalIso("2026-07-15T16:00:00Z", "America/New_York")).toBe(
+      "2026-07-15T12:00:00-04:00",
+    );
+  });
+
+  it("renders UTC with a zero offset", () => {
+    expect(toAccountLocalIso("2026-10-02T06:00:00Z", "UTC")).toBe(
+      "2026-10-02T06:00:00+00:00",
+    );
+  });
+
+  it("round-trips back to the same instant", () => {
+    for (const iso of ["2026-10-02T19:13:55.000Z", "2026-01-01T00:00:00.000Z"]) {
+      const local = toAccountLocalIso(iso, IST);
+      expect(new Date(local).toISOString()).toBe(iso);
+    }
+  });
+
+  it("returns anything unreadable untouched rather than losing it", () => {
+    expect(toAccountLocalIso("not a date", IST)).toBe("not a date");
+    expect(toAccountLocalIso("", IST)).toBe("");
   });
 });

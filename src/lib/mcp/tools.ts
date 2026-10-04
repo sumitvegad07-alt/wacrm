@@ -60,6 +60,9 @@ export const MCP_TOOLS: ToolDefinition[] = [
       "this_quarter, current_year, last_90_days, last_180_days, last_365_days…). " +
       "NEVER send raw dates — OZZO resolves the period in the account's own " +
       "timezone, which is the only way the dates are correct.\n\n" +
+      "Every timestamp comes back already in the account's own timezone, with " +
+      "its offset (2026-10-03T00:43:55+05:30). Do NOT convert it; quote it as " +
+      "given.\n\n" +
       "Two modes: pass group_by and/or measures for totals, or fields for " +
       "individual records. Results are capped; when `truncated` is true, more " +
       "rows existed than were returned, so say so rather than presenting the " +

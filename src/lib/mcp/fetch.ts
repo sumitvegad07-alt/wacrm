@@ -22,6 +22,7 @@ import { clusterPings, type Ping } from "./dwell";
 import { assertDataSetAllowed } from "./gating";
 import { clampLimit, wasTruncated } from "./limits";
 import {
+  toAccountLocalIso,
   localRangeToUtc,
   resolveCustomRange,
   resolveDaysBack,
@@ -417,7 +418,7 @@ async function runReaderRoute(
     return {
       dataset: s.name,
       mode: "detail",
-      rows: trail.rows,
+      rows: localiseTimes(trail.rows, s, ctx.timezone),
       row_count: trail.rows.length,
       truncated: wasTruncated((data ?? []).length, limit),
       period_resolved: period,
@@ -442,12 +443,39 @@ async function runReaderRoute(
   return {
     dataset: s.name,
     mode: "detail",
-    rows,
+    rows: localiseTimes(rows, s, ctx.timezone),
     row_count: rows.length,
     truncated: wasTruncated(rows.length, limit),
     period_resolved: period,
-    as_of: new Date().toISOString(),
+    as_of: toAccountLocalIso(new Date().toISOString(), ctx.timezone),
   };
+}
+
+/**
+ * Render every timestamp in the account's timezone before it leaves OZZO.
+ *
+ * Handing the AI raw UTC made it do the conversion itself — it said so, and a
+ * 19:13 UTC ping is 00:43 the NEXT day in India, so one slip turns an evening
+ * visit into a midnight one. Dates (no time) are left alone: they are already
+ * calendar dates and shifting them would be the bug, not the fix.
+ */
+function localiseTimes(
+  rows: Record<string, unknown>[],
+  s: DataSetDescriptor,
+  timezone: string,
+): Record<string, unknown>[] {
+  const stamps = new Set(
+    s.fields.filter((f) => f.type === "datetime").map((f) => f.key),
+  );
+  if (stamps.size === 0) return rows;
+  return rows.map((row) => {
+    const out: Record<string, unknown> = { ...row };
+    for (const key of stamps) {
+      const v = out[key];
+      if (typeof v === "string" && v) out[key] = toAccountLocalIso(v, timezone);
+    }
+    return out;
+  });
 }
 
 /** Newest first where the table records a time. */
