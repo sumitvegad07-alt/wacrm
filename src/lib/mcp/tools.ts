@@ -56,10 +56,22 @@ export const MCP_TOOLS: ToolDefinition[] = [
     description:
       "Read OZZO business data. Call list_data first to see what exists, then " +
       "describe_data for the data set you want, then this.\n\n" +
-      "Periods are named (today, yesterday, this_week, this_month, last_month, " +
-      "this_quarter, current_year, last_90_days, last_180_days, last_365_days…). " +
-      "NEVER send raw dates — OZZO resolves the period in the account's own " +
-      "timezone, which is the only way the dates are correct.\n\n" +
+      // This said "NEVER send raw dates" long after explicit ranges existed.
+      // An AI that believes it cannot ask about a specific day does not say
+      // so — it reports there is no data, which is how "where was Dhaval on
+      // 29 September" came back empty against 138 recorded GPS readings.
+      "THREE ways to set the window, all resolved by OZZO in the account's own " +
+      "timezone:\n" +
+      "  • period — a named preset (today, yesterday, this_week, this_month, " +
+      "last_month, last_7_days, last_15_days, last_30_days, last_90_days, " +
+      "current_year…).\n" +
+      "  • days_back — exactly N days ending today, for \"the last 9 days\". " +
+      "OZZO counts the days, so you never work them out yourself.\n" +
+      "  • start_date + end_date — YYYY-MM-DD, for a specific day or range " +
+      "such as \"29 September\" or \"20 Sep to 4 Oct\".\n" +
+      "Every window is answerable. Never tell the admin a date cannot be " +
+      "queried, and never work a date out yourself — anchor on the `today` " +
+      "that list_data reports.\n\n" +
       "Every timestamp comes back already in the account's own timezone, with " +
       "its offset (2026-10-03T00:43:55+05:30). Do NOT convert it; quote it as " +
       "given.\n\n" +
@@ -162,7 +174,20 @@ function listData(ctx: McpContext): ListDataResult {
     })),
     how_to_use:
       "Call describe_data(dataset) before fetching one you have not used. " +
-      "All dates are handled by OZZO through named periods — never send raw dates. " +
+      // This used to say "never send raw dates", left over from before
+      // explicit ranges existed. It contradicted fetch_data's own schema, and
+      // an AI that believed it could not ask about "29 September" at all —
+      // it reported there was no data rather than querying the day. Any
+      // window is answerable; say so plainly.
+      "ANY date window is supported: a named period, days_back for \"the last " +
+      "N days\", or start_date + end_date for a specific range like " +
+      "\"29 September\". OZZO resolves all of them in this account's timezone, " +
+      "and timestamps come back already converted, so never convert a date " +
+      "yourself and never conclude a day cannot be queried. " +
+      "If a data set returns nothing, that means nothing was recorded — " +
+      "check the related data set (attendance for a gap in the location " +
+      "trail, device_health for why a phone stopped reporting) before telling " +
+      "the admin there is no data at all. " +
       "This account's timezone is " +
       ctx.timezone +
       ", and today there is " +

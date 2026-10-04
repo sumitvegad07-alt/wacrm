@@ -263,7 +263,7 @@ async function runReportRoute(
     row_count: rows.length,
     truncated: wasTruncated(rows.length, limit),
     period_resolved: period,
-    as_of: new Date().toISOString(),
+    as_of: toAccountLocalIso(new Date().toISOString(), ctx.timezone),
   };
 }
 
@@ -375,7 +375,7 @@ async function runReaderRoute(
         row_count: 0,
         truncated: true,
         period_resolved: period,
-        as_of: new Date().toISOString(),
+        as_of: toAccountLocalIso(new Date().toISOString(), ctx.timezone),
         note:
           `There are ${count} matching records — too many to total accurately in one read. ` +
           `Narrow it with a filter and ask again. (OZZO will not report a partial total as if it were complete.)`,
@@ -422,7 +422,7 @@ async function runReaderRoute(
       row_count: trail.rows.length,
       truncated: wasTruncated((data ?? []).length, limit),
       period_resolved: period,
-      as_of: new Date().toISOString(),
+      as_of: toAccountLocalIso(new Date().toISOString(), ctx.timezone),
       note: trail.note,
     };
   }
@@ -436,7 +436,7 @@ async function runReaderRoute(
       row_count: rows.length,
       truncated: false,
       period_resolved: period,
-      as_of: new Date().toISOString(),
+      as_of: toAccountLocalIso(new Date().toISOString(), ctx.timezone),
     };
   }
 

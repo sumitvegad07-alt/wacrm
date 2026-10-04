@@ -49,9 +49,22 @@ describe("MCP_TOOLS", () => {
     expect(fetchTool.description).toMatch(/describe_data/i);
   });
 
-  it("tells the AI never to send raw dates", () => {
+  // This test used to assert the opposite — that the description said "never
+  // send raw dates" — and so actively protected the instruction that made the
+  // AI refuse to query a specific day. The rule it was guarding (OZZO owns
+  // the timezone) is still true; the way it was expressed was not.
+  it("tells the AI that every date window is answerable", () => {
     const fetchTool = MCP_TOOLS.find((t) => t.name === "fetch_data")!;
-    expect(fetchTool.description).toMatch(/never send raw dates/i);
+    expect(fetchTool.description).not.toMatch(/never send raw dates/i);
+    expect(fetchTool.description).toMatch(/days_back/);
+    expect(fetchTool.description).toMatch(/start_date/);
+    expect(fetchTool.description).toMatch(/never tell the admin a date cannot be/i);
+  });
+
+  it("still makes OZZO responsible for resolving dates", () => {
+    const fetchTool = MCP_TOOLS.find((t) => t.name === "fetch_data")!;
+    expect(fetchTool.description).toMatch(/account's own timezone/i);
+    expect(fetchTool.description).toMatch(/never work a date out yourself/i);
   });
 
   it("explains what truncated means, so a partial total is not reported as complete", () => {
@@ -110,6 +123,34 @@ describe("list_data", () => {
   it("never lists a sensitive data set while the switch is off", async () => {
     const r = (await callTool("list_data", {}, ctx)) as { data_sets: { name: string }[] };
     expect(r.data_sets.map((d) => d.name)).not.toContain("location_trail");
+  });
+});
+
+describe("list_data instructions", () => {
+  // The instruction that broke a real answer: list_data said "never send raw
+  // dates" long after explicit ranges existed, so the AI refused to query a
+  // specific day and reported no data instead.
+  it("does not forbid the date forms fetch_data accepts", async () => {
+    const r = (await callTool("list_data", {}, ctx)) as { how_to_use: string };
+    expect(r.how_to_use).not.toMatch(/never send raw dates/i);
+    expect(r.how_to_use).toMatch(/days_back/);
+    expect(r.how_to_use).toMatch(/start_date/);
+  });
+
+  it("tells the AI that an empty result is not proof of no data", async () => {
+    const r = (await callTool("list_data", {}, ctx)) as { how_to_use: string };
+    expect(r.how_to_use).toMatch(/attendance|device_health/);
+  });
+
+  it("agrees with the fetch_data tool description about dates", async () => {
+    // Two instructions that contradict each other are worse than either being
+    // wrong, because the AI picks one and the admin cannot tell which.
+    const r = (await callTool("list_data", {}, ctx)) as { how_to_use: string };
+    const fetchTool = MCP_TOOLS.find((t) => t.name === "fetch_data")!;
+    for (const form of ["days_back", "start_date"]) {
+      expect(fetchTool.description).toContain(form);
+      expect(r.how_to_use).toContain(form);
+    }
   });
 });
 
