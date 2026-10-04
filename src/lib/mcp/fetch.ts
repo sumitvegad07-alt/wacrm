@@ -26,6 +26,7 @@ import {
   localRangeToUtc,
   resolveCustomRange,
   resolveDaysBack,
+  resolveMonth,
   resolvePeriod,
   type ResolvedPeriod,
 } from "./periods";
@@ -40,6 +41,8 @@ export interface FetchArgs {
   /** An explicit account-local range. Both or neither. */
   start_date?: string;
   end_date?: string;
+  /** A whole calendar month, "YYYY-MM". */
+  month?: string;
   time_of_day?: { from: string; to: string };
   filters?: Record<string, unknown>;
   group_by?: string[];
@@ -162,6 +165,9 @@ function periodFor(
   if (hasStart && hasEnd) {
     return resolveCustomRange(args.start_date!, args.end_date!, timezone);
   }
+  if (args.month) {
+    return resolveMonth(args.month, timezone);
+  }
   if (args.days_back !== undefined) {
     return resolveDaysBack(args.days_back, timezone);
   }
@@ -189,6 +195,7 @@ export async function fetchData(
   const noNarrowing =
     !args.period &&
     args.days_back === undefined &&
+    !args.month &&
     !args.start_date &&
     Object.keys(args.filters ?? {}).length === 0;
   if (!wantsSummary && descriptor.route === "report" && noNarrowing) {
@@ -397,11 +404,26 @@ async function runReaderRoute(
     period,
   );
 
+  // A measure is computed in this process, never stored, so it must not reach
+  // the database as a sort column — that is a guaranteed "column does not
+  // exist". In a grouped question it is applied after grouping instead; in a
+  // record listing it is meaningless, and saying so beats silently ignoring it.
+  const sortsByMeasure = Boolean(
+    args.sort && s.measures.some((m) => m.key === args.sort),
+  );
+  if (sortsByMeasure && !wantsSummary) {
+    fail(
+      `"${args.sort}" is a total, so it can only sort a grouped question. Add group_by to total by something, or sort by one of the data set's own columns.`,
+    );
+  }
+
   // A transform must see the trail in time order and, when the ceiling bites,
   // must keep the most recent readings rather than an arbitrary thousand.
   const sortColumn = s.transform
     ? s.dateColumn
-    : (args.sort ?? (wantsSummary ? columns[0] : defaultSort(s)));
+    : sortsByMeasure
+      ? columns[0]
+      : (args.sort ?? (wantsSummary ? columns[0] : defaultSort(s)));
   if (sortColumn) query = query.order(sortColumn, { ascending: !args.sort });
 
   const { data, error } = await query.range(offset, offset + limit - 1);
@@ -429,11 +451,21 @@ async function runReaderRoute(
 
   if (wantsSummary) {
     const measure = args.measures?.[0] ?? s.measures[0]?.key ?? "count";
+    const grouped = groupRows(rows, args.group_by as string[], measure);
+    // Sorting by a total has to happen HERE: it is computed in this process,
+    // so asking Postgres to order by it is asking for a column that does not
+    // exist. Descending, because "sort by the total" always means largest
+    // first in practice.
+    if (args.sort && s.measures.some((m) => m.key === args.sort)) {
+      grouped.sort((a, b) => Number(b[args.sort!] ?? 0) - Number(a[args.sort!] ?? 0));
+    }
     return {
       dataset: s.name,
       mode: "summary",
-      rows: groupRows(rows, args.group_by as string[], measure),
-      row_count: rows.length,
+      // The rows RETURNED, not the rows read. Reporting 146 here when five
+      // cities came back would have the AI announce 146 cities.
+      rows: grouped,
+      row_count: grouped.length,
       truncated: false,
       period_resolved: period,
       as_of: toAccountLocalIso(new Date().toISOString(), ctx.timezone),

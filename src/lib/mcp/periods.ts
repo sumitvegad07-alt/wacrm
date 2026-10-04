@@ -14,17 +14,51 @@
 // so "fixing" a quirk here would break that equality.
 // ============================================================
 
+const WEEKDAYS = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+] as const;
+
+const TITLE = (w: string) => w[0].toUpperCase() + w.slice(1);
+
+/**
+ * Every window an admin can name, resolved by OZZO rather than by the AI.
+ *
+ * The list is long on purpose. Each entry removes a date calculation the AI
+ * would otherwise do in its head — "last Monday", "this financial year" — and
+ * every such calculation is a chance to be confidently wrong about a date the
+ * admin can check at a glance.
+ */
 const LABELS: Record<string, string> = {
   today: "Today",
   yesterday: "Yesterday",
+  day_before_yesterday: "Day Before Yesterday",
+
   this_week: "This Week",
   last_week: "Last Week",
+  week_before_last: "Week Before Last",
+
   this_month: "This Month",
   last_month: "Last Month",
+  month_before_last: "Month Before Last",
+
   this_quarter: "This Quarter",
   previous_quarter: "Previous Quarter",
+
   current_year: "Current Year",
   previous_year: "Previous Year",
+
+  // India runs April to March. "This year" meaning the calendar year is right
+  // for some questions and wrong for every accounting one, so both exist and
+  // the resolved dates are always reported back.
+  this_financial_year: "This Financial Year (Apr-Mar)",
+  last_financial_year: "Last Financial Year (Apr-Mar)",
+
   last_7_days: "Last 7 Days",
   last_15_days: "Last 15 Days",
   last_30_days: "Last 30 Days",
@@ -32,7 +66,14 @@ const LABELS: Record<string, string> = {
   last_90_days: "Last 90 Days",
   last_180_days: "Last 180 Days",
   last_365_days: "Last 365 Days",
+
+  // this_<weekday> / last_<weekday> are generated below.
 };
+
+for (const w of WEEKDAYS) {
+  LABELS[`this_${w}`] = `This ${TITLE(w)}`;
+  LABELS[`last_${w}`] = `Last ${TITLE(w)}`;
+}
 
 export const MCP_PERIODS: readonly string[] = Object.keys(LABELS);
 
@@ -86,6 +127,30 @@ function shiftDays(ymd: string, n: number): string {
 function dow(ymd: string): number {
   const { y, m, d } = parts(ymd);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+
+/**
+ * "this_tuesday" / "last_friday" -> a single calendar date.
+ *
+ * `this_x` is that weekday inside the CURRENT week and `last_x` the same day
+ * one week earlier, with the week starting Sunday to match the dashboard.
+ * "Last Monday" is genuinely ambiguous in English — on a Wednesday some people
+ * mean two days ago and others mean nine — so the rule is fixed here and the
+ * resolved date is always returned, which is what lets the answer say
+ * "Monday 29 September" and be checkable at a glance.
+ *
+ * `this_x` can land in the future, which is honest: a query for a day that has
+ * not happened returns nothing rather than quietly sliding to another week.
+ */
+function resolveWeekday(period: string, today: string): string | null {
+  const match = /^(this|last)_([a-z]+)$/.exec(period);
+  if (!match) return null;
+  const index = WEEKDAYS.indexOf(match[2] as (typeof WEEKDAYS)[number]);
+  if (index < 0) return null;
+  const weekStart = shiftDays(today, -dow(today));
+  const offset = match[1] === "last" ? -7 : 0;
+  return shiftDays(weekStart, index + offset);
 }
 
 export function resolvePeriod(
@@ -164,8 +229,40 @@ export function resolvePeriod(
       return wrap(shiftDays(today, -180), today);
     case "last_365_days":
       return wrap(shiftDays(today, -365), today);
-    default:
+
+    case "day_before_yesterday": {
+      const d = shiftDays(today, -2);
+      return wrap(d, d);
+    }
+    case "week_before_last": {
+      const start = shiftDays(today, -dow(today) - 14);
+      return wrap(start, shiftDays(start, 6));
+    }
+    case "month_before_last": {
+      let mm = m - 2;
+      let yy = y;
+      if (mm < 1) {
+        mm += 12;
+        yy -= 1;
+      }
+      return wrap(fmt(yy, mm, 1), fmt(yy, mm, daysInMonth(yy, mm)));
+    }
+    case "this_financial_year": {
+      // April to March. Before April we are still in the year that began last
+      // April, which is the mistake a calendar-year assumption makes.
+      const startYear = m >= 4 ? y : y - 1;
+      return wrap(fmt(startYear, 4, 1), fmt(startYear + 1, 3, 31));
+    }
+    case "last_financial_year": {
+      const startYear = (m >= 4 ? y : y - 1) - 1;
+      return wrap(fmt(startYear, 4, 1), fmt(startYear + 1, 3, 31));
+    }
+
+    default: {
+      const weekday = resolveWeekday(period, today);
+      if (weekday) return wrap(weekday, weekday);
       throw new Error(`Unknown period "${period}"`);
+    }
   }
 }
 
@@ -344,4 +441,34 @@ export function toAccountLocalIso(value: string, timezone: string): string {
   const hh = String(Math.floor(abs / 60)).padStart(2, "0");
   const mm = String(abs % 60).padStart(2, "0");
   return `${local}${sign}${hh}:${mm}`;
+}
+
+/**
+ * A whole calendar month, from "YYYY-MM".
+ *
+ * Exists so "show me August" never depends on the AI knowing how many days a
+ * month has. February is the one that bites, and it bites in leap years only,
+ * which is exactly the kind of error that survives testing and then appears
+ * once every four years.
+ */
+export function resolveMonth(month: string, timezone: string): ResolvedPeriod {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) {
+    throw new Error(`month must look like "2026-08". Got "${month}".`);
+  }
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  if (m < 1 || m > 12) {
+    throw new Error(`"${month}" is not a real month.`);
+  }
+  const names = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  return {
+    start_date: fmt(y, m, 1),
+    end_date: fmt(y, m, daysInMonth(y, m)),
+    label: `${names[m - 1]} ${y}`,
+    timezone,
+  };
 }

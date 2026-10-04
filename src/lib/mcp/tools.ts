@@ -94,6 +94,11 @@ export const MCP_TOOLS: ToolDefinition[] = [
           description:
             'Exactly this many days ending today, e.g. 9 for "the last 9 days". OZZO counts the days in the account timezone.',
         },
+        month: {
+          type: "string",
+          description:
+            'A whole calendar month, "YYYY-MM", e.g. "2026-08" for August. Use this rather than working out the month length yourself.',
+        },
         start_date: {
           type: "string",
           description:

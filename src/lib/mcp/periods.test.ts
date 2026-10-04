@@ -4,6 +4,7 @@ import {
   isMcpPeriod,
   resolveCustomRange,
   resolveDaysBack,
+  resolveMonth,
   resolvePeriod,
   toAccountLocalIso,
   todayInZone,
@@ -187,8 +188,8 @@ describe("short windows", () => {
 });
 
 describe("MCP_PERIODS", () => {
-  it("offers the dashboard presets plus the short windows, and excludes custom", () => {
-    expect(MCP_PERIODS).toHaveLength(17);
+  it("offers every named window and excludes custom", () => {
+    expect(MCP_PERIODS.length).toBeGreaterThanOrEqual(36);
     expect(MCP_PERIODS).not.toContain("custom");
     expect(MCP_PERIODS).toContain("last_180_days");
   });
@@ -339,5 +340,144 @@ describe("toAccountLocalIso", () => {
   it("returns anything unreadable untouched rather than losing it", () => {
     expect(toAccountLocalIso("not a date", IST)).toBe("not a date");
     expect(toAccountLocalIso("", IST)).toBe("");
+  });
+});
+
+// 2026-10-04 is a Sunday, so the current week runs 4 Oct to 10 Oct.
+const SUNDAY_4_OCT = new Date("2026-10-04T06:00:00Z");
+
+describe("weekday windows", () => {
+  it.each([
+    ["last_friday", "2026-10-02"],
+    ["last_monday", "2026-09-28"],
+    ["last_sunday", "2026-09-27"],
+    ["last_saturday", "2026-10-03"],
+    ["this_sunday", "2026-10-04"],
+  ])("%s resolves to %s", (period, date) => {
+    const r = resolvePeriod(period, IST, SUNDAY_4_OCT);
+    expect(r.start_date).toBe(date);
+    expect(r.end_date).toBe(date);
+  });
+
+  it("covers a single day, not a week", () => {
+    const r = resolvePeriod("last_tuesday", IST, SUNDAY_4_OCT);
+    expect(r.start_date).toBe(r.end_date);
+  });
+
+  it("names the day so the answer can be checked at a glance", () => {
+    expect(resolvePeriod("last_friday", IST, SUNDAY_4_OCT).label).toBe("Last Friday");
+    expect(resolvePeriod("this_tuesday", IST, SUNDAY_4_OCT).label).toBe("This Tuesday");
+  });
+
+  it("lets this_<weekday> fall in the future rather than sliding a week", () => {
+    // Asking on Sunday for "this Friday" means a day that has not happened.
+    // Returning nothing is honest; silently using last Friday is not.
+    const r = resolvePeriod("this_friday", IST, SUNDAY_4_OCT);
+    expect(r.start_date).toBe("2026-10-09");
+  });
+
+  it("offers all seven days both ways", () => {
+    for (const w of ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"]) {
+      expect(MCP_PERIODS).toContain(`this_${w}`);
+      expect(MCP_PERIODS).toContain(`last_${w}`);
+    }
+  });
+
+  it("puts last_<weekday> exactly seven days before this_<weekday>", () => {
+    for (const w of ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"]) {
+      const a = resolvePeriod(`this_${w}`, IST, SUNDAY_4_OCT).start_date;
+      const b = resolvePeriod(`last_${w}`, IST, SUNDAY_4_OCT).start_date;
+      expect((Date.parse(a) - Date.parse(b)) / 86_400_000, w).toBe(7);
+    }
+  });
+
+  it("rejects something that merely looks like a weekday", () => {
+    expect(() => resolvePeriod("last_someday", IST, SUNDAY_4_OCT)).toThrow(/unknown period/i);
+    expect(() => resolvePeriod("next_monday", IST, SUNDAY_4_OCT)).toThrow(/unknown period/i);
+  });
+});
+
+describe("Indian financial year", () => {
+  it("runs April to March, not January to December", () => {
+    const r = resolvePeriod("this_financial_year", IST, SUNDAY_4_OCT);
+    expect(r.start_date).toBe("2026-04-01");
+    expect(r.end_date).toBe("2027-03-31");
+  });
+
+  it("stays in the year that began last April when asked before April", () => {
+    // The mistake a calendar-year assumption makes: in February the current
+    // financial year started the PREVIOUS April.
+    const r = resolvePeriod("this_financial_year", IST, new Date("2026-02-14T06:00:00Z"));
+    expect(r.start_date).toBe("2025-04-01");
+    expect(r.end_date).toBe("2026-03-31");
+  });
+
+  it("resolves the previous financial year", () => {
+    expect(resolvePeriod("last_financial_year", IST, SUNDAY_4_OCT)).toMatchObject({
+      start_date: "2025-04-01",
+      end_date: "2026-03-31",
+    });
+  });
+
+  it("is not the same as the calendar year", () => {
+    const fy = resolvePeriod("this_financial_year", IST, SUNDAY_4_OCT);
+    const cy = resolvePeriod("current_year", IST, SUNDAY_4_OCT);
+    expect(fy.start_date).not.toBe(cy.start_date);
+  });
+
+  it("handles the 1 April boundary on both sides", () => {
+    expect(resolvePeriod("this_financial_year", IST, new Date("2026-03-31T06:00:00Z")).start_date)
+      .toBe("2025-04-01");
+    expect(resolvePeriod("this_financial_year", IST, new Date("2026-04-01T06:00:00Z")).start_date)
+      .toBe("2026-04-01");
+  });
+});
+
+describe("step-back windows", () => {
+  it("resolves the day before yesterday", () => {
+    const r = resolvePeriod("day_before_yesterday", IST, SUNDAY_4_OCT);
+    expect(r.start_date).toBe("2026-10-02");
+    expect(r.end_date).toBe("2026-10-02");
+  });
+
+  it("resolves the week before last as a full Sunday-to-Saturday week", () => {
+    const r = resolvePeriod("week_before_last", IST, SUNDAY_4_OCT);
+    expect(r.start_date).toBe("2026-09-20");
+    expect(r.end_date).toBe("2026-09-26");
+  });
+
+  it("resolves the month before last", () => {
+    const r = resolvePeriod("month_before_last", IST, SUNDAY_4_OCT);
+    expect(r.start_date).toBe("2026-08-01");
+    expect(r.end_date).toBe("2026-08-31");
+  });
+
+  it("rolls month_before_last across a year boundary", () => {
+    const r = resolvePeriod("month_before_last", IST, new Date("2026-01-15T06:00:00Z"));
+    expect(r.start_date).toBe("2025-11-01");
+    expect(r.end_date).toBe("2025-11-30");
+  });
+});
+
+describe("resolveMonth", () => {
+  it("covers a whole month", () => {
+    expect(resolveMonth("2026-08", IST)).toMatchObject({
+      start_date: "2026-08-01",
+      end_date: "2026-08-31",
+      label: "August 2026",
+    });
+  });
+
+  it("gets February right, including a leap year", () => {
+    expect(resolveMonth("2026-02", IST).end_date).toBe("2026-02-28");
+    expect(resolveMonth("2028-02", IST).end_date).toBe("2028-02-29");
+  });
+
+  it.each(["2026-13", "2026-00"])("rejects %s as a month", (m) => {
+    expect(() => resolveMonth(m, IST)).toThrow(/not a real month/i);
+  });
+
+  it.each(["August", "2026/08", "26-08", "2026-8", ""])("rejects %j", (m) => {
+    expect(() => resolveMonth(m, IST)).toThrow(/2026-08/);
   });
 });
