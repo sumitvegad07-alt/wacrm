@@ -58,6 +58,14 @@ export interface DataSetDescriptor {
    * name, and the AI would report a confident match on the wrong record.
    */
   searchFields?: string[];
+  /**
+   * route "reader": the timestamptz column a period filters on.
+   *
+   * Without this a reader data set ignores the time window entirely and
+   * answers "the last 15 days" with the whole history, which looks like a
+   * real answer.
+   */
+  dateColumn?: string;
   /** ALLOW-LIST of readable columns. No select *, ever. */
   fields: FieldDef[];
   filters: FilterDef[];

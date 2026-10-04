@@ -42,6 +42,14 @@ function fakeSupabase(rows: Record<string, unknown>[] = [], total = rows.length)
       (calls.filters as unknown[]).push(["eq", col, val]);
       return builder;
     },
+    gte: (col: string, val: unknown) => {
+      (calls.filters as unknown[]).push(["gte", col, val]);
+      return builder;
+    },
+    lt: (col: string, val: unknown) => {
+      (calls.filters as unknown[]).push(["lt", col, val]);
+      return builder;
+    },
     ilike: (col: string, val: unknown) => {
       (calls.filters as unknown[]).push(["ilike", col, val]);
       return builder;
@@ -400,5 +408,129 @@ describe("fetchData — reader route", () => {
     await expect(
       fetchData({ dataset: "customers" }, ctx({ supabase: broken })),
     ).rejects.toThrow(/could not be read/i);
+  });
+});
+
+describe("fetchData — arbitrary windows", () => {
+  it("counts exactly N days back, in account time", async () => {
+    await fetchData(
+      { dataset: "visits", days_back: 9, measures: ["visit_count"] },
+      ctx(),
+    );
+    const f = rpc.runReport.mock.calls[0][5] as {
+      date_range?: { start_date: string; end_date: string };
+    };
+    const span =
+      (Date.parse(f.date_range!.end_date) - Date.parse(f.date_range!.start_date)) /
+        86_400_000 +
+      1;
+    expect(span).toBe(9);
+  });
+
+  it("passes an explicit range straight through", async () => {
+    const r = await fetchData(
+      {
+        dataset: "visits",
+        start_date: "2026-09-20",
+        end_date: "2026-10-04",
+        measures: ["visit_count"],
+      },
+      ctx(),
+    );
+    expect(r.period_resolved).toMatchObject({
+      start_date: "2026-09-20",
+      end_date: "2026-10-04",
+      timezone: "Asia/Kolkata",
+    });
+  });
+
+  it("prefers an explicit range over days_back and period", async () => {
+    const r = await fetchData(
+      {
+        dataset: "visits",
+        period: "today",
+        days_back: 30,
+        start_date: "2026-09-20",
+        end_date: "2026-10-04",
+        measures: ["visit_count"],
+      },
+      ctx(),
+    );
+    expect(r.period_resolved!.start_date).toBe("2026-09-20");
+  });
+
+  it("prefers days_back over a named period", async () => {
+    const r = await fetchData(
+      { dataset: "visits", period: "today", days_back: 9, measures: ["visit_count"] },
+      ctx(),
+    );
+    expect(r.period_resolved!.label).toBe("Last 9 Days");
+  });
+
+  it("refuses half a range rather than guessing the other end", async () => {
+    await expect(
+      fetchData({ dataset: "visits", start_date: "2026-09-20" }, ctx()),
+    ).rejects.toThrow(/together/i);
+    await expect(
+      fetchData({ dataset: "visits", end_date: "2026-10-04" }, ctx()),
+    ).rejects.toThrow(/together/i);
+  });
+
+  it("rejects a malformed or impossible date", async () => {
+    await expect(
+      fetchData(
+        { dataset: "visits", start_date: "20-09-2026", end_date: "2026-10-04" },
+        ctx(),
+      ),
+    ).rejects.toThrow(/YYYY-MM-DD/);
+    await expect(
+      fetchData(
+        { dataset: "visits", start_date: "2026-02-30", end_date: "2026-03-01" },
+        ctx(),
+      ),
+    ).rejects.toThrow(/YYYY-MM-DD/);
+  });
+});
+
+describe("fetchData — reader date windows", () => {
+  it("bounds a reader query by real instants, in account time", async () => {
+    const fake = fakeSupabase([{ id: "1" }]);
+    await fetchData(
+      { dataset: "visit_log", start_date: "2026-09-20", end_date: "2026-10-04" },
+      ctx({ supabase: fake.client }),
+    );
+    const filters = fake.calls.filters as unknown[][];
+    const gte = filters.find((f) => f[0] === "gte");
+    const lt = filters.find((f) => f[0] === "lt");
+    expect(gte![1]).toBe("check_in_at");
+    // 20 Sep 00:00 IST is 19 Sep 18:30 UTC.
+    expect(gte![2]).toBe("2026-09-19T18:30:00.000Z");
+    // Upper bound is EXCLUSIVE midnight after the last day, so nothing in the
+    // final second is dropped.
+    expect(lt![2]).toBe("2026-10-04T18:30:00.000Z");
+  });
+
+  it("refuses a period on a reader data set that records no time", async () => {
+    const fake = fakeSupabase([{ id: "1" }]);
+    await expect(
+      fetchData({ dataset: "products", days_back: 7 }, ctx({ supabase: fake.client })),
+    ).rejects.toThrow(/no date to filter on/i);
+  });
+
+  it("reads individual visits with duration and feedback", async () => {
+    const fake = fakeSupabase([
+      { customer_company: "Brahmani casting", duration_minutes: 5, feedback_type: "Good" },
+    ]);
+    const r = await fetchData(
+      {
+        dataset: "visit_log",
+        days_back: 15,
+        fields: ["customer_company", "duration_minutes", "feedback_type"],
+      },
+      ctx({ supabase: fake.client }),
+    );
+    expect(fake.calls.table).toBe("mcp_visit_details");
+    expect(fake.calls.select).toBe("customer_company,duration_minutes,feedback_type");
+    expect(r.rows[0]).toMatchObject({ duration_minutes: 5, feedback_type: "Good" });
   });
 });

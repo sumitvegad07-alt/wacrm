@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { MCP_PERIODS, isMcpPeriod, resolvePeriod, todayInZone } from "./periods";
+import {
+  MCP_PERIODS,
+  isMcpPeriod,
+  resolveCustomRange,
+  resolveDaysBack,
+  resolvePeriod,
+  todayInZone,
+} from "./periods";
 
 const IST = "Asia/Kolkata";
 
@@ -198,5 +205,89 @@ describe("MCP_PERIODS", () => {
       expect(r.end_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(r.start_date <= r.end_date).toBe(true);
     }
+  });
+});
+
+describe("resolveDaysBack", () => {
+  const AT = new Date("2026-10-04T06:00:00Z");
+
+  it.each([
+    [1, "2026-10-04"],
+    [9, "2026-09-26"],
+    [15, "2026-09-20"],
+    [45, "2026-08-21"],
+  ])("last %i days starts on %s", (days, start) => {
+    const r = resolveDaysBack(days, IST, AT);
+    expect(r.start_date).toBe(start);
+    expect(r.end_date).toBe("2026-10-04");
+  });
+
+  it("spans exactly the number of days asked for", () => {
+    for (const days of [1, 2, 9, 15, 31, 100]) {
+      const r = resolveDaysBack(days, IST, AT);
+      const span =
+        (Date.parse(r.end_date) - Date.parse(r.start_date)) / 86_400_000 + 1;
+      expect(span, `days_back=${days}`).toBe(days);
+    }
+  });
+
+  it("counts from the account's today, not UTC's", () => {
+    // 19:30Z is already tomorrow in India.
+    const r = resolveDaysBack(1, IST, new Date("2026-10-03T19:30:00Z"));
+    expect(r.start_date).toBe("2026-10-04");
+  });
+
+  it("labels itself so the AI can quote the window", () => {
+    expect(resolveDaysBack(9, IST, AT).label).toBe("Last 9 Days");
+    expect(resolveDaysBack(1, IST, AT).label).toBe("Last 1 Day");
+  });
+
+  it("rejects nonsense rather than guessing", () => {
+    for (const bad of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => resolveDaysBack(bad, IST, AT)).toThrow(/whole number|1 or more/i);
+    }
+  });
+
+  it("refuses an unreasonable span", () => {
+    expect(() => resolveDaysBack(5000, IST, AT)).toThrow(/limited to/i);
+  });
+});
+
+describe("resolveCustomRange", () => {
+  it("accepts an explicit range as calendar dates", () => {
+    const r = resolveCustomRange("2026-09-20", "2026-10-04", IST);
+    expect(r.start_date).toBe("2026-09-20");
+    expect(r.end_date).toBe("2026-10-04");
+    expect(r.timezone).toBe(IST);
+    expect(r.label).toBe("2026-09-20 to 2026-10-04");
+  });
+
+  it("allows a single day", () => {
+    const r = resolveCustomRange("2026-09-20", "2026-09-20", IST);
+    expect(r.start_date).toBe(r.end_date);
+  });
+
+  it("rejects a backwards range instead of silently swapping it", () => {
+    expect(() => resolveCustomRange("2026-10-04", "2026-09-20", IST)).toThrow(/after/i);
+  });
+
+  it.each(["20-09-2026", "2026/09/20", "Sep 20 2026", "2026-9-2", "", "today"])(
+    "rejects %j as a date",
+    (bad) => {
+      expect(() => resolveCustomRange(bad, "2026-10-04", IST)).toThrow(/YYYY-MM-DD/);
+    },
+  );
+
+  it("rejects a date that looks right but cannot exist", () => {
+    expect(() => resolveCustomRange("2026-02-30", "2026-03-01", IST)).toThrow(/YYYY-MM-DD/);
+    expect(() => resolveCustomRange("2026-13-01", "2026-13-02", IST)).toThrow(/YYYY-MM-DD/);
+  });
+
+  it("accepts 29 February in a leap year", () => {
+    expect(resolveCustomRange("2028-02-29", "2028-03-01", IST).start_date).toBe("2028-02-29");
+  });
+
+  it("refuses an unreasonable span", () => {
+    expect(() => resolveCustomRange("2000-01-01", "2026-10-04", IST)).toThrow(/limit/i);
   });
 });

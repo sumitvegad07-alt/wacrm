@@ -261,11 +261,57 @@ function fromReportConfig(entry: (typeof REPORT_SETS)[number]): DataSetDescripto
 /** Route B descriptors — modules with no report behind them. */
 const READER_SETS: DataSetDescriptor[] = [
   {
+    name: "visit_log",
+    title: "Visit Log",
+    route: "reader",
+    line: "wfa",
+    table: "mcp_visit_details",
+    dateColumn: "check_in_at",
+    searchFields: ["customer_company", "customer_contact_person", "employee_name"],
+    fields: [
+      { key: "id", label: "Visit ID", type: "text" },
+      { key: "customer_company", label: "Company", type: "text" },
+      { key: "customer_contact_person", label: "Contact Person", type: "text" },
+      { key: "customer_city", label: "City", type: "text" },
+      { key: "customer_area", label: "Area", type: "text" },
+      { key: "employee_name", label: "Visited By", type: "text" },
+      { key: "check_in_at", label: "Check In", type: "datetime" },
+      { key: "check_out_at", label: "Check Out", type: "datetime" },
+      { key: "duration_minutes", label: "Time Spent (minutes)", type: "number" },
+      { key: "feedback_type", label: "Feedback", type: "text" },
+      { key: "feedback_text", label: "Feedback Notes", type: "text" },
+      { key: "notes", label: "Visit Notes", type: "text" },
+      { key: "target_type", label: "Visited", type: "text" },
+      { key: "check_in_distance_m", label: "Check-in Distance (m)", type: "number" },
+    ],
+    filters: [
+      { key: "search", label: "Company, person or employee contains", type: "text" },
+      { key: "contact_id", label: "Customer ID", type: "id" },
+      { key: "employee_profile_id", label: "Employee ID", type: "id" },
+      { key: "feedback_type", label: "Feedback", type: "select" },
+      { key: "target_type", label: "Visited", type: "select", options: ["Customer", "Lead"] },
+    ],
+    dimensions: [
+      { key: "employee_name", label: "Visited By", type: "text" },
+      { key: "customer_company", label: "Company", type: "text" },
+      { key: "feedback_type", label: "Feedback", type: "text" },
+      { key: "customer_city", label: "City", type: "text" },
+    ],
+    measures: [{ key: "visit_count", label: "Visits", type: "number" }],
+    notes:
+      "INDIVIDUAL visits, one row each — use this whenever the question is about particular visits rather than a total: how long each visit lasted, what feedback was left, what notes were written, who was seen and when. The `visits` data set totals visits and cannot show any of that. `duration_minutes` is check-out minus check-in and is EMPTY while a visit is still open, so an unusually large number usually means the rep forgot to check out rather than a long meeting — say so rather than averaging it in silently. Feedback is a per-account list, so read the values you get back rather than assuming a fixed set.",
+    examples: [
+      'fetch_data({ dataset: "visit_log", days_back: 15, fields: ["customer_company","employee_name","check_in_at","duration_minutes","feedback_type"] })',
+      'fetch_data({ dataset: "visit_log", start_date: "2026-09-20", end_date: "2026-10-04", filters: { search: "Dhaval" }, fields: ["customer_company","duration_minutes","feedback_type"] })',
+    ],
+  },
+  {
     name: "customers",
     title: "Customers",
     route: "reader",
     line: "crm",
     table: "contacts",
+    dateColumn: "created_at",
     // `company` first: the reports display the company name, so that is the
     // name an admin will quote back.
     searchFields: ["company", "name", "customer_code"],

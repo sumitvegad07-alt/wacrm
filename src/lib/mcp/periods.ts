@@ -168,3 +168,137 @@ export function resolvePeriod(
       throw new Error(`Unknown period "${period}"`);
   }
 }
+
+// ── Arbitrary ranges ────────────────────────────────────────
+//
+// Named presets cannot cover every real question: "last 9 days", "20 Sep to
+// 4 Oct", "1 to 15 August". The original rule was named periods only, so the
+// AI could never repeat the DSR timezone bug by computing dates itself.
+//
+// These keep that guarantee. OZZO still owns the timezone: `days_back` is
+// computed here from the account's own today, and an explicit range is read
+// as account-local CALENDAR dates, exactly as a person reading a date on a
+// page would mean them. The AI supplies intent, never arithmetic on an
+// instant.
+
+/** Longest span we will answer in one call. */
+export const MAX_RANGE_DAYS = 1100; // about three years
+
+/** Exactly `days` calendar days ending today, in the account's timezone. */
+export function resolveDaysBack(
+  days: number,
+  timezone: string,
+  now: Date = new Date(),
+): ResolvedPeriod {
+  if (!Number.isFinite(days) || days < 1) {
+    throw new Error("days_back must be a whole number of days, 1 or more.");
+  }
+  const whole = Math.floor(days);
+  if (whole > MAX_RANGE_DAYS) {
+    throw new Error(
+      `days_back is limited to ${MAX_RANGE_DAYS} days. Ask for a narrower window.`,
+    );
+  }
+  const today = todayInZone(timezone, now);
+  return {
+    start_date: shiftDays(today, -(whole - 1)),
+    end_date: today,
+    label: `Last ${whole} Day${whole === 1 ? "" : "s"}`,
+    timezone,
+  };
+}
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True when the string is a real calendar date, not just the right shape. */
+function isRealDate(ymd: string): boolean {
+  if (!YMD.test(ymd)) return false;
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (m < 1 || m > 12 || d < 1) return false;
+  return d <= daysInMonth(y, m);
+}
+
+/** An explicit range, read as account-local calendar dates. */
+export function resolveCustomRange(
+  startDate: string,
+  endDate: string,
+  timezone: string,
+): ResolvedPeriod {
+  if (!isRealDate(startDate) || !isRealDate(endDate)) {
+    throw new Error(
+      "start_date and end_date must be real calendar dates in YYYY-MM-DD form, e.g. 2026-09-20.",
+    );
+  }
+  if (startDate > endDate) {
+    throw new Error(
+      `start_date (${startDate}) is after end_date (${endDate}).`,
+    );
+  }
+  const span =
+    (Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) /
+      86_400_000 +
+    1;
+  if (span > MAX_RANGE_DAYS) {
+    throw new Error(
+      `That range covers ${Math.round(span)} days; the limit is ${MAX_RANGE_DAYS}. Ask for a narrower window.`,
+    );
+  }
+  return {
+    start_date: startDate,
+    end_date: endDate,
+    label: `${startDate} to ${endDate}`,
+    timezone,
+  };
+}
+
+/**
+ * The UTC instants bounding an account-local day range.
+ *
+ * A reader query filters a timestamptz column, so "20 September" has to
+ * become a real instant. Doing that in UTC would start an Indian tenant's day
+ * 5.5 hours late and drop the first evening of visits — the DSR bug in
+ * another costume. The offset is taken on the date in question, so a
+ * DST-observing tenant is not shifted by an hour either.
+ *
+ * `to` is EXCLUSIVE: the instant the day after end_date begins. Comparing
+ * against 23:59:59 would silently drop anything in the final second.
+ */
+export function localRangeToUtc(
+  period: ResolvedPeriod,
+): { from: string; to: string } {
+  return {
+    from: localMidnightUtc(period.start_date, period.timezone),
+    to: localMidnightUtc(shiftDays(period.end_date, 1), period.timezone),
+  };
+}
+
+function localMidnightUtc(ymd: string, timezone: string): string {
+  const { y, m, d } = parts(ymd);
+  const guess = Date.UTC(y, m - 1, d, 0, 0, 0);
+  const offset = zoneOffsetMs(timezone, new Date(guess));
+  return new Date(guess - offset).toISOString();
+}
+
+/** How far ahead of UTC `timezone` is at `at`, in milliseconds. */
+function zoneOffsetMs(timezone: string, at: Date): number {
+  const fields = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(at);
+  const get = (type: string) => Number(fields.find((f) => f.type === type)?.value);
+  const asUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour") % 24,
+    get("minute"),
+    get("second"),
+  );
+  return asUtc - at.getTime();
+}

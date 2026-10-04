@@ -71,7 +71,22 @@ export const MCP_TOOLS: ToolDefinition[] = [
         period: {
           type: "string",
           enum: [...MCP_PERIODS],
-          description: "A named period. Never a raw date.",
+          description: "A named preset window.",
+        },
+        days_back: {
+          type: "integer",
+          minimum: 1,
+          description:
+            'Exactly this many days ending today, e.g. 9 for "the last 9 days". OZZO counts the days in the account timezone.',
+        },
+        start_date: {
+          type: "string",
+          description:
+            "Start of an explicit range, YYYY-MM-DD, read in the account's timezone. Must be sent with end_date.",
+        },
+        end_date: {
+          type: "string",
+          description: "End of an explicit range, YYYY-MM-DD, inclusive.",
         },
         filters: {
           type: "object",

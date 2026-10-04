@@ -20,13 +20,24 @@
 import { runReport } from "@/lib/dashboard/report-rpc";
 import { assertDataSetAllowed } from "./gating";
 import { clampLimit, wasTruncated } from "./limits";
-import { resolvePeriod, type ResolvedPeriod } from "./periods";
+import {
+  localRangeToUtc,
+  resolveCustomRange,
+  resolveDaysBack,
+  resolvePeriod,
+  type ResolvedPeriod,
+} from "./periods";
 import type { McpContext } from "./session";
 import type { DataSetDescriptor } from "./types";
 
 export interface FetchArgs {
   dataset: string;
   period?: string;
+  /** Exactly this many days ending today, in the account's timezone. */
+  days_back?: number;
+  /** An explicit account-local range. Both or neither. */
+  start_date?: string;
+  end_date?: string;
   time_of_day?: { from: string; to: string };
   filters?: Record<string, unknown>;
   group_by?: string[];
@@ -125,12 +136,33 @@ function wrapFilterValue(
   return { [def.wrapIn]: value };
 }
 
-/** The period to apply: what was asked for, or the report's own default. */
+/**
+ * The window to apply, in the account's timezone.
+ *
+ * Three ways to ask, in order of precedence, so a caller that sends more than
+ * one gets the most specific rather than a silent pick:
+ *   start_date + end_date  an explicit range
+ *   days_back              exactly N days ending today
+ *   period                 a named preset
+ */
 function periodFor(
   s: DataSetDescriptor,
   args: FetchArgs,
   timezone: string,
 ): ResolvedPeriod | undefined {
+  const hasStart = Boolean(args.start_date);
+  const hasEnd = Boolean(args.end_date);
+  if (hasStart !== hasEnd) {
+    fail(
+      "start_date and end_date must be given together. For an open-ended window use days_back or a named period.",
+    );
+  }
+  if (hasStart && hasEnd) {
+    return resolveCustomRange(args.start_date!, args.end_date!, timezone);
+  }
+  if (args.days_back !== undefined) {
+    return resolveDaysBack(args.days_back, timezone);
+  }
   if (args.period) return resolvePeriod(args.period, timezone);
   // A report data set without a period would scan the whole history, which is
   // neither what the admin meant nor affordable.
@@ -153,7 +185,10 @@ export async function fetchData(
   // against a reporting data set is a request for the whole history, which is
   // never what was meant — answer with the shape of it instead.
   const noNarrowing =
-    !args.period && Object.keys(args.filters ?? {}).length === 0;
+    !args.period &&
+    args.days_back === undefined &&
+    !args.start_date &&
+    Object.keys(args.filters ?? {}).length === 0;
   if (!wantsSummary && descriptor.route === "report" && noNarrowing) {
     const dimension = descriptor.dimensions[0]?.key;
     const measure = descriptor.measures[0]?.key;
@@ -245,6 +280,8 @@ function escapeForOr(term: string): string {
 type QueryBuilder = {
   select: (cols: string, opts?: { count?: "exact"; head?: boolean }) => QueryBuilder;
   eq: (col: string, val: unknown) => QueryBuilder;
+  gte: (col: string, val: unknown) => QueryBuilder;
+  lt: (col: string, val: unknown) => QueryBuilder;
   or: (expr: string) => QueryBuilder;
   order: (col: string, opts?: { ascending?: boolean }) => QueryBuilder;
   range: (from: number, to: number) => Promise<{
@@ -260,10 +297,19 @@ function applyFilters(
   s: DataSetDescriptor,
   args: FetchArgs,
   accountId: string,
+  period?: ResolvedPeriod,
 ): QueryBuilder {
   // Belt and braces: RLS already scopes this to the admin's account, and the
   // explicit filter means a future RLS mistake is not a cross-tenant leak.
   let q = query.eq("account_id", accountId);
+
+  // The window, as real instants. A reader data set that declares no date
+  // column has nothing to filter on, and the caller is told so rather than
+  // being handed the whole history as if it were the period asked for.
+  if (period && s.dateColumn) {
+    const { from, to } = localRangeToUtc(period);
+    q = q.gte(s.dateColumn, from).lt(s.dateColumn, to);
+  }
 
   for (const [key, value] of Object.entries(args.filters ?? {})) {
     if (key === "search") {
@@ -309,6 +355,7 @@ async function runReaderRoute(
       s,
       args,
       ctx.accountId,
+      period,
     ) as unknown as Promise<{ count: number | null; error: { message: string } | null }>;
     const { count, error: countError } = await countQuery;
     if (countError) {
@@ -330,11 +377,18 @@ async function runReaderRoute(
     }
   }
 
+  if (period && !s.dateColumn) {
+    fail(
+      `"${s.name}" has no date to filter on, so a time period cannot be applied to it. Ask without a period, or use a data set that records time.`,
+    );
+  }
+
   let query = applyFilters(
     supabase.from(s.table!).select(columns.join(",")),
     s,
     args,
     ctx.accountId,
+    period,
   );
 
   const sortColumn = args.sort ?? (wantsSummary ? columns[0] : defaultSort(s));
@@ -373,8 +427,11 @@ async function runReaderRoute(
   };
 }
 
-/** Newest first where the table records a creation time. */
+/** Newest first where the table records a time. */
 function defaultSort(s: DataSetDescriptor): string | undefined {
+  if (s.dateColumn && s.fields.some((f) => f.key === s.dateColumn)) {
+    return s.dateColumn;
+  }
   return s.fields.some((f) => f.key === "created_at") ? "created_at" : undefined;
 }
 
