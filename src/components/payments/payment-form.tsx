@@ -20,6 +20,11 @@ import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { formatCurrency } from '@/lib/currency';
 import { fetchCustomerFinancials } from '@/lib/payments/financials';
 import {
+  DEFAULT_OUTSTANDING_CONFIG,
+  readOutstandingConfig,
+  type OutstandingConfig,
+} from '@/lib/payments/outstanding-config';
+import {
   resolvePaymentRequirements,
   findMissingRequirement,
   type PaymentSettings,
@@ -78,6 +83,12 @@ export function PaymentForm({
   const [contacts, setContacts] = useState<{ value: string; label: string }[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings | null>(null);
+  // The account's rule for what counts as owed. Starts on the pre-2026-10-05
+  // behaviour so the first paint is never wilder than the old number, and the
+  // financials effect re-runs once the real rule arrives.
+  const [outstandingConfig, setOutstandingConfig] = useState<OutstandingConfig>(
+    DEFAULT_OUTSTANDING_CONFIG
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const idempotencyKey = useRef(crypto.randomUUID());
@@ -183,6 +194,8 @@ export function PaymentForm({
       }
 
       setPaymentSettings(accountData?.settings?.payment_settings ?? null);
+      // Same account row, so the outstanding rule costs no extra round trip.
+      setOutstandingConfig(readOutstandingConfig(accountData?.settings));
 
       if (fieldsData) {
         await ensureDefaultSectionsAndFields(accountId, 'payment', undefined, supabase);
@@ -209,7 +222,7 @@ export function PaymentForm({
       // Single source of truth — see fetchCustomerFinancials(). This form used to carry
       // its own copy of the query and filtered orders by 'Approved' rather than 'Closed',
       // so it under-reported what a customer owed to the person collecting the money.
-      const result = await fetchCustomerFinancials(supabase, selectedContactId);
+      const result = await fetchCustomerFinancials(supabase, selectedContactId, outstandingConfig);
 
       if (!alive) return;
 
@@ -225,7 +238,10 @@ export function PaymentForm({
 
     fetchFinancials();
     return () => { alive = false; };
-  }, [selectedContactId, accountId, supabase]);
+    // `outstandingConfig` belongs here: it arrives a beat after the first render,
+    // and without it the form would keep showing the balance computed under the
+    // default rule rather than the account's own.
+  }, [selectedContactId, accountId, supabase, outstandingConfig]);
 
   const onSubmit = async (data: PaymentFormData) => {
     if (!hasPermission(PERMISSIONS.PAYMENTS.CREATE)) {

@@ -4,7 +4,9 @@ import {
   exceedsCreditLimit,
   settledAmount,
   fetchCustomerFinancials,
+  fetchOutstandingConfig,
 } from './financials';
+import { DEFAULT_OUTSTANDING_CONFIG } from './outstanding-config';
 
 const DAY = 86_400_000;
 const NOW = new Date('2026-08-14T00:00:00Z').getTime();
@@ -252,13 +254,24 @@ describe('fetchCustomerFinancials — the single source of truth', () => {
   // BUG-01: the payment form carried its own copy of this query and filtered orders by
   // status 'Approved' instead of 'Closed'. A closed order was therefore invisible, and
   // the collection screen under-reported what the customer owed.
-  function fakeDb(captured: { orderStatus?: string }) {
+  //
+  // Since 2026-10-05 the statuses are the account's choice rather than hard-wired, so
+  // what these tests pin is that the caller's chosen statuses are the ones that reach
+  // the query — never a status this function picked for itself.
+  interface Captured {
+    orderStatuses?: string[];
+    paymentStatuses?: string[];
+  }
+
+  function fakeDb(captured: Captured) {
     return {
       from(table: string) {
         const builder: any = {
           select: () => builder,
-          eq(col: string, val: string) {
-            if (table === 'orders' && col === 'status') captured.orderStatus = val;
+          eq: () => builder,
+          in(col: string, vals: string[]) {
+            if (col === 'status' && table === 'orders') captured.orderStatuses = vals;
+            if (col === 'status' && table === 'payments') captured.paymentStatuses = vals;
             return builder;
           },
           single: () =>
@@ -276,15 +289,79 @@ describe('fetchCustomerFinancials — the single source of truth', () => {
     };
   }
 
-  it('filters orders by Closed, not Approved', async () => {
-    const captured: { orderStatus?: string } = {};
-    await fetchCustomerFinancials(fakeDb(captured), 'contact-1');
-    expect(captured.orderStatus).toBe('Closed');
+  it('asks for exactly the order statuses the account chose', async () => {
+    const captured: Captured = {};
+    await fetchCustomerFinancials(fakeDb(captured), 'contact-1', {
+      orderStatuses: ['Part Dispatch', 'Dispatched', 'Closed'],
+      paymentStatuses: ['Approved'],
+    });
+    expect(captured.orderStatuses).toEqual(['Part Dispatch', 'Dispatched', 'Closed']);
+  });
+
+  it('asks for exactly the payment statuses the account chose', async () => {
+    const captured: Captured = {};
+    await fetchCustomerFinancials(fakeDb(captured), 'contact-1', {
+      orderStatuses: ['Closed'],
+      paymentStatuses: ['Pending', 'Approved'],
+    });
+    expect(captured.paymentStatuses).toEqual(['Pending', 'Approved']);
+  });
+
+  it('still counts only Closed and Approved on the default rule', async () => {
+    const captured: Captured = {};
+    await fetchCustomerFinancials(fakeDb(captured), 'contact-1', DEFAULT_OUTSTANDING_CONFIG);
+    expect(captured.orderStatuses).toEqual(['Closed']);
+    expect(captured.paymentStatuses).toEqual(['Approved']);
   });
 
   it('reproduces the pilot scenario: 10,000 opening + 15,300 closed = 25,300', async () => {
-    const r = await fetchCustomerFinancials(fakeDb({}), 'contact-1');
+    const r = await fetchCustomerFinancials(fakeDb({}), 'contact-1', DEFAULT_OUTSTANDING_CONFIG);
     expect(r.outstandingBalance).toBe(25300);
     expect(r.availableCredit).toBe(74700);
+  });
+});
+
+describe('fetchOutstandingConfig', () => {
+  function accountDb(settings: unknown) {
+    return {
+      from: () => {
+        const builder: any = {
+          select: () => builder,
+          eq: () => builder,
+          single: () => Promise.resolve({ data: { settings } }),
+        };
+        return builder;
+      },
+      rpc: () => Promise.resolve({ data: null }),
+    };
+  }
+
+  it('reads the rule an admin saved', async () => {
+    const config = await fetchOutstandingConfig(
+      accountDb({ outstanding_settings: { order_statuses: ['Pending', 'Closed'] } }),
+      'account-1'
+    );
+    expect(config.orderStatuses).toEqual(['Pending', 'Closed']);
+  });
+
+  it('falls back to the old behaviour when the account never chose', async () => {
+    const config = await fetchOutstandingConfig(accountDb({}), 'account-1');
+    expect(config).toEqual(DEFAULT_OUTSTANDING_CONFIG);
+  });
+
+  it('falls back to the old behaviour when the account row cannot be read', async () => {
+    // A member whose RLS hides `accounts` must not silently get a zero balance.
+    const brokenDb = {
+      from: () => {
+        const builder: any = {
+          select: () => builder,
+          eq: () => builder,
+          single: () => Promise.resolve({ data: null, error: { message: 'denied' } }),
+        };
+        return builder;
+      },
+      rpc: () => Promise.resolve({ data: null }),
+    };
+    expect(await fetchOutstandingConfig(brokenDb, 'account-1')).toEqual(DEFAULT_OUTSTANDING_CONFIG);
   });
 });

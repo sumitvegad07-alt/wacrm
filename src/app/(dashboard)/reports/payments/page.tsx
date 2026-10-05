@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { ColumnDef } from "@/components/ui/data-table/data-table-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +18,7 @@ import { paymentReportConfig } from "@/lib/reports/paymentReportConfig";
 
 export default function PaymentReportPage() {
   const router = useRouter();
-  const { accountId, hasPermission, defaultCurrency } = useAuth();
+  const { accountId, hasPermission, defaultCurrency, account } = useAuth();
   const supabase = createClient();
   
   // Tab 2: Customer Financials Data
@@ -33,11 +34,14 @@ export default function PaymentReportPage() {
 
   const fetchFinancials = async () => {
     setIsLoadingFinancials(true);
-    // Fetch contacts, their approved orders, and their approved payments
+    // Which orders count as owed and which payments as received is the account's
+    // rule — see outstanding-config. `account` is already in the auth context.
+    const config = readOutstandingConfig(account?.settings);
+
     const [contactsRes, ordersRes, paymentsRes] = await Promise.all([
       supabase.from("contacts").select("id, company, name, credit_limit, credit_days, opening_balance").eq("account_id", accountId),
-      supabase.from("orders").select("contact_id, total_amount, created_at").eq("account_id", accountId).eq("status", "Closed"),
-      supabase.from("payments").select("contact_id, amount, verified_amount").eq("account_id", accountId).eq("status", "Approved")
+      supabase.from("orders").select("contact_id, total_amount, created_at").eq("account_id", accountId).in("status", config.orderStatuses),
+      supabase.from("payments").select("contact_id, amount, verified_amount").eq("account_id", accountId).in("status", config.paymentStatuses)
     ]);
 
     if (!contactsRes.error && contactsRes.data) {

@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/currency";
 import { fetchCustomerFinancials } from "@/lib/payments/financials";
+import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
 import { AlertTriangle, CheckCircle2, XCircle, CreditCard } from "lucide-react";
 
 
@@ -52,8 +53,10 @@ export function CustomerFinancialCard({ contactId, accountId, canViewCreditLimit
       }
       
       // Shared with the payment form so both screens can never disagree about what a
-      // customer owes — see fetchCustomerFinancials().
-      const computed = await fetchCustomerFinancials(db, contactId);
+      // customer owes — see fetchCustomerFinancials(). The account's settings are
+      // already in hand from the query above, so the outstanding rule costs no extra
+      // round trip.
+      const computed = await fetchCustomerFinancials(db, contactId, readOutstandingConfig(settings));
 
       const finalData = { ...computed, paymentsEnabled: true };
       

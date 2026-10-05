@@ -6,7 +6,16 @@
  * exercised by clicking through the app.
  *
  * Outstanding = opening balance + billable orders - approved payments.
+ *
+ * Which orders are "billable" and which payments count is the account's own rule
+ * since 2026-10-05 — see `outstanding-config`.
  */
+
+import {
+  DEFAULT_OUTSTANDING_CONFIG,
+  readOutstandingConfig,
+  type OutstandingConfig,
+} from './outstanding-config';
 
 export interface FinancialOrder {
   total_amount: number;
@@ -125,6 +134,32 @@ export function computeCustomerFinancials(input: CustomerFinancialInput): Custom
 }
 
 /**
+ * Structurally typed so these helpers work with the browser and server Supabase
+ * clients alike without dragging the generated DB types through the signatures.
+ */
+type Db = {
+  from: (t: string) => any;
+  rpc: (fn: string) => any;
+};
+
+/**
+ * The account's outstanding rule — which order statuses count as owed and which
+ * payment statuses count as received.
+ *
+ * Any failure falls back to the pre-2026-10-05 behaviour rather than throwing or
+ * counting nothing. A member whose RLS hides `accounts`, or a transient error,
+ * must never be shown a zero balance for a customer who owes money.
+ */
+export async function fetchOutstandingConfig(
+  db: Db,
+  accountId: string
+): Promise<OutstandingConfig> {
+  const res = await db.from('accounts').select('settings').eq('id', accountId).single();
+  if (!res?.data) return DEFAULT_OUTSTANDING_CONFIG;
+  return readOutstandingConfig(res.data.settings);
+}
+
+/**
  * Load a customer's financial position from the database and compute it.
  *
  * This is the ONE place the outstanding figure is derived for the UI. Before this
@@ -133,22 +168,24 @@ export function computeCustomerFinancials(input: CustomerFinancialInput): Custom
  * form told collectors a customer owed far less than they did. Anything that needs to
  * show what a customer owes must call this rather than re-deriving it.
  *
- * The business rule itself is unchanged:
- *   Outstanding = opening balance + Closed orders - Approved payments
+ * The business rule:
+ *   Outstanding = opening balance + counted orders - counted payments
+ *
+ * Which statuses are "counted" is the account's choice (see `outstanding-config`).
+ * `config` is deliberately REQUIRED rather than defaulted: a caller that forgets it
+ * would otherwise silently report a different balance than the rest of the app, and
+ * that is exactly the class of bug BUG-01 was. Callers without an account's settings
+ * to hand get them from `fetchOutstandingConfig`.
  */
 export async function fetchCustomerFinancials(
-  // Structurally typed so this works with the browser and server Supabase clients
-  // alike without dragging the generated DB types through the signature.
-  db: {
-    from: (t: string) => any;
-    rpc: (fn: string) => any;
-  },
-  contactId: string
+  db: Db,
+  contactId: string,
+  config: OutstandingConfig
 ): Promise<CustomerFinancials> {
   const [contactRes, ordersRes, paymentsRes, timeRes] = await Promise.all([
     db.from('contacts').select('credit_limit, credit_days, opening_balance').eq('id', contactId).single(),
-    db.from('orders').select('total_amount, created_at').eq('contact_id', contactId).eq('status', 'Closed'),
-    db.from('payments').select('amount, verified_amount').eq('contact_id', contactId).eq('status', 'Approved'),
+    db.from('orders').select('total_amount, created_at').eq('contact_id', contactId).in('status', config.orderStatuses),
+    db.from('payments').select('amount, verified_amount').eq('contact_id', contactId).in('status', config.paymentStatuses),
     db.rpc('get_server_time'),
   ]);
 

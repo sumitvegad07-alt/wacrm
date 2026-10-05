@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
 import { MetricCard } from "./metric-card";
 import { SkeletonCard } from "./skeleton";
 import { DollarSign, AlertCircle, Clock, PieChart, BarChart } from "lucide-react";
@@ -69,14 +70,21 @@ export function MonthlyCollectionWidget() {
 }
 
 export function OutstandingAmountWidget() {
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, account } = useAuth();
   const [data, setData] = useState<number | null>(null);
+  // The account row is already in the auth context, so the outstanding rule costs
+  // no extra round trip. Memoised because it sits in a useEffect dependency array:
+  // a fresh object every render would refetch forever.
+  const outstandingConfig = useMemo(
+    () => readOutstandingConfig(account?.settings),
+    [account?.settings]
+  );
 
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
-    fetchTotalOutstanding(db, accountId).then(setData);
-  }, [accountId]);
+    fetchTotalOutstanding(db, accountId, outstandingConfig).then(setData);
+  }, [accountId, outstandingConfig]);
 
   if (data === null) return <SkeletonCard />;
 
@@ -241,14 +249,21 @@ export function PendingApprovalAgingWidget() {
 }
 
 export function OverdueCustomersWidget() {
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, account } = useAuth();
   const [data, setData] = useState<any[] | null>(null);
+  // The account row is already in the auth context, so the outstanding rule costs
+  // no extra round trip. Memoised because it sits in a useEffect dependency array:
+  // a fresh object every render would refetch forever.
+  const outstandingConfig = useMemo(
+    () => readOutstandingConfig(account?.settings),
+    [account?.settings]
+  );
 
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
-    fetchOverdueCustomers(db, accountId).then(setData);
-  }, [accountId]);
+    fetchOverdueCustomers(db, accountId, outstandingConfig).then(setData);
+  }, [accountId, outstandingConfig]);
 
   if (!data) return <Card className="h-[300px] animate-pulse bg-muted/20" />;
 
@@ -291,14 +306,21 @@ export function OverdueCustomersWidget() {
 }
 
 export function CreditExceededWidget() {
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, account } = useAuth();
   const [data, setData] = useState<any[] | null>(null);
+  // The account row is already in the auth context, so the outstanding rule costs
+  // no extra round trip. Memoised because it sits in a useEffect dependency array:
+  // a fresh object every render would refetch forever.
+  const outstandingConfig = useMemo(
+    () => readOutstandingConfig(account?.settings),
+    [account?.settings]
+  );
 
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
-    fetchCreditExceededCustomers(db, accountId).then(setData);
-  }, [accountId]);
+    fetchCreditExceededCustomers(db, accountId, outstandingConfig).then(setData);
+  }, [accountId, outstandingConfig]);
 
   if (!data) return <Card className="h-[300px] animate-pulse bg-muted/20" />;
 

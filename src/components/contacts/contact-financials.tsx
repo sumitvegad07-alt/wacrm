@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/currency';
 import { useAuth } from '@/hooks/use-auth';
+import { readOutstandingConfig } from '@/lib/payments/outstanding-config';
 import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
 import { Contact } from '@/types';
@@ -14,7 +15,7 @@ interface ContactFinancialsProps {
 }
 
 export function ContactFinancials({ contact }: ContactFinancialsProps) {
-  const { defaultCurrency } = useAuth();
+  const { defaultCurrency, account } = useAuth();
   const [loading, setLoading] = useState(true);
   
   const [financials, setFinancials] = useState({
@@ -33,9 +34,13 @@ export function ContactFinancials({ contact }: ContactFinancialsProps) {
       setLoading(true);
       const supabase = createClient();
       
+      // The account's own rule for what counts as owed — see outstanding-config.
+      // `account` is already in the auth context, so this costs no round trip.
+      const config = readOutstandingConfig(account?.settings);
+
       const [ordersRes, paymentsRes] = await Promise.all([
-        supabase.from('orders').select('total_amount, created_at').eq('contact_id', contact.id).eq('status', 'Closed'),
-        supabase.from('payments').select('amount, verified_amount').eq('contact_id', contact.id).eq('status', 'Approved'),
+        supabase.from('orders').select('total_amount, created_at').eq('contact_id', contact.id).in('status', config.orderStatuses),
+        supabase.from('payments').select('amount, verified_amount').eq('contact_id', contact.id).in('status', config.paymentStatuses),
       ]);
 
       const orders = ordersRes.data || [];

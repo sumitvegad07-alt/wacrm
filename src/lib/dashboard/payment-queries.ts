@@ -1,10 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { OutstandingConfig } from '@/lib/payments/outstanding-config'
 
 // Collection KPIs count RECORDED payments — Approved plus those still Pending
 // approval — so a payment a rep just entered shows up immediately instead of
 // reading zero until an admin approves it. Rejected/Cancelled are excluded.
-// (Outstanding/overdue/credit calcs below deliberately stay Approved-only: those
-// must reflect money actually received.)
+// (Outstanding/overdue/credit calcs below take the account's own rule instead —
+// see OutstandingConfig. `config` is required on those three so a caller cannot
+// quietly fall back to a different rule than the rest of the app shows.)
 const RECORDED_STATUSES = ['Approved', 'Pending'] as const;
 
 export async function fetchTodaysCollection(supabase: SupabaseClient, accountId: string): Promise<number> {
@@ -96,10 +98,10 @@ export async function fetchCollectionByUser(supabase: SupabaseClient, accountId:
   })).sort((a, b) => b.amount - a.amount);
 }
 
-export async function fetchTotalOutstanding(supabase: SupabaseClient, accountId: string): Promise<number> {
+export async function fetchTotalOutstanding(supabase: SupabaseClient, accountId: string, config: OutstandingConfig): Promise<number> {
   const [ordersRes, paymentsRes, contactsRes] = await Promise.all([
-    supabase.from('orders').select('total_amount').eq('account_id', accountId).eq('status', 'Closed'),
-    supabase.from('payments').select('amount, verified_amount').eq('account_id', accountId).eq('status', 'Approved'),
+    supabase.from('orders').select('total_amount').eq('account_id', accountId).in('status', config.orderStatuses),
+    supabase.from('payments').select('amount, verified_amount').eq('account_id', accountId).in('status', config.paymentStatuses),
     supabase.from('contacts').select('opening_balance').eq('account_id', accountId)
   ]);
   
@@ -145,7 +147,7 @@ export async function fetchPendingApprovalAging(supabase: SupabaseClient, accoun
   };
 }
 
-export async function fetchOverdueCustomers(supabase: SupabaseClient, accountId: string) {
+export async function fetchOverdueCustomers(supabase: SupabaseClient, accountId: string, config: OutstandingConfig) {
   const { data: contacts } = await supabase
     .from('contacts')
     .select('id, name, company, credit_days, opening_balance')
@@ -154,8 +156,8 @@ export async function fetchOverdueCustomers(supabase: SupabaseClient, accountId:
     
   if (!contacts) return [];
   
-  const { data: orders } = await supabase.from('orders').select('contact_id, total_amount, created_at').eq('account_id', accountId).eq('status', 'Closed').order('created_at', { ascending: true });
-  const { data: payments } = await supabase.from('payments').select('contact_id, amount, verified_amount').eq('account_id', accountId).eq('status', 'Approved');
+  const { data: orders } = await supabase.from('orders').select('contact_id, total_amount, created_at').eq('account_id', accountId).in('status', config.orderStatuses).order('created_at', { ascending: true });
+  const { data: payments } = await supabase.from('payments').select('contact_id, amount, verified_amount').eq('account_id', accountId).in('status', config.paymentStatuses);
   
   const paymentsByContact: Record<string, number> = {};
   (payments || []).forEach(p => {
@@ -207,7 +209,7 @@ export async function fetchOverdueCustomers(supabase: SupabaseClient, accountId:
   return overdue.sort((a, b) => b.days_overdue - a.days_overdue);
 }
 
-export async function fetchCreditExceededCustomers(supabase: SupabaseClient, accountId: string) {
+export async function fetchCreditExceededCustomers(supabase: SupabaseClient, accountId: string, config: OutstandingConfig) {
   const { data: contacts } = await supabase
     .from('contacts')
     .select('id, name, company, credit_limit, opening_balance')
@@ -216,8 +218,8 @@ export async function fetchCreditExceededCustomers(supabase: SupabaseClient, acc
     
   if (!contacts) return [];
   
-  const { data: orders } = await supabase.from('orders').select('contact_id, total_amount').eq('account_id', accountId).eq('status', 'Closed');
-  const { data: payments } = await supabase.from('payments').select('contact_id, amount, verified_amount').eq('account_id', accountId).eq('status', 'Approved');
+  const { data: orders } = await supabase.from('orders').select('contact_id, total_amount').eq('account_id', accountId).in('status', config.orderStatuses);
+  const { data: payments } = await supabase.from('payments').select('contact_id, amount, verified_amount').eq('account_id', accountId).in('status', config.paymentStatuses);
   
   const ordersByContact: Record<string, number> = {};
   (orders || []).forEach(o => {
