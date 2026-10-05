@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2, Boxes, ListChecks, Wallet } from "lucide-react";
@@ -153,6 +153,11 @@ export function PricingSchemesSettings() {
   const [paymentStatuses, setPaymentStatuses] = useState<PaymentStatus[]>(
     DEFAULT_OUTSTANDING_CONFIG.paymentStatuses
   );
+  // What was last SAVED, so a save can tell whether the rule actually moved and
+  // only then pay for a whole-account rebuild.
+  const previousOutstanding = useRef<{ orderStatuses: OrderStatus[]; paymentStatuses: PaymentStatus[] }>(
+    DEFAULT_OUTSTANDING_CONFIG
+  );
   
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -183,6 +188,7 @@ export function PricingSchemesSettings() {
     const outstanding = readOutstandingConfig(acctRes.data?.settings);
     setOrderStatuses(outstanding.orderStatuses);
     setPaymentStatuses(outstanding.paymentStatuses);
+    previousOutstanding.current = outstanding;
 
     setHasChanges(false);
     setLoading(false);
@@ -232,10 +238,39 @@ export function PricingSchemesSettings() {
       .from("accounts")
       .update({ settings: newSettings })
       .eq("id", accountId);
-      
+
+    if (error) { setSaving(false); toast.error("Could not save settings"); return; }
+
+    // The stored outstanding figures still answer the OLD question until they are
+    // recomputed, so a changed rule must rebuild them before anyone looks at a
+    // customer list. Only when the rule actually changed — a rebuild touches every
+    // customer in the account.
+    const ruleChanged =
+      JSON.stringify(previousOutstanding.current) !==
+      JSON.stringify({ orderStatuses, paymentStatuses });
+
+    if (ruleChanged) {
+      const { error: rebuildError } = await supabase.rpc("rebuild_account_outstanding", {
+        p_account_id: accountId,
+      });
+      if (rebuildError) {
+        setSaving(false);
+        // The setting saved but the figures did not move. Say so plainly rather
+        // than claiming success — the two now disagree until this is retried.
+        toast.error(
+          "Settings saved, but outstanding balances could not be recalculated. Save again to retry.",
+        );
+        return;
+      }
+      previousOutstanding.current = { orderStatuses, paymentStatuses };
+    }
+
     setSaving(false);
-    if (error) { toast.error("Could not save settings"); return; }
-    toast.success("Settings saved successfully");
+    toast.success(
+      ruleChanged
+        ? "Settings saved. Outstanding balances recalculated."
+        : "Settings saved successfully",
+    );
     setHasChanges(false);
   }
 

@@ -129,11 +129,9 @@ export function EmployeeAreaAssignment({ employeeId, accountId, canEdit }: Props
         ok: boolean; reason?: string; territory_name?: string; assigned?: number;
       };
       if (!res.ok) {
-        if (res.reason === "area_taken") {
-          toast.error(`"${res.territory_name}" is already assigned to another employee (area-wise mode allows one owner per area).`);
-        } else {
-          toast.error("Could not save assignments.");
-        }
+        // "area_taken" is gone as of 2026-10-05: an area may now be covered by
+        // several employees, so the RPC no longer refuses a shared one.
+        toast.error("Could not save assignments.");
         return;
       }
       toast.success(`Assigned ${res.assigned ?? selected.size} area(s).`);
