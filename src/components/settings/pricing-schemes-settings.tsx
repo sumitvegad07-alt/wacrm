@@ -3,8 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2, Boxes, ListChecks } from "lucide-react";
+import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2, Boxes, ListChecks, Wallet } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import {
+  DEFAULT_OUTSTANDING_CONFIG,
+  readOutstandingConfig,
+  type OrderStatus,
+  type PaymentStatus,
+} from "@/lib/payments/outstanding-config";
+import { OutstandingSettings } from "@/components/settings/outstanding-settings";
 import { useAuth } from "@/hooks/use-auth";
 import { allowedModules } from "@/lib/plans/catalog";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -136,6 +144,15 @@ export function PricingSchemesSettings() {
   type StockOutEvent = "order_created" | "order_closed" | "dispatch";
   const [stockOutEvent, setStockOutEvent] = useState<StockOutEvent>("order_closed");
   const [restrictInsufficient, setRestrictInsufficient] = useState(false);
+
+  // Outstanding behaviour (accounts.settings.outstanding_settings). Which order
+  // statuses count as money owed, and which payment statuses count as received.
+  const [orderStatuses, setOrderStatuses] = useState<OrderStatus[]>(
+    DEFAULT_OUTSTANDING_CONFIG.orderStatuses
+  );
+  const [paymentStatuses, setPaymentStatuses] = useState<PaymentStatus[]>(
+    DEFAULT_OUTSTANDING_CONFIG.paymentStatuses
+  );
   
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -163,6 +180,10 @@ export function PricingSchemesSettings() {
     setStockOutEvent((ss.stock_out_event as StockOutEvent) ?? "order_closed");
     setRestrictInsufficient(ss.restrict_on_insufficient === true);
 
+    const outstanding = readOutstandingConfig(acctRes.data?.settings);
+    setOrderStatuses(outstanding.orderStatuses);
+    setPaymentStatuses(outstanding.paymentStatuses);
+
     setHasChanges(false);
     setLoading(false);
   }, [accountId, supabase]);
@@ -172,6 +193,16 @@ export function PricingSchemesSettings() {
   /** Save all settings explicitly. */
   async function saveAllSettings() {
     if (!accountId) return;
+
+    // An empty status list would mean "nothing counts". readOutstandingConfig
+    // treats that as the default rather than zeroing every balance, so saving it
+    // would quietly do something other than what the screen shows ticked. Refuse
+    // instead, matching the inline warning under the ticks.
+    if (orderStatuses.length === 0 || paymentStatuses.length === 0) {
+      toast.error("Pick at least one order status and one payment status for Outstanding.");
+      return;
+    }
+
     setSaving(true);
     const { data: acct } = await supabase.from("accounts").select("settings").eq("id", accountId).single();
     const settings = acct?.settings ?? {};
@@ -189,6 +220,11 @@ export function PricingSchemesSettings() {
         ...(settings.stock_settings ?? {}),
         stock_out_event: stockOutEvent,
         restrict_on_insufficient: restrictInsufficient,
+      },
+      outstanding_settings: {
+        ...(settings.outstanding_settings ?? {}),
+        order_statuses: orderStatuses,
+        payment_statuses: paymentStatuses,
       },
     };
     
@@ -607,6 +643,17 @@ export function PricingSchemesSettings() {
               </div>
             )}
           </div>
+
+          <OutstandingSettings
+            orderStatuses={orderStatuses}
+            paymentStatuses={paymentStatuses}
+            disabled={!canEditSettings || saving}
+            onChange={(next) => {
+              setOrderStatuses(next.orderStatuses);
+              setPaymentStatuses(next.paymentStatuses);
+              setHasChanges(true);
+            }}
+          />
         </div>
         )}
       </div>
