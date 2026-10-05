@@ -3,7 +3,7 @@
 //
 // Shared so that what gets verified is what gets printed. The screen view puts
 // the sheets on a grey desk with gaps between them; print has to strip that
-// padding, or the gaps push the eight A4 sheets onto ten pages.
+// padding, or the gap between the two sheets pushes them onto three pages.
 //
 // `!important` is deliberate: the desk's layout is an inline style, and an
 // ordinary rule would lose to it in the print stylesheet.

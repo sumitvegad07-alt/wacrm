@@ -135,12 +135,14 @@ describe("plan content packs", () => {
         expect(template.label).toBeTruthy();
       });
 
-      test("has the five questions, ten tiles and six included groups the layout expects", () => {
-        expect(template.content.questions.rows).toHaveLength(5);
-        expect(template.content.toolkit.tiles).toHaveLength(10);
+      test("has the feature groups and benefit lines the two-page layout expects", () => {
         expect(includedGroupsForPlan(plan).length).toBeGreaterThanOrEqual(3);
         // The sixth "why" tile is the client-specific built-for line.
         expect(template.content.why).toHaveLength(5);
+      });
+
+      test("has a tagline for the page-1 heading", () => {
+        expect(template.content.tagline.length).toBeGreaterThan(30);
       });
 
       test("starts from the catalog list price", () => {

@@ -164,21 +164,24 @@ describe("billing terms", () => {
 });
 
 describe("isPricePageCrowded", () => {
+  // The numbers come from measuring the real sheet in a browser; see the
+  // clearance table over PRICE_TABLE_ROW_BUDGET.
   test("the reference proposal is comfortably within the page", () => {
-    expect(isPricePageCrowded(2, false)).toBe(false);
-    expect(isPricePageCrowded(2, true)).toBe(false);
+    expect(isPricePageCrowded(2, { showAllTerms: false })).toBe(false);
+    expect(isPricePageCrowded(2, { showAllTerms: true })).toBe(false);
   });
 
-  test("five priced rows still fit once GST adds its three totals rows", () => {
-    expect(isPricePageCrowded(5, true)).toBe(false);
+  test("four priced rows are the most the sheet holds", () => {
+    expect(isPricePageCrowded(4, { showAllTerms: false })).toBe(false);
+    expect(isPricePageCrowded(5, { showAllTerms: false })).toBe(true);
   });
 
-  test("six priced rows with GST overflow the page", () => {
-    expect(isPricePageCrowded(6, true)).toBe(true);
+  test("showing all three terms costs one price row", () => {
+    expect(isPricePageCrowded(3, { showAllTerms: true })).toBe(false);
+    expect(isPricePageCrowded(4, { showAllTerms: true })).toBe(true);
   });
 
-  test("without GST there is room for two more rows", () => {
-    expect(isPricePageCrowded(7, false)).toBe(false);
-    expect(isPricePageCrowded(8, false)).toBe(true);
+  test("GST no longer costs rows — the money ladder took the totals out of the table", () => {
+    expect(isPricePageCrowded(4, { showAllTerms: false })).toBe(false);
   });
 });

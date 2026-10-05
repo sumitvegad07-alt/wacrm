@@ -3,10 +3,10 @@
 /**
  * Deliberately does NOT auto-print, unlike the order/payment print views.
  *
- * Those documents are a single page of text; this one is eight pages with a
- * full-bleed dark cover, a web font and a logo, and firing print before they
- * load produces a PDF with the cover missing. The founder also wants to read
- * the proposal over before sending it, so opening the dialog is his click.
+ * Those documents are a single page of text; this one carries a web font and
+ * a logo, and firing print before they load produces a PDF missing both. The
+ * founder also wants to read the proposal over before sending it, so opening
+ * the dialog is his click.
  */
 export function DownloadButton() {
   return (

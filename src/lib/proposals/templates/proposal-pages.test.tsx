@@ -4,12 +4,13 @@ import { ProposalPages } from "./proposal-pages";
 import { SFA_CONTENT } from "./content/sfa";
 import { getTemplate } from "../registry";
 import { includedGroupsForPlan } from "../plan-features";
+import { compareProposalTerms } from "../term-compare";
 import type { ProposalData } from "../types";
 
 // ---------------------------------------------------------------------------
 // The document is a sales artefact: a dropped space or a stale figure is not a
 // cosmetic bug, it is what the client reads. These tests render the real pages
-// and assert the sentences, exactly as the reference proposal prints them.
+// and assert the sentences and the arithmetic.
 //
 // They exist because porting the HTML to JSX silently ate the space in
 // "Self-calculates from orders" — JSX trims whitespace at a line boundary, so
@@ -20,7 +21,6 @@ import type { ProposalData } from "../types";
 const SHAAHI: ProposalData = {
   ...getTemplate("SFA")!.defaults("2026-09-22"),
   ref: "OZZO/2026/09/SNM-01",
-  // The reference proposal was quoted at 3,600, below the catalog list price.
   lineItems: [
     { label: "OZZO SFA — Field Salesman", subLabel: "Android app", users: 5, rate: 300 },
     { label: "OZZO SFA — Admin / Manager", subLabel: "Web dashboard", users: 1, rate: 300 },
@@ -34,10 +34,20 @@ const SHAAHI: ProposalData = {
   },
 };
 
+function render(data: ProposalData) {
+  return renderToStaticMarkup(
+    <ProposalPages
+      data={data}
+      plan="SFA"
+      content={SFA_CONTENT}
+      groups={includedGroupsForPlan("SFA")}
+    />,
+  );
+}
+
 /** The document's visible words, whitespace collapsed the way a browser does. */
 function renderText(data: ProposalData): string {
-  const html = renderToStaticMarkup(<ProposalPages data={data} content={SFA_CONTENT} groups={includedGroupsForPlan("SFA")} />);
-  return html
+  return render(data)
     .replace(/<[^>]+>/g, "")
     .replace(/&amp;/g, "&")
     .replace(/&#x27;|&apos;/g, "'")
@@ -50,60 +60,49 @@ function renderText(data: ProposalData): string {
 describe("SFA proposal document", () => {
   const text = renderText(SHAAHI);
 
-  test("renders eight pages", () => {
-    const html = renderToStaticMarkup(<ProposalPages data={SHAAHI} content={SFA_CONTENT} groups={includedGroupsForPlan("SFA")} />);
-    expect(html.match(/class="page/g)).toHaveLength(8);
+  test("is two pages, not eight", () => {
+    expect(render(SHAAHI).match(/class="page/g)).toHaveLength(2);
   });
 
-  describe("sentences that cross a bold boundary keep their spaces", () => {
-    const sentences = [
-      // Page 1
-      "A tailored proposal for Shaahi Niti Masale.",
-      // Page 2 — the five answers and the sign-off
-      "Selfie + GPS attendance and live location for every rep, all day.",
-      "Geo-tagged, geo-fenced visits — check-in only works at the shop.",
-      "Orders captured at the counter — even offline — with a branded PDF.",
-      "Self-calculates from orders & collections — plus an Ageing report.",
-      "A live stock ledger derives closing stock — no godown guessing.",
-      "One system, updated in real time — no paper, no re-typing, no separate accounting software. The rest of this proposal shows exactly what you get and what it costs.",
-      // Page 5
-      "Everything above is included in your ₹300 / user / month — there are no per-module charges and no hidden fees.",
-      // Page 6 — the why tiles
-      "Built for FMCG distribution — trade levels, beats & schemes out of the box.",
-      "No second software — outstanding & stock included, not extra.",
-      "Works offline — orders never wait for a signal.",
-      "Made in India, priced for India — ₹300/user/month, all in.",
-      "Live in days — we set up your products & team for you.",
-      "Real support — over WhatsApp & email, from real people.",
-      // Page 7 — terms
-      "This proposal and its pricing are valid for 10 days from the date of issue (22 September 2026).",
-      "100% advance — the year’s subscription is payable in full before onboarding begins.",
-      "The field app is available on Android, with the admin dashboard on any web browser. An iOS (iPhone) app is not available at this time.",
-      "The quoted amount includes software, server, maintenance, implementation, and training & support — there are no separate charges for any of these.",
-      // Page 8
-      "Any additional customization will incur extra charges based on the specific requirements.",
-      "We kindly request you to confirm and obtain a separate quote for any customization before placing your order.",
-    ];
-
-    for (const sentence of sentences) {
-      test(sentence.slice(0, 60), () => {
-        expect(text).toContain(sentence);
-      });
-    }
+  test("both pages carry the client's name in the footer", () => {
+    expect(render(SHAAHI).match(/Shaahi Niti Masale · 0\d/g)).toEqual([
+      "Shaahi Niti Masale · 01",
+      "Shaahi Niti Masale · 02",
+    ]);
   });
 
-  describe("client-specific values reach the pages", () => {
-    test("the full name is on the cover and the page footers", () => {
-      const footers = renderToStaticMarkup(<ProposalPages data={SHAAHI} content={SFA_CONTENT} groups={includedGroupsForPlan("SFA")} />).match(
-        /Shaahi Niti Masale · 0\d/g,
-      );
-      // Pages 02-07. The cover and the thank-you page carry no footer.
-      expect(footers).toHaveLength(6);
+  describe("page 1 — what you get", () => {
+    test("heads the sheet with the company, the reference and the date", () => {
+      expect(text).toContain("Proposal for Shaahi Niti Masale");
+      expect(text).toContain("OZZO/2026/09/SNM-01 · 22 September 2026 · valid 10 days");
     });
 
-    test("the short name is used where the full name reads long", () => {
+    test("names the plan and its promise", () => {
+      expect(text).toContain("Everything in OZZO SFA — Complete.");
+      expect(text).toContain(SFA_CONTENT.tagline);
+    });
+
+    test("lists every feature the plan is sold, and counts them honestly", () => {
+      const groups = includedGroupsForPlan("SFA");
+      const features = groups.flatMap((g) => g.li);
+
+      for (const feature of features) {
+        expect(text, `missing feature: ${feature}`).toContain(feature);
+      }
+      expect(text).toContain(`All ${features.length} features above are included`);
+    });
+
+    test("carries the benefit lines", () => {
+      expect(text).toContain("Built for FMCG distribution — trade levels, beats & schemes out of the box.");
+      expect(text).toContain("No second software — outstanding & stock included, not extra.");
+      expect(text).toContain("Works offline — orders never wait for a signal.");
+      expect(text).toContain("Made in India, priced for India — ₹300/user/month, all in.");
+      expect(text).toContain("Live in days — we set up your products & team for you.");
+      expect(text).toContain("Real support — over WhatsApp & email, from real people.");
+    });
+
+    test("uses the short name where the full name reads long", () => {
       expect(text).toContain("Why Shaahi Niti chooses OZZO");
-      expect(text).toContain("We'd love to put Shaahi Niti");
     });
 
     test("falls back to the full name when no short name is given", () => {
@@ -111,64 +110,135 @@ describe("SFA proposal document", () => {
       expect(t).toContain("Why Shaahi Niti Masale chooses OZZO");
     });
 
-    test("the industry sentence is the one from the form, not a hardcoded industry", () => {
-      const t = renderText({
-        ...SHAAHI,
-        voice: { ...SHAAHI.voice, industryPlural: "plastics manufacturers" },
-      });
-      expect(t).toContain("Most plastics manufacturers buy a second accounting package");
-      expect(t).not.toContain("Most spices businesses");
-    });
-
     test("the built-for line bolds the part before the dash", () => {
-      const html = renderToStaticMarkup(
-        <ProposalPages
-          data={{ ...SHAAHI, voice: { ...SHAAHI.voice, builtFor: "Built for pharma — cold chain included." } }}
-          content={SFA_CONTENT}
-          groups={includedGroupsForPlan("SFA")}
-        />,
-      );
+      const html = render({
+        ...SHAAHI,
+        voice: { ...SHAAHI.voice, builtFor: "Built for pharma — cold chain included." },
+      });
       expect(html).toContain("<b>Built for pharma</b> — cold chain included.");
     });
   });
 
-  describe("every repeat of a figure agrees", () => {
-    test("the annual total is the same in all four places it appears", () => {
-      // price table, savings panel, "covers everything" heading, terms clause 5
-      expect(text.match(/21,600/g)).toHaveLength(4);
+  describe("page 2 — the money", () => {
+    test("prices each row per month and per term", () => {
+      // 5 seats + 1 admin at ₹300/user/month on a 12-month term.
+      expect(text).toContain("Rate / user / month");
+      expect(text).toContain("Per user / year");
+      expect(text).toContain("3,600"); // 300 × 12
+      expect(text).toContain("18,000"); // 5 × 300 × 12
     });
 
-    test("the per-month rate appears on the price hero and in the why tile", () => {
-      // Both spellings of the same derived figure: the price hero and the tile.
-      expect(text).toContain("₹3,600 / user / year");
-      expect(text).toContain("₹300/user/month, all in");
+    test("the ladder totals what the rows add up to", () => {
+      expect(text).toContain("Subtotal₹21,600");
+      expect(text).toContain("Total payable₹21,600");
     });
 
-    test("the user count drives the onboarding step, not a typed number", () => {
-      expect(text).toContain("your 6 logins are created");
+    test("shows no discount line when the proposal quotes list price", () => {
+      expect(text).not.toContain("off list");
+      expect(text).not.toContain("At list price");
+    });
 
-      const t = renderText({
-        ...SHAAHI,
-        lineItems: [{ label: "Field", subLabel: "", users: 25, rate: 300 }],
+    test("the four headline tiles read off the same figures", () => {
+      expect(text).toContain("Effective rate₹300per user / month");
+      // 21,600 over 6 users × 12 months × 30 days.
+      expect(text).toContain("Per user / day₹10.0every working day");
+      expect(text).toContain("Over 12 months₹21,600on this term");
+      expect(text).toContain("in 12 months");
+    });
+
+    test("renews one term after the proposal date", () => {
+      expect(text).toMatch(/Renews\d+ \w+ 2027in 12 months/);
+    });
+
+    test("carries the terms and conditions", () => {
+      expect(text).toContain("Valid for 10 days from the date of issue (22 September 2026).");
+      expect(text).toContain(
+        "100% advance — the year’s subscription is payable in full before onboarding begins.",
+      );
+      expect(text).toContain(
+        "The field app is on Android; the admin dashboard runs in any web browser. No iOS (iPhone) app at this time.",
+      );
+      expect(text).toContain(
+        "Includes software, server, maintenance, implementation, and training & support — nothing on this list is billed separately.",
+      );
+      expect(text).toContain(
+        "Anything beyond this quotation carries extra charges. Please obtain a separate quote for customization before placing your order.",
+      );
+    });
+  });
+
+  describe("the billing-period table", () => {
+    test("shows only the quoted period by default", () => {
+      expect(text).toContain("Your billing termBilling term");
+      expect(text).toContain("Yearly · 12 months₹300₹21,600₹21,600");
+      expect(text).not.toContain("on a longer term");
+      expect(text).not.toContain("Quarterly");
+      expect(text).not.toContain("Half-Yearly");
+      expect(text).not.toContain("You save");
+    });
+
+    test("shows all three periods with their savings when asked", () => {
+      const t = renderText({ ...SHAAHI, showAllTerms: true });
+
+      expect(t).toContain("The same 6 users on a longer term");
+      expect(t).toContain("Quarterly");
+      expect(t).toContain("Half-Yearly");
+      expect(t).toContain("Yearly (quoted)");
+      expect(t).toContain("You save");
+    });
+
+    test("every figure in it is what compareProposalTerms computed", () => {
+      const t = renderText({ ...SHAAHI, showAllTerms: true });
+      const rows = compareProposalTerms({
+        plan: "SFA",
+        lineItems: SHAAHI.lineItems,
+        quotedTerm: "yearly",
       });
-      expect(t).toContain("your 25 logins are created");
+
+      for (const row of rows) {
+        expect(t, `${row.term} per-invoice`).toContain(row.subtotal.toLocaleString("en-IN"));
+        expect(t, `${row.term} annualised`).toContain(row.annualised.toLocaleString("en-IN"));
+      }
     });
 
-    test("a changed rate flows to every place the price is printed", () => {
-      const t = renderText({
-        ...SHAAHI,
-        lineItems: [
-          { label: "Field", subLabel: "", users: 5, rate: 400 },
-          { label: "Admin", subLabel: "", users: 1, rate: 400 },
-        ],
-      });
+    test("the quoted row is the price the table above it charges", () => {
+      const t = renderText({ ...SHAAHI, showAllTerms: true });
+      // Both the price table's subtotal and the comparison's yearly invoice.
+      expect(t).toContain("Subtotal₹21,600");
+      expect(t).toContain("Yearly (quoted) · 12 months₹300₹21,600₹21,600₹8,640");
+    });
 
-      expect(t).toContain("Your price of ₹4,800 per user, per year");
-      expect(t).toContain("₹4,800 / user / year");
-      expect(t).toContain("in your ₹400 / user / month");
-      expect(t).toContain("₹400/user/month, all in");
-      expect(t).toContain("exactly ₹28,800 for the year");
-      expect(t).not.toContain("3,600");
+    test("a quarterly proposal marks quarterly as the quoted row", () => {
+      const quarterly = renderText({
+        ...SHAAHI,
+        billingTerm: "quarterly",
+        showAllTerms: true,
+        // Re-priced at the quarterly list rate, as changeTerm would.
+        lineItems: SHAAHI.lineItems.map((li) => ({ ...li, rate: 420 })),
+      });
+      expect(quarterly).toContain("Quarterly (quoted)");
+      expect(quarterly).not.toContain("Yearly (quoted)");
+      expect(quarterly).toContain("billed quarterly");
+    });
+  });
+
+  describe("a negotiated discount", () => {
+    const discounted = renderText({
+      ...SHAAHI,
+      lineItems: SHAAHI.lineItems.map((li) => ({ ...li, rate: 270 })),
+    });
+
+    test("shows list price, the discount and the net", () => {
+      expect(discounted).toContain("At list price₹21,600");
+      expect(discounted).toContain("Discount (10% off list)− ₹2,160");
+      expect(discounted).toContain("Net amount₹19,440");
+      expect(discounted).toContain("Total payable₹19,440");
+    });
+
+    test("the tiles are the discounted rate, not the list one", () => {
+      expect(discounted).toContain("Effective rate₹270per user / month");
+      // 19,440 / (6 × 12 × 30)
+      expect(discounted).toContain("₹9.0every working day");
     });
   });
 
@@ -177,15 +247,13 @@ describe("SFA proposal document", () => {
       expect(text).toContain("One price. Every module. No GST to add.");
     });
 
-    test("shows the 18% as a saving", () => {
-      expect(text).toContain(
-        "No GST — you save 18%. OZZO is not charging GST on this proposal, so the amount you pay is exactly ₹21,600 for the year — nothing added on top. That's a straight ₹3,888 saving versus a GST-billed quote.",
-      );
+    test("shows the 18% as a saving rather than a charge", () => {
+      expect(text).toContain("GST @ 18% — not chargedyou save ₹3,888");
     });
 
     test("states in the terms that no GST is charged", () => {
       expect(text).toContain(
-        "No GST is charged on this proposal. The amount payable is exactly ₹21,600 for the year, with nothing added on top.",
+        "No GST is charged. The amount payable is exactly ₹21,600 for the year, with nothing added on top.",
       );
     });
   });
@@ -198,30 +266,43 @@ describe("SFA proposal document", () => {
       expect(gstText).not.toContain("No GST to add");
     });
 
-    test("bills the GST instead of offering it as a saving", () => {
-      expect(gstText).toContain("GST @ 18% — ₹3,888 is billed as shown above");
-      expect(gstText).not.toContain("you save 18%");
-      expect(gstText).not.toContain("saving versus a GST-billed quote");
-    });
-
-    test("adds subtotal and GST rows to the price table", () => {
-      expect(gstText).toContain("Subtotal");
-      expect(gstText).toContain("GST @ 18%");
-      expect(gstText).toContain("Total payable / year (incl. GST)");
+    test("bills the GST in the ladder instead of offering it as a saving", () => {
+      expect(gstText).toContain("GST @ 18%₹3,888");
+      expect(gstText).not.toContain("not charged");
+      expect(gstText).not.toContain("you save ₹3,888");
     });
 
     test("headlines the grand total, not the subtotal", () => {
+      expect(gstText).toContain("Total payable₹25,488");
       expect(gstText).toContain("Your ₹25,488 covers everything");
     });
 
     test("rewrites the tax clause", () => {
-      expect(gstText).toContain("GST at 18% is charged as shown on the Investment page");
-      expect(gstText).toContain("The total payable is ₹25,488 for the year, including ₹3,888 of GST.");
+      expect(gstText).toContain("GST at 18% is charged as shown above.");
+      expect(gstText).toContain("Total payable ₹25,488 for the year, including ₹3,888 of GST.");
     });
 
     test("leaves no claim that nothing is added on top", () => {
       expect(gstText).not.toContain("nothing added on top");
       expect(gstText).not.toContain("No GST");
+    });
+  });
+
+  describe("a changed rate flows everywhere", () => {
+    const t = renderText({
+      ...SHAAHI,
+      lineItems: [
+        { label: "Field", subLabel: "", users: 5, rate: 400 },
+        { label: "Admin", subLabel: "", users: 1, rate: 400 },
+      ],
+    });
+
+    test("no stale figure survives", () => {
+      expect(t).toContain("in your ₹400 / user / month");
+      expect(t).toContain("₹400/user/month, all in");
+      expect(t).toContain("exactly ₹28,800 for the year");
+      expect(t).not.toContain("21,600");
+      expect(t).not.toContain("₹300");
     });
   });
 
@@ -235,10 +316,11 @@ describe("SFA proposal document", () => {
     test("prints zeros rather than NaN", () => {
       expect(empty).not.toContain("NaN");
       expect(empty).toContain("Your ₹0 covers everything");
+      expect(empty).toContain("₹0.0every working day");
     });
 
     test("uses a placeholder where the company name is not filled in yet", () => {
-      expect(empty).toContain("A tailored proposal for —.");
+      expect(empty).toContain("Proposal for —");
     });
   });
 });

@@ -66,6 +66,15 @@ export interface ProposalData {
    * yearly — the base rate, so an old proposal can never be silently up-priced.
    */
   billingTerm?: BillingTerm;
+  /**
+   * Whether the PDF prints all three billing terms side by side, or only the
+   * one being charged.
+   *
+   * Optional, and read as false, because this is a stored JSONB payload:
+   * proposals written before the comparison table existed have no such key,
+   * and the safe reading is the quieter document — one term, the one quoted.
+   */
+  showAllTerms?: boolean;
   /** ISO date (yyyy-mm-dd). Rendered in the account's own wording, not UTC. */
   proposalDate: string;
   validDays: number;

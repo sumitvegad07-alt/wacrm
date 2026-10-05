@@ -1,9 +1,16 @@
 // ============================================================
 // What differs between one plan's proposal and another's.
 //
-// The eight pages are one component; a content pack supplies the words. The
-// cover, terms and thank-you pages are structural and shared — only pages 2-5
-// and the plan's own naming change per plan.
+// The two pages are one component; a content pack supplies the words. The
+// header, the price table and the terms are structural and shared — only the
+// plan's own naming and its benefit lines change per plan.
+//
+// Trimmed on 5 October 2026, when the document went from eight pages to two:
+// the cover headline, the five questions, the ten capability tiles, the
+// differentiator band and the "what's included" framing all belonged to pages
+// that no longer exist. Their fields were removed rather than left unused —
+// unused sales copy is copy that drifts out of date unnoticed and comes back
+// wrong the next time someone revives a page.
 //
 // Copy may use **bold** (see RichText) and three tokens:
 //   {industry}   the "Industry, plural" field, e.g. "spices businesses"
@@ -13,97 +20,18 @@
 
 import type { ProposalVoice } from "../types";
 
-export interface CoverHighlight {
-  k: string;
-  v: string;
-}
-
-export interface QuestionRow {
-  q: string;
-  a: string;
-}
-
-export interface FeatureTile {
-  h: string;
-  li: string[];
-}
-
-export interface BandBox {
-  dot: string;
-  h: string;
-  p: string;
-}
-
-export interface SplitPane {
-  cap: string;
-  h: string;
-  p: string;
-}
-
 export interface PlanContent {
-  /** Cover eyebrow, e.g. "Sales Force Automation · Proposal". */
+  /** Page 1 eyebrow, e.g. "Sales Force Automation · Proposal". */
   eyebrow: string;
   /** Page footers: "OZZO · <footerLabel>". */
   footerLabel: string;
-  /** Page 5 plan hero and the Investment page's product naming. */
+  /** How the plan names itself on the page-1 feature header and the price table. */
   planName: string;
 
-  cover: {
-    headline: string;
-    headlineAccent: string;
-    /** The sentence before "A tailored proposal for <client>." */
-    subline: string;
-    highlights: CoverHighlight[];
-  };
+  /** The one-line promise under the page-1 heading. */
+  tagline: string;
 
-  /** Page 2 — the five questions. */
-  questions: {
-    eyebrow: string;
-    heading: string;
-    headingAccent: string;
-    rows: QuestionRow[];
-    signoff: string;
-  };
-
-  /** Page 3 — the ten capability tiles. */
-  toolkit: {
-    eyebrow: string;
-    heading: string;
-    headingAccent: string;
-    tiles: FeatureTile[];
-  };
-
-  /** Page 4 — the differentiator band plus the web/mobile split. */
-  band: {
-    eyebrow: string;
-    heading: string;
-    headingAccent: string;
-    innerHeading: string;
-    innerHeadingAccent: string;
-    sub: string;
-    stepper: { ev: string; rz: string }[];
-    boxes: BandBox[];
-    splitEyebrow: string;
-    splitHeading: string;
-    splitHeadingAccent: string;
-    panes: SplitPane[];
-  };
-
-  /** Page 5 — what the plan includes. */
-  included: {
-    eyebrow: string;
-    heading: string;
-    headingAccent: string;
-    headingTail: string;
-    sub: string;
-    /**
-     * NOT here: the feature list comes from plan-features.ts (the founder's
-     * pricing sheet), so the document always lists exactly what the plan is
-     * sold. The pack only supplies the framing copy around it.
-     */
-  };
-
-  /** Page 6 — the "Why <client> chooses OZZO" tiles. Supports **bold**. */
+  /** The "Why <client> chooses OZZO" lines. Supports **bold**. */
   why: string[];
 
   /**

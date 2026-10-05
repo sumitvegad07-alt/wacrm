@@ -119,10 +119,31 @@ Your client details, team size and any rows you added ` +
    * as a proportion rather than discarded.
    */
   const switchTerm = (next: BillingTerm) => {
-    if (!data || next === term) return;
-    setData((prev) => (prev ? changeTerm(prev, next) : prev));
+    if (!data) return;
+
+    // Picking a named term also narrows the PDF's comparison table to that one
+    // row: "Yearly" means quote yearly and show yearly, which is what the
+    // button says. "All periods" is the only way to widen it again.
+    setData((prev) =>
+      prev ? { ...(next === term ? prev : changeTerm(prev, next)), showAllTerms: false } : prev,
+    );
     setDirty(true);
   };
+
+  /**
+   * Show all three terms side by side in the PDF.
+   *
+   * The charged term is untouched — a proposal still bills one period. This
+   * only widens what the document prints, so the customer can see what a
+   * longer commitment would save.
+   */
+  const showAllTerms = () => {
+    if (!data) return;
+    setData((prev) => (prev ? { ...prev, showAllTerms: true } : prev));
+    setDirty(true);
+  };
+
+  const allTermsShown = !!data?.showAllTerms;
 
   const edit = (path: string, value: unknown) => {
     setData((prev) => (prev ? setByPath(prev, path, value) : prev));
@@ -248,7 +269,11 @@ Your client details, team size and any rows you added ` +
 
           {/* Billing term. Changing it re-prices the seat rows at the new term's
               rate while keeping any discount proportional, so a negotiated price
-              survives the switch — see changeTerm(). */}
+              survives the switch — see changeTerm().
+
+              The fourth button is not a fourth term: a proposal always bills one
+              period. It widens the PDF's comparison table to all three, which is
+              the annual close in one table. */}
           <div className="flex items-center gap-2 mt-2">
             <span className="text-sm text-muted-foreground">Billed</span>
             <div className="flex gap-1">
@@ -258,19 +283,42 @@ Your client details, team size and any rows you added ` +
                   type="button"
                   onClick={() => switchTerm(t)}
                   className={`px-2.5 py-1 text-xs rounded border transition-colors ${
-                    term === t
+                    term === t && !allTermsShown
                       ? "bg-violet-600 text-white border-violet-600 font-semibold"
-                      : "bg-background border-border hover:bg-muted"
+                      : term === t
+                        ? "bg-violet-100 text-violet-800 border-violet-300 font-semibold"
+                        : "bg-background border-border hover:bg-muted"
                   }`}
                 >
                   {TERM_LABEL[t]}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={showAllTerms}
+                className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+                  allTermsShown
+                    ? "bg-violet-600 text-white border-violet-600 font-semibold"
+                    : "bg-background border-border hover:bg-muted"
+                }`}
+              >
+                All periods
+              </button>
             </div>
-            <span className="text-xs text-muted-foreground">
-              {TERM_MONTHS[term]} months per invoice
-            </span>
           </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {allTermsShown ? (
+              <>
+                Charging <b>{TERM_LABEL[term]}</b> — {TERM_MONTHS[term]} months per invoice. The PDF
+                shows all three periods with the saving on each.
+              </>
+            ) : (
+              <>
+                Charging <b>{TERM_LABEL[term]}</b> — {TERM_MONTHS[term]} months per invoice. The PDF
+                shows this period only.
+              </>
+            )}
+          </p>
 
           {belowMinUsers && (
             <p className="text-xs text-amber-700 mt-2">
@@ -406,11 +454,11 @@ Your client details, team size and any rows you added ` +
               past this many rows it clips the tiles below the table out of the
               PDF without any error. Better a warning here than a truncated
               proposal in a client's inbox. */}
-          {isPricePageCrowded(data.lineItems.length, !!data.gstEnabled) && (
+          {isPricePageCrowded(data.lineItems.length, { showAllTerms: allTermsShown }) && (
             <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm px-3 py-2">
-              This price table is too long for the Investment page. Check page 6 of the PDF before
-              sending — rows past the bottom of the sheet are cut off, not carried to a new page.
-              {data.gstEnabled && " Turning GST off frees up two rows."}
+              This price table is too long for page 2. Check the PDF before sending — rows past the
+              bottom of the sheet are cut off, not carried to a new page.
+              {allTermsShown && " Showing one billing period instead of all three frees up a row."}
             </div>
           )}
         </div>

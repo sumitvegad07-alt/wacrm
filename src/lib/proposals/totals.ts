@@ -69,15 +69,32 @@ export function computeTotals(
 
 /**
  * The Investment page is a fixed A4 sheet with `overflow:hidden`, so a long
- * price table does not paginate — it silently clips the "why" tiles and the
- * page footer out of the PDF.
+ * price table does not paginate — it silently clips the terms and the page
+ * footer out of the PDF.
  *
- * Measured in the browser: the content collides with the footer once the table
- * carries nine rows, counting the totals rows the table adds itself (one with
- * GST off; subtotal + GST + total with it on).
+ * The budget shrank when the document went to two pages on 5 October 2026: the
+ * sheet now also carries the headline tiles, the term comparison and all six
+ * terms & conditions, which the old terms page held on its own. GST no longer
+ * costs rows — the money ladder took the totals out of the table — but showing
+ * all three billing terms costs two comparison rows, which costs one price row.
+ *
+ * MEASURED, not estimated, in a browser at A4 against the fullest sheet the
+ * document can produce: CRM + SFA, GST on, a discount showing, two-line row
+ * labels. Clearance above the page footer, in pixels:
+ *
+ *     rows        1     2     3     4     5
+ *     one term  +229  +155   +81    +7   -67
+ *     all terms +161   +87   +13   -61  -135
+ *
+ * So four rows, or three when all three terms are shown. The last row that
+ * fits clears the footer by under 10px — anything added to page 2 has to be
+ * measured again, not reasoned about.
  */
-export const PRICE_TABLE_ROW_BUDGET = 8;
+export const PRICE_TABLE_ROW_BUDGET = 4;
 
-export function isPricePageCrowded(lineItemCount: number, gstEnabled: boolean): boolean {
-  return lineItemCount + (gstEnabled ? 3 : 1) > PRICE_TABLE_ROW_BUDGET;
+export function isPricePageCrowded(
+  lineItemCount: number,
+  opts: { showAllTerms: boolean },
+): boolean {
+  return lineItemCount > PRICE_TABLE_ROW_BUDGET - (opts.showAllTerms ? 1 : 0);
 }

@@ -25,6 +25,7 @@ export function ProposalDocument({ plan, data }: { plan: string; data: ProposalD
   return (
     <ProposalPages
       data={data}
+      plan={template.plan}
       content={template.content}
       groups={includedGroupsForPlan(template.plan)}
     />
