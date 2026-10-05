@@ -1,12 +1,29 @@
 # Multi-employee assignment, configurable duplicate keys, configurable outstanding
 
 **Date:** 2026-10-05
-**Status:** items 1a, 3 and 4 shipped; items 1b/1c and 2 outstanding
+**Status:** all items built; migration 20261005160000 awaiting apply
 
-## Progress (2026-10-05)
+## Progress (2026-10-05, end of day)
 
 | Item | State |
 |---|---|
+| 1a — one area, many employees | **Live.** Migration `20261005120000` applied and verified. |
+| 1b/1c — "Also Assigned To" | Built (`841c5d0`). Migration `20261005160000` **NOT applied**. |
+| 2 — duplicate keys + lead protection | **Live.** Web `a590506`, mobile `d7fd81a`, migration `20261005150000` applied and verified. |
+| 3 — outstanding | **Live.** Web `85e6e1c`/`7c9e900`, DB `c3ccd69` (applied, verified: 306 customers, 0 changed, ₹67,684.00 identical), mobile `553d82e`. **No APK built.** |
+| 4 — activity dialog | **Live** (`6df8b20`). |
+| 5 — territory customer counts | **Live.** `f21324b`, migration `20261005140000` applied. India rolls up to 145. |
+
+Found and fixed outside the original scope:
+* `custom-fields-section-renderer` painted a section heading before the form could veto the fields under it — empty headings on every module's forms, and the actual cause of the clipped Create Task button.
+* The AI connector's catalog advertised an `outstanding_amount` measure that had never existed; `ageing` is a dormancy report, not a receivables one. Storing the balance made the promised measure real.
+* `contacts_select` RLS never checked `employee_id`, so a directly-assigned employee could not see their own customer. Fixed in `20261005160000`.
+
+Manual test plan for the founder: https://claude.ai/code/artifact/c3da94d2-4d2a-47b5-922a-b16dc09ffabf
+
+**Caveat:** reps' phones keep the old outstanding rule, and show raw duplicate errors, until an APK ships.
+
+---|---|
 | 1a — one area, many employees | **Live.** Migration `20261005120000` applied and verified: the `area_taken` check is gone from the live function. |
 | 1b/1c — "Also Assigned To" | Not started. |
 | 2 — duplicate keys | Not started. |
