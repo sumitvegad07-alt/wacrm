@@ -1,7 +1,24 @@
 # Multi-employee assignment, configurable duplicate keys, configurable outstanding
 
 **Date:** 2026-10-05
-**Status:** approved by founder, in build
+**Status:** items 1a, 3 and 4 shipped; items 1b/1c and 2 outstanding
+
+## Progress (2026-10-05)
+
+| Item | State |
+|---|---|
+| 1a — one area, many employees | **Live.** Migration `20261005120000` applied and verified: the `area_taken` check is gone from the live function. |
+| 1b/1c — "Also Assigned To" | Not started. |
+| 2 — duplicate keys | Not started. |
+| 3 — outstanding | **Live.** Web (`85e6e1c`, `7c9e900`), database (`c3ccd69`, migration `20261005130000` applied), mobile (`553d82e`, **no APK built yet**). Verified against live data: 306 customers, 0 differences from the old formula, totals identical at ₹67,684.00. |
+| 4 — activity dialog | **Live** (`6df8b20`). |
+
+Found and fixed along the way, outside the original scope:
+* `custom-fields-section-renderer` painted a section heading before the form could veto the fields under it — empty headings on every module's forms.
+* The AI connector's catalog advertised an `outstanding_amount` measure on the `outstanding` data set that had never existed; `ageing` is a dormancy report, not a receivables one. Storing the balance made the promised measure real.
+* `contacts_select` RLS never checked `employee_id`, so a directly-assigned employee could not see their own customer. Fix belongs with item 1b.
+
+**Caveat:** reps' phones keep the old rule until a new APK ships — mobile code is pushed but unbuilt, per the founder's batching rule.
 **Scope:** all tenants (founder rule — never scope to one account unless told)
 
 Four items requested together. Items 1–3 change the database, Settings, web and
