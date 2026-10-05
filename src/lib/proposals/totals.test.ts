@@ -117,17 +117,36 @@ describe("computeTotals", () => {
     expect(t.grandTotal).toBe(22680);
   });
 
-  test("rounds GST to paise rather than carrying float error", () => {
+  // Whole rupees, not paise: the proposal builder and the founder's price
+  // calculator (quote() in lib/plans/pricing.ts) price the same deal, so they
+  // have to agree to the rupee, and a PDF printing "GST @ 18% ₹1,079.46"
+  // invites a conversation about forty-six paise.
+  test("rounds GST to whole rupees, as quote() does, rather than printing paise", () => {
     const t = computeTotals([{ label: "x", subLabel: "", users: 1, rate: 1999 }], {
       gstEnabled: true,
       gstRate: 18,
       term: "quarterly",
     });
 
-    // 1999 × 3 months = 5997; × 0.18 = 1079.46
+    // 1999 × 3 months = 5997; × 0.18 = 1079.46, charged as ₹1,079.
     expect(t.subtotal).toBe(5997);
-    expect(t.gstAmount).toBe(1079.46);
-    expect(t.grandTotal).toBe(7076.46);
+    expect(t.gstAmount).toBe(1079);
+    expect(t.grandTotal).toBe(7076);
+  });
+
+  test("the money ladder adds up even when a typed rate leaves paise in the subtotal", () => {
+    const t = computeTotals([{ label: "x", subLabel: "", users: 1, rate: 1999.5 }], {
+      gstEnabled: true,
+      gstRate: 18,
+      term: "quarterly",
+    });
+
+    // The ladder prints the subtotal, the GST and the total; the first two must
+    // make the third, so the total is rounded once on the sum, not on its own.
+    expect(t.subtotal).toBe(5998.5);
+    expect(t.gstAmount).toBe(1080);
+    expect(t.grandTotal).toBe(7078.5);
+    expect(t.grandTotal).toBe(t.subtotal + t.gstAmount);
   });
 });
 

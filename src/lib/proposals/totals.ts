@@ -26,6 +26,11 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** Tax is rounded to the rupee — see the note over `gstAmount`. */
+function round0(value: number): number {
+  return Math.round(value);
+}
+
 export function computeTotals(
   lineItems: LineItem[],
   opts: { gstEnabled: boolean; gstRate: number; term?: BillingTerm },
@@ -51,7 +56,14 @@ export function computeTotals(
 
   // Computed whether or not GST is charged: with GST off the document shows the
   // same figure as the saving ("you save 18%").
-  const gstAmount = round2((subtotal * num(opts?.gstRate)) / 100);
+  //
+  // Whole rupees, matching `quote()` in lib/plans/pricing.ts: the two engines
+  // price the same deal, so the proposal and the founder's calculator have to
+  // agree to the rupee. Its reasoning holds here too — a proposal that prints
+  // "GST @ 18% ₹3,499.2" invites a conversation about twenty paise.
+  const gstAmount = round0((subtotal * num(opts?.gstRate)) / 100);
+  // Rounded once, on the sum, rather than independently: the page-2 money ladder
+  // prints the subtotal, the GST and this, and the three have to add up.
   const grandTotal = round2(subtotal + (opts?.gstEnabled ? gstAmount : 0));
 
   return {

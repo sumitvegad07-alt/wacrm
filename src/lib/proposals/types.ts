@@ -94,7 +94,10 @@ export interface ProposalTotals {
   /** Per line item, in the same order — `users × rate`. */
   lineAmounts: number[];
   subtotal: number;
-  /** Always computed. Shown as the charge when GST is on, as the saving when off. */
+  /**
+   * Always computed. Shown as the charge when GST is on, as the saving when off.
+   * Whole rupees, the same as `quote()` in lib/plans/pricing.ts.
+   */
   gstAmount: number;
   grandTotal: number;
   /** Highest per-user-per-month rate anyone is charged. Drives the price hero. */
