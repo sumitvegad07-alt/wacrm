@@ -20,7 +20,7 @@
 // combo plans are the unions of their lines.
 // ============================================================
 
-import type { PlanId } from "@/lib/plans/catalog";
+import type { PlanId, ProductLine } from "@/lib/plans/catalog";
 
 /** WFA column of the sheet (150 PUPM). */
 export const WFA_FEATURES = [
@@ -129,16 +129,41 @@ export interface FeatureGroup {
   li: string[];
 }
 
+/**
+ * Which product lines make a category's HEADING true.
+ *
+ * A heading is a promise in its own right. "Leads, Deals & Quotations" over a
+ * WFA proposal that carries only Follow-up Management told the customer they
+ * were buying a CRM — the plan gating in the database would then refuse them
+ * leads they had paid for. Same for "Attendance & Field Discipline" over a CRM
+ * proposal whose only attendance feature is the leave calendar.
+ *
+ * So categories are cut fine enough that every heading stays true of whatever
+ * subset a plan leaves behind, and this map is the machine-checked statement
+ * of when each one may appear. A category with no entry is plan-neutral.
+ */
+export const HEADING_REQUIRES: Record<string, ProductLine[]> = {
+  "Leads & Deals": ["crm"],
+  "Quotations & Documents": ["crm", "sfa"],
+  "WhatsApp & Automation": ["crm"],
+  "Field Discipline & Expenses": ["wfa"],
+  "Location & Visits": ["wfa"],
+  "Orders & Distribution": ["sfa"],
+  "Money, Stock & Pricing": ["sfa"],
+};
+
 const CATEGORIES: FeatureGroup[] = [
   {
-    h: "Leads, Deals & Quotations",
-    li: [
-      "Unlimited Leads",
-      "Visual Kanban Pipelines",
-      "Follow-up Management",
-      "Quotation Management",
-      "Multiple Customizable Templates",
-    ],
+    h: "Leads & Deals",
+    li: ["Unlimited Leads", "Visual Kanban Pipelines"],
+  },
+  {
+    h: "Customers, Tasks & Follow-ups",
+    li: ["Unlimited Customers", "Unlimited Tasks", "Follow-up Management"],
+  },
+  {
+    h: "Quotations & Documents",
+    li: ["Quotation Management", "Multiple Customizable Templates"],
   },
   {
     h: "WhatsApp & Automation",
@@ -152,10 +177,14 @@ const CATEGORIES: FeatureGroup[] = [
     ],
   },
   {
-    h: "Attendance & Field Discipline",
+    // Split from the field-discipline features below: CRM sells the leave
+    // calendar without selling a single thing that happens in the field.
+    h: "Attendance & Leave",
+    li: ["Attendance, Leave & Holiday Management", "Selfie punch-in and punch-out"],
+  },
+  {
+    h: "Field Discipline & Expenses",
     li: [
-      "Selfie punch-in and punch-out",
-      "Attendance, Leave & Holiday Management",
       "Geo-tagging",
       "Geo-Fencing for visits",
       "Odometer with photo",
@@ -200,9 +229,7 @@ const CATEGORIES: FeatureGroup[] = [
   {
     h: "Platform, Reports & AI",
     li: [
-      "Unlimited Customers",
       "Unlimited Products",
-      "Unlimited Tasks",
       "Custom Fields",
       "User hierarchy",
       "Smart Dashboard",

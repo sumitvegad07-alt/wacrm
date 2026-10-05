@@ -82,12 +82,13 @@ export function computeTotals(
  * document can produce: CRM + SFA, GST on, a discount showing, two-line row
  * labels. Clearance above the page footer, in pixels:
  *
- *     rows        1     2     3     4     5
- *     one term  +229  +155   +81    +7   -67
- *     all terms +161   +87   +13   -61  -135
+ *     rows         3     4     5
+ *     one term  +114   +40   -34
+ *     all terms  +40   -34  -108
  *
- * So four rows, or three when all three terms are shown. The last row that
- * fits clears the footer by under 10px — anything added to page 2 has to be
+ * So four rows, or three when all three terms are shown. Re-measured after the
+ * column headers were renamed on 5 October 2026 — two-line headers cost the
+ * sheet 60px, which is most of a row. Anything added to page 2 has to be
  * measured again, not reasoned about.
  */
 export const PRICE_TABLE_ROW_BUDGET = 4;

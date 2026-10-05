@@ -6,6 +6,7 @@ import { getTemplate } from "../registry";
 import { includedGroupsForPlan } from "../plan-features";
 import { compareProposalTerms } from "../term-compare";
 import type { ProposalData } from "../types";
+import { PLAN_LINES, type PlanId, type ProductLine } from "@/lib/plans/catalog";
 
 // ---------------------------------------------------------------------------
 // The document is a sales artefact: a dropped space or a stale figure is not a
@@ -123,7 +124,7 @@ describe("SFA proposal document", () => {
     test("prices each row per month and per term", () => {
       // 5 seats + 1 admin at ₹300/user/month on a 12-month term.
       expect(text).toContain("Rate / user / month");
-      expect(text).toContain("Per user / year");
+      expect(text).toContain("Per user for the year");
       expect(text).toContain("3,600"); // 300 × 12
       expect(text).toContain("18,000"); // 5 × 300 × 12
     });
@@ -142,12 +143,12 @@ describe("SFA proposal document", () => {
       expect(text).toContain("Effective rate₹300per user / month");
       // 21,600 over 6 users × 12 months × 30 days.
       expect(text).toContain("Per user / day₹10.0every working day");
-      expect(text).toContain("Over 12 months₹21,600on this term");
+      expect(text).toContain("Total for one year₹21,600paying this often");
       expect(text).toContain("in 12 months");
     });
 
     test("renews one term after the proposal date", () => {
-      expect(text).toMatch(/Renews\d+ \w+ 2027in 12 months/);
+      expect(text).toMatch(/Next payment due\d+ \w+ 2027in 12 months/);
     });
 
     test("carries the terms and conditions", () => {
@@ -169,7 +170,7 @@ describe("SFA proposal document", () => {
 
   describe("the billing-period table", () => {
     test("shows only the quoted period by default", () => {
-      expect(text).toContain("Your billing termBilling term");
+      expect(text).toContain("Your billing termHow often you pay");
       expect(text).toContain("Yearly · 12 months₹300₹21,600₹21,600");
       expect(text).not.toContain("on a longer term");
       expect(text).not.toContain("Quarterly");
@@ -306,6 +307,30 @@ describe("SFA proposal document", () => {
     });
   });
 
+  describe("the billing-period table names its columns in plain words", () => {
+    // Renamed 5 October 2026: "Per invoice / Over 12 months / You save" read as
+    // three versions of the same number. These are the words the founder reads
+    // out on the phone, so a rename is a deliberate act, not a tidy-up.
+    const t = renderText({ ...SHAAHI, showAllTerms: true });
+
+    for (const header of [
+      "How often you pay",
+      "Price / user / month",
+      "You pay each time",
+      "Total for one year",
+      "You save in a year",
+    ]) {
+      test(header, () => expect(t).toContain(header));
+    }
+
+    test("the tile and the column agree on what a year costs", () => {
+      // Same words for the same figure, so nobody has to work out that
+      // "over 12 months" and "total for one year" are one thing.
+      expect(t).toContain("Total for one year₹21,600");
+      expect(t.match(/Total for one year/g)!.length).toBe(2);
+    });
+  });
+
   describe("a half-filled proposal still renders", () => {
     const empty = renderText({
       ...getTemplate("SFA")!.defaults("2026-09-22"),
@@ -322,5 +347,63 @@ describe("SFA proposal document", () => {
     test("uses a placeholder where the company name is not filled in yet", () => {
       expect(empty).toContain("Proposal for —");
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Every plan, rendered end to end. The data-level guard in plan-features.test
+// checks the category table; this checks what actually reaches the paper —
+// a WFA customer reading "Leads, Deals & Quotations" has been told they are
+// buying a CRM, and the database will refuse them the leads they paid for.
+// ---------------------------------------------------------------------------
+
+describe("no plan's document promises another plan's product line", () => {
+  const FORBIDDEN: Record<ProductLine, RegExp> = {
+    // Not the bare word "WhatsApp": every plan offers WhatsApp support, and
+    // the chips say so. These are the CRM modules.
+    crm: /lead|deal|kanban|pipeline|whatsapp (inbox|broadcasting|chatbot|template)|whatsapp & automation/i,
+    sfa: /order collection|dispatch|stock|price list|scheme|route management|outstanding/i,
+    wfa: /geo-|odometer|punch-in|location tracking|travelled route|live feed/i,
+    fsm: /work order|job card|complaint ticket/i,
+  };
+
+  for (const plan of ["CRM", "WFA", "CRM_WFA", "SFA", "CRM_SFA"] as PlanId[]) {
+    const template = getTemplate(plan)!;
+    const lines = PLAN_LINES[plan];
+
+    const html = renderToStaticMarkup(
+      <ProposalPages
+        data={{ ...template.defaults("2026-10-05"), showAllTerms: true }}
+        plan={plan}
+        content={template.content}
+        groups={includedGroupsForPlan(plan)}
+      />,
+    );
+    const words = html
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/\s+/g, " ");
+
+    for (const line of ["crm", "wfa", "sfa", "fsm"] as ProductLine[]) {
+      if (lines[line]) continue;
+
+      test(`${plan} says nothing from the ${line.toUpperCase()} line`, () => {
+        const hit = words.match(FORBIDDEN[line]);
+        expect(hit?.[0] ?? null, `${plan} printed "${hit?.[0]}"`).toBeNull();
+      });
+    }
+  }
+
+  test("the two headings that were wrong are gone", () => {
+    // WFA printed "Leads, Deals & Quotations" over a single follow-up feature;
+    // CRM printed "Attendance & Field Discipline" over a leave calendar.
+    const headingsFor = (plan: PlanId) =>
+      includedGroupsForPlan(plan)
+        .map((g) => g.h)
+        .join(" | ");
+
+    expect(headingsFor("WFA")).not.toMatch(/lead|deal|quotation/i);
+    expect(headingsFor("CRM")).not.toMatch(/field|location|visit/i);
+    expect(headingsFor("CRM")).toContain("Attendance & Leave");
   });
 });

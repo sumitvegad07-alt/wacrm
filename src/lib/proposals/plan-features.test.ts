@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
-import type { PlanId } from "@/lib/plans/catalog";
+import { PLAN_LINES, type PlanId } from "@/lib/plans/catalog";
 import {
   ALL_CATEGORIES,
   CRM_FEATURES,
+  HEADING_REQUIRES,
   SFA_OWN_FEATURES,
   WFA_FEATURES,
   featuresForPlan,
@@ -111,12 +112,121 @@ describe("includedGroupsForPlan", () => {
         expect(new Set(all).size).toBe(all.length);
       });
 
-      test("fits the page: between three and seven groups", () => {
+      test("fits the page: between three and ten groups", () => {
         expect(groups.length).toBeGreaterThanOrEqual(3);
-        expect(groups.length).toBeLessThanOrEqual(7);
+        expect(groups.length).toBeLessThanOrEqual(10);
+      });
+
+      test("no heading promises a product line this plan does not include", () => {
+        const lines = PLAN_LINES[plan];
+
+        const liars = groups
+          .map((g) => g.h)
+          .filter((h) => {
+            const needs = HEADING_REQUIRES[h];
+            // A heading with no entry is plan-neutral; one with an entry needs
+            // at least one of its lines to be sold.
+            return needs ? !needs.some((line) => lines[line]) : false;
+          });
+
+        expect(liars, `${plan} prints headings it cannot deliver`).toEqual([]);
       });
     });
   }
+
+  // Hand-checked against the founder's pricing sheet. A change here is a change
+  // to what a proposal claims, so it has to be deliberate — which is the point
+  // of pinning the exact list rather than a rule.
+  const EXPECTED_HEADINGS: Record<string, string[]> = {
+    CRM: [
+      "Leads & Deals",
+      "Customers, Tasks & Follow-ups",
+      "Quotations & Documents",
+      "WhatsApp & Automation",
+      "Attendance & Leave",
+      "Platform, Reports & AI",
+    ],
+    WFA: [
+      "Customers, Tasks & Follow-ups",
+      "Attendance & Leave",
+      "Field Discipline & Expenses",
+      "Location & Visits",
+      "Platform, Reports & AI",
+    ],
+    CRM_WFA: [
+      "Leads & Deals",
+      "Customers, Tasks & Follow-ups",
+      "Quotations & Documents",
+      "WhatsApp & Automation",
+      "Attendance & Leave",
+      "Field Discipline & Expenses",
+      "Location & Visits",
+      "Platform, Reports & AI",
+    ],
+    SFA: [
+      "Customers, Tasks & Follow-ups",
+      "Quotations & Documents",
+      "Attendance & Leave",
+      "Field Discipline & Expenses",
+      "Location & Visits",
+      "Orders & Distribution",
+      "Money, Stock & Pricing",
+      "Platform, Reports & AI",
+    ],
+    CRM_SFA: [
+      "Leads & Deals",
+      "Customers, Tasks & Follow-ups",
+      "Quotations & Documents",
+      "WhatsApp & Automation",
+      "Attendance & Leave",
+      "Field Discipline & Expenses",
+      "Location & Visits",
+      "Orders & Distribution",
+      "Money, Stock & Pricing",
+      "Platform, Reports & AI",
+    ],
+  };
+
+  for (const plan of PLANS) {
+    test(`${plan} prints exactly the headings it should`, () => {
+      expect(includedGroupsForPlan(plan).map((g) => g.h)).toEqual(EXPECTED_HEADINGS[plan]);
+    });
+  }
+
+  test("a plan without the CRM line never sees a leads, deals or WhatsApp heading", () => {
+    for (const plan of PLANS) {
+      if (PLAN_LINES[plan].crm) continue;
+      const headings = includedGroupsForPlan(plan).map((g) => g.h).join(" | ");
+      expect(headings, plan).not.toMatch(/lead|deal|kanban|whatsapp|pipeline/i);
+    }
+  });
+
+  test("a plan without the SFA line never sees an order, stock or pricing heading", () => {
+    for (const plan of PLANS) {
+      if (PLAN_LINES[plan].sfa) continue;
+      const headings = includedGroupsForPlan(plan).map((g) => g.h).join(" | ");
+      expect(headings, plan).not.toMatch(/order|dispatch|stock|pricing|scheme|route/i);
+    }
+  });
+
+  test("a plan without the WFA line never sees a field, location or visit heading", () => {
+    for (const plan of PLANS) {
+      if (PLAN_LINES[plan].wfa) continue;
+      const headings = includedGroupsForPlan(plan).map((g) => g.h).join(" | ");
+      expect(headings, plan).not.toMatch(/field|location|visit|geo|track/i);
+    }
+  });
+
+  test("every heading that can appear is covered by HEADING_REQUIRES or is plan-neutral", () => {
+    // Plan-neutral headings are listed here on purpose: adding a category
+    // without deciding which lines earn it should fail, not pass silently.
+    const NEUTRAL = ["Customers, Tasks & Follow-ups", "Attendance & Leave", "Platform, Reports & AI"];
+
+    const undeclared = ALL_CATEGORIES.map((c) => c.h).filter(
+      (h) => !(h in HEADING_REQUIRES) && !NEUTRAL.includes(h),
+    );
+    expect(undeclared, "new category: say which product lines earn its heading").toEqual([]);
+  });
 
   test("no plan sells more features than the page can print", () => {
     // The "what's included" page is a fixed A4 sheet with overflow:hidden, so

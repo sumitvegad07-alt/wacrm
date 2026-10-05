@@ -175,6 +175,16 @@ export function ProposalPages({
   const userMonths = t.usersTotal * t.months;
   const perUserPerDay = userMonths ? Math.round((t.subtotal / (userMonths * 30)) * 10) / 10 : 0;
 
+  /**
+   * How much room page 1 has to spare.
+   *
+   * CRM sells 19 features and CRM + SFA sells 46 on the same fixed sheet. One
+   * size left the small plans a third empty — which reads as a thin offer —
+   * and would clip the big ones. The band sets the column count and the type
+   * size; the thresholds are measured, see proposal.css.
+   */
+  const density = featureCount > 32 ? "dense" : featureCount > 22 ? "mid" : "roomy";
+
   const tokens = {
     industry: data.voice?.industryPlural ?? "",
     /** Per user for one whole term — the figure the price table charges. */
@@ -188,7 +198,7 @@ export function ProposalPages({
   return (
     <div className="ozzo-doc">
       {/* ══════════ PAGE 1 · WHAT YOU GET ══════════ */}
-      <section className="page">
+      <section className={`page sheet-${density}`}>
         <div className="sheet-head">
           <div className="logo" />
           <div className="id">
@@ -213,7 +223,7 @@ export function ProposalPages({
           <p className="sub">{content.tagline}</p>
         </div>
 
-        <div className="feat-grid">
+        <div className={`feat-grid ${density}`}>
           {groups.map((group) => (
             <div className="fgroup" key={group.h}>
               <h4>{group.h}</h4>
@@ -267,7 +277,7 @@ export function ProposalPages({
               <th>Item</th>
               <th className="r">Users</th>
               <th className="r">Rate / user / month</th>
-              <th className="r">Per user / {noun}</th>
+              <th className="r">Per user for the {noun}</th>
               <th className="r">Amount (₹)</th>
             </tr>
           </thead>
@@ -351,8 +361,12 @@ export function ProposalPages({
             sub="per user / month"
           />
           <Tile label="Per user / day" value={`₹${perUserPerDay.toFixed(1)}`} sub="every working day" />
-          <Tile label="Over 12 months" value={`₹${inr(t.annualised)}`} sub="on this term" />
-          <Tile label="Renews" value={shortDate(renews)} sub={`in ${t.months} months`} />
+          <Tile
+            label="Total for one year"
+            value={`₹${inr(t.annualised)}`}
+            sub="paying this often"
+          />
+          <Tile label="Next payment due" value={shortDate(renews)} sub={`in ${t.months} months`} />
         </div>
 
         <div className="cmp">
@@ -362,11 +376,11 @@ export function ProposalPages({
           <table className="ptable mini">
             <thead>
               <tr>
-                <th>Billing term</th>
-                <th className="r">Rate / user / month</th>
-                <th className="r">Per invoice</th>
-                <th className="r">Over 12 months</th>
-                {showAllTerms && <th className="r">You save</th>}
+                <th>How often you pay</th>
+                <th className="r">Price / user / month</th>
+                <th className="r">You pay each time</th>
+                <th className="r">Total for one year</th>
+                {showAllTerms && <th className="r">You save in a year</th>}
               </tr>
             </thead>
             <tbody>

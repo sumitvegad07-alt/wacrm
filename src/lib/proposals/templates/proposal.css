@@ -86,11 +86,16 @@
 
   /* ═════ PAGE 1 · FEATURES ═════ */
 
-  /* Three balanced columns. CSS columns rather than grid: the groups are
-     different lengths, and grid would align their tops into ragged rows with
-     a gap under every short one. `break-inside:avoid` keeps a group whole,
-     which matters in print as well as on screen. */
-  .feat-grid{column-count:3;column-gap:11px;}
+  /* Balanced columns. CSS columns rather than grid: the groups are different
+     lengths, and grid would align their tops into ragged rows with a gap under
+     every short one. `break-inside:avoid` keeps a group whole, which matters
+     in print as well as on screen.
+
+     Column count and type size come from the density band on the sheet, below:
+     CRM sells 19 features and CRM + SFA sells 46 onto the same fixed page, and
+     one size either leaves the small plans a third empty or clips the big
+     ones. */
+  .feat-grid{column-gap:11px;}
   .fgroup{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid;
     border:1px solid var(--border);border-radius:12px;padding:11px 12px;background:var(--card);
     margin-bottom:11px;}
@@ -101,27 +106,63 @@
   .fgroup li:last-child{margin-bottom:0;}
   .fgroup li::before{content:"✓";position:absolute;left:0;top:0;color:var(--emerald);font-weight:800;font-size:10px;}
 
+  /* ── Density bands ──────────────────────────────────────────────────
+     Measured on the real sheet; the thresholds live in proposal-pages.tsx.
+       dense  (33+ features, SFA and CRM + SFA)        3 columns, tight
+       mid    (23-32,        CRM + WFA)                3 columns, easier
+       roomy  (up to 22,     CRM and WFA)              2 columns, generous
+     ------------------------------------------------------------------ */
+  .feat-grid.dense{column-count:3;}
+  .feat-grid.mid{column-count:3;column-gap:12px;}
+  .feat-grid.roomy{column-count:2;column-gap:16px;}
+
+  .feat-grid.mid .fgroup{padding:13px 15px;margin-bottom:12px;border-radius:13px;}
+  .feat-grid.mid .fgroup h4{font-size:11px;margin-bottom:9px;}
+  .feat-grid.mid .fgroup li{font-size:11.5px;line-height:1.45;margin-bottom:6px;padding-left:16px;}
+  .feat-grid.mid .fgroup li::before{font-size:11px;}
+
+  .feat-grid.roomy .fgroup{padding:13px 15px;margin-bottom:13px;border-radius:14px;}
+  .feat-grid.roomy .fgroup h4{font-size:11.5px;margin-bottom:9px;letter-spacing:.11em;}
+  .feat-grid.roomy .fgroup li{font-size:12.2px;line-height:1.45;margin-bottom:6px;padding-left:18px;}
+  .feat-grid.roomy .fgroup li::before{font-size:11.5px;}
+
+  /* The rest of page 1 breathes with the grid, or a roomy feature list would
+     sit above a cramped benefits block. */
+  .sheet-roomy .section-head h2{font-size:27px;}
+  .sheet-roomy .section-head .sub{font-size:13.5px;}
+  .sheet-mid .section-head h2{font-size:26px;}
+
   .allin{margin-top:3px;background:var(--emerald-soft);border:1px solid #bfe6d4;border-radius:12px;
     padding:11px 14px;font-size:11.5px;color:#0b7a53;font-weight:600;}
   .allin b{color:#075c3f;}
+  .sheet-roomy .allin{padding:13px 16px;font-size:12.6px;border-radius:14px;}
+  .sheet-mid .allin{padding:12px 15px;font-size:12.2px;}
 
   .why{display:grid;grid-template-columns:1fr 1fr;gap:9px 20px;}
   .why .w{display:flex;gap:9px;font-size:11.8px;line-height:1.45;color:var(--fg);}
   .why .w .ic{flex:none;width:18px;height:18px;border-radius:6px;background:var(--emerald-soft);color:var(--emerald);
     display:flex;align-items:center;justify-content:center;font-weight:800;font-size:10.5px;margin-top:1px;}
   .why .w b{color:var(--ink);}
+  .sheet-roomy .why{gap:12px 24px;}
+  .sheet-roomy .why .w{font-size:12.8px;line-height:1.48;}
+  .sheet-roomy .why .w .ic{width:20px;height:20px;font-size:11.5px;}
+  .sheet-mid .why{gap:11px 22px;}
+  .sheet-mid .why .w{font-size:12.4px;}
 
   /* ═════ PAGE 2 · PRICE TABLE ═════ */
   .ptable{width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:14px;overflow:hidden;}
-  .ptable th{background:var(--paper-2);text-align:left;font-size:9.5px;letter-spacing:.09em;
-    text-transform:uppercase;color:var(--muted);padding:7px 13px;font-weight:700;}
+  .ptable th{background:var(--paper-2);text-align:left;font-size:9px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted);padding:6px 11px;font-weight:700;line-height:1.3;}
   .ptable td{padding:8px 13px;font-size:12.5px;border-top:1px solid var(--border);color:var(--fg);}
   .ptable td.r,.ptable th.r{text-align:right;}
   .ptable .prod b{color:var(--ink);}
   .ptable .prod span{display:block;font-size:10.5px;color:var(--muted);font-weight:400;margin-top:2px;}
 
   /* The term comparison. Same table, quieter. */
-  .ptable.mini td{padding:7px 13px;font-size:12px;}
+  .ptable.mini td{padding:6px 11px;font-size:11.8px;}
+  /* "Quarterly (quoted) · 3 months" must stay on one line, or the quoted row
+     is half again as tall as the two it is meant to be compared with. */
+  .ptable.mini td:first-child{white-space:nowrap;}
   .ptable.mini td .mo{color:var(--muted);font-weight:400;}
   .ptable.mini tr.picked td{background:#fff8e1;font-weight:600;}
   .ptable.mini .save{color:#0b6b3a;}
@@ -150,9 +191,9 @@
 
   /* ═════ PAGE 2 · HEADLINE TILES ═════ */
   .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:12px;}
-  .tile{border:1px solid var(--border);border-radius:11px;padding:8px 11px;background:var(--card);}
-  .tile .k{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.11em;font-weight:700;}
-  .tile .v{font-size:17px;font-weight:800;color:var(--ink);letter-spacing:-0.02em;margin-top:3px;line-height:1.1;}
+  .tile{border:1px solid var(--border);border-radius:11px;padding:7px 10px;background:var(--card);}
+  .tile .k{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;line-height:1.25;}
+  .tile .v{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-0.02em;margin-top:2px;line-height:1.1;}
   .tile .s{font-size:9.5px;color:var(--muted);margin-top:2px;}
 
   /* ═════ PAGE 2 · WHAT IT COVERS ═════ */
@@ -169,9 +210,9 @@
      the comparison on the same sheet, and a term pushed off a fixed-height
      page is a term the customer never agreed to. */
   .terms{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 10px;}
-  .term{display:flex;gap:8px;border:1px solid var(--border);border-radius:11px;padding:9px 11px;background:var(--card);}
+  .term{display:flex;gap:7px;border:1px solid var(--border);border-radius:11px;padding:8px 10px;background:var(--card);}
   .term .n{flex:none;width:19px;height:19px;border-radius:6px;background:var(--primary-soft);color:var(--primary-700);
     font-weight:800;font-size:10px;display:flex;align-items:center;justify-content:center;}
   .term .c h4{font-size:10.5px;font-weight:700;color:var(--ink);margin-bottom:2px;}
-  .term .c p{font-size:9.8px;color:var(--muted);line-height:1.42;}
+  .term .c p{font-size:9.5px;color:var(--muted);line-height:1.38;}
   .term .c p b{color:var(--fg);}
