@@ -19,6 +19,13 @@ import {
 } from "@/lib/location/tracking-window";
 import { FENCE_RADII, normalizeGeoFencing } from "@/lib/location/geofence-config";
 import { McpWorkforceAccessCard } from "@/components/settings/mcp-workforce-access";
+import { DuplicatePreventionSettings } from "@/components/settings/duplicate-prevention-settings";
+import {
+  readCustomerUniqueKeys,
+  readLeadUniqueKeys,
+  type CustomerUniqueKey,
+  type LeadUniqueKey,
+} from "@/lib/dedupe/unique-keys";
 
 /** The shape of accounts.settings this panel merges into. Only the nested blobs
  *  it re-spreads are named; everything else rides along untouched. */
@@ -243,7 +250,9 @@ export function ModuleSettingsPanel() {
   const [amountDiscountBasis, setAmountDiscountBasis] = useState<'entered' | 'base'>('entered');
   // Which field must be unique to block duplicates on save (per module).
   const [productUniqueKey, setProductUniqueKey] = useState<'name' | 'code'>('name');
-  const [customerUniqueKey, setCustomerUniqueKey] = useState<'name' | 'code'>('name');
+  // Several fields may be ticked per module; any match blocks the save.
+  const [customerUniqueKeys, setCustomerUniqueKeys] = useState<CustomerUniqueKey[]>(['name']);
+  const [leadUniqueKeys, setLeadUniqueKeys] = useState<LeadUniqueKey[]>([]);
   // Geo-Fencing: one parent switch, two independent sub-switches.
   //   visit      — block visit check-in/out away from the customer's saved location
   //   attendance — block punch-in/out away from an Attendance Location
@@ -291,7 +300,8 @@ export function ModuleSettingsPanel() {
         setHsnEnabled(!!s.hsn_enabled);
         setMultiUnitEnabled(!!s.extra_settings?.multi_unit_enabled);
         setProductUniqueKey(s.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
-        setCustomerUniqueKey(s.extra_settings?.customer_unique_key === 'code' ? 'code' : 'name');
+        setCustomerUniqueKeys(readCustomerUniqueKeys(s));
+        setLeadUniqueKeys(readLeadUniqueKeys(s));
         setAmountDiscountBasis(os.amount_discount_basis === 'base' ? 'base' : 'entered');
 
         const gf = normalizeGeoFencing(s.geo_fencing);
@@ -413,7 +423,12 @@ export function ModuleSettingsPanel() {
           ...(baseSettings?.extra_settings || {}),
           multi_unit_enabled: multiUnitEnabled,
           product_unique_key: productUniqueKey,
-          customer_unique_key: customerUniqueKey,
+          customer_unique_keys: customerUniqueKeys,
+          lead_unique_keys: leadUniqueKeys,
+          // The old single-choice key stays written so an older mobile build,
+          // which reads only this, keeps behaving sensibly instead of falling
+          // back to "name" when the admin picked code.
+          customer_unique_key: customerUniqueKeys.includes('code') ? 'code' : 'name',
         },
         geo_fencing: {
           enabled: geoFencingEnabled,
@@ -465,7 +480,7 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, productUniqueKey, customerUniqueKey, amountDiscountBasis, geoFencingEnabled, geoVisitEnabled, geoAttendanceEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, refreshProfile, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, productUniqueKey, customerUniqueKeys, leadUniqueKeys, amountDiscountBasis, geoFencingEnabled, geoVisitEnabled, geoAttendanceEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, refreshProfile, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
@@ -475,7 +490,8 @@ export function ModuleSettingsPanel() {
     setHsnEnabled(!!originalSettings.hsn_enabled);
     setMultiUnitEnabled(!!originalSettings.extra_settings?.multi_unit_enabled);
     setProductUniqueKey(originalSettings.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
-    setCustomerUniqueKey(originalSettings.extra_settings?.customer_unique_key === 'code' ? 'code' : 'name');
+    setCustomerUniqueKeys(readCustomerUniqueKeys(originalSettings));
+    setLeadUniqueKeys(readLeadUniqueKeys(originalSettings));
     setAmountDiscountBasis(originalSettings.order_settings?.amount_discount_basis === 'base' ? 'base' : 'entered');
     const gf = normalizeGeoFencing(originalSettings.geo_fencing);
     setGeoFencingEnabled(gf.enabled);
@@ -663,43 +679,17 @@ export function ModuleSettingsPanel() {
                 </FeatureRow>
               )}
 
-              {/* Duplicate prevention — pick the field that must be unique. Saving a
-                  product/customer whose value already exists is then blocked. */}
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Prevent duplicate records</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Choose the field that must be unique. A save is blocked when the value already
-                    exists on another active record.
-                  </p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-sm font-medium text-foreground mb-1.5">Product unique key</p>
-                    <KoopsOptionToggle
-                      options={[
-                        { label: "Name", value: "name" },
-                        { label: "Product Code", value: "code" },
-                      ]}
-                      value={productUniqueKey}
-                      onChange={setProductUniqueKey}
-                      disabled={!canEditSettings}
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground mb-1.5">Customer unique key</p>
-                    <KoopsOptionToggle
-                      options={[
-                        { label: "Name", value: "name" },
-                        { label: "Customer Code", value: "code" },
-                      ]}
-                      value={customerUniqueKey}
-                      onChange={setCustomerUniqueKey}
-                      disabled={!canEditSettings}
-                    />
-                  </div>
-                </div>
-              </div>
+              <DuplicatePreventionSettings
+                productUniqueKey={productUniqueKey}
+                customerKeys={customerUniqueKeys}
+                leadKeys={leadUniqueKeys}
+                disabled={!canEditSettings}
+                onChange={(next) => {
+                  setProductUniqueKey(next.productUniqueKey);
+                  setCustomerUniqueKeys(next.customerKeys);
+                  setLeadUniqueKeys(next.leadKeys);
+                }}
+              />
 
               <FeatureRow
                 label="Enable customer hierarchy"

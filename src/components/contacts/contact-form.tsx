@@ -6,6 +6,11 @@ import { useAuth } from '@/hooks/use-auth';
 import { getCurrencySymbol } from '@/lib/currency';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { toast } from 'sonner';
+import {
+  CUSTOMER_UNIQUE_KEYS,
+  readCustomerUniqueKeys,
+  type CustomerUniqueKey,
+} from '@/lib/dedupe/unique-keys';
 import type { Contact, Tag, ContactTag, CustomField, Profile } from '@/types';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { TerritoryPicker } from '@/components/territories/territory-picker';
@@ -86,8 +91,9 @@ export function ContactForm({
   const [pincode, setPincode] = useState('');
   const [gstNumber, setGstNumber] = useState('');   // customer GSTIN (party_gstin source for orders)
   const [customerCode, setCustomerCode] = useState('');
-  // Which field must be unique (Extra Settings → Prevent duplicate records).
-  const [uniqueKey, setUniqueKey] = useState<'name' | 'code'>('name');
+  // Which fields must be unique (Extra Settings → Prevent duplicate records).
+  // Several can be ticked; ANY match blocks the save.
+  const [uniqueKeys, setUniqueKeys] = useState<CustomerUniqueKey[]>(['name']);
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   
@@ -227,7 +233,7 @@ export function ContactForm({
     const os = acctRes.data?.settings?.order_settings;
     setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? os.levels : [] });
     setAssignmentMode(acctRes.data?.settings?.assignment_mode || 'area');
-    setUniqueKey(acctRes.data?.settings?.extra_settings?.customer_unique_key === 'code' ? 'code' : 'name');
+    setUniqueKeys(readCustomerUniqueKeys(acctRes.data?.settings));
     setProfiles((profRes.data || []) as Profile[]);
     // Price Lists (v5) are an SFA-line feature; only load them there.
     if (hasSFA) {
@@ -349,25 +355,26 @@ export function ContactForm({
       return;
     }
 
-    // Duplicate guard — block a save whose unique-key value already exists on
-    // another customer in this account (key chosen in Extra Settings). Phone
-    // duplicates are handled separately above.
-    {
-      const keyField = uniqueKey === 'code' ? 'customer_code' : 'name';
-      const keyVal = (uniqueKey === 'code' ? customerCode : name).trim();
-      if (keyVal) {
-        const escaped = keyVal.replace(/[%_\\]/g, '\\$&');
-        let q = supabase
-          .from('contacts')
-          .select('id')
-          .eq('account_id', accountId)
-          .ilike(keyField, escaped);
-        if (isEdit && contact) q = q.neq('id', contact.id);
-        const { data: dup } = await q.limit(1);
-        if (dup && dup.length > 0) {
-          toast.error(`A customer with this ${uniqueKey === 'code' ? 'Customer Code' : 'name'} already exists.`);
-          return;
-        }
+    // Duplicate guard — block a save when ANY ticked field already exists on
+    // another customer in this account (fields chosen in Extra Settings). Phone
+    // duplicates are handled separately above, and the database enforces all of
+    // this again so a race or an import cannot slip past.
+    for (const field of CUSTOMER_UNIQUE_KEYS) {
+      if (!uniqueKeys.includes(field.key)) continue;
+      const keyVal = (field.key === 'code' ? customerCode : name).trim();
+      if (!keyVal) continue;
+
+      const escaped = keyVal.replace(/[%_\\]/g, '\\$&');
+      let q = supabase
+        .from('contacts')
+        .select('id')
+        .eq('account_id', accountId)
+        .ilike(field.column, escaped);
+      if (isEdit && contact) q = q.neq('id', contact.id);
+      const { data: dup } = await q.limit(1);
+      if (dup && dup.length > 0) {
+        toast.error(`A customer with this ${field.label} already exists.`);
+        return;
       }
     }
 

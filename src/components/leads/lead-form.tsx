@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { LEAD_UNIQUE_KEYS, readLeadUniqueKeys, type LeadUniqueKey } from "@/lib/dedupe/unique-keys";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
@@ -43,6 +44,9 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
   const [territorySettings, setTerritorySettings] = useState<TerritorySettings>(DEFAULT_TERRITORY_SETTINGS);
   const [territoryRows, setTerritoryRows] = useState<Territory[]>([]);
   const [territoryId, setTerritoryId] = useState<string | null>(null);
+  // Which fields block a duplicate lead (Extra Settings → Prevent duplicate
+  // records). Empty until an admin opts in — leads had no checking before today.
+  const [uniqueKeys, setUniqueKeys] = useState<LeadUniqueKey[]>([]);
   // Geography cascade shows on every plan once the hierarchy has levels + rows,
   // not only when the WFA Territory module is on — see contact-form for rationale.
   const showTerritoryCascade = enabledLevels(territorySettings).length > 0 && territoryRows.length > 0;
@@ -89,12 +93,14 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
   async function fetchTerritoryData() {
     if (!accountId) return;
     try {
-      const [s, rows] = await Promise.all([
+      const [s, rows, acct] = await Promise.all([
         getAccountTerritorySettings(accountId),
         getTerritoryRows(accountId),
+        createClient().from("accounts").select("settings").eq("id", accountId).single(),
       ]);
       setTerritorySettings(s);
       setTerritoryRows(rows);
+      setUniqueKeys(readLeadUniqueKeys(acct.data?.settings));
     } catch {
       /* optional enrichment */
     }
@@ -226,6 +232,31 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       ...(showTerritoryCascade ? { territory_id: territoryId } : {}),
     };
 
+    // Duplicate guard — block a save when ANY ticked field already exists on
+    // another lead in this account. Nothing is ticked by default: leads had no
+    // duplicate checking at all before 2026-10-05, so an account only starts
+    // rejecting saves once an admin opts in. Phone is not checked here — a
+    // unique index enforces it unconditionally, and 23505 is handled below.
+    for (const field of LEAD_UNIQUE_KEYS) {
+      if (!uniqueKeys.includes(field.key)) continue;
+      const keyVal = (field.key === "email" ? formData.email : formData.name).trim();
+      if (!keyVal) continue;
+
+      const escaped = keyVal.replace(/[%_\\]/g, "\\$&");
+      let q = supabase
+        .from("leads")
+        .select("id")
+        .eq("account_id", accountId)
+        .ilike(field.column, escaped);
+      if (lead?.id) q = q.neq("id", lead.id);
+      const { data: dup } = await q.limit(1);
+      if (dup && dup.length > 0) {
+        toast.error(`A lead with this ${field.label} already exists.`);
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     let savedId = lead?.id;
     let saveError = null;
 
@@ -251,7 +282,17 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
     }
 
     if (saveError) {
-      toast.error("Failed to save lead: " + saveError.message);
+      // 23505 is the unique index on (account_id, phone_normalized), or the
+      // database backstop for a ticked field. Raw Postgres text helps nobody.
+      if ((saveError as { code?: string }).code === "23505") {
+        toast.error(
+          saveError.message.includes("phone_normalized")
+            ? "A lead with this contact number already exists."
+            : saveError.message,
+        );
+      } else {
+        toast.error("Failed to save lead: " + saveError.message);
+      }
     } else if (savedId) {
       const lid = savedId;
       // Custom values + activity log are independent → run them together (was:
