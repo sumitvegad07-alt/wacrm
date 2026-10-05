@@ -50,9 +50,12 @@ export function CollaboratorsSelect({
           className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 h-9 font-normal text-left"
         >
           <span className={cn("truncate", selectedIds.length === 0 && "text-muted-foreground")}>
+            {/* "Employees", not "collaborators": the label above this control now
+                reads "Also Assigned To" on both the customer and lead screens, and
+                the two wordings together read like two different fields. */}
             {selectedIds.length === 0
-              ? "Select collaborators..."
-              : `${selectedIds.length} collaborator${selectedIds.length > 1 ? "s" : ""} selected`}
+              ? "Select employees..."
+              : `${selectedIds.length} employee${selectedIds.length > 1 ? "s" : ""} selected`}
           </span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
         </PopoverTrigger>
@@ -103,7 +106,7 @@ export function CollaboratorsSelect({
                 {!disabled && (
                   <button
                     type="button"
-                    aria-label="Remove collaborator"
+                    aria-label="Remove employee"
                     onClick={() => removeId(id)}
                     className="rounded-full p-0.5 hover:bg-primary/20 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-ring"
                   >
