@@ -14,6 +14,7 @@ import {
   assignEmployeeAreas,
 } from "@/lib/territories/api";
 import { enabledLevels, levelName } from "@/lib/territories/settings";
+import { fetchDirectCustomerCounts, rollUpCustomerCounts } from "@/lib/territories/customer-counts";
 import type { TerritoryNode, TerritorySettings } from "@/lib/territories/types";
 
 interface Props {
@@ -58,19 +59,30 @@ export function EmployeeAreaAssignment({ employeeId, accountId, canEdit }: Props
   const [roots, setRoots] = useState<TerritoryNode[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /** Customers per territory, own + everything beneath. null when the counts
+   *  could not be read, which must look different from "nobody is here": a badge
+   *  reading 0 everywhere looks like data loss, so it is hidden instead. */
+  const [customerCounts, setCustomerCounts] = useState<Map<string, number> | null>(null);
   const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     if (!accountId || !employeeId) return;
     setLoading(true);
     try {
-      const [s, tree, assigned] = await Promise.all([
+      const [s, tree, assigned, directCounts] = await Promise.all([
         getAccountTerritorySettings(accountId),
         getTerritoryTree(accountId),
         getEmployeeAssignedAreas(employeeId),
+        // A missing count must never stop the picker loading — assigning areas
+        // matters more than the badge beside them. null means "unknown", which
+        // hides the badge rather than claiming every territory is empty.
+        fetchDirectCustomerCounts(accountId).catch(() => null),
       ]);
       setSettings(s);
       setRoots(tree);
+      // Rolled up against the FULL tree, not the search-filtered view, so a
+      // country's badge keeps its real total while a search hides its children.
+      setCustomerCounts(directCounts ? rollUpCustomerCounts(tree, directCounts) : null);
       setSelected(new Set(assigned));
       const assignedSet = new Set(assigned);
       const exp = new Set<string>();
@@ -184,6 +196,7 @@ export function EmployeeAreaAssignment({ employeeId, accountId, canEdit }: Props
                   settings={settings}
                   canEdit={canEdit}
                   selected={selected}
+                  customerCounts={customerCounts}
                   isExpanded={isExpanded}
                   onToggleSelect={toggleNode}
                   onToggleExpand={toggleExpand}
@@ -215,6 +228,7 @@ function CheckNode({
   settings,
   canEdit,
   selected,
+  customerCounts,
   isExpanded,
   onToggleSelect,
   onToggleExpand,
@@ -224,12 +238,15 @@ function CheckNode({
   settings: TerritorySettings;
   canEdit: boolean;
   selected: Set<string>;
+  /** Customers in each territory, own + everything beneath it. null = unknown. */
+  customerCounts: Map<string, number> | null;
   isExpanded: (id: string) => boolean;
   onToggleSelect: (node: TerritoryNode) => void;
   onToggleExpand: (id: string) => void;
 }) {
   const hasChildren = node.children.length > 0;
   const open = isExpanded(node.id);
+  const customerCount = customerCounts?.get(node.id) ?? null;
 
   // checked = whole subtree selected; indeterminate = some (but not all) selected.
   const ids = subtreeIds(node);
@@ -258,6 +275,19 @@ function CheckNode({
           />
           <span className="text-sm truncate">{node.name}</span>
           <Badge variant="outline" className="text-[10px] px-1 py-0 shrink-0">{levelName(settings, node.level)}</Badge>
+          {/* Customers in here, counting everything beneath — a Country holds no
+              customers directly, so a direct-only count would always read 0. */}
+          {customerCount !== null && (
+            <Badge
+              variant="secondary"
+              className="text-[10px] px-1.5 py-0 shrink-0 tabular-nums"
+              title={`${customerCount} customer${customerCount === 1 ? "" : "s"} in ${node.name}${
+                node.children.length > 0 ? " and everything under it" : ""
+              }`}
+            >
+              {customerCount}
+            </Badge>
+          )}
         </label>
       </div>
       {open && node.children.map((c) => (
@@ -268,6 +298,7 @@ function CheckNode({
           settings={settings}
           canEdit={canEdit}
           selected={selected}
+          customerCounts={customerCounts}
           isExpanded={isExpanded}
           onToggleSelect={onToggleSelect}
           onToggleExpand={onToggleExpand}
