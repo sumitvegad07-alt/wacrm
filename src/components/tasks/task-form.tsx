@@ -457,10 +457,10 @@ export function TaskForm({
   const canAssignOthers = accountRole === "admin" || accountRole === "owner" || hasAssignPerm;
   const assignableProfiles = canAssignOthers ? profiles : profiles.filter(p => p.id === user?.id);
 
-  const formContent = (
+  const formBody = (
     <>
         {/* Custom Header similar to Note Screenshot */}
-        <div className="flex items-center justify-between border-b border-border pb-4 mb-4 pr-6">
+        <div className="flex items-center justify-between border-b border-border pb-3 mb-3 pr-6">
           <h2 className="text-xl font-light text-foreground">{task ? "Edit" : "Add"} {isNote ? "Note" : "Activity"}</h2>
         </div>
 
@@ -486,6 +486,9 @@ export function TaskForm({
           /* NOTE VIEW */
           <div className="space-y-4">
             <Textarea
+              // The box exists to be typed in — land the cursor here instead of
+              // making the user click before every note.
+              autoFocus
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Note"
@@ -494,9 +497,11 @@ export function TaskForm({
           </div>
         ) : (
           /* STANDARD ACTIVITY VIEW */
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="space-y-4">
               <Input
+                // Same reason as the note box: this is the first thing anyone types.
+                autoFocus
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={activityType}
@@ -504,7 +509,7 @@ export function TaskForm({
               />
 
               {/* Order requested: Schedule Date, Schedule Time, Priority, Assigned To, then the rest. */}
-              <div className="grid grid-cols-2 gap-4 mt-6">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label className="text-muted-foreground text-xs uppercase font-medium">Scheduled Date</Label>
                   <Input
@@ -565,7 +570,10 @@ export function TaskForm({
                 </div>
               </div>
 
-              <div className="pt-4 mt-4 border-t border-border/50">
+              {/* `empty:hidden` so the divider goes too when the renderer paints
+                  nothing — otherwise a stray line and 32px of dead space push the
+                  Save buttons off the bottom of the dialog. */}
+              <div className="pt-4 mt-4 border-t border-border/50 empty:hidden empty:border-0">
                 <CustomFieldsSectionRenderer
                   accountId={accountId}
                   moduleName="task"
@@ -748,7 +756,10 @@ export function TaskForm({
           </div>
         )}
 
-        {/* Footer Area */}
+    </>
+  );
+
+  const formFooter = (
         <FormActions
           onCancel={() => onOpenChange(false)}
           onSave={handleSave}
@@ -791,7 +802,6 @@ export function TaskForm({
             ) : undefined
           }
         />
-    </>
   );
 
   if (asPage) {
@@ -803,15 +813,27 @@ export function TaskForm({
         onBack={() => onOpenChange(false)}
         width="none"
       >
-        {formContent}
+        {formBody}
+        {formFooter}
       </FormPageShell>
     );
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("bg-popover border-border text-popover-foreground max-h-[90vh] overflow-y-auto", isNote ? "sm:max-w-2xl" : "sm:max-w-3xl")}>
-        {formContent}
+      {/* Column layout, not one long scroll: only the FIELDS scroll, so Create Task
+          is always on screen. Previously the whole dialog scrolled and the button
+          was cut off at the bottom edge. */}
+      <DialogContent
+        className={cn(
+          "bg-popover border-border text-popover-foreground flex flex-col max-h-[85vh] gap-0",
+          isNote ? "sm:max-w-lg" : "sm:max-w-xl",
+        )}
+      >
+        {/* The negative margin lets the scroll area use the dialog's own padding,
+            so focus rings aren't clipped at the edges. */}
+        <div className="min-h-0 flex-1 overflow-y-auto -mx-6 px-6">{formBody}</div>
+        <div className="shrink-0">{formFooter}</div>
       </DialogContent>
     </Dialog>
   );

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Label } from '@/components/ui/label';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
+import { visibleSectionFields } from '@/components/custom-fields/visible-fields';
 import type { CustomField, CustomFieldSection } from '@/types';
 
 interface CustomFieldsSectionRendererProps {
@@ -136,22 +137,31 @@ export function CustomFieldsSectionRenderer({
     arr.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   }
 
+  // Resolve the form's per-field veto BEFORE painting anything. A section whose
+  // every field is hidden must disappear entirely, header and all — otherwise it
+  // leaves a heading with nothing under it (the Task form hides both of its
+  // "Schedule & Priority" fields because they are drawn higher up, in a fixed
+  // order). When no section survives, render nothing at all, so the caller's
+  // wrapper — which usually carries a divider — can collapse with `empty:hidden`.
+  const paintable = displaySections
+    .map((sec) => ({
+      sec,
+      visible: visibleSectionFields(fieldsBySectionId.get(sec.id) || [], renderCustomSystemField),
+    }))
+    .filter(({ visible }) => visible.length > 0);
+
+  if (paintable.length === 0) return null;
+
   return (
     <div className="space-y-4">
-      {displaySections.map((sec) => {
-        const sectionFields = fieldsBySectionId.get(sec.id) || [];
-        if (sectionFields.length === 0) return null;
-
+      {paintable.map(({ sec, visible }) => {
         return (
           <div key={sec.id} className="space-y-3">
             <h4 className={SECTION_HEADER_CLASS}>
               {sec.name}
             </h4>
             <div className={fieldGridClassName}>
-              {sectionFields.map((field) => {
-                const customNode = renderCustomSystemField ? renderCustomSystemField(field) : undefined;
-                if (customNode === null) return null; // Component explicitly requested to be hidden
-                
+              {visible.map(({ field, customNode }) => {
                 const isSystem = Boolean(field.system_key);
                 const value = isSystem && formData && field.system_key
                   ? formData[field.system_key] ?? ''
