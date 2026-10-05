@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getCurrencySymbol } from '@/lib/currency';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { toast } from 'sonner';
+import { CollaboratorsSelect } from '@/components/ui/collaborators-select';
 import {
   CUSTOMER_UNIQUE_KEYS,
   readCustomerUniqueKeys,
@@ -91,6 +92,10 @@ export function ContactForm({
   const [pincode, setPincode] = useState('');
   const [gstNumber, setGstNumber] = useState('');   // customer GSTIN (party_gstin source for orders)
   const [customerCode, setCustomerCode] = useState('');
+  // Extra employees who may work this customer, as AUTH user ids (what RLS
+  // compares against). The single main owner stays employee_id, so reports,
+  // targets and sales credit are untouched.
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
   // Which fields must be unique (Extra Settings → Prevent duplicate records).
   // Several can be ticked; ANY match blocks the save.
   const [uniqueKeys, setUniqueKeys] = useState<CustomerUniqueKey[]>(['name']);
@@ -154,6 +159,23 @@ export function ContactForm({
       ? customFields.filter((f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)))
       : customFields;
 
+    fields = [
+      ...fields,
+      {
+        id: 'sys-collaborator_ids',
+        account_id: accountId || '',
+        module_name: 'contact',
+        name: 'Also Assigned To',
+        system_key: 'collaborator_ids',
+        field_type: 'select',
+        is_system: true,
+        is_active: true,
+        is_required: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as unknown as CustomField,
+    ];
+
     if (assignmentMode === 'direct') {
       fields = [
         ...fields,
@@ -199,6 +221,11 @@ export function ContactForm({
       setHierarchyLevel(contact?.hierarchy_level ?? null);
       setPriceListId((contact as any)?.price_list_id ?? null);
       setEmployeeId(contact?.employee_id ?? '');
+      setCollaboratorIds(
+        Array.isArray((contact as { collaborator_ids?: string[] })?.collaborator_ids)
+          ? ((contact as { collaborator_ids?: string[] }).collaborator_ids as string[])
+          : []
+      );
       setDupMatch(null);
       setTerritoryId((contact as Contact & { territory_id?: string | null })?.territory_id ?? null);
       setNeedsTerritoryReview(!!(contact as Contact & { needs_territory_review?: boolean })?.needs_territory_review);
@@ -321,6 +348,7 @@ export function ContactForm({
       country,
       pincode,
       employee_id: assignmentMode === 'direct' ? (employeeId || null) : null,
+      collaborator_ids: collaboratorIds,
     };
 
     const cfError = validateRequiredCustomFields(renderedCustomFields, customValues, formDataMap);
@@ -403,6 +431,7 @@ export function ContactForm({
         hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
         ...(hasSFA ? { price_list_id: priceListId } : {}),
         employee_id: assignmentMode === 'direct' ? (employeeId || null) : null,
+      collaborator_ids: collaboratorIds,
         // Territory Master (authoritative geography). Clearing the review flag
         // once a territory is chosen resolves any "needs migration" state.
         ...(showTerritoryCascade
@@ -621,6 +650,22 @@ export function ContactForm({
                       />
                       <Label htmlFor="sameAsPhone" className="text-xs text-muted-foreground">Same as Phone Number</Label>
                     </div>
+                  </div>
+                );
+              }
+              if (fld.system_key === 'collaborator_ids') {
+                return (
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-xs">Also Assigned To</Label>
+                    <CollaboratorsSelect
+                      profiles={profiles}
+                      selectedIds={collaboratorIds}
+                      onChange={setCollaboratorIds}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Everyone here gets full access to this customer. The main owner above is
+                      unchanged, so reports and targets still credit one person.
+                    </p>
                   </div>
                 );
               }

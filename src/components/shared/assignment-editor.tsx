@@ -110,16 +110,17 @@ export function AssignmentEditor({
         />
       </div>
 
-      {/* Collaborators */}
+      {/* Also Assigned To — the same control and wording the customer form uses,
+          so the two screens read identically (founder, 2026-10-05). */}
       <div>
-        <p className="mb-1.5 text-sm text-muted-foreground">Collaborators</p>
+        <p className="mb-1.5 text-sm text-muted-foreground">Also Assigned To</p>
         <CollaboratorsSelect
           profiles={profiles}
           selectedIds={collabs}
           disabled={!canEdit}
           onChange={(ids) => {
             setCollabs(ids);
-            persist("collaborator_ids", ids, "collaborators");
+            persist("collaborator_ids", ids, "assignees");
           }}
         />
       </div>
