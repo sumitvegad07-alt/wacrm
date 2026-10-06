@@ -84,7 +84,13 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     ] = await Promise.all([
       supabase.from("profiles").select("*").eq("account_id", account.id),
       supabase.from("lead_notes").select("*").eq("lead_id", resolvedParams.id).order("created_at", { ascending: false }),
-      supabase.from("custom_fields").select("*").or("module_name.eq.lead,module_name.is.null").order("field_name"),
+      supabase
+        .from("custom_fields")
+        .select("*")
+        .eq("account_id", account.id)
+        .eq("module_name", "lead")
+        .order("position", { ascending: true })
+        .order("created_at", { ascending: true }),
       supabase.from("lead_custom_values").select("*").eq("lead_id", resolvedParams.id),
       supabase.from("tasks").select("*").eq("lead_id", resolvedParams.id).order("created_at", { ascending: false }),
       supabase.from("module_activities").select("*").eq("module_name", "lead").eq("record_id", resolvedParams.id).order("created_at", { ascending: false }),
@@ -229,6 +235,30 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const ownerOptions = allProfiles.map((p) => ({ value: p.user_id, label: p.full_name || p.email || "User" }));
   const collaboratorIds: string[] = Array.isArray(lead.collaborator_ids) ? lead.collaborator_ids : [];
 
+  // The lead's field setup drives this page exactly like it drives the form:
+  // a deactivated field disappears, a renamed field re-labels, and a predefined
+  // (system_key) field reads its value from the lead row — never from
+  // lead_custom_values, which only ever holds true custom fields.
+  const activeFields = customFields.filter((f) => f.is_active !== false);
+  const systemField = (key: string) => activeFields.find((f) => f.system_key === key);
+  const hasSystem = (key: string) => !!systemField(key);
+  const labelFor = (key: string, fallback: string) => systemField(key)?.field_name || fallback;
+  const extraFields = activeFields.filter((f) => !f.system_key);
+
+  // Predefined contact rows: shown only when the field is active and the lead
+  // actually carries a value. `phone` was missing here, so Lead Discovery leads
+  // (which fill phone, not whatsapp) showed no contact number at all.
+  const contactRows = ([
+    ["contact_person", "Contact Person", lead.contact_person],
+    ["phone", "Phone Number", lead.phone],
+    ["whatsapp", "WhatsApp Number", lead.whatsapp],
+    ["email", "Email", lead.email],
+    ["area", "Area / Locality", lead.area],
+    ["pincode", "Pincode / ZIP", lead.pincode],
+  ] as [string, string, string | null][]).filter(([key, , value]) => hasSystem(key) && !!value);
+  const showAddress = hasSystem("address") && !!lead.address;
+  const showCoords = lead.latitude != null && lead.longitude != null;
+
   return (
     <div className="mx-auto w-full max-w-7xl">
       {/* Breadcrumb + actions */}
@@ -251,8 +281,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               {converting ? <Loader2 className="size-4 animate-spin" /> : <UserCheck className="size-4" />} Convert to Customer
             </Button>
           )}
-          {lead.whatsapp && (
-            <Button onClick={() => router.push(`/inbox?phone=${lead.whatsapp}`)} variant="outline" className="gap-2"><MessageSquare className="size-4" /> Message</Button>
+          {(lead.whatsapp || lead.phone) && (
+            <Button onClick={() => router.push(`/inbox?phone=${lead.whatsapp || lead.phone}`)} variant="outline" className="gap-2"><MessageSquare className="size-4" /> Message</Button>
           )}
           <Button onClick={() => router.push(`/leads/${lead.id}/edit`)} variant="secondary" className="gap-2"><Pencil className="size-4" /> Edit</Button>
         </div>
@@ -313,38 +343,38 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      {/* Source / Industry / Price Group */}
-      <div className="grid grid-cols-1 gap-6 border-t border-border px-4 py-6 sm:grid-cols-3">
-        <div>
-          <p className="text-sm text-muted-foreground">Source</p>
-          <p className="mt-1 font-medium text-foreground">{lead.source || "-"}</p>
+      {/* Source / Industry. "Price Group" used to sit here showing a permanent "-";
+          leads have no price group, so the tile is gone. */}
+      {(hasSystem("source") || hasSystem("industry")) && (
+        <div className="grid grid-cols-1 gap-6 border-t border-border px-4 py-6 sm:grid-cols-3">
+          {hasSystem("source") && (
+            <div>
+              <p className="text-sm text-muted-foreground">{labelFor("source", "Source")}</p>
+              <p className="mt-1 font-medium text-foreground">{lead.source || "-"}</p>
+            </div>
+          )}
+          {hasSystem("industry") && (
+            <div>
+              <p className="text-sm text-muted-foreground">{labelFor("industry", "Industry")}</p>
+              <p className="mt-1 font-medium text-foreground">{lead.industry || "-"}</p>
+            </div>
+          )}
         </div>
-        <div>
-          <p className="text-sm text-muted-foreground">Industry</p>
-          <p className="mt-1 font-medium text-foreground">{lead.industry || "-"}</p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">Price Group</p>
-          <p className="mt-1 font-medium text-foreground">-</p>
-        </div>
-      </div>
+      )}
 
       {/* Contact + location details */}
-      {(lead.contact_person || lead.whatsapp || lead.email || lead.address || (lead.latitude != null && lead.longitude != null)) && (
+      {(contactRows.length > 0 || showAddress || showCoords) && (
         <div className="grid grid-cols-1 gap-6 border-t border-border px-4 py-6 sm:grid-cols-3">
-          {lead.contact_person && (
-            <div><p className="text-sm text-muted-foreground">Contact Person</p><p className="mt-1 font-medium text-foreground">{lead.contact_person}</p></div>
+          {contactRows.map(([key, fallback, value]) => (
+            <div key={key}>
+              <p className="text-sm text-muted-foreground">{labelFor(key, fallback)}</p>
+              <p className="mt-1 font-medium text-foreground break-words">{value}</p>
+            </div>
+          ))}
+          {showAddress && (
+            <div className="sm:col-span-3"><p className="text-sm text-muted-foreground">{labelFor("address", "Address")}</p><p className="mt-1 font-medium text-foreground">{lead.address}</p></div>
           )}
-          {lead.whatsapp && (
-            <div><p className="text-sm text-muted-foreground">WhatsApp / Phone</p><p className="mt-1 font-medium text-foreground">{lead.whatsapp}</p></div>
-          )}
-          {lead.email && (
-            <div><p className="text-sm text-muted-foreground">Email</p><p className="mt-1 font-medium text-foreground">{lead.email}</p></div>
-          )}
-          {lead.address && (
-            <div className="sm:col-span-3"><p className="text-sm text-muted-foreground">Address</p><p className="mt-1 font-medium text-foreground">{lead.address}</p></div>
-          )}
-          {lead.latitude != null && lead.longitude != null && (
+          {showCoords && (
             <div><p className="text-sm text-muted-foreground">Coordinates (geo-tagged)</p><p className="mt-1 font-medium font-mono text-sm text-foreground">{lead.latitude}, {lead.longitude}</p></div>
           )}
         </div>
@@ -353,11 +383,11 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       {/* Other Details (custom fields) */}
       <div className="border-t border-border px-4 py-6">
         <h2 className="mb-4 text-lg font-semibold text-foreground">Other Details</h2>
-        {customFields.length === 0 ? (
+        {extraFields.length === 0 ? (
           <p className="text-sm text-muted-foreground">No additional details.</p>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-            {customFields.map((field) => {
+            {extraFields.map((field) => {
               const val = customValues[field.id];
               return (
                 <div key={field.id}>
