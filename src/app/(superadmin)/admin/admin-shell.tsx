@@ -24,6 +24,7 @@ import {
   BarChart3,
   Calculator,
   Trash2,
+  Radar,
 } from "lucide-react";
 import { isFounderEmail } from "@/lib/auth/founder";
 
@@ -51,6 +52,7 @@ const FOUNDER_NAV_ITEMS = [
   { href: "/admin/retention", label: "Data Retention", icon: Trash2 },
   { href: "/admin/proposals", label: "Sales Proposals", icon: FileText },
   { href: "/admin/forecast", label: "Business Forecast", icon: BarChart3 },
+  { href: "/admin/revenue/discover", label: "Lead Discovery", icon: Radar },
 ];
 
 function SuperAdminShellInner({ children }: { children: React.ReactNode }) {

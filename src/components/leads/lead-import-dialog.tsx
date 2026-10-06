@@ -20,11 +20,15 @@ export function LeadImportDialog({ open, onOpenChange, onSuccess }: LeadImportDi
   const { accountId, user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [results, setResults] = useState<{ success: number; failed: number } | null>(null);
+  const [results, setResults] = useState<{
+    success: number;
+    failed: number;
+    duplicates: number;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const downloadTemplate = () => {
-    const template = "Name,Contact Person,WhatsApp,Email,Source,Industry,Status,Address,City,State,Country,Latitude,Longitude\nExample Lead,John Doe,+1234567890,john@example.com,Website,Technology,New,123 Main St,New York,NY,USA,40.7128,-74.0060";
+    const template = "Name,Contact Person,Phone,Email,Source,Industry,Status,Address,Area,City,State,Country,Pincode,Latitude,Longitude\nShivalli Seeds Pvt Ltd,Ramesh Patil,919876543210,sales@example.in,Website,Seeds,New,Plot 14 Industrial Estate,Ranebennur,Haveri,Karnataka,India,581115,14.6167,75.6300";
     const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -100,8 +104,9 @@ export function LeadImportDialog({ open, onOpenChange, onSuccess }: LeadImportDi
       const headers = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
       const dataRows = rows.slice(1).filter(r => r.some(cell => cell.trim() !== ''));
 
-      // Expected headers: name, contactperson, whatsapp, email, source, industry, status, address, city, state, country, latitude, longitude
-      
+      // Expected headers: name, contactperson, phone/whatsapp, email, source, industry,
+      // status, address, area, city, state, country, pincode, latitude, longitude
+
       const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('business'));
       if (nameIdx === -1) {
         toast.error("CSV must contain a 'Name' or 'Business Name' column");
@@ -121,53 +126,108 @@ export function LeadImportDialog({ open, onOpenChange, onSuccess }: LeadImportDi
       const cityIdx = getIdx(['city']);
       const stateIdx = getIdx(['state', 'region', 'province']);
       const countryIdx = getIdx(['country']);
+      const areaIdx = getIdx(['area', 'locality']);
+      const pincodeIdx = getIdx(['pincode', 'pin', 'postal', 'zip']);
+      const latIdx = getIdx(['latitude']);
+      const lngIdx = getIdx(['longitude']);
 
       const supabase = createClient();
       let successCount = 0;
       let failCount = 0;
+      let duplicateCount = 0;
+
+      const cell = (row: string[], idx: number) => {
+        if (idx < 0) return null;
+        const value = (row[idx] ?? '').trim();
+        return value === '' ? null : value;
+      };
+
+      const num = (row: string[], idx: number) => {
+        const value = cell(row, idx);
+        if (value === null) return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      // Build every payload up front so duplicates inside the file can be removed
+      // before any insert. `leads` has a unique index on (account_id, phone) since
+      // migration 20261005150000, and one duplicate in a batch of 50 rejects all
+      // 50 — so a file carrying the same number twice used to lose 49 good rows
+      // with it.
+      const seenPhones = new Set<string>();
+      const payloads: Record<string, unknown>[] = [];
+
+      for (const row of dataRows) {
+        const name = cell(row, nameIdx);
+        if (!name) {
+          failCount++; // Name is required
+          continue;
+        }
+
+        const phone = cell(row, phoneIdx);
+        const normalized = phone ? phone.replace(/\D/g, '') : '';
+        if (normalized) {
+          if (seenPhones.has(normalized)) {
+            duplicateCount++;
+            continue;
+          }
+          seenPhones.add(normalized);
+        }
+
+        payloads.push({
+          account_id: accountId,
+          user_id: user.id,
+          name: name.substring(0, 255),
+          contact_person: cell(row, personIdx),
+          // Both columns: `phone` is what the duplicate index is built on, and
+          // `whatsapp` is what the messaging features read. Writing only one of
+          // them either skips the duplicate check or breaks WhatsApp.
+          phone,
+          whatsapp: phone,
+          email: cell(row, emailIdx),
+          source: cell(row, sourceIdx),
+          industry: cell(row, industryIdx),
+          status: cell(row, statusIdx),
+          address: cell(row, addressIdx),
+          area: cell(row, areaIdx),
+          city: cell(row, cityIdx),
+          state: cell(row, stateIdx),
+          country: cell(row, countryIdx),
+          pincode: cell(row, pincodeIdx),
+          latitude: num(row, latIdx),
+          longitude: num(row, lngIdx),
+        });
+      }
 
       // Process in batches of 50 to avoid hammering DB
       const batchSize = 50;
-      for (let i = 0; i < dataRows.length; i += batchSize) {
-        const batch = dataRows.slice(i, i + batchSize);
-        
-        const payloads = batch.map(row => {
-          const name = row[nameIdx];
-          if (!name) return null; // Name is required
-          
-          return {
-            account_id: accountId,
-            user_id: user.id,
-            name: name.substring(0, 255),
-            contact_person: personIdx >= 0 ? row[personIdx] : null,
-            whatsapp: phoneIdx >= 0 ? row[phoneIdx] : null,
-            email: emailIdx >= 0 ? row[emailIdx] : null,
-            source: sourceIdx >= 0 ? row[sourceIdx] : null,
-            industry: industryIdx >= 0 ? row[industryIdx] : null,
-            status: statusIdx >= 0 ? row[statusIdx] : null,
-            address: addressIdx >= 0 ? row[addressIdx] : null,
-            city: cityIdx >= 0 ? row[cityIdx] : null,
-            state: stateIdx >= 0 ? row[stateIdx] : null,
-            country: countryIdx >= 0 ? row[countryIdx] : null,
-          };
-        }).filter(Boolean) as any[];
+      for (let i = 0; i < payloads.length; i += batchSize) {
+        const batch = payloads.slice(i, i + batchSize);
 
-        if (payloads.length === 0) {
-            failCount += batch.length;
-            continue;
+        const bulk = await supabase.from('leads').insert(batch).select('id');
+        let inserted: { id: string }[] = bulk.data ?? [];
+
+        if (bulk.error) {
+          // Almost always one row colliding with a lead that already exists. Retry
+          // the batch row by row so the other 49 still land, and so the failure
+          // count is the true number of bad rows rather than the batch size.
+          inserted = [];
+          for (const payload of batch) {
+            const single = await supabase.from('leads').insert(payload).select('id');
+            if (single.error) {
+              if (single.error.code === '23505') duplicateCount++;
+              else failCount++;
+            } else if (single.data) {
+              inserted.push(...single.data);
+            }
+          }
         }
 
-        const { data, error } = await supabase.from('leads').insert(payloads).select('id');
-        
-        if (error) {
-          console.error("Batch insert error:", error);
-          failCount += batch.length;
-        } else if (data) {
-          successCount += data.length;
-          failCount += (batch.length - data.length);
-          
+        if (inserted.length > 0) {
+          successCount += inserted.length;
+
           // Log activities for all successful inserts
-          const logPromises = data.map(record => logModuleActivity(supabase, {
+          const logPromises = inserted.map(record => logModuleActivity(supabase, {
             moduleName: "lead",
             recordId: record.id,
             action: "created",
@@ -177,7 +237,7 @@ export function LeadImportDialog({ open, onOpenChange, onSuccess }: LeadImportDi
         }
       }
 
-      setResults({ success: successCount, failed: failCount });
+      setResults({ success: successCount, failed: failCount, duplicates: duplicateCount });
       if (successCount > 0) {
         onSuccess();
       }
@@ -258,6 +318,12 @@ export function LeadImportDialog({ open, onOpenChange, onSuccess }: LeadImportDi
                   <p className="text-2xl font-bold text-green-600">{results.success}</p>
                   <p className="text-muted-foreground">Imported</p>
                 </div>
+                {results.duplicates > 0 && (
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-muted-foreground">{results.duplicates}</p>
+                    <p className="text-muted-foreground">Already had</p>
+                  </div>
+                )}
                 {results.failed > 0 && (
                   <div className="text-center">
                     <p className="text-2xl font-bold text-amber-600">{results.failed}</p>
