@@ -129,6 +129,12 @@ export async function GET() {
     return NextResponse.json({
       usage,
       hasApiKey: Boolean(placesApiKey()),
+      // Founder-only diagnostic, NAMES only and never values. Setting this key
+      // cost two deploys of guessing at whether Vercel was passing it through
+      // and under what name; the server can answer that in one reload.
+      envNames: Object.keys(process.env)
+        .filter((name) => /GOOGLE|PLACES|MAPS/i.test(name))
+        .sort(),
       runs: runs.data ?? [],
     });
   } catch (err) {

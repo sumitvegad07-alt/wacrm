@@ -93,6 +93,7 @@ export default function DiscoverClient() {
   // ── server state ──
   const [usage, setUsage] = useState<Usage | null>(null);
   const [hasApiKey, setHasApiKey] = useState(true);
+  const [envNames, setEnvNames] = useState<string[]>([]);
   const [pastRuns, setPastRuns] = useState<RunRow[]>([]);
 
   // ── harvest state ──
@@ -127,6 +128,7 @@ export default function DiscoverClient() {
     if (!payload) return;
     setUsage(payload.usage ?? null);
     setHasApiKey(payload.hasApiKey !== false);
+    setEnvNames(payload.envNames ?? []);
     setPastRuns(payload.runs ?? []);
   }, []);
 
@@ -332,6 +334,28 @@ export default function DiscoverClient() {
           <span>
             <code>GOOGLE_PLACES_API_KEY</code> is not set on the server. Add it in Vercel and
             redeploy — until then the Start button will refuse.
+            <span className="block mt-1.5">
+              {envNames.length === 0 ? (
+                <>
+                  The server can see <b>no</b> setting whose name mentions Google, Places or Maps.
+                  Vercel is not passing the variable to this project at all — check that it is on
+                  the <b>wacrm project&apos;s own</b> Environment Variables, not the Shared tab, and
+                  that <b>Production</b> is ticked.
+                </>
+              ) : (
+                <>
+                  The server can see these related settings:{" "}
+                  {envNames.map((name, i) => (
+                    <span key={name}>
+                      {i > 0 && ", "}
+                      <code>{name}</code>
+                    </span>
+                  ))}
+                  . If the name you want is not in that list, the variable is misnamed; rename it
+                  to exactly <code>GOOGLE_PLACES_API_KEY</code> and redeploy.
+                </>
+              )}
+            </span>
           </span>
         </div>
       )}
