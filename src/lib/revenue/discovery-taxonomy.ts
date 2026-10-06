@@ -154,6 +154,41 @@ export const RETAIL_PRIMARY_TYPES: ReadonlySet<string> = new Set([
   "amusement_park",
 ]);
 
+/**
+ * Words in Google's *display* type that mean "this organisation does not buy
+ * sales-force software".
+ *
+ * Needed because RETAIL_PRIMARY_TYPES matches the raw `primaryType`, and the
+ * first real harvest showed that misses things: Karnataka State Seeds
+ * Corporation came back as a "Government office" and National Seeds Corporation
+ * as a "Non-profit organization", both past the raw filter. Matching the shown
+ * label catches whatever Google actually puts in front of us.
+ */
+export const NON_BUYER_TYPE_WORDS: readonly string[] = [
+  "government",
+  "non-profit",
+  "nonprofit",
+  "association",
+  "consultant",
+  "school",
+  "college",
+  "university",
+  "temple",
+  "church",
+  "mosque",
+  "hospital",
+  "police",
+  "library",
+  "museum",
+  "tourist",
+];
+
+/** True when Google's own label for this place marks it as a non-buyer. */
+export function isNonBuyerType(displayType: string): boolean {
+  const label = displayType.toLowerCase();
+  return NON_BUYER_TYPE_WORDS.some((word) => label.includes(word));
+}
+
 export function findIndustry(value: string): DiscoveryIndustry | undefined {
   return DISCOVERY_INDUSTRIES.find((i) => i.value === value);
 }

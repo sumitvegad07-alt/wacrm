@@ -12,6 +12,7 @@ import {
   RETAIL_PRIMARY_TYPES,
   findCategory,
   findIndustry,
+  isNonBuyerType,
 } from "./discovery-taxonomy";
 import { searchNameForDistrict } from "./discovery-geography";
 
@@ -183,8 +184,14 @@ export interface DiscoveryRow {
   address: string;
   area: string;
   city: string;
+  /** Real district, read from Google's address components. */
+  district: string;
   state: string;
   pincode: string;
+  /** Where we looked, which is not always where the business turned out to be. */
+  searchedIn: string;
+  /** True when Google places this business outside the district we searched. */
+  outsideSearchedArea: boolean;
   latitude: string;
   longitude: string;
   rating: string;
@@ -210,10 +217,18 @@ export interface MappedPlace {
 /**
  * Turns one Google result into a CSV row, or explains why it was dropped.
  *
- * City and area come from what we SEARCHED, not from Google's address string.
- * That is deliberate: the searched district is the fact we are certain of, while
- * parsing an Indian formatted address for a city is guesswork that silently
- * mislabels half the rows.
+ * City and district come from Google's address components, NOT from what we
+ * searched. The first version did the opposite, reasoning that the searched
+ * place was the only certain fact. The first real harvest disproved that: a text
+ * search widens its net when a small town runs out of matches, so 24 of 80 rows
+ * came back more than 40 km from the place searched — one of them a Bengaluru
+ * company 306 km away, confidently labelled "Haveri".
+ *
+ * Such a row is not junk: it is a real company in the wrong place. So it is kept
+ * with its TRUE location, flagged `outsideSearchedArea`, and the place we looked
+ * in is preserved separately. Dropping it would be worse than mislabelling it —
+ * the place ID would be recorded as seen, and the company would then never
+ * surface again in a search of the district it is actually in.
  */
 export function mapPlace(
   place: PlacesResult,
@@ -223,7 +238,11 @@ export function mapPlace(
   const placeId = place.id?.trim();
   if (!placeId) return { row: null, skip: "no_id" };
 
-  if (place.primaryType && RETAIL_PRIMARY_TYPES.has(place.primaryType)) {
+  const displayType = place.primaryTypeDisplayName?.text ?? "";
+  if (
+    (place.primaryType && RETAIL_PRIMARY_TYPES.has(place.primaryType)) ||
+    (displayType && isNonBuyerType(displayType))
+  ) {
     return { row: null, skip: "retail" };
   }
 
@@ -237,6 +256,14 @@ export function mapPlace(
     return { row: null, skip: "no_phone" };
   }
 
+  const locality = componentOf(place, "locality");
+  const taluk = componentOf(place, "administrative_area_level_3");
+  const googleDistrict = componentOf(place, "administrative_area_level_2");
+  const sublocality = componentOf(place, "sublocality_level_1") || componentOf(place, "sublocality");
+
+  const district = googleDistrict || ctx.district;
+  const searchedIn = ctx.area ?? ctx.district;
+
   return {
     row: {
       placeId,
@@ -244,15 +271,20 @@ export function mapPlace(
       phone,
       website: (place.websiteUri ?? "").trim(),
       address: (place.formattedAddress ?? "").trim(),
-      area: ctx.area ?? "",
-      city: ctx.district,
+      area: sublocality,
+      city: locality || taluk || googleDistrict || ctx.district,
+      district,
+      searchedIn,
+      // Only claim "outside" when Google actually told us a district. A missing
+      // component is unknown, not a mismatch, and must not be reported as one.
+      outsideSearchedArea: googleDistrict !== "" && !sameDistrict(googleDistrict, ctx.district),
       state: ctx.state,
       pincode: pincodeFrom(place),
       latitude: place.location?.latitude != null ? String(place.location.latitude) : "",
       longitude: place.location?.longitude != null ? String(place.location.longitude) : "",
       rating: place.rating != null ? String(place.rating) : "",
       reviews: place.userRatingCount != null ? String(place.userRatingCount) : "",
-      primaryType: place.primaryTypeDisplayName?.text ?? place.primaryType ?? "",
+      primaryType: displayType || place.primaryType || "",
       industry: ctx.industryLabel,
     },
     skip: null,
@@ -270,11 +302,74 @@ export function mapPlace(
 export function normalisePhone(raw: string): string {
   const digits = raw.replace(/\D/g, "");
   if (!digits) return "";
+  // Indian toll-free and UAN numbers are dialled as-is. Prefixing 91 turns
+  // 1800 123 2152 into 911800..., which rings nowhere.
+  if (/^(1800|1860|1600)/.test(digits)) return digits;
   if (digits.startsWith("91") && digits.length >= 12) return digits;
   // National format carries a trunk "0" (e.g. 080…, 09876…). Drop it, add 91.
   const national = digits.replace(/^0+/, "");
   if (!national) return "";
   return `91${national}`;
+}
+
+function componentOf(place: PlacesResult, type: string): string {
+  for (const component of place.addressComponents ?? []) {
+    if (component.types?.includes(type)) {
+      return (component.longText ?? component.shortText ?? "").trim();
+    }
+  }
+  return "";
+}
+
+/**
+ * Karnataka renamed most of its cities in 2014 and Google still answers with
+ * either spelling depending on the listing. Without this, a Mysuru result in a
+ * Mysuru search reads as "outside the area".
+ */
+const RENAMED_PLACES: [RegExp, string][] = [
+  [/bangalore/g, "bengaluru"],
+  [/mysore/g, "mysuru"],
+  [/belgaum/g, "belagavi"],
+  [/gulbarga/g, "kalaburagi"],
+  [/bellary/g, "ballari"],
+  [/bijapur/g, "vijayapura"],
+  [/shimoga/g, "shivamogga"],
+  [/tumkur/g, "tumakuru"],
+  [/chikmagalur/g, "chikkamagaluru"],
+  [/hospet/g, "hosapete"],
+  [/mangalore/g, "mangaluru"],
+  [/hubli/g, "hubballi"],
+  [/gadag/g, "gadaga"],
+  [/bagalkot/g, "bagalakote"],
+  [/koppal/g, "koppala"],
+  [/raichur/g, "raichuru"],
+  [/dharwad/g, "dharwada"],
+  [/yadgir/g, "yadgiri"],
+];
+
+/** Comparable form of a place name: lower case, letters only, modern spelling. */
+function placeKey(value: string): string {
+  let key = value.toLowerCase().replace(/\bdistricts?\b/g, "");
+  key = key.replace(/[^a-z]/g, "");
+  for (const [from, to] of RENAMED_PLACES) key = key.replace(from, to);
+  return key;
+}
+
+/**
+ * Whether Google's district is the one we searched. Compared against both our
+ * seed spelling and the alias Google was given, since those differ on purpose —
+ * we search "Mangaluru" but Google answers with the district, "Dakshina Kannada".
+ */
+export function sameDistrict(googleDistrict: string, searchedDistrict: string): boolean {
+  const google = placeKey(googleDistrict);
+  if (!google) return true;
+
+  for (const candidate of [searchedDistrict, searchNameForDistrict(searchedDistrict)]) {
+    const ours = placeKey(candidate);
+    if (!ours) continue;
+    if (google === ours || google.includes(ours) || ours.includes(google)) return true;
+  }
+  return false;
 }
 
 function pincodeFrom(place: PlacesResult): string {
@@ -344,6 +439,7 @@ export const CSV_HEADERS = [
   "Address",
   "Area",
   "City",
+  "District",
   "State",
   "Country",
   "Pincode",
@@ -352,6 +448,8 @@ export const CSV_HEADERS = [
   "Rating",
   "Reviews",
   "Business Type",
+  "Searched In",
+  "Outside Searched Area",
   "Google Place ID",
 ] as const;
 
@@ -372,6 +470,7 @@ export function toCsv(rows: DiscoveryRow[], source: string): string {
         row.address,
         row.area,
         row.city,
+        row.district,
         row.state,
         "India",
         row.pincode,
@@ -380,6 +479,8 @@ export function toCsv(rows: DiscoveryRow[], source: string): string {
         row.rating,
         row.reviews,
         row.primaryType,
+        row.searchedIn,
+        row.outsideSearchedArea ? "Yes" : "No",
         row.placeId,
       ]
         .map(csvCell)

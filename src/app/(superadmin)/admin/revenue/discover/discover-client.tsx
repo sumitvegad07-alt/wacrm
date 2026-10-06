@@ -94,6 +94,9 @@ export default function DiscoverClient() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [hasApiKey, setHasApiKey] = useState(true);
   const [envNames, setEnvNames] = useState<string[]>([]);
+  const [already, setAlready] = useState<{ total: number; alreadyDone: number; lastRunAt: string | null } | null>(
+    null,
+  );
   const [pastRuns, setPastRuns] = useState<RunRow[]>([]);
 
   // ── harvest state ──
@@ -175,6 +178,43 @@ export default function DiscoverClient() {
   }, [districts, activeAreas, areaOptions, pincode]);
 
   const estimate = useMemo(() => estimateCalls(plannedQueries), [plannedQueries]);
+
+  /**
+   * Checks the chosen combination against past harvests. Debounced because it
+   * fires on every tick of a district or area box, and delayed work is dropped
+   * on cleanup so a slow answer cannot overwrite a newer one.
+   */
+  useEffect(() => {
+    if (running || plannedQueries === 0) {
+      setAlready(null);
+      return;
+    }
+
+    let live = true;
+    const timer = setTimeout(async () => {
+      const res = await fetch("/api/admin/revenue/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "preview",
+          industry,
+          category,
+          state,
+          districts,
+          areas: activeAreas,
+          pincode: pincode.trim() || null,
+        }),
+      });
+      if (!live || !res.ok) return;
+      const payload = await res.json().catch(() => null);
+      if (live && payload) setAlready(payload);
+    }, 400);
+
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [running, plannedQueries, industry, category, state, districts, activeAreas, pincode]);
 
   const overDailyCap = usage ? estimate.expectedCalls > usage.dailyRemaining : false;
 
@@ -551,6 +591,28 @@ export default function DiscoverClient() {
                     : `You have ${usage.dailyRemaining} calls left today.`}
                 </p>
               )}
+
+              {already && already.alreadyDone > 0 && (
+                <p className="mt-2 text-amber-600 dark:text-amber-400">
+                  {already.alreadyDone === already.total ? (
+                    <>
+                      <b>You have already done this exact search.</b> All {already.total} of these
+                      searches were run
+                      {already.lastRunAt ? ` on ${whenShort(already.lastRunAt)}` : " recently"}, so
+                      starting now would find nothing new. Change the industry, the customer
+                      category, or pick different districts or areas.
+                    </>
+                  ) : (
+                    <>
+                      <b>Partly done already.</b> {already.alreadyDone} of these {already.total}{" "}
+                      searches were run
+                      {already.lastRunAt ? ` on ${whenShort(already.lastRunAt)}` : " recently"} and
+                      will be skipped free of charge. Only{" "}
+                      <b>{already.total - already.alreadyDone}</b> will actually be searched.
+                    </>
+                  )}
+                </p>
+              )}
             </>
           )}
         </div>
@@ -558,7 +620,12 @@ export default function DiscoverClient() {
         <div className="flex gap-2">
           <button
             onClick={() => void startHarvest()}
-            disabled={running || plannedQueries === 0 || !hasApiKey}
+            disabled={
+              running ||
+              plannedQueries === 0 ||
+              !hasApiKey ||
+              (already !== null && already.total > 0 && already.alreadyDone === already.total)
+            }
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 disabled:opacity-60"
           >
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -726,6 +793,14 @@ export default function DiscoverClient() {
       </div>
     </div>
   );
+}
+
+function whenShort(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+  });
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

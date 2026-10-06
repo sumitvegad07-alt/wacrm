@@ -149,6 +149,8 @@ export async function POST(req: NextRequest) {
     const admin = serviceClient();
 
     switch (body.action) {
+      case "preview":
+        return await previewPlan(admin, body);
       case "start":
         return await startRun(admin, ctx.userId, body);
       case "search":
@@ -161,6 +163,43 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return toErrorResponse(err);
   }
+}
+
+// ── preview ─────────────────────────────────────────────────
+
+/**
+ * Answers "have I already done this?" before a single call is spent.
+ *
+ * The harvest already skips a search it ran recently, but the founder only
+ * learned that after pressing Start and watching nothing happen. Asking the same
+ * question up front turns a silent no-op into an answer he can act on: change
+ * the industry, the category, or the area.
+ */
+async function previewPlan(admin: Admin, body: Record<string, unknown>) {
+  const plan = planFromBody(body);
+  if (plan.length === 0) {
+    return NextResponse.json({ total: 0, alreadyDone: 0, lastRunAt: null });
+  }
+
+  const texts = plan.map((spec) => spec.text);
+  const since = new Date(Date.now() - SEARCH_REUSE_DAYS * 86_400_000).toISOString();
+
+  const { data } = await admin
+    .from("re_discovery_queries")
+    .select("query_text, created_at")
+    .in("query_text", texts)
+    .gte("created_at", since)
+    .is("error", null)
+    .gt("calls_used", 0)
+    .order("created_at", { ascending: false });
+
+  const done = new Set((data ?? []).map((row: { query_text: string }) => row.query_text));
+
+  return NextResponse.json({
+    total: plan.length,
+    alreadyDone: done.size,
+    lastRunAt: data?.[0]?.created_at ?? null,
+  });
 }
 
 // ── start ───────────────────────────────────────────────────
@@ -484,6 +523,25 @@ function planFor(input: {
     districts: input.districts,
     areas,
     pincode: input.pincode,
+  });
+}
+
+/** The plan a request body describes, or [] when it does not describe one. */
+function planFromBody(body: Record<string, unknown>) {
+  const industry = findIndustry(String(body.industry ?? ""));
+  const category = findCategory(String(body.category ?? ""));
+  const state = String(body.state ?? "").trim();
+  const districts = asStringArray(body.districts);
+
+  if (!industry || !category || !state || districts.length === 0) return [];
+
+  return planFor({
+    industry: industry.value,
+    category: category.value,
+    state,
+    districts,
+    areas: asStringArray(body.areas),
+    pincode: typeof body.pincode === "string" ? body.pincode.trim() : null,
   });
 }
 

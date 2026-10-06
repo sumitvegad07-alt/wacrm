@@ -10,6 +10,7 @@ import {
   estimateCalls,
   mapPlace,
   normalisePhone,
+  sameDistrict,
   toCsv,
   type DiscoveryRow,
   type PlacesResult,
@@ -135,6 +136,44 @@ describe("normalisePhone", () => {
     expect(normalisePhone("n/a")).toBe("");
     expect(normalisePhone("0")).toBe("");
   });
+
+  it("leaves toll-free numbers alone — 911800… rings nowhere", () => {
+    // Ankur Seeds came back from the first real harvest as 9118001232152.
+    expect(normalisePhone("1800 123 2152")).toBe("18001232152");
+    expect(normalisePhone("1860 266 0123")).toBe("18602660123");
+  });
+});
+
+describe("sameDistrict", () => {
+  it("accepts the district we searched", () => {
+    expect(sameDistrict("Haveri", "Haveri")).toBe(true);
+    expect(sameDistrict("Haveri District", "Haveri")).toBe(true);
+  });
+
+  it("accepts the alias Google was given, not just our seed spelling", () => {
+    // We search "Mangaluru"; Google answers with the district, Dakshina Kannada.
+    expect(sameDistrict("Dakshina Kannada", "Dakshina Kannada")).toBe(true);
+    expect(sameDistrict("Dharwad", "Dharwada")).toBe(true);
+    expect(sameDistrict("Gadag", "Gadaga")).toBe(true);
+  });
+
+  it("accepts the pre-2014 name for the same place", () => {
+    expect(sameDistrict("Bangalore Urban", "Bengaluru Urban")).toBe(true);
+    expect(sameDistrict("Mysore", "Mysuru")).toBe(true);
+    expect(sameDistrict("Belgaum", "Belagavi")).toBe(true);
+  });
+
+  it("rejects a genuinely different district", () => {
+    // The real failures from the first harvest: a Haveri search returning
+    // Bengaluru, Koppal and Gadag companies.
+    expect(sameDistrict("Bengaluru Urban", "Haveri")).toBe(false);
+    expect(sameDistrict("Koppal", "Haveri")).toBe(false);
+    expect(sameDistrict("Chikkaballapur", "Haveri")).toBe(false);
+  });
+
+  it("treats a missing district as unknown, never as a mismatch", () => {
+    expect(sameDistrict("", "Haveri")).toBe(true);
+  });
 });
 
 const ctx = { industryLabel: "Seeds", state: "Karnataka", district: "Haveri", area: "Ranebennur" };
@@ -155,13 +194,76 @@ function place(over: PlacesResult = {}): PlacesResult {
   };
 }
 
+const KA = (district: string, locality: string) => [
+  { types: ["locality"], longText: locality },
+  { types: ["administrative_area_level_2"], longText: district },
+  { types: ["administrative_area_level_1"], longText: "Karnataka" },
+  { types: ["postal_code"], longText: "581115" },
+];
+
 describe("mapPlace", () => {
-  it("labels city and area from what we searched, not from the address text", () => {
-    const { row } = mapPlace(place(), ctx, { includeWithoutPhone: false });
-    expect(row?.city).toBe("Haveri");
-    expect(row?.area).toBe("Ranebennur");
+  it("takes city and district from Google, and records where we looked", () => {
+    const { row } = mapPlace(
+      place({ addressComponents: KA("Haveri", "Ranebennur") }),
+      ctx,
+      { includeWithoutPhone: false },
+    );
+    expect(row?.city).toBe("Ranebennur");
+    expect(row?.district).toBe("Haveri");
+    expect(row?.searchedIn).toBe("Ranebennur");
+    expect(row?.outsideSearchedArea).toBe(false);
     expect(row?.industry).toBe("Seeds");
     expect(row?.phone).toBe("918373221144");
+  });
+
+  it("keeps a company found far outside the searched district, correctly labelled", () => {
+    // Pollen Seeds really came back from a Ranebennur search, 271 km away in
+    // Bengaluru. Dropping it would record the place ID as seen and lose the
+    // company from the Bengaluru search too, so it is kept and flagged.
+    const { row, skip } = mapPlace(
+      place({
+        displayName: { text: "Pollen Seeds Pvt. Ltd." },
+        addressComponents: KA("Bengaluru Urban", "Bengaluru"),
+      }),
+      ctx,
+      { includeWithoutPhone: false },
+    );
+    expect(skip).toBeNull();
+    expect(row?.city).toBe("Bengaluru");
+    expect(row?.district).toBe("Bengaluru Urban");
+    expect(row?.searchedIn).toBe("Ranebennur");
+    expect(row?.outsideSearchedArea).toBe(true);
+  });
+
+  it("falls back to the searched district when Google gives no components", () => {
+    const { row } = mapPlace(place({ addressComponents: [] }), ctx, {
+      includeWithoutPhone: false,
+    });
+    expect(row?.district).toBe("Haveri");
+    expect(row?.outsideSearchedArea).toBe(false);
+  });
+
+  it("drops the organisations that never buy sales software", () => {
+    // Both of these got past the raw-type filter in the first real harvest.
+    for (const label of ["Government office", "Non-profit organization", "Association / Organization", "Consultant"]) {
+      const result = mapPlace(
+        place({ primaryType: "point_of_interest", primaryTypeDisplayName: { text: label } }),
+        ctx,
+        { includeWithoutPhone: false },
+      );
+      expect(result.skip, label).toBe("retail");
+    }
+  });
+
+  it("keeps the labels that are real prospects", () => {
+    for (const label of ["Suppliers", "Manufacturer", "Wholesaler", "Corporate office"]) {
+      const result = mapPlace(
+        place({ primaryType: "point_of_interest", primaryTypeDisplayName: { text: label } }),
+        ctx,
+        { includeWithoutPhone: false },
+      );
+      expect(result.skip, label).toBeNull();
+    }
   });
 
   it("reads the PIN from address components, and falls back to the address string", () => {
@@ -220,6 +322,9 @@ function row(over: Partial<DiscoveryRow> = {}): DiscoveryRow {
     address: "",
     area: "",
     city: "Haveri",
+    district: "Haveri",
+    searchedIn: "Haveri",
+    outsideSearchedArea: false,
     state: "Karnataka",
     pincode: "",
     latitude: "",
