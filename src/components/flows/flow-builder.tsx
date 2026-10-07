@@ -17,7 +17,14 @@
  * are list-only and have no canvas analogue.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   CircleAlert,
   Plus,
@@ -39,6 +46,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -589,21 +597,27 @@ function AddNodeButton({ onAdd }: { onAdd: (type: NodeType) => void }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="border-border bg-popover">
         {groupNodeTypesByCategory(types).map((group, i) => (
-          <div key={group.id}>
+          // DropdownMenuLabel is a Base UI *group part*: outside a
+          // DropdownMenuGroup it throws "MenuGroupContext is missing"
+          // and takes the whole page down with it. The separator stays
+          // outside the group, between groups.
+          <Fragment key={group.id}>
             {i > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuLabel className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-              {group.label}
-            </DropdownMenuLabel>
-            {group.types.map((t) => {
-              const meta = NODE_META[t];
-              return (
-                <DropdownMenuItem key={t} onClick={() => onAdd(t)}>
-                  <meta.icon className={cn('h-3.5 w-3.5', meta.color)} />
-                  {meta.label}
-                </DropdownMenuItem>
-              );
-            })}
-          </div>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                {group.label}
+              </DropdownMenuLabel>
+              {group.types.map((t) => {
+                const meta = NODE_META[t];
+                return (
+                  <DropdownMenuItem key={t} onClick={() => onAdd(t)}>
+                    <meta.icon className={cn('h-3.5 w-3.5', meta.color)} />
+                    {meta.label}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuGroup>
+          </Fragment>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
