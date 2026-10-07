@@ -21,15 +21,29 @@
 //      separately finds more than searching "Dharwad" ever will. This is both
 //      the volume lever and the manufacturer-vs-retailer filter.
 //
-// Karnataka is populated (founder starts there). Other states fall back to
-// district-level search until their areas are filled in, which is a correctness-
-// safe default: fewer searches, fewer results, never wrong results.
+// The area lists themselves live in industrial-areas.ts — 1,626 estates across
+// 33 states. A state or district with no entry falls back to district-level
+// search, which is a correctness-safe default: fewer searches, fewer results,
+// never wrong ones.
 // ============================================================
 
 import { SEED_INDIA_DISTRICTS, SEED_INDIA_STATES } from "@/lib/territories/seed-data.generated";
+import { INDUSTRIAL_AREAS } from "./industrial-areas";
 
-/** Official seed spelling → the spelling Google Maps resolves best. */
-const DISTRICT_SEARCH_ALIASES: Record<string, string> = {
+/**
+ * Official seed spelling → the spelling Google Maps actually resolves.
+ *
+ * Three kinds of entry, all of them the same bug: a name that returns fewer
+ * results, or none, while looking exactly like an empty district.
+ *
+ *   1. Official state spellings Google does not favour (Dharwada → Dharwad).
+ *   2. Administrative names that are not place names. Nobody signs a building
+ *      "Sri Potti Sriramulu Nellore" or "NTR"; the city is Nellore, Vijayawada.
+ *   3. Punctuation Google chokes on — note that the seed's "Medchal–Malkajgiri"
+ *      uses an EN DASH, not a hyphen.
+ */
+export const DISTRICT_SEARCH_ALIASES: Record<string, string> = {
+  // Karnataka
   Bagalakote: "Bagalkot",
   "Bengaluru Urban": "Bengaluru",
   Chamarajanagara: "Chamarajanagar",
@@ -44,120 +58,86 @@ const DISTRICT_SEARCH_ALIASES: Record<string, string> = {
   "Uttara Kannada": "Karwar",
   Vijayanagara: "Hosapete",
   Yadgiri: "Yadgir",
-};
 
-/**
- * KIADB industrial areas and manufacturing towns, keyed by the district's
- * official seed name. Keep each entry a place Google Maps can actually resolve —
- * an estate name nobody has mapped returns zero and wastes a call.
- */
-const KARNATAKA_AREAS: Record<string, string[]> = {
-  "Bengaluru Urban": [
-    "Peenya Industrial Area",
-    "Rajajinagar Industrial Estate",
-    "Bommasandra Industrial Area",
-    "Jigani Industrial Area",
-    "Attibele Industrial Area",
-    "Electronic City",
-    "Whitefield",
-    "Mahadevapura",
-    "Yeshwanthpur Industrial Suburb",
-    "Kumbalgodu Industrial Area",
-  ],
-  "Bengaluru Rural": [
-    "Dabaspet Industrial Area",
-    "Nelamangala",
-    "Hoskote Industrial Area",
-    "Doddaballapur Industrial Area",
-    "Devanahalli",
-  ],
-  Ramanagara: ["Bidadi Industrial Area", "Harohalli Industrial Area", "Kanakapura", "Channapatna"],
-  Kolar: ["Narasapura Industrial Area", "Vemagal Industrial Area", "Kolar", "Bangarapet"],
-  Chikkaballapura: ["Chikkaballapur Industrial Area", "Gauribidanur", "Sidlaghatta"],
-  Tumakuru: [
-    "Antharasanahalli Industrial Area",
-    "Hirehalli Industrial Area",
-    "Vasanthanarasapura Industrial Area",
-    "Sira",
-    "Tiptur",
-  ],
-  Mysuru: [
-    "Hebbal Industrial Area Mysuru",
-    "Metagalli Industrial Area",
-    "Belagola Industrial Area",
-    "Hootagalli Industrial Area",
-    "Thandya Industrial Area Nanjangud",
-    "Nanjangud",
-  ],
-  Mandya: ["Mandya Industrial Area", "Maddur", "Malavalli", "Srirangapatna", "Nagamangala"],
-  Chamarajanagara: ["Badanaguppe Kellamballi Industrial Area", "Kollegal", "Gundlupet"],
-  Hassan: ["Hassan Growth Centre", "Arsikere", "Channarayapatna", "Holenarsipur", "Sakleshpur"],
-  "Dakshina Kannada": [
-    "Baikampady Industrial Area",
-    "Yeyyadi Industrial Area",
-    "Thokur",
-    "Puttur",
-    "Bantwal",
-    "Mulki",
-  ],
-  Udupi: ["Shivalli Industrial Area Manipal", "Nandikur", "Kundapura", "Karkala", "Padubidri"],
-  "Uttara Kannada": ["Karwar", "Dandeli", "Sirsi", "Bhatkal", "Honnavar", "Haliyal"],
-  Shivamogga: ["Machenahalli Industrial Area", "Bhadravathi", "Sagar", "Shikaripura", "Sorab"],
-  Chikkamagaluru: ["Chikkamagaluru Industrial Area", "Kadur", "Tarikere", "Birur"],
-  Chitradurga: ["Chitradurga Industrial Area", "Hiriyur", "Challakere", "Hosadurga"],
-  Davanagere: ["Davangere Industrial Area", "Harihar", "Lokikere", "Channagiri"],
-  Ballari: ["Ballari Industrial Area", "Sandur", "Kudligi", "Siruguppa"],
-  Vijayanagara: ["Hosapete", "Toranagallu", "Kottur", "Harapanahalli", "Hagaribommanahalli"],
-  Koppala: ["Koppal Industrial Area", "Ginigera", "Gangavathi", "Kukanoor", "Yelburga"],
-  Raichuru: ["Raichur Growth Centre", "Shaktinagar", "Sindhanur", "Manvi", "Devadurga"],
-  Yadgiri: ["Kadechur Badiyal Industrial Area", "Yadgir", "Shahapur", "Surapura"],
-  Kalaburagi: [
-    "Kapanoor Industrial Area",
-    "Nandur Keshwar Industrial Area",
-    "Wadi",
-    "Sedam",
-    "Aland",
-    "Chittapur",
-  ],
-  Bidar: ["Kolhar Industrial Area", "Humnabad Industrial Area", "Bhalki", "Basavakalyan", "Aurad"],
-  Vijayapura: ["Vijayapura Industrial Area", "Indi", "Sindagi", "Basavana Bagewadi", "Muddebihal"],
-  Bagalakote: [
-    "Bagalkot Industrial Area",
-    "Mudhol",
-    "Jamkhandi",
-    "Mahalingapura",
-    "Ilkal",
-    "Rabkavi Banhatti",
-  ],
-  Belagavi: [
-    "Udyambag Industrial Area",
-    "Auto Nagar Belagavi",
-    "Machhe Industrial Area",
-    "Honaga Industrial Area",
-    "Kanbargi",
-    "Gokak",
-    "Nipani",
-    "Chikkodi",
-    "Hukkeri",
-    "Mudalagi",
-    "Khanapur",
-  ],
-  Dharwada: [
-    "Belur Industrial Area Dharwad",
-    "Gokul Road Hubballi",
-    "Tarihal Industrial Area",
-    "Rayapur Dharwad",
-    "Navanagar Hubballi",
-    "Kalghatgi",
-  ],
-  Gadaga: ["Gadag Industrial Area", "Narayanpur Gadag", "Mundargi", "Ron", "Naragund", "Gajendragad"],
-  Haveri: ["Ranebennur", "Haveri Industrial Area", "Byadgi", "Hirekerur", "Savanur", "Shiggaon", "Hangal"],
-  Kodagu: ["Kushalnagar", "Madikeri", "Somwarpet", "Virajpet"],
-};
+  // Telangana — the en dash in Medchal–Malkajgiri is not a hyphen.
+  "Medchal–Malkajgiri": "Medchal",
+  "Kumuram Bheem Asifabad": "Asifabad",
+  "Jogulamba Gadwal": "Gadwal",
+  "Rajanna Sircilla": "Sircilla",
+  "Jayashankar Bhupalpally": "Bhupalpally",
+  "Yadadri Bhuvanagiri": "Bhongir",
+  "Bhadradri Kothagudem": "Kothagudem",
 
-/** Area lists by state's seed name. Only Karnataka is filled in so far. */
-const AREAS_BY_STATE: Record<string, Record<string, string[]>> = {
-  Karnataka: KARNATAKA_AREAS,
+  // Andhra Pradesh — several districts are named after people, not places.
+  "Sri Potti Sriramulu Nellore": "Nellore",
+  NTR: "Vijayawada",
+  YSR: "Kadapa",
+  Ananthapuramu: "Anantapur",
+  "Dr. B.R. Ambedkar Konaseema": "Amalapuram",
+  "Alluri Sitharama Raju": "Paderu",
+  "Parvathipuram Manyam": "Parvathipuram",
+  "Sri Sathya Sai": "Puttaparthi",
+  "East Godavari": "Rajamahendravaram",
+  "West Godavari": "Bhimavaram",
+
+  // Punjab
+  "Sahibzada Ajit Singh Nagar": "Mohali",
+  "Shahid Bhagat Singh Nagar": "Nawanshahr",
+  "Sri Muktsar Sahib": "Muktsar",
+
+  // Uttar Pradesh
+  "Gautam Buddha Nagar": "Noida",
+  "Kanpur Nagar": "Kanpur",
+  "Kanpur Dehat": "Akbarpur Kanpur Dehat",
+
+  // Uttarakhand
+  "Udham Singh Nagar": "Rudrapur",
+  "Pauri Garhwal": "Pauri",
+  "Tehri Garhwal": "New Tehri",
+
+  // Maharashtra
+  "Mumbai Suburban": "Mumbai",
+  "Mumbai City": "Mumbai",
+
+  // West Bengal
+  Maldah: "Malda",
+  "Paschim Bardhaman": "Asansol",
+  "Purba Bardhaman": "Bardhaman",
+  "Paschim Medinipur": "Midnapore",
+  "Purba Medinipur": "Tamluk",
+
+  // Jharkhand
+  "East Singhbhum": "Jamshedpur",
+  "West Singhbhum": "Chaibasa",
+  "Seraikela-Kharsawan": "Seraikela",
+  Hazaribag: "Hazaribagh",
+
+  // Assam
+  "Kamrup Metropolitan": "Guwahati",
+
+  // Chhattisgarh — hyphenated amalgamations Google does not know as one place.
+  "Balrampur-Ramanujganj": "Ramanujganj",
+  "Gaurela-Pendra-Marwahi": "Pendra",
+  "Manendragarh-Chirmiri-Bharatpur": "Chirmiri",
+  "Mohla-Manpur-Ambagarh Chowki": "Mohla",
+  "Khairagarh-Chhuikhadan-Gandai": "Khairagarh",
+  "Sarangarh-Bilaigarh": "Sarangarh",
+  "Janjgir-Champa": "Champa",
+
+  // Elsewhere
+  "Shahdara district": "Shahdara",
+  "Dadra and Nagar Haveli": "Silvassa",
+  "Itanagar capital complex": "Itanagar",
+  "Papum Pare": "Naharlagun",
+  "Mahé": "Mahe",
+  "East Khasi Hills": "Shillong",
+  "Ri Bhoi": "Byrnihat",
+  "West Garo Hills": "Tura",
+  "Imphal West": "Imphal",
+  "East Sikkim": "Gangtok",
+  "South Sikkim": "Namchi",
+  "West Tripura": "Agartala",
+  "South Tripura": "Belonia",
 };
 
 export interface GeoOption {
@@ -189,7 +169,7 @@ export function listDistricts(state: string): GeoOption[] {
  * have not been mapped yet, which the UI reports as "district-level only".
  */
 export function listAreas(state: string, districts: string[]): AreaOption[] {
-  const byDistrict = AREAS_BY_STATE[state];
+  const byDistrict = INDUSTRIAL_AREAS[state];
   if (!byDistrict) return [];
 
   const out: AreaOption[] = [];
@@ -203,7 +183,7 @@ export function listAreas(state: string, districts: string[]): AreaOption[] {
 
 /** True when this state has an industrial-area list at all. */
 export function hasAreaCoverage(state: string): boolean {
-  return Boolean(AREAS_BY_STATE[state]);
+  return Boolean(INDUSTRIAL_AREAS[state]);
 }
 
 /**

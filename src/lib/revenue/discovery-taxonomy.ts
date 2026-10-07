@@ -33,34 +33,92 @@ export interface DiscoveryCategory {
 
 /**
  * SFA-shaped industries: each one is a business that moves physical goods
- * through a field force. Ordered roughly by how well OZZO SFA fits.
+ * through a field force of its own. Grouped by sector so the dropdown reads in
+ * an order a salesperson thinks in, rather than alphabetically.
+ *
+ * The test of whether something belongs here is not "do they make things" but
+ * "do they employ reps who visit customers" — which is what OZZO SFA is for.
  */
 export const DISCOVERY_INDUSTRIES: DiscoveryIndustry[] = [
+  // ── Agri inputs ──
   { value: "seeds", label: "Seeds", term: "seeds" },
   { value: "fertilizer", label: "Fertilizer & agrochemicals", term: "fertilizer" },
   { value: "pesticides", label: "Pesticides", term: "pesticides" },
+  { value: "agri_implements", label: "Agricultural implements", term: "agricultural implements" },
+  { value: "cattle_feed", label: "Cattle & poultry feed", term: "cattle feed" },
+  { value: "irrigation", label: "Irrigation & drip systems", term: "drip irrigation systems" },
+
+  // ── Food & beverage ──
   { value: "fmcg_food", label: "FMCG food products", term: "food products" },
-  { value: "dairy_beverages", label: "Dairy & beverages", term: "dairy products" },
+  { value: "beverages", label: "Beverages & soft drinks", term: "beverages" },
+  { value: "packaged_water", label: "Packaged drinking water", term: "packaged drinking water" },
+  { value: "dairy", label: "Dairy products", term: "dairy products" },
+  { value: "spices", label: "Spices & masala", term: "spices and masala" },
+  { value: "edible_oil", label: "Edible oils", term: "edible oil" },
+  { value: "flour_rice_mills", label: "Flour & rice mills", term: "rice and flour mill" },
+  { value: "snacks", label: "Snacks & namkeen", term: "snacks and namkeen" },
+  { value: "bakery", label: "Bakery & confectionery", term: "bakery and confectionery products" },
+  { value: "tea_coffee", label: "Tea & coffee", term: "tea and coffee" },
+  { value: "sugar_jaggery", label: "Sugar & jaggery", term: "sugar and jaggery" },
+  { value: "frozen_foods", label: "Frozen & processed foods", term: "frozen food" },
+
+  // ── Pharma & personal care ──
   { value: "pharma", label: "Pharmaceuticals", term: "pharmaceutical" },
   { value: "ayurvedic", label: "Ayurvedic & nutraceutical", term: "ayurvedic products" },
   { value: "cosmetics", label: "Cosmetics & personal care", term: "cosmetics" },
-  { value: "paints", label: "Paints & coatings", term: "paints" },
-  { value: "chemicals", label: "Adhesives & chemicals", term: "chemicals" },
-  { value: "plastics", label: "Plastics & packaging", term: "packaging" },
+  { value: "medical_devices", label: "Medical devices & surgical", term: "surgical and medical devices" },
+  { value: "veterinary", label: "Veterinary medicines", term: "veterinary medicines" },
+
+  // ── Building & construction ──
   { value: "cement", label: "Cement & building material", term: "building material" },
+  { value: "tiles", label: "Tiles & sanitaryware", term: "tiles and sanitaryware" },
+  { value: "paints", label: "Paints & coatings", term: "paints" },
+  { value: "pipes", label: "PVC pipes & fittings", term: "PVC pipes and fittings" },
+  { value: "steel_pipes", label: "Steel pipes & tubes", term: "steel pipes and tubes" },
+  { value: "plywood", label: "Plywood & laminates", term: "plywood and laminates" },
+  { value: "glass", label: "Glass & glassware", term: "glass" },
+  { value: "marble_granite", label: "Marble & granite", term: "marble and granite" },
+  { value: "hardware", label: "Hardware & fasteners", term: "hardware and fasteners" },
   { value: "steel", label: "Steel & metal fabrication", term: "steel fabrication" },
+  { value: "aac_blocks", label: "Blocks & precast concrete", term: "AAC blocks and precast concrete" },
+
+  // ── Electrical & engineering ──
   { value: "electrical", label: "Electrical equipment", term: "electrical equipment" },
   { value: "cables", label: "Wires & cables", term: "wires and cables" },
+  { value: "switchgear", label: "Switchgear & panels", term: "switchgear and control panels" },
+  { value: "transformers", label: "Transformers", term: "transformers" },
+  { value: "led_lighting", label: "LED & lighting", term: "LED lighting" },
   { value: "pumps", label: "Pumps & motors", term: "pumps and motors" },
+  { value: "bearings", label: "Bearings & power transmission", term: "bearings" },
+  { value: "hand_tools", label: "Hand & power tools", term: "hand tools" },
+  { value: "machinery", label: "Industrial machinery", term: "industrial machinery" },
+  { value: "batteries", label: "Batteries & inverters", term: "batteries and inverters" },
+  { value: "solar", label: "Solar equipment", term: "solar panels" },
+  { value: "appliances", label: "Home appliances & fans", term: "home appliances" },
+
+  // ── Auto & mobility ──
   { value: "auto_components", label: "Auto components", term: "auto components" },
-  { value: "agri_implements", label: "Agricultural implements", term: "agricultural implements" },
+  { value: "tyres", label: "Tyres & rubber products", term: "tyres" },
+  { value: "lubricants", label: "Lubricants & oils", term: "lubricants" },
+
+  // ── Chemicals & materials ──
+  { value: "chemicals", label: "Adhesives & chemicals", term: "chemicals" },
+  { value: "dyes", label: "Dyes & pigments", term: "dyes and pigments" },
+  { value: "plastics", label: "Plastics & packaging", term: "packaging" },
+  { value: "paper", label: "Paper & corrugated boxes", term: "corrugated boxes" },
+  { value: "rubber", label: "Rubber & polymer products", term: "rubber products" },
+  { value: "industrial_gases", label: "Industrial gases & welding", term: "industrial gases and welding" },
+
+  // ── Consumer & lifestyle ──
   { value: "textiles", label: "Textiles & garments", term: "textiles" },
   { value: "footwear", label: "Footwear & leather", term: "footwear" },
-  { value: "plywood", label: "Plywood & laminates", term: "plywood and laminates" },
-  { value: "tiles", label: "Tiles & sanitaryware", term: "tiles and sanitaryware" },
-  { value: "lubricants", label: "Lubricants & oils", term: "lubricants" },
-  { value: "stationery", label: "Stationery & paper", term: "stationery and paper" },
-  { value: "machinery", label: "Industrial machinery", term: "industrial machinery" },
+  { value: "furniture", label: "Furniture manufacturing", term: "furniture" },
+  { value: "mattress", label: "Mattresses & foam", term: "mattress and foam" },
+  { value: "kitchenware", label: "Kitchenware & utensils", term: "kitchenware and utensils" },
+  { value: "stationery", label: "Stationery & paper products", term: "stationery" },
+  { value: "printing", label: "Printing & labels", term: "printing and labels" },
+  { value: "toys_sports", label: "Toys & sports goods", term: "toys and sports goods" },
+  { value: "ceramics", label: "Ceramics & crockery", term: "ceramics" },
 ];
 
 /**

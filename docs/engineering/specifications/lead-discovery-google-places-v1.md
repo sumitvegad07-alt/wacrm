@@ -53,24 +53,39 @@ Two deliberate consequences:
 
 ### D1 — Industrial areas, not just districts
 
-Manufacturers cluster in KIADB industrial estates, and each estate is its own
-separate 60-result bucket. Searching Hubballi's Tarihal and Gokul Road separately
-finds more than searching "Dharwad" ever can. Karnataka ships with **31 districts
-and 163 industrial areas**, giving a full single-industry sweep of 163 searches
-(~294 expected calls). A district with areas selected is **not** also searched
-whole — that would re-find the same companies at full price.
+Manufacturers cluster in industrial estates, and each estate is its own separate
+60-result bucket. Searching Hubballi's Tarihal and Gokul Road separately finds
+more than searching "Dharwad" ever can. A district with areas selected is **not**
+also searched whole — that would re-find the same companies at full price.
 
-States without an area list fall back to district-level search: fewer results,
-never wrong results.
+`industrial-areas.ts` carries **1,626 estates across 33 states and 543
+districts**, named after each state's development corporation because that is how
+they are signposted and therefore how Google has them: MIDC, GIDC, SIPCOT/SIDCO,
+UPSIDA, RIICO, HSIIDC, KIADB, TSIIC, APIIC. A full single-industry sweep runs
+~134 searches in Maharashtra (~245 calls) and 163 in Karnataka (~294).
+
+States or districts without an area list fall back to district-level search:
+fewer results, never wrong results. Omitting is safe; inventing is not — an
+estate name nobody has mapped returns zero and wastes a billable call.
 
 ### D2 — District search aliases
 
 The shared India seed (`supabase/seed-data/territory-seed.json`, also used by
-Territory Master) carries official Kannada spellings — *Dharwada, Gadaga,
-Bagalakote, Koppala*. Google matches far better on *Dharwad, Gadag, Bagalkot,
-Koppal*. Sending the official spelling returns fewer results **and fails
-silently**, which is indistinguishable from an empty district. The founder picks
-the official name; Google receives the alias.
+Territory Master) carries administrative names, which are often not the names
+Google knows. Sending one returns fewer results **and fails silently**, which is
+indistinguishable from an empty district. The founder picks the official name;
+Google receives the alias. Three kinds:
+
+1. Official state spellings Google does not favour — *Dharwada → Dharwad*.
+2. Administrative names that are not place names — nobody signs a building
+   *"Sri Potti Sriramulu Nellore"* or *"NTR"*; the cities are Nellore and
+   Vijayawada.
+3. Punctuation — the seed's *Medchal–Malkajgiri* uses an EN DASH, not a hyphen.
+
+A district key that does not exist in the seed is equally invisible, so
+`discovery-query.test.ts` fails the build on any unknown state or district key,
+and on any alias pointing at a district that does not exist. Two such typos were
+caught by that test while the dataset was being written.
 
 ### D3 — The browser drives the loop
 
@@ -140,10 +155,11 @@ the intended later fix; it is not in V1.
 
 | File | Role |
 |---|---|
-| `src/lib/revenue/discovery-taxonomy.ts` | 25 industries, 4 categories, retail-type exclusions |
-| `src/lib/revenue/discovery-geography.ts` | District aliases + 163 Karnataka industrial areas; states/districts reused from the Territory Master seed |
+| `src/lib/revenue/discovery-taxonomy.ts` | 64 industries, 4 categories, retail and non-buyer exclusions |
+| `src/lib/revenue/discovery-geography.ts` | District search aliases; states/districts reused from the Territory Master seed |
+| `src/lib/revenue/industrial-areas.ts` | 1,626 industrial estates across 33 states, keyed state → district → areas |
 | `src/lib/revenue/discovery-query.ts` | Pure logic: query plan, quota maths, field mask, place→row, dedupe, CSV |
-| `src/lib/revenue/discovery-query.test.ts` | 31 tests over all of the above |
+| `src/lib/revenue/discovery-query.test.ts` | 51 tests, including the dataset key validation |
 | `src/lib/revenue/places-client.ts` | Google Places Text Search, server-only |
 | `src/app/api/admin/revenue/discover/route.ts` | `requireFounder()`, start/search/finish, cap enforcement |
 | `src/app/(superadmin)/admin/revenue/discover/` | Page + harvest UI |
@@ -190,5 +206,6 @@ is what makes "free" guaranteed rather than hoped for.
 ## Not in V1
 
 Contact-person enrichment (MCA API), OpenStreetMap as a second free source,
-scheduled/background harvesting, writing leads straight into an account instead of
-a CSV, and any state's industrial areas other than Karnataka.
+scheduled/background harvesting, and writing leads straight into an account
+instead of a CSV. Industrial areas for the north-eastern states and the smaller
+union territories are thin, and those fall back to district-level search.

@@ -15,7 +15,17 @@ import {
   type DiscoveryRow,
   type PlacesResult,
 } from "./discovery-query";
-import { listAreas, listDistricts, searchNameForDistrict } from "./discovery-geography";
+import {
+  DISTRICT_SEARCH_ALIASES,
+  hasAreaCoverage,
+  listAreas,
+  listDistricts,
+  listStates,
+  searchNameForDistrict,
+} from "./discovery-geography";
+import { INDUSTRIAL_AREAS } from "./industrial-areas";
+import { DISCOVERY_INDUSTRIES } from "./discovery-taxonomy";
+import { SEED_INDIA_DISTRICTS, SEED_INDIA_STATES } from "@/lib/territories/seed-data.generated";
 
 const base = { industry: "seeds", category: "manufacturer", state: "Karnataka" };
 
@@ -438,6 +448,108 @@ describe("Karnataka geography", () => {
   });
 
   it("returns no areas for a state nobody has mapped yet, instead of inventing them", () => {
-    expect(listAreas("Kerala", listDistricts("Kerala").map((d) => d.value))).toEqual([]);
+    // Ladakh has no industrial estates in the dataset, so it falls back to
+    // district-level search. Empty is the correct answer here, never a guess.
+    expect(listAreas("Ladakh", listDistricts("Ladakh").map((d) => d.value))).toEqual([]);
+    expect(hasAreaCoverage("Ladakh")).toBe(false);
+    expect(hasAreaCoverage("Kerala")).toBe(true);
+  });
+});
+
+
+describe("the all-India industrial-area dataset", () => {
+  const seedStates = new Set(SEED_INDIA_STATES.map((state) => state.n));
+  const seedPairs = new Set(SEED_INDIA_DISTRICTS.map((d) => `${d.s}||${d.n}`));
+
+  it("keys every state to the shared India seed", () => {
+    const unknown = Object.keys(INDUSTRIAL_AREAS).filter((state) => !seedStates.has(state));
+    expect(unknown).toEqual([]);
+  });
+
+  /**
+   * The one that matters. A district key the seed does not have is invisible:
+   * listAreas() returns nothing for it, the UI shows an empty picker, and there
+   * is no error anywhere. Two such typos were caught writing this dataset.
+   */
+  it("keys every district to the shared India seed", () => {
+    const unknown: string[] = [];
+    for (const [state, byDistrict] of Object.entries(INDUSTRIAL_AREAS)) {
+      for (const district of Object.keys(byDistrict)) {
+        if (!seedPairs.has(`${state}||${district}`)) unknown.push(`${state} / ${district}`);
+      }
+    }
+    expect(unknown).toEqual([]);
+  });
+
+  it("covers the states OZZO actually sells into, at real depth", () => {
+    const total = Object.values(INDUSTRIAL_AREAS)
+      .flatMap((byDistrict) => Object.values(byDistrict))
+      .reduce((sum, list) => sum + list.length, 0);
+    expect(total).toBeGreaterThan(1500);
+
+    // The industrial heartland must be present — losing one of these silently
+    // halves the reachable prospects for that state.
+    for (const state of [
+      "Maharashtra",
+      "Gujarat",
+      "Tamil Nadu",
+      "Karnataka",
+      "Telangana",
+      "Uttar Pradesh",
+      "Haryana",
+      "Punjab",
+      "Rajasthan",
+      "West Bengal",
+    ]) {
+      expect(Object.keys(INDUSTRIAL_AREAS[state] ?? {}).length, state).toBeGreaterThan(5);
+    }
+  });
+
+  it("lists no area twice inside one district", () => {
+    const dupes: string[] = [];
+    for (const [state, byDistrict] of Object.entries(INDUSTRIAL_AREAS)) {
+      for (const [district, list] of Object.entries(byDistrict)) {
+        if (new Set(list).size !== list.length) dupes.push(`${state} / ${district}`);
+      }
+    }
+    expect(dupes).toEqual([]);
+  });
+
+  it("aliases only districts that exist, so no alias is a dead letter", () => {
+    const seedDistricts = new Set(SEED_INDIA_DISTRICTS.map((d) => d.n));
+    const orphans = Object.keys(DISTRICT_SEARCH_ALIASES).filter((d) => !seedDistricts.has(d));
+    expect(orphans).toEqual([]);
+  });
+
+  it("never aliases a district to an empty string", () => {
+    for (const [district, alias] of Object.entries(DISTRICT_SEARCH_ALIASES)) {
+      expect(alias.trim(), district).not.toBe("");
+    }
+  });
+
+  it("offers every state for selection, even those without areas yet", () => {
+    expect(listStates()).toHaveLength(SEED_INDIA_STATES.length);
+  });
+});
+
+describe("the industry list", () => {
+  it("has no duplicate value or label", () => {
+    const values = DISCOVERY_INDUSTRIES.map((i) => i.value);
+    const labels = DISCOVERY_INDUSTRIES.map((i) => i.label);
+    expect(new Set(values).size).toBe(values.length);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it("gives every industry a non-empty search term", () => {
+    for (const industry of DISCOVERY_INDUSTRIES) {
+      expect(industry.term.trim(), industry.value).not.toBe("");
+    }
+  });
+
+  it("covers the sectors the founder asked for", () => {
+    const values = new Set(DISCOVERY_INDUSTRIES.map((i) => i.value));
+    for (const value of ["beverages", "pipes", "spices", "fmcg_food"]) {
+      expect(values.has(value), value).toBe(true);
+    }
   });
 });

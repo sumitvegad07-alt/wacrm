@@ -23,6 +23,7 @@ import {
   Square,
 } from "lucide-react";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   hasAreaCoverage,
   listAreas,
@@ -120,6 +121,10 @@ export default function DiscoverClient() {
   // Set when the founder presses Stop, read inside the loop.
   const cancelled = useRef(false);
 
+  const industryOptions = useMemo(
+    () => DISCOVERY_INDUSTRIES.map((i) => ({ value: i.value, label: i.label })),
+    [],
+  );
   const stateOptions = useMemo(() => listStates(), []);
   const districtOptions = useMemo(() => listDistricts(state), [state]);
   const areaOptions = useMemo(() => listAreas(state, districts), [state, districts]);
@@ -417,18 +422,14 @@ export default function DiscoverClient() {
       <div className="bg-card border border-border rounded-xl p-5 space-y-4">
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Industry">
-            <select
+            <SearchableSelect
+              options={industryOptions}
               value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
+              onChange={setIndustry}
               disabled={running}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              {DISCOVERY_INDUSTRIES.map((i) => (
-                <option key={i.value} value={i.value}>
-                  {i.label}
-                </option>
-              ))}
-            </select>
+              placeholder="Pick an industry"
+              searchPlaceholder="Type to find an industry…"
+            />
           </Field>
 
           <Field label="Customer category">
@@ -447,22 +448,20 @@ export default function DiscoverClient() {
           </Field>
 
           <Field label="State">
-            <select
+            <SearchableSelect
+              options={stateOptions}
               value={state}
-              onChange={(e) => {
-                setState(e.target.value);
+              onChange={(next) => {
+                setState(next);
+                // Districts and areas belong to the old state; keeping them would
+                // build a plan for places that are not in the state any more.
                 setDistricts([]);
                 setAreas([]);
               }}
               disabled={running}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              {stateOptions.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              placeholder="Pick a state"
+              searchPlaceholder="Type to find a state…"
+            />
           </Field>
 
           <Field label="Pincode (optional)">
