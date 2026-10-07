@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
 import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
@@ -29,7 +30,9 @@ export default function CustomerVisitsPage() {
   const [selectedDate, setSelectedDate] = useState('');
   const [visitsData, setVisitsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // _v2: saved column layouts would otherwise hide the new coordinate columns.
+  const tableView = useTableView("wacrm_visits_table_columns_v2", {});
+  const { filterState } = tableView;
 
   const supabase = createClient();
   const scope = useDataScope();
@@ -351,10 +354,7 @@ export default function CustomerVisitsPage() {
       <DataTable
         columns={columns}
         data={filteredVisits}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        // _v2: saved column layouts would otherwise hide the new coordinate columns.
-        storageKey="wacrm_visits_table_columns_v2"
+        tableView={tableView}
         isLoading={isLoading}
         rowKey={(row) => row.id}
         onRowClick={(row) => router.push(`/location-tracking/visits/${row.id}`)}

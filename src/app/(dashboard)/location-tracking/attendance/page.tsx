@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
 import { useAuth } from "@/hooks/use-auth";
@@ -41,7 +42,14 @@ export default function UserAttendancePage() {
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
   const [usersSummaryData, setUsersSummaryData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // One hook per tab, keyed by the tab's own table. Each tab therefore keeps its
+  // own remembered filters instead of sharing — and switching tabs no longer has
+  // to blank the filters by hand to avoid applying one tab's columns to the other.
+  const tableView = useTableView(
+    activeTab === "Users" ? "wacrm_attendance_users_columns" : "wacrm_attendance_punch_columns",
+    {},
+  );
+  const { filterState } = tableView;
   const [shift, setShift] = useState(DEFAULT_TRACKING);
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
   
@@ -542,10 +550,8 @@ export default function UserAttendancePage() {
     });
   }, [globalSearch, usersSummaryData, filterState]);
 
-  // Reset filter state when changing tabs to avoid applying invalid filters
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
-    setFilterState({});
   };
 
   // Direct-URL guard — the sidebar hides this without view_attendance. Owner/admin pass.
@@ -615,9 +621,7 @@ export default function UserAttendancePage() {
             <DataTable
               columns={punchInColumns}
               data={filteredPunchData}
-              filterState={filterState}
-              onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-              storageKey="wacrm_attendance_punch_columns"
+              tableView={tableView}
               isLoading={isLoading}
               rowKey={(row) => row.id}
             />
@@ -627,9 +631,7 @@ export default function UserAttendancePage() {
             <DataTable
               columns={usersColumns}
               data={filteredUsersData}
-              filterState={filterState}
-              onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-              storageKey="wacrm_attendance_users_columns"
+              tableView={tableView}
               isLoading={isLoading}
               rowKey={(row) => row.id}
             />

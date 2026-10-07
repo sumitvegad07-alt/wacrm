@@ -34,6 +34,7 @@ import { useDataScope } from "@/hooks/use-data-scope";
 import { GatedButton } from "@/components/ui/gated-button";
 
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
@@ -58,7 +59,10 @@ export default function PipelinesPage() {
   const [loading, setLoading] = useState(true);
 
   // DataTable state — default filter shows Active deals (Inactive/all via Status column filter).
-  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
+  // Keyed by pipeline: each pipeline has its own stages, so its filters and its
+  // saved views are its own. The hook re-reads when the key changes.
+  const tableView = useTableView(`wacrm_deals_table_${selectedPipelineId}`, { record_status: ['active'] });
+  const { filterState } = tableView;
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
   // Dialog / sheet state
@@ -785,9 +789,7 @@ export default function PipelinesPage() {
             <DataTable
               columns={visibleColumns}
               data={filteredDeals}
-              filterState={filterState}
-              onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-              storageKey={`wacrm_deals_table_${selectedPipelineId}`}
+              tableView={tableView}
               onRowClick={(deal) => router.push(`/deals/${deal.id}`)}
               rowKey={(deal) => deal.id}
               selection={{

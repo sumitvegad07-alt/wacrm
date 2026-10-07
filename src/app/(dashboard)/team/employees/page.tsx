@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout, PageHeader, PageToolbar, StatusBadge, ConfirmDialog } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 
@@ -56,7 +57,8 @@ export default function EmployeesPage() {
   const [deactivating, setDeactivating] = useState(false);
   
   const [search, setSearch] = useState("");
-  const [filterState, setFilterState] = useState<FilterState>({ status: ["active"] });
+  const tableView = useTableView("wacrm_employees_table_columns", { status: ["active"] });
+  const { filterState } = tableView;
   
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -423,9 +425,7 @@ export default function EmployeesPage() {
       <DataTable
         columns={columns}
         data={filtered}
-        filterState={filterState}
-        onFilterChange={(id, value) => setFilterState(prev => ({ ...prev, [id]: value }))}
-        storageKey="wacrm_employees_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(emp) => emp.id}
         onRowClick={(emp) => router.push(`/team/employees/${emp.id}`)}

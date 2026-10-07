@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Search, Plus, Truck } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
@@ -38,7 +39,8 @@ export default function DispatchesPage() {
   const [rows, setRows] = useState<DispatchRow[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const tableView = useTableView("wacrm_dispatches_table_columns", {});
+  const { filterState } = tableView;
   const [globalSearch, setGlobalSearch] = useState('');
 
   const fetchData = useCallback(async () => {
@@ -140,9 +142,7 @@ export default function DispatchesPage() {
       <DataTable
         columns={visibleColumns}
         data={filtered}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
-        storageKey="wacrm_dispatches_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(d) => d.id}
         onRowClick={(d) => router.push(`/dispatches/${d.id}`)}

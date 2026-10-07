@@ -12,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import type { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { ConfirmDialog } from "@/components/shared";
@@ -139,7 +140,8 @@ export default function RolesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<EmployeeRole | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const tableView = useTableView("wacrm_employee_roles_table_columns", {});
+  const { filterState } = tableView;
   const [deleteRoleTarget, setDeleteRoleTarget] = useState<EmployeeRole | null>(null);
   const [deletingRole, setDeletingRole] = useState(false);
 
@@ -405,9 +407,7 @@ export default function RolesPage() {
               <DataTable
                 columns={roleColumns}
                 data={filteredRoles}
-                filterState={filterState}
-                onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
-                storageKey="wacrm_employee_roles_table_columns"
+        tableView={tableView}
                 isLoading={loading}
                 rowKey={(role) => role.id}
                 onRowClick={(role) => handleSelectRole(role)}

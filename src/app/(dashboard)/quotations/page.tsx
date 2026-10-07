@@ -38,6 +38,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useCan } from '@/hooks/use-can';
 
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
@@ -71,7 +72,8 @@ export default function QuotationsPage() {
   // DataTable state
   const [globalSearch, setGlobalSearch] = useState('');
   // Default filter shows Active quotations (Inactive/all via the Status column filter).
-  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
+  const tableView = useTableView("wacrm_quotations_table_columns", { record_status: ['active'] });
+  const { filterState } = tableView;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   // Lookups
@@ -466,9 +468,7 @@ export default function QuotationsPage() {
       <DataTable
         columns={visibleColumns}
         data={filteredQuotations}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        storageKey="wacrm_quotations_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(quotation) => quotation.id}
         onRowClick={(quotation) => router.push(`/quotations/${quotation.id}`)}

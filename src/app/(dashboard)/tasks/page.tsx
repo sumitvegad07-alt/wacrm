@@ -48,6 +48,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
@@ -88,7 +89,8 @@ export default function TasksPage() {
   const [globalSearch, setGlobalSearch] = useState('');
   const [hideCompleted, setHideCompleted] = useState(true);
   // Default filter shows Active tasks (Inactive/all via the Status column filter).
-  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
+  const tableView = useTableView("wacrm_tasks_table_columns", { record_status: ['active'] });
+  const { filterState } = tableView;
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   // Lookups
@@ -458,9 +460,7 @@ export default function TasksPage() {
       <DataTable
         columns={visibleColumns}
         data={filteredTasks}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        storageKey="wacrm_tasks_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(task) => task.id}
         onRowClick={(task) => router.push(`/tasks/${task.id}`)}

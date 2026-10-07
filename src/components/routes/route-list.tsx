@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { type ColumnDef, type FilterState } from "@/components/ui/data-table/data-table-types";
 
 const PAGE_SIZE = 25;
@@ -179,7 +180,8 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
     );
   };
 
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const tableView = useTableView("wacrm_routes_table_columns", {});
+  const { filterState } = tableView;
 
   const columns: ColumnDef<any>[] = useMemo(() => [
     {
@@ -382,9 +384,7 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
       <DataTable
         columns={columns}
         data={rows}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        storageKey="wacrm_routes_table_columns"
+        tableView={tableView}
         isLoading={isLoading}
         rowKey={(route) => route.id}
         onRowClick={(route) => {

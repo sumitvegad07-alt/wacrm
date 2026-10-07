@@ -23,6 +23,7 @@ import {
 import { PageLayout, PageHeader, ConfirmDialog, BulkActionBar } from "@/components/shared";
 import { Trash2 } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 
@@ -41,7 +42,8 @@ export default function CatalogCategoriesPage() {
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterState, setFilterState] = useState<FilterState>({ record_status: ["active"] });
+  const tableView = useTableView("wacrm_categories_table_columns", { record_status: ["active"] });
+  const { filterState } = tableView;
 
   // Level-naming config
   const [levelsCount, setLevelsCount] = useState<1 | 2 | 3>(1);
@@ -293,9 +295,7 @@ export default function CatalogCategoriesPage() {
       <DataTable
         columns={columns}
         data={filtered}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
-        storageKey="wacrm_categories_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(c) => c.id}
         selection={canEditSettings ? {

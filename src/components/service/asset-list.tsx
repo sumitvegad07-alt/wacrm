@@ -47,6 +47,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import type { ColumnDef } from "@/components/ui/data-table/data-table-types";
 import { ImportWizard } from "@/components/import/import-wizard";
@@ -103,6 +104,7 @@ export function AssetList({
   const router = useRouter();
   const pathname = usePathname();
   const { hasPermission } = useAuth();
+  const tableView = useTableView("wacrm_service_assets_table_columns");
   const [isPending, startTransition] = useTransition();
 
   const canCreate = hasPermission(PERMISSIONS.SERVICE_ASSETS.CREATE);
@@ -495,7 +497,7 @@ export function AssetList({
       <DataTable
         columns={columns}
         data={rows}
-        storageKey="wacrm_service_assets_table_columns"
+        tableView={tableView}
         isLoading={isPending}
         rowKey={(a) => a.id}
         onRowClick={(a) => router.push(`/service/assets/${a.id}`)}

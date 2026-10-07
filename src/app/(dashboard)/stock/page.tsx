@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { fetchStockPositions, type StockPosition } from '@/lib/stock/financials';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +28,8 @@ export default function StockPage() {
   const [rows, setRows] = useState<StockPosition[]>([]);
   const [query, setQuery] = useState('');
   const [lowOnly, setLowOnly] = useState(false);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const tableView = useTableView("wacrm_stock_table_columns", {});
+  const { filterState } = tableView;
   const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -105,9 +107,7 @@ export default function StockPage() {
       <DataTable
         columns={columns}
         data={filtered}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState((p) => ({ ...p, [id]: val }))}
-        storageKey="wacrm_stock_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(r) => r.productId}
         onRowClick={(r) => router.push(`/stock/${r.productId}`)}

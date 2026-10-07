@@ -386,6 +386,34 @@ timelines), `products`, `quotations`, `expenses`, `geofences`, `tracking_session
   - `CustomFieldsSectionRenderer` automatically renders a red asterisk (`*`) next to field labels when `field.is_required = true`.
   - Client-side validation (`validateRequiredCustomFields(customFields, customValues)` in `src/lib/custom-fields.ts`) is executed inside `handleSubmit` / `handleSave` across **all** modules (`Contacts`, `Leads`, `Quotations`, `Tasks`, `Expenses`, `Deals`, `Orders`, `Dispatches`, `Products`). If any required active field is empty, submission is blocked with a descriptive sonner error toast.
 
+### Table state & Saved Views (migration `20261007120000_table_views`, 2026-10-07)
+
+Every `DataTable` screen gets its filters, column layout and rows-per-page from
+**one hook**: `useTableView(storageKey, defaultFilters)` in `src/hooks/use-table-view.ts`.
+Pages no longer hold `useState<FilterState>` and no longer pass `filterState`,
+`onFilterChange` or `storageKey` to `DataTable` — they pass `tableView={tableView}`.
+Adding a new list screen means calling the hook and passing that one prop.
+
+Three layers of memory, deliberately different:
+
+- **Filters → `sessionStorage`** (`<storageKey>:filters`). This is why filters now
+  survive leaving a screen and coming back, and a refresh, while closing the
+  browser starts clean. No network calls. `undefined` (never stored) and `{}`
+  (user cleared everything on purpose) are different states and must stay that way.
+- **Column layout + rows per page → `localStorage`** (`<storageKey>`), in the same
+  `{ active, visible }` shape `DataTable` has always written, so existing layouts
+  were not lost. `DataTable` no longer owns this state: it derives the effective
+  layout each render with the pure `reconcileColumns(columns, stored)`.
+- **Named views → `table_views`**, private per user (`user_id` is an **auth** user
+  id, not `profiles.id`), one default per table enforced by a partial unique index.
+  `table_key` is the storage key with any trailing `_v<n>` stripped, so bumping a
+  column version still resets layouts without orphaning saved views.
+
+Saved views never block a table. If the fetch fails the Views menu offers only
+"All records" and filter remembering still works.
+
+Pure helpers and their tests live in `src/lib/table-views/`.
+
 ### Global UI Design System & Spacing Guidelines (Web)
 
 - **Full Screen Width for Forms & Panels (`w-full`)**: Do NOT use narrow wrappers (`max-w-2xl`, `max-w-xl`) or constrained centered containers on create, edit, view, or settings screens. All main screens and settings forms must use full screen width (`w-full` / `max-w-[95vw]`).

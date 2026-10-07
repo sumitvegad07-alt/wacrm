@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LeadForm } from "@/components/leads/lead-form";
 import { ImportWizard } from "@/components/import/import-wizard";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
@@ -70,7 +71,9 @@ export default function LeadsPage() {
   const [deleting, setDeleting] = useState(false);
 
   // Default filter: show Active records only (Inactive/all reachable via the Status column filter).
-  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
+  // _v2: saved column layouts would otherwise hide the new geo-tag columns.
+  const tableView = useTableView("wacrm_leads_table_columns_v2", { record_status: ['active'] });
+  const { filterState } = tableView;
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {
@@ -398,13 +401,6 @@ export default function LeadsPage() {
     return getVisibleTableColumns([...columns], customFields, leads);
   }, [columns, customFields, leads]);
 
-  const handleFilterChange = (columnId: string, value: any) => {
-    setFilterState(prev => ({
-      ...prev,
-      [columnId]: value
-    }));
-  };
-
   // Apply filters locally (since we fetch all leads for now)
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
@@ -503,10 +499,7 @@ export default function LeadsPage() {
             </Button>
           </div>
         }
-        filterState={filterState}
-        onFilterChange={handleFilterChange}
-        // _v2: saved column layouts would otherwise hide the new geo-tag columns.
-        storageKey="wacrm_leads_table_columns_v2"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(lead) => lead.id}
         onRowClick={(lead) => router.push(`/leads/${lead.id}`)}

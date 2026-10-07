@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Search, MapPin, AlertTriangle } from 'lucide-react';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import {
   ColumnDef,
   FilterState,
@@ -42,7 +43,10 @@ export default function AllLocationsPage() {
   const [selectedDate, setSelectedDate] = useState('');
   const [pingsData, setPingsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // Bumped to _v2: column visibility is cached per browser, so an admin who had already
+  // opened this page would never see the new coordinate and tracking-gap columns appear.
+  const tableView = useTableView("wacrm_all_locations_table_columns_v2", {});
+  const { filterState } = tableView;
 
   const supabase = createClient();
 
@@ -430,13 +434,7 @@ export default function AllLocationsPage() {
       <DataTable
         columns={columns}
         data={filteredPings}
-        filterState={filterState}
-        onFilterChange={(id, val) =>
-          setFilterState((prev) => ({ ...prev, [id]: val }))
-        }
-        // Bumped to _v2: column visibility is cached per browser, so an admin who had already
-        // opened this page would never see the new coordinate and tracking-gap columns appear.
-        storageKey="wacrm_all_locations_table_columns_v2"
+        tableView={tableView}
         isLoading={isLoading}
         rowKey={(row) => row.id}
       />

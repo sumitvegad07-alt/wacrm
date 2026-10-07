@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { ChevronRight, HeartPulse, AlertTriangle, UserCheck, MoonStar, Search } from "lucide-react";
 import { computeAgentHealth, LOW_COVERAGE_PCT, type AgentHealth } from "@/lib/location/tracking-health";
@@ -82,7 +83,11 @@ export default function TrackingHealthPage() {
   const [notPunchedIn, setNotPunchedIn] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [globalSearch, setGlobalSearch] = useState("");
-  const [filterState, setFilterState] = useState<FilterState>({});
+  // Bumped to _v2: column visibility is cached per browser, so anyone who had already
+  // opened this page would keep the old hidden-by-default set and never see GPS off,
+  // switched off, mock or gaps appear.
+  const tableView = useTableView("wacrm_tracking_health_table_v2", {});
+  const { filterState } = tableView;
 
   const supabase = createClient();
 
@@ -511,12 +516,7 @@ export default function TrackingHealthPage() {
       <DataTable
         columns={columns}
         data={filtered}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
-        // Bumped to _v2: column visibility is cached per browser, so anyone who had already
-        // opened this page would keep the old hidden-by-default set and never see GPS off,
-        // switched off, mock or gaps appear.
-        storageKey="wacrm_tracking_health_table_v2"
+        tableView={tableView}
         isLoading={isLoading}
         rowKey={(row) => row.id}
       />

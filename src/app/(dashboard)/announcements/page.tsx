@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -27,7 +28,8 @@ export default function AnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [globalSearch, setGlobalSearch] = useState("");
   // Default filter shows Active announcements (Inactive/all via the Status column filter).
-  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
+  const tableView = useTableView("announcements-table", { record_status: ['active'] });
+  const { filterState } = tableView;
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -245,11 +247,9 @@ export default function AnnouncementsPage() {
         <DataTable
           columns={columns}
           data={filteredData}
-          filterState={filterState}
-          onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
           isLoading={loading}
           emptyMessage="No announcements found"
-          storageKey="announcements-table"
+        tableView={tableView}
           rowKey={(row) => row.id}
           onRowClick={(row) => router.push(`/announcements/${row.id}`)}
         />

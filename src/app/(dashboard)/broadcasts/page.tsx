@@ -7,6 +7,7 @@ import { Broadcast } from '@/types';
 import { Button } from '@/components/ui/button';
 import { PageLayout, PageHeader, StatusBadge } from '@/components/shared';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef } from '@/components/ui/data-table/data-table-types';
 import { Radio, Plus, Loader2 } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
@@ -54,6 +55,7 @@ function RateCell({
 export default function BroadcastsPage() {
   const router = useRouter();
   const canCreate = useCan('send-messages');
+  const tableView = useTableView("wacrm_broadcasts_table_columns");
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -263,7 +265,7 @@ export default function BroadcastsPage() {
         <DataTable
           columns={columns}
           data={broadcasts}
-          storageKey="wacrm_broadcasts_table_columns"
+          tableView={tableView}
           isLoading={loading}
           rowKey={(b) => b.id}
           onRowClick={(b) => router.push(`/broadcasts/${b.id}`)}

@@ -11,18 +11,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ColumnDef, FilterState } from "./data-table-types";
+import { ColumnDef } from "./data-table-types";
 import { DataTableHeader } from "./data-table-header";
 import { ManageColumnsDialog } from "./manage-columns-dialog";
+import { TableViewsBar } from "./table-views-bar";
 import { useDataExport } from "@/hooks/use-data-export";
+import type { TableViewApi } from "@/hooks/use-table-view";
+import { reconcileColumns } from "@/lib/table-views";
 import { TableSkeleton, EmptyState } from "@/components/shared";
 
 interface DataTableProps<T> {
   columns: ColumnDef<T>[];
   data: T[];
-  filterState?: FilterState;
-  onFilterChange?: (columnId: string, value: any) => void;
-  storageKey: string;
+  /**
+   * The screen's table state, from `useTableView(storageKey, defaultFilters)`.
+   *
+   * It owns the filters, the column layout, the rows per page and the saved
+   * views, so all of that survives leaving the screen and coming back. The page
+   * holds the hook rather than the table because the page needs `filterState`
+   * to filter its own rows.
+   */
+  tableView: TableViewApi;
   isLoading?: boolean;
   emptyMessage?: React.ReactNode;
   rowKey: (row: T) => string;
@@ -63,9 +72,7 @@ interface DataTableProps<T> {
 export function DataTable<T>({
   columns,
   data,
-  filterState = {},
-  onFilterChange = () => {},
-  storageKey,
+  tableView,
   isLoading,
   emptyMessage = "No data found.",
   rowKey,
@@ -76,69 +83,57 @@ export function DataTable<T>({
   serverPagination,
 }: DataTableProps<T>) {
   const [isManageColumnsOpen, setIsManageColumnsOpen] = useState(false);
-  const [activeColumnIds, setActiveColumnIds] = useState<string[]>([]);
-  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>([]);
   const [isMounted, setIsMounted] = useState(false);
-  const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const { exportToCsv } = useDataExport();
 
   const safeData = data || [];
   const safeColumns = columns || [];
+  const storageKey = tableView.storageKey;
+  const filterState = tableView.filterState;
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [safeData.length]);
 
-  // Load preferences from local storage on mount
+  /**
+   * The effective column layout, derived rather than stored.
+   *
+   * `tableView` holds what the user chose (or what a saved view carried);
+   * `reconcileColumns` merges that with the columns this release actually
+   * defines. Being a pure derivation means switching view updates the table in
+   * the same render — no effect, no flicker, and no writing a merged layout back
+   * to storage behind the user's back.
+   */
+  const { active: activeColumnIds, visible: visibleColumnIds } = useMemo(
+    () => reconcileColumns(safeColumns, tableView.columnState),
+    [safeColumns, tableView.columnState],
+  );
+
+  // Tell the hook what is really on screen, so "Save as new view" records this
+  // layout even when the user has never opened Manage Columns.
+  const reportEffectiveColumns = tableView.reportEffectiveColumns;
   useEffect(() => {
-    setIsMounted(true);
-    const stored = localStorage.getItem(storageKey);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (parsed.active && parsed.visible) {
-          // Reconcile stored columns with current columns (in case new columns were added)
-          const newColIds = safeColumns.map(c => c.id).filter(id => !parsed.active.includes(id));
-          const allActive = [...parsed.active, ...newColIds];
-          
-          setActiveColumnIds(allActive);
-          
-          // New columns should be visible if visibleByDefault !== false
-          const newVisibleCols = newColIds.filter(id => {
-             const c = safeColumns.find(col => col.id === id);
-             return c && c.visibleByDefault !== false;
-          });
-          setVisibleColumnIds([...parsed.visible, ...newVisibleCols]);
-          return;
-        }
-      } catch (e) {
-        console.error("Failed to parse column preferences", e);
-      }
-    }
-    
-    // Default fallback
-    const defaultIds = safeColumns.map(c => c.id);
-    const defaultVisible = safeColumns.filter(c => c.visibleByDefault !== false).map(c => c.id);
-    setActiveColumnIds(defaultIds);
-    setVisibleColumnIds(defaultVisible);
-  }, [safeColumns, storageKey]);
+    reportEffectiveColumns({ active: activeColumnIds, visible: visibleColumnIds });
+  }, [reportEffectiveColumns, activeColumnIds, visibleColumnIds]);
 
   const handleSaveColumns = (active: string[], visible: string[]) => {
-    setActiveColumnIds(active);
-    setVisibleColumnIds(visible);
-    localStorage.setItem(storageKey, JSON.stringify({ active, visible }));
+    tableView.setColumnState({ active, visible });
   };
 
   // Local mode pages `safeData` here; server mode trusts the page it was handed.
-  const effectivePageSize = serverPagination ? serverPagination.pageSize : pageSize;
+  const effectivePageSize = serverPagination ? serverPagination.pageSize : tableView.pageSize;
   const totalRecords = serverPagination ? serverPagination.total : safeData.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / effectivePageSize));
   const safePage = Math.min(serverPagination ? serverPagination.page : currentPage, totalPages);
   const startIndex = (safePage - 1) * effectivePageSize;
   const endIndex = serverPagination
     ? Math.min(startIndex + safeData.length, totalRecords)
-    : Math.min(startIndex + pageSize, totalRecords);
+    : Math.min(startIndex + effectivePageSize, totalRecords);
   const paginatedData = useMemo(() => {
     return serverPagination ? safeData : safeData.slice(startIndex, endIndex);
   }, [safeData, startIndex, endIndex, serverPagination]);
@@ -153,7 +148,7 @@ export function DataTable<T>({
 
   // Determine the ordered visible columns
   const visibleColumns = activeColumnIds
-    .filter(id => id !== "actions" && visibleColumnIds.includes(id))
+    .filter(id => visibleColumnIds.includes(id))
     .map(id => safeColumns.find(c => c.id === id))
     .filter(Boolean) as ColumnDef<T>[];
 
@@ -166,40 +161,39 @@ export function DataTable<T>({
   return (
     <div className="space-y-0">
       {/* Top Table Toolbar (in that vertical line just before the starting of the table) */}
-      {(actions || safeData.length > 0) && (
-        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-t-xl border border-b-0 border-border bg-muted/20 text-xs min-h-[44px]">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-foreground text-xs">
-              Total: {totalRecords} records
-            </span>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {actions}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                aria-label="More table actions"
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none"
-                title="Table actions menu"
-              >
-                <Menu className="size-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 text-xs">
-                {menuActions}
-                {menuActions && !serverPagination && <DropdownMenuSeparator />}
-                {!serverPagination && (
-                  <DropdownMenuItem
-                    onClick={() => exportToCsv(safeData, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
-                    className="cursor-pointer gap-2"
-                  >
-                    <Download className="size-3.5" />
-                    Export CSV
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-t-xl border border-b-0 border-border bg-muted/20 text-xs min-h-[44px]">
+        <div className="flex items-center gap-3 flex-wrap">
+          <TableViewsBar view={tableView} />
+          <span className="font-semibold text-foreground text-xs">
+            Total: {totalRecords} records
+          </span>
         </div>
-      )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {actions}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="More table actions"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none"
+              title="Table actions menu"
+            >
+              <Menu className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 text-xs">
+              {menuActions}
+              {menuActions && !serverPagination && <DropdownMenuSeparator />}
+              {!serverPagination && (
+                <DropdownMenuItem
+                  onClick={() => exportToCsv(safeData, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
+                  className="cursor-pointer gap-2"
+                >
+                  <Download className="size-3.5" />
+                  Export CSV
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
 
       <div className="border border-border bg-card overflow-hidden">
         <Table>
@@ -231,7 +225,7 @@ export function DataTable<T>({
                   key={col.id}
                   column={col}
                   filterValue={filterState[col.id]}
-                  onFilterChange={onFilterChange}
+                  onFilterChange={tableView.setFilter}
                 />
               ))}
             </TableRow>
@@ -300,7 +294,7 @@ export function DataTable<T>({
                   serverPagination.onPageSizeChange(next);
                   return;
                 }
-                setPageSize(next);
+                tableView.setPageSize(next);
                 setCurrentPage(1);
               }}
               className="h-7 rounded border border-border bg-background px-2 text-xs font-medium text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
@@ -312,10 +306,10 @@ export function DataTable<T>({
             <span>rows per page</span>
           </div>
           <span className="h-4 w-px bg-border hidden sm:inline-block" />
-          <Button 
+          <Button
             type="button"
-            variant="outline" 
-            size="sm" 
+            variant="outline"
+            size="sm"
             className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted font-medium"
             onClick={() => setIsManageColumnsOpen(true)}
           >

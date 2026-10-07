@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { PageLayout, PageToolbar, StatusBadge } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import type { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import {
   listLeaveTypes,
@@ -38,7 +39,8 @@ export default function LeavesPage() {
   const [reportIds, setReportIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const tableView = useTableView("wacrm_leaves_table_columns", {});
+  const { filterState } = tableView;
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Leave | null>(null);
 
@@ -172,10 +174,6 @@ export default function LeavesPage() {
     [leaveTypes],
   );
 
-  const handleFilterChange = (columnId: string, value: unknown) => {
-    setFilterState((prev) => ({ ...prev, [columnId]: value }));
-  };
-
   const filtered = useMemo(() => {
     return leaves.filter((l) => {
       for (const [key, value] of Object.entries(filterState)) {
@@ -217,7 +215,7 @@ export default function LeavesPage() {
                 size="sm"
                 variant={activeStatus === status ? "default" : "ghost"}
                 className="h-7 px-3 text-xs font-medium"
-                onClick={() => handleFilterChange("status", status === "All" ? [] : [status])}
+                onClick={() => tableView.setFilter("status", status === "All" ? [] : [status])}
               >
                 {status}
               </Button>
@@ -241,9 +239,7 @@ export default function LeavesPage() {
             <Plus className="size-3 mr-1" /> Apply Leave
           </Button>
         }
-        filterState={filterState}
-        onFilterChange={handleFilterChange}
-        storageKey="wacrm_leaves_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(l) => l.id}
         // The record opens as a PAGE, following the order and lead modules — that is where the

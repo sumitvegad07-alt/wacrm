@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Search, Truck, PackageCheck } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { PageLayout, PageHeader, PageToolbar, StatusBadge } from '@/components/shared';
@@ -37,7 +38,8 @@ export default function PendingDispatchPage() {
 
   const [rows, setRows] = useState<PendingRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const tableView = useTableView("wacrm_pending_dispatch_table_columns", {});
+  const { filterState } = tableView;
   const [globalSearch, setGlobalSearch] = useState('');
 
   const fetchData = useCallback(async () => {
@@ -128,9 +130,7 @@ export default function PendingDispatchPage() {
       <DataTable
         columns={columns}
         data={filtered}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
-        storageKey="wacrm_pending_dispatch_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(o) => o.id}
         onRowClick={(o) => router.push(`/orders/${o.id}`)}

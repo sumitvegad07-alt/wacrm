@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDataScope } from "@/hooks/use-data-scope";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -41,7 +42,8 @@ export default function ExpensesPage() {
   const [deletingExp, setDeletingExp] = useState(false);
   
   // Default filter shows Active expenses (Inactive/all via the Status column filter).
-  const [filterState, setFilterState] = useState<FilterState>({ record_status: ['active'] });
+  const tableView = useTableView("wacrm_expenses_table_columns", { record_status: ['active'] });
+  const { filterState } = tableView;
 
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
@@ -391,13 +393,6 @@ export default function ExpensesPage() {
     return getVisibleTableColumns([...columns], customFields, expenses);
   }, [columns, customFields, expenses]);
 
-  const handleFilterChange = (columnId: string, value: any) => {
-    setFilterState(prev => ({
-      ...prev,
-      [columnId]: value
-    }));
-  };
-
   const filteredExpenses = useMemo(() => {
     return expenses.filter(expense => {
       if (
@@ -454,9 +449,9 @@ export default function ExpensesPage() {
                   className="h-7 px-3 text-xs font-medium"
                   onClick={() => {
                     if (status === "All") {
-                      handleFilterChange("status", []);
+                      tableView.setFilter("status", []);
                     } else {
-                      handleFilterChange("status", [status]);
+                      tableView.setFilter("status", [status]);
                     }
                   }}
                 >
@@ -502,9 +497,7 @@ export default function ExpensesPage() {
             <Plus className="size-3 mr-1" /> New Expense
           </Button>
         }
-        filterState={filterState}
-        onFilterChange={handleFilterChange}
-        storageKey="wacrm_expenses_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(expense) => expense.id}
         onRowClick={handleRowClick}

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { useTableView } from "@/hooks/use-table-view";
 import { ColumnDef } from "@/components/ui/data-table/data-table-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ export default function PaymentReportPage() {
   const supabase = createClient();
   
   // Tab 2: Customer Financials Data
+  const tableView = useTableView("financial-report-table");
   const [financialsData, setFinancialsData] = useState<any[]>([]);
   const [isLoadingFinancials, setIsLoadingFinancials] = useState(true);
 
@@ -180,7 +182,7 @@ export default function PaymentReportPage() {
               <DataTable
                 columns={financialColumns}
                 data={financialsData}
-                storageKey="financial-report-table"
+                tableView={tableView}
                 isLoading={isLoadingFinancials}
                 rowKey={(r) => r.id}
               />

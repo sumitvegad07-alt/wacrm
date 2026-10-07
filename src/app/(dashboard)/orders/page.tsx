@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { useDataScope } from '@/hooks/use-data-scope';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
@@ -87,7 +88,8 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const tableView = useTableView("wacrm_orders_table_columns", {});
+  const { filterState } = tableView;
   const [globalSearch, setGlobalSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
@@ -379,9 +381,7 @@ export default function OrdersPage() {
       <DataTable
         columns={visibleColumns}
         data={filtered}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
-        storageKey="wacrm_orders_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(o) => o.id}
         onRowClick={(o) => router.push(`/orders/${o.id}`)}

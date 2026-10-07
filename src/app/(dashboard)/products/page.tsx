@@ -35,6 +35,7 @@ import { ImportWizard } from '@/components/import/import-wizard';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
 import { useCan } from '@/hooks/use-can';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
@@ -64,7 +65,8 @@ export default function ProductsPage() {
   
   // DataTable state — default filter shows Active products (Inactive/all via the Status column filter).
   const [globalSearch, setGlobalSearch] = useState('');
-  const [filterState, setFilterState] = useState<FilterState>({ active: ['true'] });
+  const tableView = useTableView("wacrm_products_table_columns", { active: ['true'] });
+  const { filterState } = tableView;
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   
   // Lookups
@@ -328,9 +330,7 @@ export default function ProductsPage() {
       <DataTable
         columns={visibleColumns}
         data={filteredProducts}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        storageKey="wacrm_products_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(product) => product.id}
         onRowClick={(product) => router.push(`/products/${product.id}`)}

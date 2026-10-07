@@ -10,6 +10,7 @@ import { Plus, CheckCircle2, XCircle, Ban, Loader2, Edit } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
@@ -57,7 +58,8 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const tableView = useTableView("wacrm_payments_table_columns", {});
+  const { filterState } = tableView;
   const [globalSearch, setGlobalSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -346,9 +348,7 @@ export default function PaymentsPage() {
       <DataTable
         columns={visibleColumns}
         data={filtered}
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState((prev) => ({ ...prev, [id]: val }))}
-        storageKey="wacrm_payments_table_columns"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(p) => p.id}
         onRowClick={(p) => router.push(`/payments/${p.id}`)}

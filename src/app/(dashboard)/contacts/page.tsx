@@ -34,6 +34,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { GatedButton } from '@/components/ui/gated-button';
 import { DataTable } from '@/components/ui/data-table/data-table';
+import { useTableView } from '@/hooks/use-table-view';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { Badge } from '@/components/ui/badge';
@@ -83,7 +84,9 @@ export default function ContactsPage() {
 
   // DataTable state
   // Default filter: show Active customers only (Inactive/all via the Status column filter).
-  const [filterState, setFilterState] = useState<FilterState>({ status: ['active'] });
+  // _v3: saved column layouts would otherwise hide the new geo-tag columns.
+  const tableView = useTableView("wacrm_contacts_table_columns_v3", { status: ['active'] });
+  const { filterState } = tableView;
   const [globalSearch, setGlobalSearch] = useState("");
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
@@ -671,10 +674,7 @@ export default function ContactsPage() {
             </GatedButton>
           </div>
         }
-        filterState={filterState}
-        onFilterChange={(id, val) => setFilterState(prev => ({...prev, [id]: val}))}
-        // _v2: saved column layouts would otherwise hide the new geo-tag columns.
-        storageKey="wacrm_contacts_table_columns_v3"
+        tableView={tableView}
         isLoading={loading}
         rowKey={(contact) => contact.id}
         onRowClick={(contact) => router.push(`/contacts/${contact.id}`)}
