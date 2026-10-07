@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -84,7 +85,10 @@ export function TableViewsBar({ view }: { view: TableViewApi }) {
   return (
     <>
       <div className="flex items-center gap-2 flex-wrap">
-        <DropdownMenu>
+        {/* Re-read the list each time the menu opens, so a screen that was
+            already open when saved views first became available fills in
+            instead of looking empty until the page is reloaded. */}
+        <DropdownMenu onOpenChange={(open) => open && view.refreshViews()}>
           <DropdownMenuTrigger
             aria-label="Table views"
             title="Saved views for this table"
@@ -101,43 +105,48 @@ export function TableViewsBar({ view }: { view: TableViewApi }) {
           </DropdownMenuTrigger>
 
           <DropdownMenuContent align="start" className="w-64 text-xs">
-            <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Views
-            </DropdownMenuLabel>
+            {/* DropdownMenuLabel is a Base UI *group part*: used outside a
+                DropdownMenuGroup it throws "MenuGroupContext is missing" and
+                takes the whole page down with it. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Views
+              </DropdownMenuLabel>
 
-            <DropdownMenuItem
-              onClick={() => view.applyView(null)}
-              className="cursor-pointer gap-2"
-            >
-              <span className="w-3.5">{!activeView && <Check className="size-3.5" />}</span>
-              All records
-            </DropdownMenuItem>
-
-            {views.map((v) => (
               <DropdownMenuItem
-                key={v.id}
-                onClick={() => view.applyView(v.id)}
+                onClick={() => view.applyView(null)}
                 className="cursor-pointer gap-2"
               >
-                <span className="w-3.5">
-                  {activeView?.id === v.id && <Check className="size-3.5" />}
-                </span>
-                <span className="flex-1 truncate">{v.name}</span>
-                {v.is_default && (
-                  <span className="shrink-0" title="Opens by default">
-                    <Star className="size-3 fill-primary text-primary" />
-                  </span>
-                )}
+                <span className="w-3.5">{!activeView && <Check className="size-3.5" />}</span>
+                All records
               </DropdownMenuItem>
-            ))}
 
-            {views.length === 0 && !view.viewsLoading && (
-              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                {view.viewsUnavailable
-                  ? "Saved views are unavailable right now."
-                  : "No saved views yet."}
-              </div>
-            )}
+              {views.map((v) => (
+                <DropdownMenuItem
+                  key={v.id}
+                  onClick={() => view.applyView(v.id)}
+                  className="cursor-pointer gap-2"
+                >
+                  <span className="w-3.5">
+                    {activeView?.id === v.id && <Check className="size-3.5" />}
+                  </span>
+                  <span className="flex-1 truncate">{v.name}</span>
+                  {v.is_default && (
+                    <span className="shrink-0" title="Opens by default">
+                      <Star className="size-3 fill-primary text-primary" />
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+
+              {views.length === 0 && !view.viewsLoading && (
+                <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                  {view.viewsUnavailable
+                    ? "Saved views are unavailable right now."
+                    : "No saved views yet."}
+                </div>
+              )}
+            </DropdownMenuGroup>
 
             <DropdownMenuSeparator />
 

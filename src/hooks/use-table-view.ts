@@ -63,6 +63,8 @@ export interface TableViewApi {
   viewsLoading: boolean;
   /** True when saved views are unavailable (not signed in, or the fetch failed). */
   viewsUnavailable: boolean;
+  /** Re-read the saved view list — called when the Views menu is opened. */
+  refreshViews: () => void;
 
   applyView: (viewId: string | null) => void;
   saveAsView: (name: string) => Promise<boolean>;
@@ -163,13 +165,6 @@ export function useTableView(
     activeViewIdRef.current = activeViewId;
   }, [activeViewId]);
 
-  /**
-   * Whether this tab already had working filters for this table when the views
-   * fetch started. Captured before the fetch rather than read after it, because
-   * applying a view writes scratch and would otherwise erase the answer.
-   */
-  const hadScratchRef = useRef<boolean>(false);
-
   const effectiveColumnsRef = useRef<TableColumnState | null>(null);
   const reportEffectiveColumns = useCallback((columns: TableColumnState) => {
     effectiveColumnsRef.current = columns;
@@ -201,22 +196,22 @@ export function useTableView(
     [storageKey],
   );
 
-  useEffect(() => {
-    // Wait for the session to settle rather than reporting "no views" during a
-    // normal page load, but do not wait on the profile row — the fetch only
-    // needs the auth id, and account_id is checked when a view is written.
-    if (authLoading) return;
+  /**
+   * Fetch this table's saved views.
+   *
+   * `applyDefault` is only true for the automatic load. A manual refresh must
+   * not yank the user onto their default view while they are working.
+   */
+  const loadViews = useCallback(
+    async (applyDefault: boolean): Promise<void> => {
+      if (!userId) {
+        setViewsLoading(false);
+        setViewsUnavailable(true);
+        return;
+      }
 
-    if (!userId) {
-      setViewsLoading(false);
-      setViewsUnavailable(true);
-      return;
-    }
+      const hadScratch = readScratchFilters(storageKey) !== undefined;
 
-    let cancelled = false;
-    hadScratchRef.current = readScratchFilters(storageKey) !== undefined;
-
-    (async () => {
       const { data, error } = await supabase
         .from("table_views")
         .select("id, name, config, is_default")
@@ -224,11 +219,9 @@ export function useTableView(
         .eq("table_key", tableKey)
         .order("name", { ascending: true });
 
-      if (cancelled) return;
-
       if (error) {
-        // Most likely the migration has not been applied yet. Filters still
-        // persist locally; the Views menu just has nothing in it.
+        // Most likely the table is not there yet. Filters still persist
+        // locally; the Views menu just has nothing in it.
         setViews([]);
         setViewsUnavailable(true);
         setViewsLoading(false);
@@ -246,12 +239,11 @@ export function useTableView(
       setViewsUnavailable(false);
       setViewsLoading(false);
 
-      const stillExists = (id: string | null) => !!id && parsed.some((v) => v.id === id);
-
-      if (stillExists(activeViewIdRef.current)) return;
+      const active = activeViewIdRef.current;
+      if (active && parsed.some((v) => v.id === active)) return;
 
       // A remembered view that has since been deleted, or none remembered.
-      if (activeViewIdRef.current) {
+      if (active) {
         setActiveViewId(null);
         writeActiveViewId(storageKey, null);
       }
@@ -259,7 +251,7 @@ export function useTableView(
       // The default view opens the table, but only on a genuinely fresh visit.
       // Scratch filters mean the user is navigating inside this tab and their
       // working filters outrank the default.
-      if (!hadScratchRef.current) {
+      if (applyDefault && !hadScratch) {
         const fallback = parsed.find((v) => v.is_default);
         if (fallback) {
           setActiveViewId(fallback.id);
@@ -267,12 +259,28 @@ export function useTableView(
           applyConfig(fallback.config);
         }
       }
-    })();
+    },
+    [supabase, userId, tableKey, storageKey, applyConfig],
+  );
 
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase, userId, tableKey, storageKey, applyConfig, authLoading]);
+  useEffect(() => {
+    // Wait for the session to settle rather than reporting "no views" during a
+    // normal page load, but do not wait on the profile row — the fetch only
+    // needs the auth id, and account_id is checked when a view is written.
+    if (authLoading) return;
+    void loadViews(true);
+  }, [authLoading, loadViews]);
+
+  /**
+   * Re-read the list, used when the Views menu is opened.
+   *
+   * A page that was already open when saved views first became available would
+   * otherwise show an empty menu until it was reloaded.
+   */
+  const refreshViews = useCallback(() => {
+    if (authLoading || !userId) return;
+    void loadViews(false);
+  }, [authLoading, userId, loadViews]);
 
   // ------------------------------------------------------------------- setters
 
@@ -355,12 +363,13 @@ export function useTableView(
       toast.error("Please wait for the page to finish loading, then try again.");
       return false;
     }
-    if (viewsUnavailable) {
-      toast.error("Saved views are not available right now.");
-      return false;
-    }
+    // Deliberately NOT blocked on `viewsUnavailable`. That flag only records
+    // that an earlier fetch failed — and a page opened before the migration ran,
+    // or during a network blip, would otherwise refuse every save until it was
+    // reloaded, which is exactly how this went wrong the first time out. Try the
+    // write and report what the database actually says.
     return true;
-  }, [busy, userId, accountId, viewsUnavailable, profileLoading]);
+  }, [busy, userId, accountId, profileLoading]);
 
   const saveAsView = useCallback(
     async (rawName: string): Promise<boolean> => {
@@ -386,11 +395,13 @@ export function useTableView(
       setBusy(false);
 
       if (error || !data) {
-        toast.error(
-          error?.code === "23505"
-            ? `You already have a view called "${name}".`
-            : "Could not save the view.",
-        );
+        if (error?.code === "23505") {
+          toast.error(`You already have a view called "${name}".`);
+        } else if (error?.code === "42P01") {
+          toast.error("Saved views are not set up on this account yet.");
+        } else {
+          toast.error(`Could not save the view${error?.message ? `: ${error.message}` : "."}`);
+        }
         return false;
       }
 
@@ -401,6 +412,7 @@ export function useTableView(
         config: parseConfig(data.config),
       };
       setViews((prev) => [...prev, saved].sort((a, b) => a.name.localeCompare(b.name)));
+      setViewsUnavailable(false);
       setActiveViewId(saved.id);
       writeActiveViewId(storageKey, saved.id);
       toast.success(`View "${saved.name}" saved.`);
@@ -562,6 +574,7 @@ export function useTableView(
     isDirty,
     viewsLoading,
     viewsUnavailable,
+    refreshViews,
     applyView,
     saveAsView,
     updateActiveView,
