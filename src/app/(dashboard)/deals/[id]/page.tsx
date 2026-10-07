@@ -100,7 +100,13 @@ export default function DealDetailsPage() {
       leadRes
     ] = await Promise.all([
       supabase.from('pipeline_stages').select('*').eq('pipeline_id', dealData.pipeline_id).order('position'),
-      supabase.from('custom_fields').select('*').eq('module_name', 'deal').order('field_name'),
+      supabase
+        .from('custom_fields')
+        .select('*')
+        .eq('account_id', dealData.account_id)
+        .eq('module_name', 'deal')
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: true }),
       supabase.from('deal_custom_values').select('*').eq('deal_id', id),
       supabase.from('tasks').select('*').eq('deal_id', id).order('created_at', { ascending: false }),
       supabase.from('module_activities').select('*').eq('module_name', 'deal').eq('record_id', id).order('created_at', { ascending: false }),
@@ -338,6 +344,39 @@ export default function DealDetailsPage() {
   const ownerOptions = allProfiles.map((p) => ({ value: p.id, label: p.full_name || p.email || "User" }));
   const ownerValue = allProfiles.find((p) => p.id === deal.assigned_to || p.user_id === deal.assigned_to)?.id ?? "";
   const dealCollaboratorIds: string[] = Array.isArray(deal.collaborator_ids) ? deal.collaborator_ids : [];
+
+  // The deal's field setup drives this page the same way it drives the form: a
+  // deactivated field disappears, a renamed field re-labels, and a predefined
+  // (system_key) field reads its value from the deal row — never from
+  // deal_custom_values, which only ever holds true custom fields.
+  const activeFields = customFields.filter((f) => f.is_active !== false);
+  // Predefined keys already drawn higher up this page (title in the heading,
+  // value and expected_close_date in the header line and the details grid), so
+  // "Custom Fields" must not repeat them. Anything predefined and NOT listed
+  // here falls through to systemRows below and shows its real column value.
+  const NATIVE_SYSTEM_KEYS = new Set([
+    "title",
+    "value",
+    "currency",
+    "expected_close_date",
+    "notes",
+    "status",
+    "deal_number",
+    "stage_id",
+    "contact_id",
+    "lead_id",
+    "assigned_to",
+  ]);
+  const dealRowValue = (key: string): string => {
+    const raw = (deal as any)[key];
+    if (raw == null || raw === "") return "";
+    return String(raw);
+  };
+  const systemRows = activeFields
+    .filter((f) => f.system_key && !NATIVE_SYSTEM_KEYS.has(f.system_key))
+    .map((f) => ({ field: f, value: dealRowValue(f.system_key as string) }))
+    .filter((r) => r.value !== "");
+  const extraFields = activeFields.filter((f) => !f.system_key);
 
   const isLost = deal.status === "lost";
   const isWon = deal.status === "won" || deal.is_converted;
@@ -689,11 +728,17 @@ export default function DealDetailsPage() {
             )}
           </div>
 
-          {customFields.length > 0 && (
+          {(systemRows.length > 0 || extraFields.length > 0) && (
             <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-4">
               <h3 className="text-lg font-semibold border-b border-border pb-3">Custom Fields</h3>
               <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                {customFields.map((field) => {
+                {systemRows.map(({ field, value }) => (
+                  <div key={field.id}>
+                    <p className="text-sm text-muted-foreground mb-1 capitalize">{field.field_name}</p>
+                    <p className="font-medium break-words">{value}</p>
+                  </div>
+                ))}
+                {extraFields.map((field) => {
                   const val = customValues[field.id];
                   return (
                     <div key={field.id}>

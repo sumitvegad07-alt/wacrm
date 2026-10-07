@@ -37,7 +37,7 @@ export default function ProductDetailsPage() {
     // 1. Fetch Product
     const { data: productData, error: productError } = await supabase
       .from('products')
-      .select('*')
+      .select('*, category_rel:product_categories(name), unit_rel:product_units(name, short_name)')
       .eq('id', id)
       .maybeSingle();
 
@@ -55,7 +55,13 @@ export default function ProductDetailsPage() {
       tasksRes,
       actRes
     ] = await Promise.all([
-      supabase.from('custom_fields').select('*').eq('module_name', 'product').order('field_name'),
+      supabase
+        .from('custom_fields')
+        .select('*')
+        .eq('account_id', productData.account_id)
+        .eq('module_name', 'product')
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: true }),
       supabase.from('product_custom_values').select('*').eq('product_id', id),
       supabase.from('tasks').select('*').eq('product_id', id).order('created_at', { ascending: false }),
       supabase.from('module_activities').select('*').eq('module_name', 'product').eq('record_id', id).order('created_at', { ascending: false })
@@ -111,6 +117,45 @@ export default function ProductDetailsPage() {
   }
 
   if (!product) return null;
+
+  // The product's field setup drives this page the same way it drives the form: a
+  // deactivated field disappears (the seeded "Unit Price" is deactivated on every
+  // account and has no products column at all), a renamed field re-labels, and a
+  // predefined (system_key) field reads its value from the product row — never
+  // from product_custom_values, which only ever holds true custom fields.
+  const activeFields = customFields.filter((f) => f.is_active !== false);
+  // Predefined keys already drawn in "Product Details" above, so "Other Details"
+  // must not repeat them. Category and Unit are deliberately NOT here: nothing
+  // else on this page shows them, so they stay in the block below and now render
+  // their real value instead of a permanent "-".
+  const NATIVE_SYSTEM_KEYS = new Set([
+    'name',
+    'sku',
+    'price',
+    'description',
+    'active',
+    'image',
+    'images',
+    'category_id',
+    'unit_id',
+    'tax_slab_id',
+  ]);
+  const productRowValue = (key: string): string => {
+    const row = product as any;
+    // category / unit moved to the masters (category_id / unit_id) and new writes
+    // null the legacy text column, so read the joined name first — same order the
+    // products list uses.
+    if (key === 'category') return row.category_rel?.name || row.category || '';
+    if (key === 'unit') return row.unit_rel?.short_name || row.unit_rel?.name || row.unit || '';
+    const raw = row[key];
+    if (raw == null || raw === '') return '';
+    return String(raw);
+  };
+  const systemRows = activeFields
+    .filter((f) => f.system_key && !NATIVE_SYSTEM_KEYS.has(f.system_key))
+    .map((f) => ({ field: f, value: productRowValue(f.system_key as string) }))
+    .filter((r) => r.value !== '');
+  const extraFields = activeFields.filter((f) => !f.system_key);
 
   const plannedTasks = tasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled');
   const pastTasks = tasks.filter(t => t.status === 'Completed' || t.status === 'Cancelled');
@@ -207,12 +252,18 @@ export default function ProductDetailsPage() {
               </div>
             </div>
 
-            {customFields.length > 0 && (
+            {(systemRows.length > 0 || extraFields.length > 0) && (
               <>
                 <div className="my-6 border-t border-border/50" />
                 <h3 className="text-lg font-semibold mb-4">Other Details</h3>
                 <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                  {customFields.map((field) => {
+                  {systemRows.map(({ field, value }) => (
+                    <div key={field.id}>
+                      <p className="text-sm text-muted-foreground mb-1 capitalize">{field.field_name}</p>
+                      <p className="font-medium break-words">{value}</p>
+                    </div>
+                  ))}
+                  {extraFields.map((field) => {
                     const val = customValues[field.id];
                     return (
                       <div key={field.id}>

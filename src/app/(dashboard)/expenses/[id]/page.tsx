@@ -67,7 +67,13 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
       tasksRes,
       activitiesRes
     ] = await Promise.all([
-      supabase.from('custom_fields').select('*').eq("module_name", "expense").order('field_name'),
+      supabase
+        .from('custom_fields')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('module_name', 'expense')
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: true }),
       supabase.from('expense_custom_values').select('*').eq('expense_id', resolvedParams.id),
       supabase.from('tasks').select('*').eq('expense_id', resolvedParams.id).order('created_at', { ascending: false }),
       supabase.from('module_activities').select('*').eq('module_name', 'expense').eq('record_id', resolvedParams.id).order('created_at', { ascending: false })
@@ -202,6 +208,40 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
   }
 
   if (!expense) return null;
+
+  // The expense's field setup drives this page the same way it drives the form: a
+  // deactivated field disappears, a renamed field re-labels, and a predefined
+  // (system_key) field reads its value from the expense row — never from
+  // expense_custom_values, which only ever holds true custom fields.
+  const activeFields = customFields.filter((f: any) => f.is_active !== false);
+  // Predefined keys already drawn higher up this page (expense_date as "Date" in
+  // the Expense Details card, amount as "Claimed Amount" under Amounts & Travel),
+  // so "Custom Fields" must not repeat them. Anything predefined and NOT listed
+  // here falls through to systemRows below and shows its real column value
+  // instead of a permanent "-".
+  const NATIVE_SYSTEM_KEYS = new Set([
+    "expense_date",
+    "amount",
+    "travel_km",
+    "rate_per_km",
+    "remarks",
+    "proof_file",
+    "status",
+    "odometer_start",
+    "odometer_end",
+    "employee_id",
+    "expense_type_id",
+  ]);
+  const expenseRowValue = (key: string): string => {
+    const raw = expense[key];
+    if (raw == null || raw === "") return "";
+    return String(raw);
+  };
+  const systemRows: { field: any; value: string }[] = activeFields
+    .filter((f: any) => f.system_key && !NATIVE_SYSTEM_KEYS.has(f.system_key))
+    .map((f: any) => ({ field: f, value: expenseRowValue(f.system_key as string) }))
+    .filter((r: { value: string }) => r.value !== "");
+  const extraFields = activeFields.filter((f: any) => !f.system_key);
 
   const isPending = expense.status === "Pending";
   const statusColor = expense.status === "Approved" ? "bg-green-600 text-white border-transparent shadow-sm" :
@@ -428,11 +468,17 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
           </div>
 
           {/* Custom Fields Card */}
-          {customFields.length > 0 && (
+          {(systemRows.length > 0 || extraFields.length > 0) && (
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="font-semibold text-foreground border-b border-border pb-3">Custom Fields</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 pt-1">
-                {customFields.map(cf => (
+                {systemRows.map(({ field, value }) => (
+                  <div key={field.id}>
+                    <p className="text-xs text-muted-foreground font-medium uppercase mb-1">{field.field_name}</p>
+                    <div className="text-sm"><span className="font-medium">{value}</span></div>
+                  </div>
+                ))}
+                {extraFields.map((cf: any) => (
                   <div key={cf.id}>
                     <p className="text-xs text-muted-foreground font-medium uppercase mb-1">{cf.field_name}</p>
                     <div className="text-sm">

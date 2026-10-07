@@ -13,6 +13,7 @@ import { TaskForm } from "@/components/tasks/task-form";
 import { TaskChecklistSection } from "@/components/tasks/task-checklist";
 import { TaskCommentsSection } from "@/components/tasks/task-comments";
 import { TaskAttachmentsSection } from "@/components/tasks/task-attachments";
+import { useAuth } from "@/hooks/use-auth";
 
 function isOverdue(task: Task) {
   if (task.status === 'Completed' || task.status === 'Cancelled') return false;
@@ -29,6 +30,7 @@ export default function TaskDetailsPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const supabase = createClient();
+  const { accountId } = useAuth();
 
   const [task, setTask] = useState<Task | null>(null);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -37,10 +39,12 @@ export default function TaskDetailsPage() {
   const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
+    if (!accountId) return;
     fetchTask();
-  }, [id]);
+  }, [id, accountId]);
 
   async function fetchTask() {
+    if (!accountId) return;
     setLoading(true);
     const [taskRes, fieldsRes, valuesRes] = await Promise.all([
       supabase
@@ -48,7 +52,13 @@ export default function TaskDetailsPage() {
         .select("*, assignee:profiles!tasks_assigned_user_id_fkey(*), contact:contacts!tasks_contact_id_fkey(*), deal:deals!tasks_deal_id_fkey(*), product:products!tasks_product_id_fkey(*), conversation:conversations!tasks_conversation_id_fkey(*)")
         .eq("id", id)
         .maybeSingle(),
-      supabase.from("custom_fields").select("*").eq("module_name", "task").order("field_name"),
+      supabase
+        .from("custom_fields")
+        .select("*")
+        .eq("account_id", accountId)
+        .eq("module_name", "task")
+        .order("position", { ascending: true })
+        .order("created_at", { ascending: true }),
       supabase.from("task_custom_values").select("*").eq("task_id", id)
     ]);
 
@@ -78,6 +88,41 @@ export default function TaskDetailsPage() {
   }
 
   if (!task) return null;
+
+  // The task's field setup drives this page the same way it drives the form: a
+  // deactivated field disappears, a renamed field re-labels, and a predefined
+  // (system_key) field reads its value from the task row — never from
+  // task_custom_values, which only ever holds true custom fields.
+  const activeFields = customFields.filter((f) => f.is_active !== false);
+  // Predefined keys already drawn higher up this page: title, status and
+  // priority in the heading, due_date and the assignee on the line under it,
+  // description in its own block. "Custom Fields" must not repeat them.
+  // Anything predefined and NOT listed here falls through to systemRows below
+  // and shows its real column value instead of nothing.
+  const NATIVE_SYSTEM_KEYS = new Set([
+    "title",
+    "status",
+    "priority",
+    "due_date",
+    "due_time",
+    "assigned_user_id",
+    "description",
+    "contact_id",
+    "deal_id",
+    "product_id",
+    "conversation_id",
+  ]);
+  const taskRowValue = (key: string): string => {
+    const raw = (task as any)[key];
+    if (raw == null || raw === "") return "";
+    return String(raw);
+  };
+  const systemRows = activeFields
+    .filter((f) => f.system_key && !NATIVE_SYSTEM_KEYS.has(f.system_key))
+    .map((f) => ({ field: f, value: taskRowValue(f.system_key as string) }))
+    .filter((r) => r.value !== "");
+  // Like the original block, a custom field with no stored value stays hidden.
+  const extraFields = activeFields.filter((f) => !f.system_key && !!customValues[f.id]);
 
   return (
     <div className="space-y-6 w-full max-w-none flex flex-col h-full">
@@ -175,14 +220,19 @@ export default function TaskDetailsPage() {
               <p className="text-muted-foreground italic">No description provided.</p>
             )}
 
-            {customFields.length > 0 && customFields.some(f => customValues[f.id]) && (
+            {(systemRows.length > 0 || extraFields.length > 0) && (
               <>
                 <div className="my-6 border-t border-border/50" />
                 <h3 className="text-lg font-semibold mb-4">Custom Fields</h3>
                 <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                  {customFields.map((field) => {
+                  {systemRows.map(({ field, value }) => (
+                    <div key={field.id}>
+                      <p className="text-sm text-muted-foreground mb-1 capitalize">{field.field_name}</p>
+                      <p className="font-medium break-words">{value}</p>
+                    </div>
+                  ))}
+                  {extraFields.map((field) => {
                     const val = customValues[field.id];
-                    if (!val) return null;
                     return (
                       <div key={field.id}>
                         <p className="text-sm text-muted-foreground mb-1 capitalize">{field.field_name}</p>
