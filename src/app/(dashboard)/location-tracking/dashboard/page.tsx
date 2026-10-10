@@ -735,7 +735,7 @@ export default function LocationDashboardPage() {
             </div>
           )}
 
-          <div className="border-border mb-4 grid grid-cols-4 gap-2 border-b pb-4">
+          <div className="border-border mb-4 grid grid-cols-2 gap-2 border-b pb-4 md:grid-cols-4">
             <div className="text-center">
               <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
                 Visit

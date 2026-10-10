@@ -488,7 +488,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
           {/* ---- STEP: PREVIEW ---- */}
           {step === "preview" && summary && (
             <>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 <VerdictTile n={summary.total} label="Total" />
                 <VerdictTile n={summary.valid} label="Valid" tone="good" />
                 <VerdictTile n={summary.invalid} label="Invalid" tone="bad" />

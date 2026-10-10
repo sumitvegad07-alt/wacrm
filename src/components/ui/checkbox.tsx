@@ -16,7 +16,12 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        "peer size-4 shrink-0 cursor-pointer rounded-[4px] border border-primary/50 bg-card shadow-sm transition-colors",
+        "peer relative size-4 shrink-0 cursor-pointer rounded-[4px] border border-primary/50 bg-card shadow-sm transition-colors",
+        // Tap area, not visible size: a 44px checkbox would look broken, so
+        // the box stays 16px and an invisible ::after overlay carries the
+        // touch target. Same pattern radio-group.tsx already uses. Hidden
+        // from md: up so desktop pointer behaviour is unchanged.
+        "after:absolute after:-inset-x-3.5 after:-inset-y-3.5 after:content-[''] md:after:hidden",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:text-primary-foreground",

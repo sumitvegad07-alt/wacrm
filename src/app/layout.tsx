@@ -12,6 +12,7 @@ import {
   THEME_IDS,
 } from "@/lib/themes";
 import Script from "next/script";
+import { BROWSER_GATE_SCRIPT } from "@/lib/theme/browser-gate";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -88,6 +89,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {/* Runs before the theme script and before React: a browser too old
+            to run the app gets a readable message, not a broken grey screen. */}
+        <script id="browser-gate" dangerouslySetInnerHTML={{ __html: BROWSER_GATE_SCRIPT }} />
         <script id="theme-boot" dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">

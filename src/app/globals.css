@@ -431,6 +431,19 @@ html[data-theme="rose"] {
   html {
     @apply font-sans;
   }
+
+  html,
+  body {
+    /* `clip`, never `hidden`: overflow:hidden on body breaks position:sticky,
+     * which already bit us on the marketing site. `clip` stops sideways
+     * scrolling without creating a scroll container.
+     *
+     * This is a safety net, not a fix. An element wider than the window still
+     * gets clipped and its content lost, so real offenders must still be made
+     * responsive. */
+    overflow-x: clip;
+  }
+
   .dark {
     color-scheme: dark;
   }
