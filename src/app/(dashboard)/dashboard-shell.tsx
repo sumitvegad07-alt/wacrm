@@ -178,7 +178,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   if (webAccessDisabled) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background px-4">
+      <div className="app-shell flex items-center justify-center bg-background px-4">
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -206,7 +206,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   if (isExpired) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background px-4">
+      <div className="app-shell flex items-center justify-center bg-background px-4">
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -257,7 +257,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   if (pathname === "/getting-started/welcome") {
     return (
       <KeyboardShortcutsProvider>
-        <div className="h-screen overflow-y-auto bg-background">
+        <div className="app-shell app-main safe-bottom bg-background">
           <PresenceHeartbeat />
           <TourRunner />
           {children}
@@ -268,7 +268,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <KeyboardShortcutsProvider>
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="app-shell flex flex-col bg-background lg:flex-row">
       {/* Reports this tab's online/away presence once we know a user is
           signed in. Headless — renders nothing. */}
       <PresenceHeartbeat />
@@ -277,7 +277,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
         {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
-        <main className="flex-1 overflow-y-auto p-3 pb-6 sm:p-4 sm:pb-6">
+        <main className="app-main safe-bottom flex-1 p-3 pb-6 sm:p-4 sm:pb-6">
           {/* Only nudge in the final 15 days of the trial — not for the whole
               trial window. `trialDaysLeft === null` means no expiry date is set,
               so we still show the generic "trial is active" message then. */}

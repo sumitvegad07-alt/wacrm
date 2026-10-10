@@ -40,6 +40,15 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0f172a",
+  // Draw into the notch area so the app fills an iPhone screen; the
+  // `safe-top` / `safe-bottom` classes keep content clear of the notch and
+  // the home bar. Next.js already supplies width=device-width,
+  // initial-scale=1, and we deliberately do NOT set maximumScale or
+  // userScalable: pinch-zoom must keep working for anyone with weak eyesight.
+  viewportFit: "cover",
+  // The Android keyboard should push content up rather than cover the field
+  // being typed into.
+  interactiveWidget: "resizes-content",
 };
 
 // Minimal inline script executed synchronously in <head> before React
