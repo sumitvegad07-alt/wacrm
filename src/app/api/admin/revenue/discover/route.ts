@@ -48,6 +48,14 @@ import { placesApiKey } from "@/lib/revenue/places-client";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Starting a harvest answers immediately and then keeps searching in `after()`,
+ * which runs inside this invocation — so without this the first chunk of every
+ * harvest was cut off at the platform default, seconds in, and the run was left
+ * stranded. It matches the worker route and the retention job.
+ */
+export const maxDuration = 300;
+
 /** The columns the page needs to describe a harvest that is still going. */
 const ACTIVE_COLUMNS =
   "id, status, industry, industry_label, category, state, districts, queries_planned, queries_done, next_index, calls_used, rows_new, leads_stored, stop_reason, last_error, cancel_requested, heartbeat_at, started_at";
@@ -100,10 +108,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       usage,
       hasApiKey: Boolean(placesApiKey()),
-      // Without it a harvest does its first few minutes and then cannot hand on
-      // to a fresh invocation — it would only ever creep forward when this page
-      // is opened. Worth saying out loud rather than looking like slowness.
-      hasCronSecret: Boolean(process.env.CRON_SECRET),
       // Founder-only diagnostic, NAMES only and never values. Setting this key
       // cost two deploys of guessing at whether Vercel was passing it through
       // and under what name; the server can answer that in one reload.
@@ -158,6 +162,54 @@ async function readActiveRun(admin: Admin): Promise<ActiveRun | null> {
     .limit(1);
 
   return (data?.[0] as ActiveRun | undefined) ?? null;
+}
+
+/**
+ * Whether a worker is really on this harvest right now.
+ *
+ * A harvest paused for a cap counts as alive — it is waiting for tomorrow, not
+ * dead — so it still blocks a second one, which is right: the cap it is waiting
+ * for is the same cap a new harvest would spend.
+ */
+function isAlive(run: ActiveRun): boolean {
+  if (run.stop_reason !== null) return true;
+  if (run.heartbeat_at === null) return false;
+  return Date.now() - Date.parse(run.heartbeat_at) <= HEARTBEAT_STALE_SECONDS * 1000;
+}
+
+/**
+ * Closes off a harvest nothing is working on any more.
+ *
+ * Its totals are recomputed from the query log first, so the Past harvests list
+ * shows what it really cost rather than the zeroes a run that never reached its
+ * own tidy-up would otherwise keep.
+ */
+async function retireRun(admin: Admin, runId: string): Promise<void> {
+  const { data } = await admin
+    .from("re_discovery_queries")
+    .select("calls_used, results_count, new_count")
+    .eq("run_id", runId);
+
+  const totals = (data ?? []).reduce(
+    (acc, row: { calls_used: number; results_count: number; new_count: number }) => ({
+      queries_done: acc.queries_done + 1,
+      calls_used: acc.calls_used + (row.calls_used ?? 0),
+      rows_found: acc.rows_found + (row.results_count ?? 0),
+      rows_new: acc.rows_new + (row.new_count ?? 0),
+    }),
+    { queries_done: 0, calls_used: 0, rows_found: 0, rows_new: 0 },
+  );
+
+  await admin
+    .from("re_discovery_runs")
+    .update({
+      ...totals,
+      status: "abandoned",
+      heartbeat_at: null,
+      worker_token: null,
+      finished_at: new Date().toISOString(),
+    })
+    .eq("id", runId);
 }
 
 /**
@@ -295,16 +347,26 @@ async function startRun(
 
   // One at a time. Two harvests running together would spend the same daily cap
   // from both ends and leave the page unable to say which one it is showing.
-  const running = await readActiveRun(admin);
-  if (running) {
-    return NextResponse.json(
-      {
-        error:
-          "A harvest is already going. Wait for it to finish, or stop it first — only one runs at a time so they cannot spend the same daily cap twice.",
-        activeRunId: running.id,
-      },
-      { status: 409 },
-    );
+  //
+  // Only a harvest that is actually alive blocks a new one, though. A run whose
+  // worker died leaves a row that looks active for ever, and refusing on that
+  // basis made Start permanently useless — which is exactly what happened the
+  // first evening this ran. Pressing Start when nothing is happening is a clear
+  // instruction, so a dead run is retired rather than used as a reason to say
+  // no. Its rows and its searches are kept either way.
+  const existing = await readActiveRun(admin);
+  if (existing) {
+    if (isAlive(existing)) {
+      return NextResponse.json(
+        {
+          error:
+            "A harvest is already going. Wait for it to finish, or stop it first — only one runs at a time so they cannot spend the same daily cap twice.",
+          activeRunId: existing.id,
+        },
+        { status: 409 },
+      );
+    }
+    await retireRun(admin, existing.id);
   }
 
   const plan = planFor({ industry: industry.value, category: category.value, state, districts, areas, pincode });

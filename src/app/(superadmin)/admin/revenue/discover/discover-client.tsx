@@ -140,7 +140,6 @@ export default function DiscoverClient() {
   // ── server state ──
   const [usage, setUsage] = useState<Usage | null>(null);
   const [hasApiKey, setHasApiKey] = useState(true);
-  const [hasCronSecret, setHasCronSecret] = useState(true);
   const [envNames, setEnvNames] = useState<string[]>([]);
   const [already, setAlready] = useState<{
     total: number;
@@ -175,7 +174,6 @@ export default function DiscoverClient() {
 
     setUsage(payload.usage ?? null);
     setHasApiKey(payload.hasApiKey !== false);
-    setHasCronSecret(payload.hasCronSecret !== false);
     setEnvNames(payload.envNames ?? []);
     setPastRuns(payload.runs ?? []);
     setActive(payload.active ?? null);
@@ -544,18 +542,6 @@ export default function DiscoverClient() {
                 </>
               )}
             </span>
-          </span>
-        </div>
-      )}
-
-      {!hasCronSecret && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300 flex gap-2">
-          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>
-            <code>CRON_SECRET</code> is not set on the server, so a harvest cannot hand itself on
-            between runs. It will do about four minutes of searching and then sit still until you
-            open this page again, which nudges it along. Set it in Vercel and redeploy to let a
-            harvest finish on its own.
           </span>
         </div>
       )}
