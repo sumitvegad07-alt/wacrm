@@ -16,8 +16,10 @@
 //
 // WHAT IS WRITTEN TO THE DATABASE
 //
-// Call counts, and Google Place IDs for deduplication. Never a prospect's name,
-// phone or address — see the migration header for why.
+// Call counts, Google Place IDs for deduplication, and — since
+// 20261010100000 — the harvested rows themselves for 90 DAYS, so a CSV can be
+// downloaded again without paying the quota twice. The rows are then deleted
+// and only the Place IDs remain. See that migration's header for the trade.
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -58,6 +60,14 @@ const CAP_TIMEZONE = "Asia/Kolkata";
  * The "Ignore my previous harvests" tick overrides it.
  */
 const SEARCH_REUSE_DAYS = 45;
+
+/**
+ * How long the harvested rows themselves are kept, so a CSV can be downloaded
+ * again. Place IDs are kept forever (deduplication); names, phones and
+ * addresses are not. Ninety days is the figure the founder chose and the
+ * migration header explains why it is bounded at all.
+ */
+const LEADS_RETENTION_DAYS = 90;
 
 /**
  * The service-role client's type, taken from the factory rather than imported
@@ -115,12 +125,14 @@ export async function GET() {
     await requireFounder();
     const admin = serviceClient();
 
+    await purgeOldLeads(admin);
+
     const [usage, runs] = await Promise.all([
       readUsage(admin),
       admin
         .from("re_discovery_runs")
         .select(
-          "id, industry_label, category, state, districts, areas, queries_planned, queries_done, calls_used, rows_found, rows_new, status, started_at",
+          "id, industry_label, category, state, districts, areas, queries_planned, queries_done, calls_used, rows_found, rows_new, leads_stored, status, started_at",
         )
         .order("started_at", { ascending: false })
         .limit(15),
@@ -153,10 +165,16 @@ export async function POST(req: NextRequest) {
         return await previewPlan(admin, body);
       case "start":
         return await startRun(admin, ctx.userId, body);
+      case "resume":
+        return await resumeRun(admin, ctx.userId, body);
       case "search":
         return await runSearch(admin, ctx.userId, body);
       case "finish":
         return await finishRun(admin, ctx.userId, body);
+      case "rows":
+        return await rowsForRun(admin, ctx.userId, body);
+      case "priorRows":
+        return await rowsForSelection(admin, body);
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
@@ -184,14 +202,23 @@ async function previewPlan(admin: Admin, body: Record<string, unknown>) {
   const texts = plan.map((spec) => spec.text);
   const since = new Date(Date.now() - SEARCH_REUSE_DAYS * 86_400_000).toISOString();
 
-  const { data } = await admin
-    .from("re_discovery_queries")
-    .select("query_text, created_at")
-    .in("query_text", texts)
-    .gte("created_at", since)
-    .is("error", null)
-    .gt("calls_used", 0)
-    .order("created_at", { ascending: false });
+  const [{ data }, stored] = await Promise.all([
+    admin
+      .from("re_discovery_queries")
+      .select("query_text, created_at")
+      .in("query_text", texts)
+      .gte("created_at", since)
+      .is("error", null)
+      .gt("calls_used", 0)
+      .order("created_at", { ascending: false }),
+    // How many of last time's rows are still downloadable. This is what turns
+    // "you have already done this" from a dead end into an offer: the rows are
+    // right here, free, instead of a second trip to Google.
+    admin
+      .from("re_discovery_leads")
+      .select("id", { count: "exact", head: true })
+      .in("query_text", texts),
+  ]);
 
   const done = new Set((data ?? []).map((row: { query_text: string }) => row.query_text));
 
@@ -199,6 +226,7 @@ async function previewPlan(admin: Admin, body: Record<string, unknown>) {
     total: plan.length,
     alreadyDone: done.size,
     lastRunAt: data?.[0]?.created_at ?? null,
+    storedRows: stored.count ?? 0,
   });
 }
 
@@ -239,6 +267,7 @@ async function startRun(admin: Admin, userId: string, body: Record<string, unkno
       areas,
       pincode,
       queries_planned: plan.length,
+      ignore_seen: body.ignoreSeen === true,
     })
     .select("id")
     .single();
@@ -250,16 +279,100 @@ async function startRun(admin: Admin, userId: string, body: Record<string, unkno
 
   return NextResponse.json({
     runId: data.id,
-    // The browser gets the plan so it can show progress by name; the server
-    // rebuilds it independently on every search and trusts only the index.
-    plan: plan.map((spec, index) => ({
-      index,
-      text: spec.text,
-      district: spec.district,
-      area: spec.area,
-      // Already paid for recently: the browser skips these without a call.
-      done: alreadyDone.has(spec.text),
-    })),
+    plan: planPayload(plan, alreadyDone),
+  });
+}
+
+/**
+ * The plan as the browser needs it: names to show progress by, and a flag per
+ * search saying "this one is free, skip it".
+ *
+ * The browser gets the plan only to narrate itself. The server rebuilds it
+ * independently on every search and trusts nothing from the browser but an
+ * index into it.
+ */
+function planPayload(plan: ReturnType<typeof planFor>, alreadyDone: Set<string>) {
+  return plan.map((spec, index) => ({
+    index,
+    text: spec.text,
+    district: spec.district,
+    area: spec.area,
+    done: alreadyDone.has(spec.text),
+  }));
+}
+
+// ── resume ──────────────────────────────────────────────────
+
+/**
+ * Picks an interrupted harvest back up.
+ *
+ * The browser loses a harvest for ordinary reasons — Chrome discards the tab,
+ * or a stray click leaves the page — and before this the quota spent was simply
+ * gone along with the rows. Now the rows are on the server and the plan is
+ * rebuilt from the run row, so resuming costs nothing: the searches already
+ * done are marked done, and the rows already found come back with them.
+ */
+async function resumeRun(admin: Admin, userId: string, body: Record<string, unknown>) {
+  const runId = String(body.runId ?? "");
+  if (!runId) return NextResponse.json({ error: "runId is required" }, { status: 400 });
+
+  const { data: run } = await admin
+    .from("re_discovery_runs")
+    .select(
+      "id, owner_id, industry, industry_label, category, state, districts, areas, pincode, ignore_seen, queries_planned, started_at",
+    )
+    .eq("id", runId)
+    .single();
+
+  if (!run) return NextResponse.json({ error: "That harvest no longer exists" }, { status: 404 });
+  if (run.owner_id !== userId) return NextResponse.json({ error: "Not your run" }, { status: 403 });
+
+  const plan = planFor({
+    industry: run.industry,
+    category: run.category,
+    state: run.state,
+    districts: run.districts ?? [],
+    areas: run.areas ?? [],
+    pincode: run.pincode,
+  });
+
+  if (plan.length === 0) {
+    return NextResponse.json({ error: "That harvest's choices no longer build a plan" }, { status: 400 });
+  }
+
+  // Searches this run itself finished. Counted separately from the reuse window
+  // because a run started with "ignore my previous harvests" must still not
+  // repeat its own completed searches — that would be paying twice inside one
+  // harvest, which no setting asks for.
+  const { data: ownQueries } = await admin
+    .from("re_discovery_queries")
+    .select("query_text")
+    .eq("run_id", runId)
+    .is("error", null)
+    .gt("calls_used", 0);
+
+  const done = new Set((ownQueries ?? []).map((row: { query_text: string }) => row.query_text));
+
+  if (run.ignore_seen !== true) {
+    for (const text of await readRecentSearches(admin, plan.map((p) => p.text))) done.add(text);
+  }
+
+  // A count, not the rows. This runs on every page load while an unfinished
+  // harvest is remembered, and the rows can be several megabytes; they are
+  // fetched by the "rows" action once the founder actually asks for them.
+  const { count } = await admin
+    .from("re_discovery_leads")
+    .select("id", { count: "exact", head: true })
+    .eq("run_id", runId);
+
+  return NextResponse.json({
+    runId: run.id,
+    plan: planPayload(plan, done),
+    rowsStored: count ?? 0,
+    ignoreSeen: run.ignore_seen === true,
+    startedAt: run.started_at,
+    industryLabel: run.industry_label,
+    state: run.state,
   });
 }
 
@@ -396,11 +509,32 @@ async function runSearch(admin: Admin, userId: string, body: Record<string, unkn
 
   // Record the place IDs BEFORE answering, so a lost response cannot leave the
   // same company eligible to be harvested again in a later run.
+  //
+  // The rows go down in the same breath, for the same reason: a response that
+  // never arrives, or a tab that dies while it is in flight, must not throw
+  // away companies the quota has already been spent on.
   if (final.rows.length > 0) {
     await admin.from("re_discovery_seen_places").upsert(
       final.rows.map((row) => ({ place_id: row.placeId, run_id: runId })),
       { onConflict: "place_id", ignoreDuplicates: true },
     );
+
+    const stored = await admin
+      .from("re_discovery_leads")
+      .upsert(
+        final.rows.map((row) => toLeadInsert(row, runId, spec.text)),
+        { onConflict: "run_id,place_id", ignoreDuplicates: true },
+      )
+      .select("id");
+
+    // A failed save is not a failed search: the rows are already on their way
+    // to the browser and the CSV it builds is still correct. All that is lost is
+    // the ability to download this batch again, so it is logged, not thrown.
+    if (stored.error) {
+      console.error("[discover] could not store harvested rows", stored.error.message);
+    } else if ((stored.data?.length ?? 0) > 0) {
+      await admin.rpc("re_discovery_add_leads", { p_run_id: runId, p_count: stored.data.length });
+    }
   }
 
   await admin.from("re_discovery_queries").insert({
@@ -490,6 +624,204 @@ async function finishRun(admin: Admin, userId: string, body: Record<string, unkn
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   return NextResponse.json({ ok: true, totals, status });
+}
+
+// ── stored rows ─────────────────────────────────────────────
+
+/** Every lead column, in one place so a select and an insert cannot drift. */
+const LEAD_COLUMNS =
+  "place_id, name, phone, website, address, area, city, district, state, pincode, searched_in, outside_searched_area, latitude, longitude, rating, reviews, primary_type, industry";
+
+/**
+ * Supabase caps a select at 1,000 rows. A Karnataka sweep is several thousand,
+ * so stored rows are read in pages — a silent truncation here would hand back
+ * a short CSV that looks complete.
+ */
+const PAGE = 1000;
+
+/** A ceiling on one download, so a runaway selection cannot exhaust memory. */
+const MAX_ROWS = 50_000;
+
+interface LeadRecord {
+  place_id: string;
+  name: string;
+  phone: string;
+  website: string;
+  address: string;
+  area: string;
+  city: string;
+  district: string;
+  state: string;
+  pincode: string;
+  searched_in: string;
+  outside_searched_area: boolean;
+  latitude: string;
+  longitude: string;
+  rating: string;
+  reviews: string;
+  primary_type: string;
+  industry: string;
+}
+
+function toLeadInsert(row: DiscoveryRow, runId: string, queryText: string) {
+  return {
+    run_id: runId,
+    query_text: queryText,
+    place_id: row.placeId,
+    name: row.name,
+    phone: row.phone,
+    website: row.website,
+    address: row.address,
+    area: row.area,
+    city: row.city,
+    district: row.district,
+    state: row.state,
+    pincode: row.pincode,
+    searched_in: row.searchedIn,
+    outside_searched_area: row.outsideSearchedArea,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    rating: row.rating,
+    reviews: row.reviews,
+    primary_type: row.primaryType,
+    industry: row.industry,
+  };
+}
+
+function fromLeadRow(record: LeadRecord): DiscoveryRow {
+  return {
+    placeId: record.place_id,
+    name: record.name,
+    phone: record.phone,
+    website: record.website,
+    address: record.address,
+    area: record.area,
+    city: record.city,
+    district: record.district,
+    state: record.state,
+    pincode: record.pincode,
+    searchedIn: record.searched_in,
+    outsideSearchedArea: record.outside_searched_area,
+    latitude: record.latitude,
+    longitude: record.longitude,
+    rating: record.rating,
+    reviews: record.reviews,
+    primaryType: record.primary_type,
+    industry: record.industry,
+  };
+}
+
+/**
+ * Stored rows for one harvest, or for whichever harvests ran these exact
+ * searches. Deduplicated by Place ID, newest kept: the same company can sit in
+ * two runs of the same district, and a CSV must not list it twice.
+ */
+async function readStoredRows(
+  admin: Admin,
+  scope: { runId: string } | { queryTexts: string[] },
+): Promise<DiscoveryRow[]> {
+  if ("queryTexts" in scope && scope.queryTexts.length === 0) return [];
+
+  const byPlace = new Map<string, DiscoveryRow>();
+
+  for (let from = 0; from < MAX_ROWS; from += PAGE) {
+    let query = admin
+      .from("re_discovery_leads")
+      .select(LEAD_COLUMNS)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + PAGE - 1);
+
+    query =
+      "runId" in scope ? query.eq("run_id", scope.runId) : query.in("query_text", scope.queryTexts);
+
+    const { data, error } = await query;
+    if (error || !data || data.length === 0) break;
+
+    for (const record of data as unknown as LeadRecord[]) {
+      if (!byPlace.has(record.place_id)) byPlace.set(record.place_id, fromLeadRow(record));
+    }
+
+    if (data.length < PAGE) break;
+  }
+
+  return [...byPlace.values()];
+}
+
+/** The CSV's Source column, built the same way wherever it is needed. */
+function sourceLabel(state: string): string {
+  return `Google Maps — ${state}`;
+}
+
+/** Rows of one past harvest, so its CSV can be saved again. */
+async function rowsForRun(admin: Admin, userId: string, body: Record<string, unknown>) {
+  const runId = String(body.runId ?? "");
+  if (!runId) return NextResponse.json({ error: "runId is required" }, { status: 400 });
+
+  const { data: run } = await admin
+    .from("re_discovery_runs")
+    .select("id, owner_id, state, industry, industry_label")
+    .eq("id", runId)
+    .single();
+
+  if (!run) return NextResponse.json({ error: "Harvest not found" }, { status: 404 });
+  if (run.owner_id !== userId) return NextResponse.json({ error: "Not your run" }, { status: 403 });
+
+  const rows = await readStoredRows(admin, { runId });
+
+  return NextResponse.json({
+    rows,
+    source: sourceLabel(run.state),
+    industry: run.industry,
+    state: run.state,
+    // Zero is a real answer, not an error: harvests from before the rows were
+    // stored, and anything past the 90 days, have nothing left to hand back.
+    expired: rows.length === 0,
+  });
+}
+
+/**
+ * Rows the last harvest of this exact selection produced.
+ *
+ * Scoped by search text rather than by run, because a run may have covered
+ * twenty districts and the question being asked is about the three on screen.
+ */
+async function rowsForSelection(admin: Admin, body: Record<string, unknown>) {
+  const plan = planFromBody(body);
+  if (plan.length === 0) {
+    return NextResponse.json({ error: "Nothing to look up with those choices" }, { status: 400 });
+  }
+
+  const rows = await readStoredRows(admin, { queryTexts: plan.map((spec) => spec.text) });
+  const state = String(body.state ?? "").trim();
+
+  return NextResponse.json({ rows, source: sourceLabel(state), expired: rows.length === 0 });
+}
+
+/**
+ * Deletes harvested rows past the retention window, and zeroes the counter that
+ * advertised them.
+ *
+ * Runs on page load rather than from cron: this table is written by exactly one
+ * tool, which cannot be used without loading this page, so a separate scheduled
+ * job would only be a second thing to notice had stopped working.
+ */
+async function purgeOldLeads(admin: Admin) {
+  const cutoff = new Date(Date.now() - LEADS_RETENTION_DAYS * 86_400_000).toISOString();
+
+  const { error } = await admin.from("re_discovery_leads").delete().lt("created_at", cutoff);
+  // Never fail the page over housekeeping — the quota figures above it matter
+  // more than the purge, which will simply be retried on the next load.
+  if (error) {
+    console.error("[discover] lead purge failed", error.message);
+    return;
+  }
+
+  await admin
+    .from("re_discovery_runs")
+    .update({ leads_stored: 0 })
+    .lt("started_at", cutoff)
+    .gt("leads_stored", 0);
 }
 
 // ── shared ──────────────────────────────────────────────────
