@@ -54,6 +54,7 @@ import {
   type SkipReason,
 } from "@/lib/revenue/discovery-query";
 import {
+  canAutoResume,
   clearDraft,
   clearProgress,
   readDraft,
@@ -113,6 +114,8 @@ interface Interrupted {
   startedAt: string;
   industryLabel: string;
   state: string;
+  /** The browser killed this one recently — carry it on without being asked. */
+  autoResume: boolean;
 }
 
 export default function DiscoverClient() {
@@ -154,6 +157,8 @@ export default function DiscoverClient() {
   const [pastRuns, setPastRuns] = useState<RunRow[]>([]);
   const [interrupted, setInterrupted] = useState<Interrupted | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /** True when the page picked a harvest back up without being asked. */
+  const [resumedAutomatically, setResumedAutomatically] = useState(false);
 
   // ── harvest state ──
   const [running, setRunning] = useState(false);
@@ -175,6 +180,15 @@ export default function DiscoverClient() {
 
   // Set when the founder presses Stop, read inside the loop.
   const cancelled = useRef(false);
+
+  /**
+   * Guards against carrying a harvest on twice.
+   *
+   * React runs effects twice in development, and the probe that decides to
+   * resume is one of them. Without this, a single interruption would start two
+   * loops against the same run and spend the quota twice over.
+   */
+  const autoResumed = useRef(false);
 
   const industryOptions = useMemo(
     () => DISCOVERY_INDUSTRIES.map((i) => ({ value: i.value, label: i.label })),
@@ -306,6 +320,9 @@ export default function DiscoverClient() {
         startedAt: payload.startedAt,
         industryLabel: payload.industryLabel ?? "",
         state: payload.state ?? "",
+        // Decided here, where the stored note is in hand; acted on below, once
+        // the function that does the resuming has been declared.
+        autoResume: canAutoResume({ ...progress, nextIndex: from }),
       });
     })();
 
@@ -398,92 +415,6 @@ export default function DiscoverClient() {
   const overDailyCap = usage ? estimate.expectedCalls > usage.dailyRemaining : false;
 
   /**
-   * Starts a fresh harvest.
-   *
-   * `force` is the "search Google again anyway" path: it overrides the
-   * Ignore-my-previous-harvests tick for this one run, so a combination the
-   * founder has already pulled is fetched again, companies and all, instead of
-   * leaving him at a dead end.
-   */
-  async function startHarvest(force = false) {
-    setError(null);
-    setStopMessage(null);
-    setRows([]);
-    setLog([]);
-    setDone(0);
-    setDuplicates(0);
-    setReused(0);
-    setDownloaded(false);
-    setSkipped({ retail: 0, closed: 0, no_phone: 0, no_id: 0 });
-    setInterrupted(null);
-    clearProgress();
-
-    const useIgnoreSeen = ignoreSeen || force;
-
-    const startRes = await fetch("/api/admin/revenue/discover", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "start",
-        industry,
-        category,
-        state,
-        districts,
-        areas: activeAreas,
-        pincode: pincode.trim() || null,
-        ignoreSeen: useIgnoreSeen,
-      }),
-    });
-
-    const startPayload = await startRes.json().catch(() => ({}));
-    if (!startRes.ok) {
-      setError(startPayload.error ?? "Could not start the harvest");
-      return;
-    }
-
-    await runPlan(startPayload.runId, startPayload.plan ?? [], 0, useIgnoreSeen);
-  }
-
-  /**
-   * Picks up the harvest this browser was in the middle of.
-   *
-   * The rows already paid for are fetched back first, so the CSV at the end is
-   * the whole harvest and not just the part that ran after the interruption.
-   */
-  async function resumeHarvest() {
-    if (!interrupted) return;
-    setBusy("resume");
-
-    const res = await fetch("/api/admin/revenue/discover", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "rows", runId: interrupted.runId }),
-    });
-    const payload = await res.json().catch(() => ({}));
-    setBusy(null);
-
-    if (!res.ok) {
-      setError(payload.error ?? "Could not read back what that harvest already found");
-      return;
-    }
-
-    const recovered: DiscoveryRow[] = payload.rows ?? [];
-    setError(null);
-    setStopMessage(null);
-    setRows(recovered);
-    setLog([]);
-    setDuplicates(0);
-    setReused(0);
-    setDownloaded(false);
-    setSkipped({ retail: 0, closed: 0, no_phone: 0, no_id: 0 });
-    setDone(interrupted.nextIndex);
-
-    const { runId, plan, nextIndex, ignoreSeen: runIgnoreSeen } = interrupted;
-    setInterrupted(null);
-    await runPlan(runId, plan, nextIndex, runIgnoreSeen);
-  }
-
-  /**
    * The harvest loop: one Google search per request, rows accumulated here.
    *
    * Shared by Start and Resume so there is exactly one copy of the rules about
@@ -497,16 +428,30 @@ export default function DiscoverClient() {
 
     // Written before the first search, not after it: the point of the note is to
     // survive the tab dying, and the tab can die on the very first request.
-    const remember = (nextIndex: number) =>
-      writeProgress({ runId, nextIndex, planLength: plan.length, savedAt: new Date().toISOString() });
+    const remember = (nextIndex: number, stoppedByUser = false) =>
+      writeProgress({
+        runId,
+        nextIndex,
+        planLength: plan.length,
+        savedAt: new Date().toISOString(),
+        stoppedByUser,
+      });
     remember(from);
+
+    // Stops the machine sleeping mid-harvest. It does not stop Chrome
+    // discarding the tab — nothing in the browser can — but a laptop that
+    // suspends during a two-hundred-search sweep is one real way these die, and
+    // this costs nothing to prevent. Unsupported everywhere but Chromium, hence
+    // the guard.
+    const wakeLock = await requestWakeLock();
 
     let reachedEnd = true;
 
     for (const entry of plan.slice(from)) {
       if (cancelled.current) {
-        // Deliberately keeps the note. Stopping is usually "not now", and the
-        // next visit offers the rest back instead of starting over.
+        // Keeps the note, flagged as deliberate: the rest is still offered on
+        // the next visit, but the page will not start it again on its own.
+        remember(entry.index, true);
         reachedEnd = false;
         break;
       }
@@ -589,9 +534,122 @@ export default function DiscoverClient() {
     // Only a harvest that ran out of plan has nothing left to resume.
     if (reachedEnd) clearProgress();
 
+    await releaseWakeLock(wakeLock);
     setRunning(false);
+    setResumedAutomatically(false);
     void loadUsage();
   }
+
+  /**
+   * Starts a fresh harvest.
+   *
+   * `force` is the "search Google again anyway" path: it overrides the
+   * Ignore-my-previous-harvests tick for this one run, so a combination the
+   * founder has already pulled is fetched again, companies and all, instead of
+   * leaving him at a dead end.
+   */
+  async function startHarvest(force = false) {
+    setError(null);
+    setStopMessage(null);
+    setRows([]);
+    setLog([]);
+    setDone(0);
+    setDuplicates(0);
+    setReused(0);
+    setDownloaded(false);
+    setSkipped({ retail: 0, closed: 0, no_phone: 0, no_id: 0 });
+    setInterrupted(null);
+    clearProgress();
+
+    const useIgnoreSeen = ignoreSeen || force;
+
+    const startRes = await fetch("/api/admin/revenue/discover", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "start",
+        industry,
+        category,
+        state,
+        districts,
+        areas: activeAreas,
+        pincode: pincode.trim() || null,
+        ignoreSeen: useIgnoreSeen,
+      }),
+    });
+
+    const startPayload = await startRes.json().catch(() => ({}));
+    if (!startRes.ok) {
+      setError(startPayload.error ?? "Could not start the harvest");
+      return;
+    }
+
+    await runPlan(startPayload.runId, startPayload.plan ?? [], 0, useIgnoreSeen);
+  }
+
+  /**
+   * Picks up the harvest this browser was in the middle of.
+   *
+   * The rows already paid for are fetched back first, so the CSV at the end is
+   * the whole harvest and not just the part that ran after the interruption.
+   */
+  async function beginResume(run: Interrupted, automatic = false) {
+    setBusy("resume");
+
+    const res = await fetch("/api/admin/revenue/discover", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "rows", runId: run.runId }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    setBusy(null);
+
+    if (!res.ok) {
+      setError(payload.error ?? "Could not read back what that harvest already found");
+      return;
+    }
+
+    const recovered: DiscoveryRow[] = payload.rows ?? [];
+    setResumedAutomatically(automatic);
+    setError(null);
+    setStopMessage(null);
+    setRows(recovered);
+    setLog([]);
+    setDuplicates(0);
+    setReused(0);
+    setDownloaded(false);
+    setSkipped({ retail: 0, closed: 0, no_phone: 0, no_id: 0 });
+    setDone(run.nextIndex);
+
+    setInterrupted(null);
+    await runPlan(run.runId, run.plan, run.nextIndex, run.ignoreSeen);
+  }
+
+  /**
+   * Carries an interrupted harvest on by itself.
+   *
+   * Offering a button was not enough. The banner sits above the form, the form
+   * is where the eye already is, and the Start button next to it is the
+   * familiar one — so an interrupted harvest got restarted by hand instead of
+   * resumed. Carrying on costs nothing for the searches already done, so there
+   * was never a decision here worth interrupting him for.
+   *
+   * Only ever for a harvest the browser killed within the last few hours:
+   * `canAutoResume` refuses one that was stopped on purpose, and one old enough
+   * that this page is probably open for something else.
+   */
+  useEffect(() => {
+    if (!interrupted?.autoResume || autoResumed.current || running) return;
+    autoResumed.current = true;
+    void beginResume(interrupted, true);
+    // beginResume is left out of the dependencies on purpose: it is rebuilt on
+    // every render, and the ref above already makes this fire exactly once.
+    // Listing it would restart the harvest mid-flight. Deliberately not
+    // silenced with an eslint-disable — that directive makes the React compiler
+    // stop analysing this whole component, which hides real findings elsewhere
+    // in the file.
+  }, [interrupted, running]);
+
 
   function downloadCsv() {
     saveCsv(rows, source, `${industry || "leads"}-${state || "india"}`);
@@ -756,7 +814,7 @@ export default function DiscoverClient() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => void resumeHarvest()}
+              onClick={() => void beginResume(interrupted)}
               disabled={busy !== null}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 disabled:opacity-60"
             >
@@ -1094,7 +1152,9 @@ export default function DiscoverClient() {
 
         {running && (
           <p className="text-xs text-muted-foreground">
-            Keep this tab open — the results live here until you download the CSV.
+            {resumedAutomatically
+              ? "Carried on by itself — this harvest was interrupted, and the searches already done were skipped free of charge."
+              : "Every company found is saved as it arrives. If this tab dies, open the page again and it picks up where it left off."}
           </p>
         )}
       </div>
@@ -1124,8 +1184,9 @@ export default function DiscoverClient() {
         <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm flex gap-2">
           <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
           <span>
-            {rows.length.toLocaleString("en-IN")} companies found. Download the CSV before you leave
-            this page — these rows are not saved anywhere else, and re-running costs quota.
+            {rows.length.toLocaleString("en-IN")} companies found. They are saved for 90 days, so
+            you can take the CSV again from Past harvests below if you lose it — but download it now
+            while it is in front of you.
           </span>
         </div>
       )}
@@ -1257,6 +1318,29 @@ export default function DiscoverClient() {
       </div>
     </div>
   );
+}
+
+/**
+ * Asks the browser to keep the machine awake, if it can.
+ *
+ * Chromium only, and it throws outright when the page is not visible — both of
+ * which are fine: a harvest without a wake lock is exactly as correct, just
+ * more exposed to a laptop deciding to sleep.
+ */
+async function requestWakeLock(): Promise<WakeLockSentinel | null> {
+  try {
+    return (await navigator.wakeLock?.request("screen")) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function releaseWakeLock(lock: WakeLockSentinel | null): Promise<void> {
+  try {
+    await lock?.release();
+  } catch {
+    /* already gone — the browser released it when the tab lost visibility */
+  }
 }
 
 /**

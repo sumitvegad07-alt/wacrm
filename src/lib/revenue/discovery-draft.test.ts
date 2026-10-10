@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   EMPTY_DRAFT,
+  PROGRESS_AUTO_RESUME_HOURS,
   PROGRESS_MAX_AGE_DAYS,
+  canAutoResume,
   sanitizeDraft,
   sanitizeProgress,
   type DiscoveryDraft,
+  type DiscoveryProgress,
 } from "./discovery-draft";
 
 const FULL: DiscoveryDraft = {
@@ -94,6 +97,7 @@ describe("sanitizeProgress", () => {
     nextIndex: 47,
     planLength: 163,
     savedAt: "2026-10-10T08:00:00.000Z",
+    stoppedByUser: false,
   };
 
   it("keeps a fresh, well-formed progress record", () => {
@@ -133,5 +137,38 @@ describe("sanitizeProgress", () => {
   it("rejects an unparseable or future savedAt", () => {
     expect(sanitizeProgress({ ...good, savedAt: "not a date" }, now)).toBeNull();
     expect(sanitizeProgress({ ...good, savedAt: "2026-10-11T00:00:00.000Z" }, now)).toBeNull();
+  });
+});
+
+describe("canAutoResume", () => {
+  const now = new Date("2026-10-10T10:00:00.000Z");
+  const killed: DiscoveryProgress = {
+    runId: "6b1f1d6e-6b9f-4a6a-9f2a-3c4d5e6f7a8b",
+    nextIndex: 4,
+    planLength: 16,
+    savedAt: "2026-10-10T09:58:00.000Z",
+    stoppedByUser: false,
+  };
+
+  it("carries on a harvest the browser killed moments ago", () => {
+    expect(canAutoResume(killed, now)).toBe(true);
+  });
+
+  it("never carries on one that was stopped on purpose", () => {
+    expect(canAutoResume({ ...killed, stoppedByUser: true }, now)).toBe(false);
+  });
+
+  it("never carries on one with nothing left to do", () => {
+    expect(canAutoResume({ ...killed, nextIndex: 16 }, now)).toBe(false);
+  });
+
+  it("offers rather than resumes once the window has passed", () => {
+    const old = new Date(now.getTime() - (PROGRESS_AUTO_RESUME_HOURS + 1) * 3_600_000).toISOString();
+    expect(canAutoResume({ ...killed, savedAt: old }, now)).toBe(false);
+  });
+
+  it("still carries on at the edge of the window", () => {
+    const edge = new Date(now.getTime() - PROGRESS_AUTO_RESUME_HOURS * 3_600_000).toISOString();
+    expect(canAutoResume({ ...killed, savedAt: edge }, now)).toBe(true);
   });
 });

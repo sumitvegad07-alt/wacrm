@@ -62,6 +62,14 @@ export interface DiscoveryProgress {
   nextIndex: number;
   planLength: number;
   savedAt: string;
+  /**
+   * True only when the founder pressed Stop.
+   *
+   * The difference matters: a harvest the browser killed should pick itself
+   * back up, while one he stopped on purpose must not start again behind his
+   * back the next time the page opens.
+   */
+  stoppedByUser: boolean;
 }
 
 /**
@@ -72,6 +80,21 @@ export interface DiscoveryProgress {
  * on a page opened for something else is noise, not help.
  */
 export const PROGRESS_MAX_AGE_DAYS = 7;
+
+/**
+ * How recently a harvest must have been interrupted for the page to carry it on
+ * by itself, without being asked.
+ *
+ * The case this exists for is measured in seconds: switch to another browser,
+ * Chrome discards the tab, come back to a page that has quietly lost a harvest.
+ * Making that a button to press was not enough — it is above the fold, the form
+ * is below it, and the familiar Start button is what the eye lands on.
+ *
+ * Six hours keeps it inside the working day. Older than that and the harvest is
+ * offered rather than resumed: opening this page tomorrow for something else
+ * should not silently start spending the quota.
+ */
+export const PROGRESS_AUTO_RESUME_HOURS = 6;
 
 export const DRAFT_KEY = "ozzo:discover:draft";
 export const PROGRESS_KEY = "ozzo:discover:progress";
@@ -146,7 +169,22 @@ export function sanitizeProgress(raw: unknown, now: Date = new Date()): Discover
     nextIndex: nextIndex as number,
     planLength: planLength as number,
     savedAt,
+    stoppedByUser: input.stoppedByUser === true,
   };
+}
+
+/**
+ * Whether this harvest should simply carry on, rather than wait to be asked.
+ *
+ * Yes for one the browser killed a short while ago. No for one that was stopped
+ * on purpose, and no for one old enough that the founder has moved on.
+ */
+export function canAutoResume(progress: DiscoveryProgress, now: Date = new Date()): boolean {
+  if (progress.stoppedByUser) return false;
+  if (progress.nextIndex >= progress.planLength) return false;
+
+  const age = now.getTime() - Date.parse(progress.savedAt);
+  return age >= 0 && age <= PROGRESS_AUTO_RESUME_HOURS * 3_600_000;
 }
 
 function asString(value: unknown): string {
