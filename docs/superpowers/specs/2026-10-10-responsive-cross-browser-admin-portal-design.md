@@ -147,9 +147,14 @@ A browser that cannot read `oklch` throws that line away and keeps the hex. A mo
 
 **Who this actually saves.** Chrome and Android WebView 90–110, Firefox 100–112, and Safari below 15.4. On Indian Android phones that is a real slice of users, and without this they see a colourless UI. It does **not** help Safari 15.4–16.3 or Firefox 113–127, which read `oklch` perfectly well — their problem is `@property`, covered in section 2.
 
-**Second part of this task.** Tailwind v4 compiles every see-through utility such as `bg-primary/10` into `color-mix(in oklab, …)`, which is missing below Chrome 111, Firefox 113 and Safari 16.2. Those backgrounds go solid or transparent, which matters when coloured text sits on them. The theme already has pre-mixed tokens (`--primary-soft`, `--primary-soft-2`), so the fix is to route see-through **surfaces** through pre-mixed tokens. Faded text and faded borders are left alone — they degrade harmlessly.
+**What we are deliberately NOT doing here.** Tailwind v4 compiles every see-through utility such as `bg-primary/10` into `color-mix(in oklab, …)`, which is missing below Chrome 111, Firefox 113 and Safari 16.2. An earlier draft of this spec said we would route those through pre-mixed tokens. That was the wrong call, for two measured reasons:
 
-There is also a known Safari 16.4 bug where `color-mix()` with `currentColor` crashes the page, fixed in 16.6. The audit will check whether the project generates that combination; if it does, those few utilities get pre-mixed tokens too.
+- There are around 600 such usages across about 40 different token-and-opacity combinations. Rewriting them would churn hundreds of files for a cosmetic gain.
+- The failure is mild. When `color-mix()` cannot be read, the browser drops that one declaration, so the panel falls back to its parent surface. It goes flat instead of tinted. The text on it keeps its own solid colour and stays readable.
+
+So flatter tinted panels are an **accepted Tier 2 difference**, not something we engineer around. Only the solid colours get fallbacks, and those are the ones that actually matter — without them the entire UI loses its colour.
+
+**One crash risk, checked and ruled out.** Safari 16.4 crashes on `color-mix()` combined with `currentColor` (fixed in 16.6), and 16.4 is a Tier 1 browser, so this would have been serious. Verified on 2026-10-10: the project generates no `*-current/NN` utilities, so Tailwind never emits that combination. Every `currentColor` in the codebase is an SVG attribute, which is unaffected. Re-check if anyone adds a utility like `text-current/50` or `border-current/50`.
 
 ### 1.3 Touch sizes
 
