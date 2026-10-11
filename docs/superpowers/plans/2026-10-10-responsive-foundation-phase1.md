@@ -1425,6 +1425,41 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
+## What the first real run changed in this plan
+
+Recorded 2026-10-11, after running the suite end to end for the first time.
+Three things in the plan above were wrong, and they cost most of a day.
+
+**1. Run the suite against a production build, not the dev server.** The plan
+says `npm run dev`, and `playwright.config.ts` still starts it. On a cold dev
+server every route compiles on first visit, which took longer than
+Playwright's 30s navigation timeout, so 58 of 68 tests failed as timeouts and
+looked like real layout failures. Against `npm run build && npm start` the
+same pages serve in ~40ms. Build once, then run.
+
+**2. `waitForLoadState("networkidle")` is the wrong wait here.** Pages hold
+live Supabase subscriptions, so the network never goes quiet. It inflates
+every test to 30-40s and, with four workers on one server, pushes some past
+the 60s test timeout — four laptop tests failed that way and all 11 passed
+when re-run alone. Use `domcontentloaded` plus an explicit wait for the
+content being measured.
+
+**3. Task 4's "six ui/* files cover all 465 components" was false.** The
+most-tapped controls in the app are raw `<button>` elements (row actions,
+header icons, page toolbars, saved-view chips), and 26 list pages override
+the shared `Button` with their own `h-7`/`h-8`. Growing `button.tsx` left 35
+controls under 44px on `/contacts` at 390px. What actually works is a
+`min-height`/`min-width` rule below 767.98px in `globals.css`: `min-height`
+beats the `height` a utility class sets whatever the specificity, so no page
+can shrink a control under a thumb, including pages not yet written.
+
+**Still open:** Firefox and WebKit have never run. The bundled browser
+download stalled twice on this machine, once for seven hours, because
+Playwright waits on its install lock with no timeout. Everything verified so
+far is Chrome only, via `playwright.chrome.config.ts`, which uses the
+installed Chrome and needs no download. The cross-engine half of the spec is
+not proven.
+
 ## Phase 1 exit check
 
 Run before reporting Phase 1 complete. Paste real output for each; do not assert a result you have not run.
