@@ -38,6 +38,18 @@ test.describe("touch targets", () => {
             const box = el.getBoundingClientRect();
             if (box.width === 0 || box.height === 0) continue; // hidden
 
+            // A 1-2px box is a visually-hidden input (the usual trick for a
+            // custom file picker or a screen-reader-only field), not a
+            // control anyone aims a thumb at. The visible label or button
+            // in front of it is measured on its own.
+            if (box.width <= 2 || box.height <= 2) continue;
+
+            // A link inside a sentence is exempt. WCAG's target-size rule
+            // makes the same exception, because growing inline text links to
+            // 44px would wreck the paragraphs they sit in. Buttons, nav
+            // links and anything laid out as a block still have to comply.
+            if (el.tagName === "A" && getComputedStyle(el).display === "inline") continue;
+
             const slot = el.getAttribute("data-slot") ?? "";
             // A control wrapped in a tappable label is as big as that label.
             const wrapper = el.closest<HTMLElement>("[data-touch-target]");

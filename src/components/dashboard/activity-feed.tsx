@@ -59,7 +59,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
         <h2 className="text-sm font-semibold text-foreground">Recent Activity</h2>
         <Link
           href="/inbox"
-          className="text-xs font-medium text-primary hover:text-primary/80"
+          className="inline-flex min-h-11 md:min-h-0 items-center text-xs font-medium text-primary hover:text-primary/80"
         >
           View all →
         </Link>

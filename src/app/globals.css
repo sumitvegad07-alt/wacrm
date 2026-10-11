@@ -466,6 +466,17 @@ html[data-theme="rose"] {
       min-height: 2.75rem;
       min-width: 2.75rem;
     }
+
+    /* Text fields, selects and textareas get the height but not the width:
+     * they are already wide, and forcing a minimum width would push narrow
+     * inline fields past the window edge. Checkbox and radio are excluded —
+     * a native box stretched to 44px draws a huge tick, so those grow a
+     * wrapping label instead. */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+    select,
+    textarea {
+      min-height: 2.75rem;
+    }
   }
 
   .dark {

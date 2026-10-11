@@ -478,15 +478,21 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                     placeholder="+91..."
                   />
                   <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="checkbox"
-                      id="lead-sameAsPhone"
-                      checked={sameAsPhone}
-                      onChange={(e) => {
-                        setSameAsPhone(e.target.checked);
-                        if (e.target.checked) setFormData((prev) => ({ ...prev, whatsapp: prev.phone }));
-                      }}
-                    />
+                    <label
+                      htmlFor="lead-sameAsPhone"
+                      data-touch-target
+                      className="inline-flex h-11 w-11 md:h-auto md:w-auto cursor-pointer items-center justify-center"
+                    >
+                      <input
+                        type="checkbox"
+                        id="lead-sameAsPhone"
+                        checked={sameAsPhone}
+                        onChange={(e) => {
+                          setSameAsPhone(e.target.checked);
+                          if (e.target.checked) setFormData((prev) => ({ ...prev, whatsapp: prev.phone }));
+                        }}
+                      />
+                    </label>
                     <Label htmlFor="lead-sameAsPhone" className="text-xs text-muted-foreground">Same as Phone Number</Label>
                   </div>
                 </div>

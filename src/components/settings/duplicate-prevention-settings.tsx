@@ -34,7 +34,7 @@ export interface DuplicatePreventionSettingsProps {
 /** The Contact Number row: shown so the rule is visible, locked because it is real. */
 function AlwaysOnPhoneRow({ what }: { what: string }) {
   return (
-    <label className="flex items-center gap-2 text-sm text-muted-foreground">
+    <label data-touch-target className="flex min-h-11 md:min-h-0 items-center gap-2 text-sm text-muted-foreground">
       <input type="checkbox" checked readOnly disabled className="size-4 shrink-0" />
       <span>Contact Number</span>
       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80">
@@ -61,7 +61,7 @@ function KeyChecklist<K extends string>({
   return (
     <div className="space-y-1.5">
       {fields.map((field) => (
-        <label key={field.key} className="flex items-center gap-2 text-sm">
+        <label key={field.key} data-touch-target className="flex min-h-11 md:min-h-0 items-center gap-2 text-sm">
           <input
             type="checkbox"
             className="size-4 shrink-0"
@@ -145,7 +145,7 @@ export function DuplicatePreventionSettings({
                 { value: "code" as const, label: "Product Code" },
               ]
             ).map((opt) => (
-              <label key={opt.value} className="flex items-center gap-2 text-sm">
+              <label key={opt.value} data-touch-target className="flex min-h-11 md:min-h-0 items-center gap-2 text-sm">
                 <input
                   type="radio"
                   name="product-unique-key"
