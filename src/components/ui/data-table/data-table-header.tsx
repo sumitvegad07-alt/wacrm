@@ -36,7 +36,7 @@ export function DataTableHeader<T>({ column, filterValue, onFilterChange }: Data
               placeholder={`Search ${column.label}...`}
               value={filterValue || ""}
               onChange={(e) => onFilterChange(column.id, e.target.value)}
-              className="h-8"
+              className="h-11 md:h-8"
               autoFocus
             />
             <div className="flex justify-between items-center mt-2">
@@ -47,11 +47,11 @@ export function DataTableHeader<T>({ column, filterValue, onFilterChange }: Data
                   onFilterChange(column.id, "");
                   setOpen(false);
                 }}
-                className="h-7 text-xs text-muted-foreground"
+                className="h-11 md:h-7 text-xs text-muted-foreground"
               >
                 Clear
               </Button>
-              <Button size="sm" className="h-7 text-xs" onClick={() => setOpen(false)}>
+              <Button size="sm" className="h-11 md:h-7 text-xs" onClick={() => setOpen(false)}>
                 Apply
               </Button>
             </div>
@@ -98,11 +98,11 @@ export function DataTableHeader<T>({ column, filterValue, onFilterChange }: Data
                   onFilterChange(column.id, null);
                   setOpen(false);
                 }}
-                className="h-7 text-xs text-muted-foreground"
+                className="h-11 md:h-7 text-xs text-muted-foreground"
               >
                 Clear
               </Button>
-              <Button size="sm" className="h-7 text-xs" onClick={() => setOpen(false)}>
+              <Button size="sm" className="h-11 md:h-7 text-xs" onClick={() => setOpen(false)}>
                 Done
               </Button>
             </div>
@@ -157,7 +157,7 @@ export function DataTableHeader<T>({ column, filterValue, onFilterChange }: Data
                     <label className="text-xs text-muted-foreground">Start Date</label>
                     <Input 
                       type="date" 
-                      className="h-8" 
+                      className="h-11 md:h-8" 
                       value={customStart}
                       onChange={(e) => onFilterChange(column.id, [e.target.value, customEnd])}
                     />
@@ -166,7 +166,7 @@ export function DataTableHeader<T>({ column, filterValue, onFilterChange }: Data
                     <label className="text-xs text-muted-foreground">End Date</label>
                     <Input 
                       type="date" 
-                      className="h-8" 
+                      className="h-11 md:h-8" 
                       value={customEnd}
                       onChange={(e) => onFilterChange(column.id, [customStart, e.target.value])}
                     />
@@ -177,11 +177,11 @@ export function DataTableHeader<T>({ column, filterValue, onFilterChange }: Data
                     variant="ghost" 
                     size="sm" 
                     onClick={() => onFilterChange(column.id, null)}
-                    className="h-7 text-xs text-muted-foreground"
+                    className="h-11 md:h-7 text-xs text-muted-foreground"
                   >
                     Cancel
                   </Button>
-                  <Button size="sm" className="h-7 text-xs" onClick={() => setOpen(false)}>
+                  <Button size="sm" className="h-11 md:h-7 text-xs" onClick={() => setOpen(false)}>
                     Apply
                   </Button>
                 </div>

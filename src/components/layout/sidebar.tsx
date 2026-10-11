@@ -636,8 +636,8 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
         className={cn(
           "flex items-center rounded-lg transition-all duration-150 group relative",
           isTopLevel
-            ? "gap-3 px-3 py-1.5 text-sm font-medium"
-            : "gap-2 px-2 py-1.5 text-[13px] font-medium",
+            ? "gap-3 px-3 py-1.5 min-h-11 md:min-h-0 text-sm font-medium"
+            : "gap-2 px-2 py-1.5 min-h-11 md:min-h-0 text-[13px] font-medium",
           isActive
             ? isTopLevel
               ? "bg-primary text-primary-foreground font-semibold shadow-sm"
@@ -762,14 +762,14 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center px-4">
-          <Link href="/follow-ups" className="flex items-center" aria-label="OZZO home">
+          <Link href="/follow-ups" className="flex min-h-11 md:min-h-0 items-center" aria-label="OZZO home">
             <BrandWordmark />
           </Link>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close menu"
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+            className="flex h-11 w-11 md:h-9 md:w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
@@ -803,7 +803,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                     type="button"
                     onClick={() => toggleGroup(node.label)}
                     className={cn(
-                      "flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-sm font-medium transition-colors group",
+                      "flex w-full items-center justify-between rounded-lg px-3 py-1.5 min-h-11 md:min-h-0 text-sm font-medium transition-colors group",
                       isGroupActive
                         ? "text-foreground font-semibold bg-muted/50"
                         : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"

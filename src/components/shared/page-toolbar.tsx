@@ -78,7 +78,7 @@ export function PageToolbar({
             variant="outline"
             size="sm"
             onClick={onExportCsv}
-            className="h-8 gap-1.5 text-xs"
+            className="h-11 md:h-8 gap-1.5 text-xs"
           >
             <DownloadIcon className="size-3" />
             <span className="hidden sm:inline">Export CSV</span>
@@ -91,7 +91,7 @@ export function PageToolbar({
             size="sm"
             onClick={onRefresh}
             disabled={refreshing}
-            className="h-8 w-8 p-0 shrink-0"
+            className="h-11 w-11 md:h-8 md:w-8 p-0 shrink-0"
             title="Refresh data"
           >
             <RefreshCwIcon

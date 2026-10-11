@@ -92,7 +92,7 @@ export function TableViewsBar({ view }: { view: TableViewApi }) {
           <DropdownMenuTrigger
             aria-label="Table views"
             title="Saved views for this table"
-            className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none"
+            className="flex h-11 md:h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none"
           >
             <Table2 className="size-3.5 text-muted-foreground" />
             <span className="max-w-[180px] truncate">{label}</span>
@@ -217,7 +217,7 @@ export function TableViewsBar({ view }: { view: TableViewApi }) {
             type="button"
             onClick={() => view.resetFilters()}
             title="Clear all filters on this table"
-            className="flex h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+            className="flex h-11 md:h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
           >
             {activeFilterCount} {activeFilterCount === 1 ? "filter" : "filters"} active
             <X className="size-3" />

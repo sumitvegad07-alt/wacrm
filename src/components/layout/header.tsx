@@ -119,7 +119,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           data-shortcut="back"
           onClick={() => router.back()}
           aria-label="Go back"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex h-11 w-11 md:h-8 md:w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           title="Go back"
         >
           <ArrowLeft className="size-4" />
@@ -157,7 +157,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           type="button"
           onClick={openPalette}
           aria-label="Search the app"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+          className="flex h-11 w-11 md:h-8 md:w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
         >
           <Search className="size-4" />
         </button>

@@ -173,7 +173,7 @@ export function DataTable<T>({
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="More table actions"
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none"
+              className="flex h-11 w-11 md:h-7 md:w-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none"
               title="Table actions menu"
             >
               <Menu className="size-4" />
@@ -200,7 +200,14 @@ export function DataTable<T>({
           <TableHeader>
             <TableRow>
               {selection && (
-                <TableHead className="w-10">
+                <TableHead className="w-11 md:w-10">
+                  {/* The visible box stays 16px; the label around it is the
+                      44px tap target on phones. Measured by the responsive
+                      suite through `data-touch-target`. */}
+                  <label
+                    data-touch-target
+                    className="inline-flex h-11 w-11 md:h-auto md:w-auto cursor-pointer items-center justify-center"
+                  >
                   <input
                     type="checkbox"
                     className="size-4 cursor-pointer accent-primary align-middle"
@@ -213,6 +220,7 @@ export function DataTable<T>({
                     onChange={(e) => selection.onSelectAll(e.target.checked)}
                     aria-label="Select all rows on this page"
                   />
+                  </label>
                 </TableHead>
               )}
               {actionsColumn && (
@@ -256,12 +264,17 @@ export function DataTable<T>({
                 >
                   {selection && (
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        className="size-4 cursor-pointer accent-primary align-middle"
-                        checked={selection.selectedIds.has(rowKey(row))}
-                        onChange={(e) => selection.onSelect(rowKey(row), e.target.checked)}
-                      />
+                      <label
+                        data-touch-target
+                        className="inline-flex h-11 w-11 md:h-auto md:w-auto cursor-pointer items-center justify-center"
+                      >
+                        <input
+                          type="checkbox"
+                          className="size-4 cursor-pointer accent-primary align-middle"
+                          checked={selection.selectedIds.has(rowKey(row))}
+                          onChange={(e) => selection.onSelect(rowKey(row), e.target.checked)}
+                        />
+                      </label>
                     </TableCell>
                   )}
                   {actionsColumn && (
@@ -297,7 +310,7 @@ export function DataTable<T>({
                 tableView.setPageSize(next);
                 setCurrentPage(1);
               }}
-              className="h-7 rounded border border-border bg-background px-2 text-xs font-medium text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-11 md:h-7 rounded border border-border bg-background px-2 text-xs font-medium text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
             >
               {(serverPagination?.pageSizeOptions ?? [10, 20, 50, 100]).map((n) => (
                 <option key={n} value={n}>{n}</option>
@@ -310,7 +323,7 @@ export function DataTable<T>({
             type="button"
             variant="outline"
             size="sm"
-            className="text-xs h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted font-medium"
+            className="text-xs h-11 md:h-7 text-muted-foreground gap-1.5 px-2.5 bg-background hover:bg-muted font-medium"
             onClick={() => setIsManageColumnsOpen(true)}
           >
             <LayoutGrid className="size-3" />
@@ -333,7 +346,7 @@ export function DataTable<T>({
                   ? serverPagination.onPageChange(Math.max(1, safePage - 1))
                   : setCurrentPage((p) => Math.max(1, p - 1))
               }
-              className="h-7 px-2.5 text-xs bg-background hover:bg-muted font-medium"
+              className="h-11 md:h-7 px-2.5 text-xs bg-background hover:bg-muted font-medium"
             >
               <ChevronLeft className="size-3.5 mr-1" />
               Prev
@@ -348,7 +361,7 @@ export function DataTable<T>({
                   ? serverPagination.onPageChange(Math.min(totalPages, safePage + 1))
                   : setCurrentPage((p) => Math.min(totalPages, p + 1))
               }
-              className="h-7 px-2.5 text-xs bg-background hover:bg-muted font-medium"
+              className="h-11 md:h-7 px-2.5 text-xs bg-background hover:bg-muted font-medium"
             >
               Next
               <ChevronRight className="size-3.5 ml-1" />

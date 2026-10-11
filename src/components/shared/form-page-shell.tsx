@@ -54,7 +54,7 @@ export function FormPageShell({
           data-shortcut="back"
           onClick={onBack}
           aria-label="Go back"
-          className="inline-flex items-center justify-center rounded-md h-8 w-8 border border-border hover:bg-accent shrink-0"
+          className="inline-flex items-center justify-center rounded-md h-11 w-11 md:h-8 md:w-8 border border-border hover:bg-accent shrink-0"
         >
           <ArrowLeft className="h-4 w-4 text-foreground" />
         </button>

@@ -9,6 +9,13 @@ const TOUCH_MIN = 44;
  * Three controls are deliberately small on screen and grow their tap area with
  * an `::after` overlay instead — the pattern radio-group.tsx already uses in
  * this repo. For those we measure the overlay, not the visible box.
+ *
+ * A native <input type="checkbox"> cannot carry an ::after overlay at all —
+ * pseudo-elements do not render on replaced elements — so those keep their
+ * 16px box inside a 44px <label data-touch-target>. Tapping anywhere in that
+ * label toggles the box, so the label IS the tap target and is what we
+ * measure. Marking a wrapper that is not actually tappable would make this
+ * test lie, so `data-touch-target` belongs only on a label or button.
  */
 const PSEUDO_TARGET_SLOTS = ["checkbox", "radio-group-item", "switch"];
 
@@ -32,7 +39,10 @@ test.describe("touch targets", () => {
             if (box.width === 0 || box.height === 0) continue; // hidden
 
             const slot = el.getAttribute("data-slot") ?? "";
-            let { width, height } = box;
+            // A control wrapped in a tappable label is as big as that label.
+            const wrapper = el.closest<HTMLElement>("[data-touch-target]");
+            const measured = wrapper ? wrapper.getBoundingClientRect() : box;
+            let { width, height } = measured;
 
             if (pseudoSlots.includes(slot)) {
               const after = getComputedStyle(el, "::after");
