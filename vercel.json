@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/retention",
       "schedule": "30 20 * * *"
+    },
+    {
+      "path": "/api/cron/demo-refresh",
+      "schedule": "30 0 * * *"
     }
   ]
 }
