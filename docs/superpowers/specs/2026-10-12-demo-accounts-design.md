@@ -96,20 +96,65 @@ cron route must run the *same* code. Two copies of "what does a realistic day lo
 exactly the drift this repo already had to rescue the pricing engine from. `tsx` is already a
 devDependency, so the script runs as `npx tsx scripts/seed-demo-accounts.ts`.
 
+Per `AGENTS.md`, this repo's Next.js is not the stock version — the relevant guide under
+`node_modules/next/dist/docs/` must be read before the cron route is written, rather than
+assuming the route-handler conventions carried in from anywhere else.
+
 ### Why a cron at all
 
 Every headline tile is today-scoped. Seed once and the history charts stay beautiful forever
 while the top row of the dashboard reads zero on every day except the day it was seeded — and
 the top row is what a prospect looks at first.
 
-`refresh.ts` is therefore idempotent per account per day and **clock-aware**: it writes today's
-events only up to the wall-clock moment it runs. Called at 11:00 it produces a GPS trail from
-09:40 to 11:00; called again at 17:00 it extends the same day to 17:00. Nothing is ever
-future-dated, so the Location Tracking timeline never shows a rep working at a time that has
-not happened.
+`refresh.ts` is therefore idempotent per account per day and **clock-aware**: given a cutoff
+time it writes today's events only up to that moment. Called with a cutoff of 11:00 it produces a
+GPS trail from 09:40 to 11:00; called again with 17:00 it extends the same day to 17:00.
 
-Each run also does three housekeeping jobs, so the tenants stay the same size forever instead of
-growing without bound:
+### The Vercel Hobby constraint, and what it costs
+
+**Confirmed: this project is on the Hobby tier.** Hobby allows **2 cron jobs, daily granularity
+only**. `/api/cron/retention` already uses one. So the demo refresh gets the second, and it may
+run once a day — which uses up the cron budget entirely. Any future scheduled job on this project
+will need either Pro or a consolidation of the two existing routes. Worth knowing before
+something else needs a cron.
+
+A once-daily run cannot be clock-accurate, so the design splits into a default and an override:
+
+- **Cron, daily at 02:00 IST (`0 20 * * *` UTC).** Writes the *whole* working day, 09:30–18:30,
+  for today. Every dashboard tile is then correct from the moment the day starts: 5 active
+  agents, full day's distance, a complete visit and order count. The cost is that until 18:30
+  actually passes, part of that data is timestamped slightly ahead of the clock.
+- **On-demand, from the founder's machine.** `npx tsx scripts/seed-demo-accounts.ts
+  --refresh-now` calls the same `refresh.ts` with a cutoff of the current minute, trimming today
+  back to the real clock. Run before a high-stakes pitch and the data is exact.
+
+  Deliberately a local command rather than a URL to click: the cron route authenticates with an
+  `Authorization: Bearer $CRON_SECRET` header (the pattern `/api/cron/retention` already uses),
+  and a browser bookmark cannot send a header. The alternative — accepting the secret as a query
+  parameter — would put it in Vercel's request logs and the browser's history, which is not worth
+  saving a terminal command.
+
+**What the future-dating actually costs, checked rather than assumed.** It is invisible on every
+dashboard tile:
+
+- `liveAgents` computes `minutesAgo = (now − latestPing)/60000` and tests `<= 25`. A
+  future-dated ping gives a negative number, which passes — all 5 reps show live.
+- The map's `lastSeen` label renders `minutesAgo < 1` as "just now". Reads naturally.
+- `visitsToday`, `distanceKm`, `ordersToday` are all `>= todayStart` counts with no upper bound,
+  so they simply include the whole day.
+
+The one place it shows is **Location Tracking → today's replay**, where the GPS trail extends
+past the current time. A prospect would have to be looking for it. Accepted, with the
+`?cutoff=now` bookmark as the fix for a high-stakes pitch.
+
+One knock-on: battery must not bottom out, because `avgBattery` reads each agent's *latest*
+ping. A trail ending at 18:30 with a realistic 95%→15% drain would show "Average Battery 15%"
+at 9 AM, which reads as a fleet of dying phones. The drain curve floors at 40%.
+
+### Housekeeping on every run
+
+Each run also does three jobs, so the tenants stay the same size forever instead of growing
+without bound:
 
 1. **Rolls up and prunes GPS.** Pings older than 7 days are summarised into
    `location_daily_summary` and deleted — the same order the retention job uses
@@ -119,15 +164,20 @@ growing without bound:
    seeded.
 3. **Clears its own notification noise** (see below).
 
-Schedule: `0 */2 * * *` in `vercel.json`, alongside the existing `/api/cron/retention` entry.
-The route is also callable by hand with the cron secret, for a forced top-up minutes before a
-meeting.
+### Staying inside the Hobby function timeout
 
-**Constraint to confirm at build time:** Vercel's Hobby tier allows 2 cron jobs at daily
-granularity only. One daily entry is already in use by retention. If the project is on Hobby,
-the schedule degrades to `0 2 * * *` (once at 02:00) and today's data is written for the full
-09:30–18:30 window up front, which re-introduces future-dated rows for part of the day. Pro
-tier supports the 2-hourly schedule. Verify before choosing.
+The daily route's write budget is bounded deliberately. Per tenant per day: 5
+`tracking_sessions`, ~270 `location_pings`, ~25 `site_visits`, ~12 `orders` + ~35 `order_items`,
+~10 `payments`, ~3 `expenses` — about 360 rows, so ~1,450 rows across the four tenants, in
+batches of 500. That is a few seconds of work.
+
+It sets `maxDuration = 300`, matching `/api/cron/retention`, which already runs at 300 on this
+project — so that ceiling is known to work here rather than assumed from Vercel's published
+Hobby limits. Elapsed time is logged per tenant so a future slowdown shows up before it starts
+timing out.
+
+The initial 12-month seed is ~30,000 rows and does **not** run through this route — it runs from
+the founder's machine via `npx tsx`, where there is no timeout at all.
 
 ## The four tenants
 
