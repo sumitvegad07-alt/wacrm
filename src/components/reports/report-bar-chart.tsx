@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { type ReportConfig, type ReportDefinition } from '@/lib/reports/types';
 import { formatCurrency, formatCurrencyShort } from '@/lib/currency';
+import { chartTooltipProps } from '@/components/charts/chart-tooltip';
 
 interface ReportBarChartProps {
   data: Record<string, unknown>[];
@@ -109,6 +110,7 @@ export function ReportBarChart({ data, config, reportState, defaultCurrency, mea
             />
             <YAxis tickFormatter={formatYAxis} tick={{ fontSize: 12 }} width={56} />
             <Tooltip
+              {...chartTooltipProps}
               cursor={{ fillOpacity: 0.08 }}
               formatter={(value: any, name: any) => [
                 formatTooltipValue(value, String(name)),

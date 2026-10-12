@@ -17,15 +17,6 @@ export const CHART = {
   grid: "rgba(148,163,184,0.15)",
 };
 
-export const tooltipStyle = {
-  contentStyle: {
-    background: "hsl(var(--card, 0 0% 100%))",
-    border: "1px solid rgba(148,163,184,0.3)",
-    borderRadius: 8,
-    fontSize: 12,
-  },
-} as const;
-
 export function FrequencyTabs({
   value,
   onChange,

@@ -22,7 +22,8 @@ import { SkeletonCard } from "@/components/dashboard/skeleton";
 import { getCrmAnalytics } from "@/app/actions/crm-analytics";
 import type { CrmAnalytics, FunnelStage, Slice } from "@/lib/dashboard/crm-analytics-types";
 import { FREQUENCY_LABEL, PERIOD_LABEL, type Frequency } from "@/lib/dashboard/analytics-period";
-import { CHART, tooltipStyle, FrequencyTabs, ChartCard, EmptyChart, AnalyticsError, TopList } from "./analytics-ui";
+import { CHART, FrequencyTabs, ChartCard, EmptyChart, AnalyticsError, TopList } from "./analytics-ui";
+import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 
 const PALETTE = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899", "#ef4444", "#64748b", "#14b8a6", "#f97316"];
 
@@ -113,7 +114,7 @@ export function CrmAnalytics() {
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="text-muted-foreground" width={40} />
-                <Tooltip formatter={(v) => `${Number(v).toLocaleString()} new`} {...tooltipStyle} />
+                <Tooltip formatter={(v) => `${Number(v).toLocaleString()} new`} {...chartTooltipProps} />
                 <Bar dataKey="value" name="New customers" fill={CHART.customer} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -166,7 +167,7 @@ function Donut({ items }: { items?: Slice[] }) {
               <Cell key={s.name} fill={PALETTE[i % PALETTE.length]} />
             ))}
           </Pie>
-          <Tooltip formatter={(v, n) => [Number(v).toLocaleString(), String(n)]} {...tooltipStyle} />
+          <Tooltip formatter={(v, n) => [Number(v).toLocaleString(), String(n)]} {...chartTooltipProps} />
         </PieChart>
       </ResponsiveContainer>
       <div className="flex-1 space-y-1.5">

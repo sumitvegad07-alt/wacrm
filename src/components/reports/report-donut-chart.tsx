@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { type ReportConfig, type ReportDefinition } from '@/lib/reports/types';
 import { formatCurrencyShort } from '@/lib/currency';
+import { chartTooltipProps } from '@/components/charts/chart-tooltip';
 import {
   PieChart,
   Pie,
@@ -108,6 +109,7 @@ export function ReportDonutChart({ data, config, reportState, defaultCurrency, m
                 the measure label there replaced the slice name, so every slice read
                 "# of order : 1" with no clue which customer it was. Return `name`. */}
             <Tooltip
+              {...chartTooltipProps}
               formatter={(value, name) => [formatTooltipValue(value), String(name)]}
             />
           </PieChart>

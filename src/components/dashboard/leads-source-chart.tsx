@@ -1,6 +1,7 @@
 "use client"
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { chartTooltipProps } from '@/components/charts/chart-tooltip';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b']
@@ -51,7 +52,7 @@ export function LeadsSourceChart({ data, loading }: LeadsSourceChartProps) {
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                {...chartTooltipProps}
               />
               <Legend verticalAlign="bottom" height={36} />
             </PieChart>

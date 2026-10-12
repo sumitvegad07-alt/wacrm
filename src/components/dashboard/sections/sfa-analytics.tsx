@@ -40,13 +40,13 @@ import {
 } from "@/lib/dashboard/analytics-period";
 import {
   CHART,
-  tooltipStyle,
   FrequencyTabs,
   ChartCard,
   EmptyChart,
   AnalyticsError,
   TopList,
 } from "./analytics-ui";
+import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 
 const STATUS_COLOR: Record<string, string> = {
   Pending: "#f59e0b",
@@ -142,7 +142,7 @@ export function SfaAnalytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                   <YAxis tickFormatter={compact} tick={{ fontSize: 11 }} className="text-muted-foreground" width={54} />
-                  <Tooltip formatter={(v) => money(Number(v))} {...tooltipStyle} />
+                  <Tooltip formatter={(v) => money(Number(v))} {...chartTooltipProps} />
                   <Bar dataKey="value" name="Order value" fill={CHART.order} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -154,7 +154,7 @@ export function SfaAnalytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                   <YAxis tickFormatter={compact} tick={{ fontSize: 11 }} className="text-muted-foreground" width={54} />
-                  <Tooltip formatter={(v) => money(Number(v))} {...tooltipStyle} />
+                  <Tooltip formatter={(v) => money(Number(v))} {...chartTooltipProps} />
                   <Bar dataKey="value" name="Sales value" fill={CHART.sales} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -166,7 +166,7 @@ export function SfaAnalytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                   <YAxis tickFormatter={compact} tick={{ fontSize: 11 }} className="text-muted-foreground" width={54} />
-                  <Tooltip formatter={(v) => money(Number(v))} {...tooltipStyle} />
+                  <Tooltip formatter={(v) => money(Number(v))} {...chartTooltipProps} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="order" name="Order value" fill={CHART.order} radius={[4, 4, 0, 0]} />
                   <Line dataKey="sales" name="Sales value" stroke={CHART.sales} strokeWidth={2} dot={false} />
@@ -180,7 +180,7 @@ export function SfaAnalytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                   <YAxis tickFormatter={compact} tick={{ fontSize: 11 }} className="text-muted-foreground" width={54} />
-                  <Tooltip formatter={(v) => money(Number(v))} {...tooltipStyle} />
+                  <Tooltip formatter={(v) => money(Number(v))} {...chartTooltipProps} />
                   <Bar dataKey="value" name="Collected" fill={CHART.payment} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -204,7 +204,7 @@ export function SfaAnalytics() {
                           const pl = (p as { payload?: { value?: number; status?: string } }).payload;
                           return [`${Number(v)} orders · ${money(pl?.value ?? 0)}`, pl?.status ?? ""];
                         }}
-                        {...tooltipStyle}
+                        {...chartTooltipProps}
                       />
                     </PieChart>
                   </ResponsiveContainer>

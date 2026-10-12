@@ -7,6 +7,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -244,11 +245,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // window they're in — see the type doc above.
   const [profileLoading, setProfileLoading] = useState(true);
 
+  /**
+   * Which user id the profile+account rows have already been loaded for.
+   *
+   * supabase-js always emits `INITIAL_SESSION` the moment you subscribe, and
+   * then `TOKEN_REFRESHED` / `SIGNED_IN` for the SAME user whenever the access
+   * token rotates or the tab regains focus. Every one of those used to re-run
+   * the full profile + account fetch and push brand-new object identities into
+   * this root context, so the entire app re-rendered and every data effect
+   * keyed on `profile`/`account` re-ran. That showed up as two to three
+   * identical `/rest/v1/profiles` and `/rest/v1/accounts` requests on every
+   * page load and as clicks that felt dead mid-session.
+   *
+   * A ref, not state: it must be readable by the listener without re-creating
+   * the subscription, and changing it must not itself cause a render.
+   */
+  const loadedForUserId = useRef<string | null>(null);
+
   // Shared across init, auth-state-change listener, and the exposed
   // refreshProfile() callback. Reads the current session's user id and
   // pulls the matching profile row along with its account summary.
   const fetchProfile = useCallback(async (userId: string) => {
     const supabase = createClient();
+    loadedForUserId.current = userId;
     setProfileLoading(true);
     try {
       const { data, error } = await supabase
@@ -405,7 +424,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // (header, sidebar) can render from the user object alone,
           // profile enriches async. Callers that need to branch on
           // profile data gate on `profileLoading` instead.
-          fetchProfile(currentUser.id);
+          //
+          // Guarded on the same ref as the listener below: `getSession()` is
+          // async, so INITIAL_SESSION often lands BEFORE this resolves and has
+          // already started the fetch. Without the check both paths fire and
+          // we pay for the profile and account rows twice on every load.
+          if (currentUser.id !== loadedForUserId.current) {
+            fetchProfile(currentUser.id);
+          }
         } else {
           // No user → no profile to load. Flip profileLoading off so
           // pages that gate on it don't wait forever on the logged-out
@@ -427,11 +453,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
+      // Keep the previous object when it is the same user, unchanged. Supabase
+      // hands back a freshly built user on every event, and a new identity here
+      // re-renders every consumer of this root context for nothing.
+      setUser((prev) =>
+        prev && currentUser && prev.id === currentUser.id && prev.updated_at === currentUser.updated_at
+          ? prev
+          : currentUser,
+      );
 
       if (currentUser) {
-        fetchProfile(currentUser.id);
+        // Only when the signed-in identity actually changed. INITIAL_SESSION
+        // duplicates what init() just did, and TOKEN_REFRESHED / SIGNED_IN
+        // carry the same user — re-fetching on those bought nothing and cost
+        // a full re-render of the app. refreshProfile() stays the way callers
+        // force a reload after editing the profile.
+        if (currentUser.id !== loadedForUserId.current) {
+          fetchProfile(currentUser.id);
+        }
       } else {
+        loadedForUserId.current = null;
         setModuleSettings({ ...DEFAULT_MODULE_SETTINGS });
         setModuleSettingsLoaded(false);
         setProfile(null);

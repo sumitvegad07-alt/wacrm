@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { chartTooltipProps } from '@/components/charts/chart-tooltip';
 import { LayoutList, BarChart2, Filter } from 'lucide-react'
 
 interface JourneyProps {
@@ -53,7 +54,7 @@ export function ContactJourneyMatrix({ data, loading }: JourneyProps) {
         ) : view === 'funnel' ? (
           <ResponsiveContainer width="100%" height="100%">
             <FunnelChart>
-              <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+              <Tooltip {...chartTooltipProps} />
               <Funnel dataKey="value" data={data} isAnimationActive>
                 <LabelList position="right" fill="currentColor" stroke="none" dataKey="name" className="text-sm font-medium" />
                 <LabelList position="center" fill="#fff" stroke="none" dataKey="value" className="text-sm font-bold" />
@@ -66,7 +67,7 @@ export function ContactJourneyMatrix({ data, loading }: JourneyProps) {
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="currentColor" className="opacity-10" />
               <XAxis type="number" axisLine={false} tickLine={false} />
               <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-              <Tooltip cursor={{ fill: 'currentColor', opacity: 0.05 }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+              <Tooltip {...chartTooltipProps} cursor={{ fill: 'currentColor', opacity: 0.05 }} />
               <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={30}>
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />

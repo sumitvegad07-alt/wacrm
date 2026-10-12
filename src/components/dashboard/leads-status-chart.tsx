@@ -1,6 +1,7 @@
 "use client"
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { chartTooltipProps } from '@/components/charts/chart-tooltip';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface LeadsStatusChartProps {
@@ -39,7 +40,7 @@ export function LeadsStatusChart({ data, loading }: LeadsStatusChartProps) {
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
               <Tooltip
-                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                {...chartTooltipProps}
                 cursor={{ fill: 'currentColor', opacity: 0.05 }}
               />
               <Bar dataKey="value" fill="currentColor" radius={[4, 4, 0, 0]} className="fill-primary" />

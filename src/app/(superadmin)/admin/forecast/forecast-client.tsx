@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { ArrowLeft, BarChart3, Info } from "lucide-react";
 import { inr } from "@/lib/proposals/format";
+import { chartTooltipProps } from '@/components/charts/chart-tooltip';
 import {
   BASIS_LABEL,
   FORECAST_BASES,
@@ -173,6 +174,7 @@ export default function ForecastClient() {
                 tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
               />
               <Tooltip
+                {...chartTooltipProps}
                 formatter={(v, name) => [`₹${inr(Number(v) || 0)}`, name === "won" ? "Won" : "Lost"]}
                 labelFormatter={(l) => `Month: ${l}`}
               />
@@ -203,6 +205,7 @@ export default function ForecastClient() {
                 tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
               />
               <Tooltip
+                {...chartTooltipProps}
                 formatter={(v) => [`₹${inr(Number(v) || 0)}`, "Due for renewal"]}
                 labelFormatter={(l) => `Month: ${l}`}
               />

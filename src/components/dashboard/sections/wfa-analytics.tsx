@@ -21,12 +21,12 @@ import { SkeletonCard } from "@/components/dashboard/skeleton";
 import { FREQUENCY_LABEL, PERIOD_LABEL, type Frequency } from "@/lib/dashboard/analytics-period";
 import {
   CHART,
-  tooltipStyle,
   FrequencyTabs,
   ChartCard,
   AnalyticsError,
   TopList,
 } from "./analytics-ui";
+import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 
 /**
  * WFA (Workforce) analytics — the field-activity matrices carried over from the
@@ -107,7 +107,7 @@ export function WfaAnalytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="text-muted-foreground" width={40} />
-                  <Tooltip formatter={(v) => `${Number(v).toLocaleString()} visits`} {...tooltipStyle} />
+                  <Tooltip formatter={(v) => `${Number(v).toLocaleString()} visits`} {...chartTooltipProps} />
                   <Bar dataKey="value" name="Customer visits" fill={CHART.visit} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -119,7 +119,7 @@ export function WfaAnalytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="text-muted-foreground" width={40} />
-                  <Tooltip formatter={(v) => `${Number(v).toLocaleString()} new`} {...tooltipStyle} />
+                  <Tooltip formatter={(v) => `${Number(v).toLocaleString()} new`} {...chartTooltipProps} />
                   <Bar dataKey="value" name="New customers" fill={CHART.customer} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -131,7 +131,7 @@ export function WfaAnalytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="text-muted-foreground" width={40} />
-                  <Tooltip formatter={(v) => Number(v).toLocaleString()} {...tooltipStyle} />
+                  <Tooltip formatter={(v) => Number(v).toLocaleString()} {...chartTooltipProps} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="total" name="Total visits" fill={CHART.visit} radius={[4, 4, 0, 0]} />
                   <Line dataKey="productive" name="Productive" stroke={CHART.sales} strokeWidth={2} dot={false} />
