@@ -102,3 +102,31 @@ export function applyCustomFieldFilters<T>(
 
   return next as T;
 }
+
+/**
+ * A stable `useServerTable` dependency for a screen's custom-field definitions.
+ *
+ * Screens load their `custom_fields` list asynchronously, so passing the array
+ * itself as a dependency re-runs the query a second time the moment it arrives
+ * — a wasted round-trip on every page load, which is exactly the kind of
+ * duplicate work this whole change exists to remove.
+ *
+ * The definitions only affect the QUERY when a `cf_*` filter is actually
+ * active, and then only through that field's type. So this returns an empty
+ * string when nothing is filtered, and otherwise a key that changes only when
+ * an active filter's field type does.
+ */
+export function customFieldFilterKey(
+  filters: FilterState,
+  customFields: CustomField[],
+): string {
+  const active = Object.keys(filters ?? {}).filter(
+    (key) => key.startsWith("cf_") && !isEmptyFilterValue(filters[key]),
+  );
+  if (active.length === 0) return "";
+
+  return active
+    .map((key) => `${key}:${customFields.find((f) => `cf_${f.id}` === key)?.field_type ?? "?"}`)
+    .sort()
+    .join("|");
+}

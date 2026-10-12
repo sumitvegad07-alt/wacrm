@@ -40,6 +40,7 @@ import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-ty
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, EmptyState, StatusBadge } from "@/components/shared";
 import { DEFAULT_PIPELINE_STAGES } from "@/lib/pipelines/default-stages";
+import { DEAL_BOARD_CAP } from "@/lib/table/reference-cap";
 
 const SPEC_DEFAULT_STAGES = DEFAULT_PIPELINE_STAGES;
 
@@ -188,7 +189,10 @@ export default function PipelinesPage() {
         .from("deals")
         .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
         .eq("pipeline_id", pipelineId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        // A board must show every deal in every stage, so it cannot page. The
+        // cap stops it becoming an unbounded download; see DEAL_BOARD_CAP.
+        .limit(DEAL_BOARD_CAP);
       // Fetch all deals; the Record Status column filter (default Active) decides what shows.
       const { data: dealsData } = await scope.apply(dealsBase, "user_id");
 

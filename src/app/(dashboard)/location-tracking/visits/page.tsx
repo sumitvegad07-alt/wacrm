@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useCallback, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useDataScope } from "@/hooks/use-data-scope";
@@ -12,6 +12,10 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
+import { useServerTable } from '@/hooks/use-server-table';
+import { fetchAllPages } from '@/lib/table/export-all-pages';
+import type { ServerTableQuery } from '@/lib/table/server-query';
+import { applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
 import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
@@ -24,12 +28,9 @@ import {
 
 export default function CustomerVisitsPage() {
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   // No default date: the page opens showing recent visits across all days.
   // Picking a date narrows to that day; clearing it returns to "all".
   const [selectedDate, setSelectedDate] = useState('');
-  const [visitsData, setVisitsData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   // _v2: saved column layouts would otherwise hide the new coordinate columns.
   const tableView = useTableView("wacrm_visits_table_columns_v2", {});
   const { filterState } = tableView;
@@ -38,111 +39,143 @@ export default function CustomerVisitsPage() {
   const scope = useDataScope();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!scope.ready) return; // wait for the scoped id set
-    fetchVisits();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, scope.ready, scope.key]);
+  /**
+   * One page of visits, searched and filtered by the database.
+   *
+   * This screen used to pull 500 visits and filter them in the browser — a hard
+   * cap that also meant older visits simply could not be reached. site_visits
+   * is the largest table in the app (24,310 rows and growing with every visit
+   * every rep makes), so customer_name, visited_by_name and search_text are
+   * columns on the row now (migration 20261012110000).
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      // Directional data-scoping (app-level; RLS is the real boundary).
+      let q = scope.apply(
+        sb
+          .from('site_visits')
+          .select(
+            `id, check_in_at, check_out_at, feedback_type, feedback_text, visit_photo_url,
+             target_type, target_id, check_in_lat, check_in_lng, check_out_lat, check_out_lng,
+             customer_name, visited_by_name, contacts ( name, company )`,
+            { count: 'exact' },
+          ),
+        'user_id',
+      );
 
-  const fetchVisits = async () => {
-    setIsLoading(true);
+      if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
-    // Directional data-scoping (app-level; RLS is the real boundary). No-op unless the account
-    // has Reporting Hierarchy on and the role isn't a bypass — see useDataScope.
-    let query = supabase
-      .from('site_visits')
-      .select(`
-        id,
-        check_in_at,
-        check_out_at,
-        feedback_type,
-        feedback_text,
-        visit_photo_url,
-        target_type,
-        target_id,
-        check_in_lat,
-        check_in_lng,
-        check_out_lat,
-        check_out_lng,
-        contacts ( name, company ),
-        profiles ( full_name )
-      `)
-      .order('check_in_at', { ascending: false })
-      .limit(500);
+      q = applyTextFilter(q, 'customer_name', filters.name);
+      q = applyTextFilter(q, 'visited_by_name', filters.visitedBy);
+      q = applyInFilter(q, 'feedback_type', filters.feedbackType);
+      q = applyDateFilter(q, 'check_in_at', filters.checkIn);
+      q = applyDateFilter(q, 'check_out_at', filters.checkOut);
 
-    // Date is an optional filter now — empty means "all recent visits".
-    if (selectedDate) {
-      const startOfDay = new Date(selectedDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(selectedDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      query = query
-        .gte('check_in_at', startOfDay.toISOString())
-        .lte('check_in_at', endOfDay.toISOString());
-    }
-
-    const { data, error } = await scope.apply(query, 'user_id');
-
-    if (data) {
-      // Visits are polymorphic (target_type 'Customer' | 'Lead'). The
-      // contacts embed only resolves legacy contact_id rows, and PostgREST
-      // can't join polymorphically — so lead names need a second lookup.
-      const leadIds = data
-        .filter(v => (v as any).target_type === 'Lead' && (v as any).target_id)
-        .map(v => (v as any).target_id);
-      const leadNames: Record<string, string> = {};
-      const leadPeople: Record<string, string> = {};
-      if (leadIds.length > 0) {
-        const { data: leadRows } = await supabase
-          .from('leads')
-          .select('id, name, company, contact_person')
-          .in('id', leadIds);
-        leadRows?.forEach(l => {
-          // Lead the row with the firm, as the customers list does.
-          leadNames[l.id] = (l as any).company || l.name;
-          leadPeople[l.id] = (l as any).contact_person || "";
-        });
+      // The toolbar's date picker: empty means "all recent visits".
+      if (selectedDate) {
+        const startOfDay = new Date(selectedDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(selectedDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        q = q.gte('check_in_at', startOfDay.toISOString()).lte('check_in_at', endOfDay.toISOString());
       }
 
-      const formatted = data.map(v => ({
+      return q.order('check_in_at', { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [scope, selectedDate],
+  );
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    enabled: scope.ready,
+    deps: [scope.key, selectedDate],
+  });
+
+  const fetchVisits = table.reload;
+  const isLoading = table.loading;
+
+  /**
+   * Lead names for the rows on screen.
+   *
+   * Visits are polymorphic (target_type 'Customer' | 'Lead') and PostgREST
+   * cannot join polymorphically, so lead rows still need a lookup — but only
+   * for the twenty rows on this page, not for every visit in the account.
+   */
+  const [leadInfo, setLeadInfo] = useState<Record<string, { name: string; person: string }>>({});
+  const leadIdsKey = useMemo(
+    () =>
+      table.rows
+        .filter((v) => (v as Record<string, unknown>).target_type === 'Lead' && (v as Record<string, unknown>).target_id)
+        .map((v) => String((v as Record<string, unknown>).target_id))
+        .join(','),
+    [table.rows],
+  );
+  useEffect(() => {
+    if (!leadIdsKey) { setLeadInfo({}); return; }
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from('leads').select('id, name, company, contact_person').in('id', leadIdsKey.split(','));
+      if (!alive) return;
+      const map: Record<string, { name: string; person: string }> = {};
+      (data || []).forEach((l: { id: string; name: string; company: string | null; contact_person: string | null }) => {
+        // Lead the row with the firm, as the customers list does.
+        map[l.id] = { name: l.company || l.name, person: l.contact_person || '' };
+      });
+      setLeadInfo(map);
+    })();
+    return () => { alive = false; };
+  }, [leadIdsKey, supabase]);
+
+  const toRow = useCallback(
+    (v: Record<string, any>) => {
+      const isLead = v.target_type === 'Lead';
+      const lead = isLead ? leadInfo[v.target_id] : undefined;
+      // Show the COMPANY here, not the contact person. A visit listed as
+      // "Laxmi mittal" when the customer is "Brahmani casting" is the same
+      // record under two names, and nobody can tell which to ask about.
+      const display = isLead ? lead?.name : v.customer_name;
+      return {
         id: v.id,
-        // Show the COMPANY here, not the contact person. A visit listed as
-        // "Laxmi mittal" when the customer is "Brahmani casting" is the same
-        // record under two names, and nobody can tell which one to ask about.
-        // Falls back to the person when a record has no company.
-        name: (v as any).target_type === 'Lead'
-          ? (leadNames[(v as any).target_id] ? `[${leadNames[(v as any).target_id]}]` : "Unknown")
-          : (((v.contacts as any)?.company || (v.contacts as any)?.name)
-              ? `[${(v.contacts as any).company || (v.contacts as any).name}]`
-              : "Unknown"),
-        contactPerson: (v as any).target_type === 'Lead'
-          ? (leadPeople[(v as any).target_id] || "-")
-          : ((v.contacts as any)?.name || "-"),
-        targetType: (v as any).target_type === 'Lead' ? 'Lead' : 'Customer',
+        name: display ? `[${display}]` : 'Unknown',
+        contactPerson: isLead ? (lead?.person || '-') : (v.contacts?.name || '-'),
+        targetType: isLead ? 'Lead' : 'Customer',
         rawCheckIn: v.check_in_at,
         rawCheckOut: v.check_out_at,
         checkIn: new Date(v.check_in_at).toLocaleString('en-IN'),
-        checkOut: v.check_out_at ? new Date(v.check_out_at).toLocaleString('en-IN') : "Active",
-        duration: v.check_out_at ? Math.round((new Date(v.check_out_at).getTime() - new Date(v.check_in_at).getTime()) / 60000) + "min" : "-",
-        feedbackType: v.feedback_type || "N/A",
-        feedback: v.feedback_text || "-",
-        visitedBy: (v.profiles as any)?.full_name || "Unknown",
+        checkOut: v.check_out_at ? new Date(v.check_out_at).toLocaleString('en-IN') : 'Active',
+        duration: v.check_out_at
+          ? Math.round((new Date(v.check_out_at).getTime() - new Date(v.check_in_at).getTime()) / 60000) + 'min'
+          : '-',
+        feedbackType: v.feedback_type || 'N/A',
+        feedback: v.feedback_text || '-',
+        visitedBy: v.visited_by_name || 'Unknown',
         img: v.visit_photo_url || null,
-        // Where the rep stood at each end of the visit. Check-out can be missing on a visit
-        // that is still open, so the two are kept separate rather than merged into one field.
-        checkInLat: (v as any).check_in_lat ?? null,
-        checkInLng: (v as any).check_in_lng ?? null,
-        checkOutLat: (v as any).check_out_lat ?? null,
-        checkOutLng: (v as any).check_out_lng ?? null,
-        checkInLatLng: formatLatLng((v as any).check_in_lat, (v as any).check_in_lng),
-        checkOutLatLng: formatLatLng((v as any).check_out_lat, (v as any).check_out_lng),
-      }));
-      setVisitsData(formatted);
-    } else {
-      setVisitsData([]);
-    }
-    setIsLoading(false);
-  };
+        checkInLat: v.check_in_lat,
+        checkInLng: v.check_in_lng,
+        checkOutLat: v.check_out_lat,
+        checkOutLng: v.check_out_lng,
+      };
+    },
+    [leadInfo],
+  );
+
+  const visitsData = useMemo(
+    () => table.rows.map((v) => toRow(v as Record<string, any>)),
+    [table.rows, toRow],
+  );
+
+  const exportAll = useCallback(async () => {
+    const { rows, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return { rows: rows.map((v) => toRow(v as Record<string, any>)), truncated };
+  }, [supabase, buildQuery, table.search, filterState, toRow]);
+
 
   const columns: ColumnDef<any>[] = [
     {
@@ -297,28 +330,8 @@ export default function CustomerVisitsPage() {
     }
   ];
 
-  const filteredVisits = useMemo(() => {
-    return visitsData.filter(row => {
-      if (searchQuery && !row.name.toLowerCase().includes(searchQuery.toLowerCase()) && !row.visitedBy.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return false;
-      }
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
-        if (colId === "name") {
-          if (!row.name.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "visitedBy") {
-          if (!row.visitedBy.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "feedbackType") {
-          if (!(val as string[]).includes(row.feedbackType)) return false;
-        } else if (colId === "checkIn") {
-          if (!isDateInFilter(row.rawCheckIn, val as string | string[])) return false;
-        } else if (colId === "checkOut") {
-          if (!isDateInFilter(row.rawCheckOut, val as string | string[])) return false;
-        }
-      }
-      return true;
-    });
-  }, [searchQuery, visitsData, filterState]);
+  /** buildQuery already applied the search and every column filter. */
+  const filteredVisits = visitsData;
 
   return (
     <PageLayout>
@@ -345,8 +358,8 @@ export default function CustomerVisitsPage() {
 
       <PageToolbar
         search={{
-          value: searchQuery,
-          onChange: setSearchQuery,
+          value: table.search,
+          onChange: table.setSearch,
           placeholder: "Search by customer or employee...",
         }}
       />
@@ -358,6 +371,7 @@ export default function CustomerVisitsPage() {
         isLoading={isLoading}
         rowKey={(row) => row.id}
         onRowClick={(row) => router.push(`/location-tracking/visits/${row.id}`)}
+        serverPagination={{ ...table.serverPagination, exportAll }}
       />
 
       <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />

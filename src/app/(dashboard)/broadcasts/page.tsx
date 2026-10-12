@@ -13,6 +13,7 @@ import { Radio, Plus, Loader2 } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
+import { REFERENCE_ROW_CAP } from '@/lib/table/reference-cap';
 
 /**
  * Poll cadence while any broadcast is sending. Kept modest so we don't
@@ -69,7 +70,8 @@ export default function BroadcastsPage() {
       const { data, error: fetchError } = await supabase
         .from('broadcasts')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(REFERENCE_ROW_CAP);
 
       if (fetchError) throw fetchError;
       setBroadcasts(data ?? []);

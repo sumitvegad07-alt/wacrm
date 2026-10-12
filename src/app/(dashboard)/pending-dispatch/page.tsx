@@ -9,6 +9,10 @@ import { Search, Truck, PackageCheck } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
+import { useServerTable } from '@/hooks/use-server-table';
+import { fetchAllPages } from '@/lib/table/export-all-pages';
+import type { ServerTableQuery } from '@/lib/table/server-query';
+import { applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { PageLayout, PageHeader, PageToolbar, StatusBadge } from '@/components/shared';
@@ -36,44 +40,82 @@ export default function PendingDispatchPage() {
   const { accountId, hasPermission } = useAuth();
   const canDispatch = hasPermission(PERMISSIONS.CRM.CREATE_ORDERS);
 
-  const [rows, setRows] = useState<PendingRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const tableView = useTableView("wacrm_pending_dispatch_table_columns", {});
   const { filterState } = tableView;
-  const [globalSearch, setGlobalSearch] = useState('');
 
-  const fetchData = useCallback(async () => {
-    if (!accountId) return;
-    setLoading(true);
-    // An order is "pending dispatch" while its status is Approved or Part
-    // Dispatch — the state machine already flips it to Dispatched once every
-    // item ships, so status is the source of truth for "not fully dispatched".
-    const { data } = await supabase
-      .from('orders')
-      .select('id, order_number, date, status, contacts(company, name), leads(name), order_items(quantity), order_dispatches(dispatch_items(quantity))')
-      .eq('account_id', accountId)
-      .in('status', ['Approved', 'Part Dispatch'])
-      .order('created_at', { ascending: false });
+  /**
+   * One page of orders awaiting dispatch, searched and filtered by the database.
+   *
+   * An order is "pending dispatch" while its status is Approved or Part
+   * Dispatch — the state machine flips it to Dispatched once every item ships,
+   * so status is the source of truth for "not fully dispatched".
+   *
+   * customer_name and search_text are columns on orders (migration
+   * 20261012100000), so this no longer embeds contacts or leads.
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      let q = sb
+        .from('orders')
+        .select(
+          'id, order_number, date, status, customer_name, order_items(quantity), order_dispatches(dispatch_items(quantity))',
+          { count: 'exact' },
+        )
+        .eq('account_id', accountId!)
+        .in('status', ['Approved', 'Part Dispatch']);
 
-    setRows(((data || []) as any[]).map((o) => {
-      const ordered = (o.order_items || []).reduce((s: number, it: any) => s + Number(it.quantity || 0), 0);
-      const delivered = (o.order_dispatches || []).reduce((s: number, d: any) =>
-        s + (d.dispatch_items || []).reduce((t: number, di: any) => t + Number(di.quantity || 0), 0), 0);
-      return {
-        id: o.id,
-        order_number: o.order_number,
-        customerName: o.contacts?.company || o.contacts?.name || o.leads?.name || 'Unknown',
-        date: o.date,
-        status: o.status,
-        ordered,
-        delivered,
-        difference: ordered - delivered,
-      };
-    }));
-    setLoading(false);
-  }, [accountId, supabase]);
+      if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+      q = applyTextFilter(q, 'customer_name', filters.customerName);
+      q = applyTextFilter(q, 'order_number', filters.order_number);
+      q = applyInFilter(q, 'status', filters.status);
+      q = applyDateFilter(q, 'date', filters.date);
+
+      return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [accountId],
+  );
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    enabled: Boolean(accountId),
+    deps: [accountId],
+  });
+
+  const fetchData = table.reload;
+  const loading = table.loading;
+
+  const toRow = (o: Record<string, any>): PendingRow => {
+    const ordered = (o.order_items || []).reduce(
+      (sum: number, it: { quantity?: number }) => sum + Number(it.quantity || 0), 0);
+    const delivered = (o.order_dispatches || []).reduce(
+      (sum: number, d: { dispatch_items?: { quantity?: number }[] }) =>
+        sum + (d.dispatch_items || []).reduce((t: number, di) => t + Number(di.quantity || 0), 0), 0);
+    return {
+      id: o.id,
+      order_number: o.order_number,
+      customerName: o.customer_name || 'Unknown',
+      date: o.date,
+      status: o.status,
+      ordered,
+      delivered,
+      difference: ordered - delivered,
+    };
+  };
+
+  const rows = useMemo(() => table.rows.map((o) => toRow(o as Record<string, any>)), [table.rows]);
+
+  const exportAll = useCallback(async () => {
+    const { rows: all, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return { rows: all.map((o) => toRow(o as Record<string, any>)), truncated };
+  }, [supabase, buildQuery, table.search, filterState]);
+
 
   const columns: ColumnDef<PendingRow>[] = [
     { id: 'order_number', label: 'Order #', type: 'text', render: (o) => <span className="font-medium font-mono text-sm">{o.order_number}</span> },
@@ -97,20 +139,8 @@ export default function PendingDispatchPage() {
     }] : []),
   ];
 
-  const filtered = useMemo(() => rows.filter((o) => {
-    if (globalSearch) {
-      const q = globalSearch.toLowerCase();
-      if (!o.order_number.toLowerCase().includes(q) && !o.customerName.toLowerCase().includes(q)) return false;
-    }
-    for (const [colId, val] of Object.entries(filterState)) {
-      if (val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0)) continue;
-      if (colId === 'customerName') { if (!o.customerName.toLowerCase().includes((val as string).toLowerCase())) return false; }
-      else if (colId === 'order_number') { if (!o.order_number.toLowerCase().includes((val as string).toLowerCase())) return false; }
-      else if (colId === 'status') { if (!(val as string[]).includes(o.status)) return false; }
-      else if (colId === 'date') { if (!isDateInFilter(o.date, val as string | string[])) return false; }
-    }
-    return true;
-  }), [rows, filterState, globalSearch]);
+  /** buildQuery already applied the search and every column filter. */
+  const filtered = rows;
 
   return (
     <PageLayout>
@@ -121,8 +151,8 @@ export default function PendingDispatchPage() {
 
       <PageToolbar
         search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
+          value: table.search,
+          onChange: table.setSearch,
           placeholder: "Search by order # or customer...",
         }}
       />
@@ -134,6 +164,7 @@ export default function PendingDispatchPage() {
         isLoading={loading}
         rowKey={(o) => o.id}
         onRowClick={(o) => router.push(`/orders/${o.id}`)}
+        serverPagination={{ ...table.serverPagination, exportAll }}
       />
     </PageLayout>
   );

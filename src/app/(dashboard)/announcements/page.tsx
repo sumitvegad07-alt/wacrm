@@ -18,6 +18,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { isDateInFilter } from "@/lib/date-filters";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
 
 export default function AnnouncementsPage() {
   const { accountId, accountRole } = useAuth();
@@ -43,7 +44,8 @@ export default function AnnouncementsPage() {
       .from("tenant_announcements")
       .select("*")
       .eq("account_id", accountId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(REFERENCE_ROW_CAP);
 
     if (error) {
       toast.error("Failed to load announcements");

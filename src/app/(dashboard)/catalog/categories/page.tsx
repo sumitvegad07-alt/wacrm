@@ -26,6 +26,7 @@ import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
+import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
 
 interface CategoryRow {
   id: string;
@@ -80,7 +81,7 @@ export default function CatalogCategoriesPage() {
     if (!accountId) return;
     setLoading(true);
     const [{ data: cats }, { data: acct }] = await Promise.all([
-      supabase.from("product_categories").select("*").eq("account_id", accountId).order("created_at"),
+      supabase.from("product_categories").select("*").eq("account_id", accountId).order("created_at").limit(REFERENCE_ROW_CAP),
       supabase.from("accounts").select("settings").eq("id", accountId).single(),
     ]);
     setCategories((cats as CategoryRow[]) ?? []);

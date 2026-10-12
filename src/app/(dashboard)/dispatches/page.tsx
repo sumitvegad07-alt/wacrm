@@ -9,6 +9,10 @@ import { Search, Plus, Truck } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
+import { useServerTable } from '@/hooks/use-server-table';
+import { fetchAllPages } from '@/lib/table/export-all-pages';
+import type { ServerTableQuery } from '@/lib/table/server-query';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
@@ -36,57 +40,98 @@ export default function DispatchesPage() {
   
   const canCreate = hasPermission(PERMISSIONS.CRM.CREATE_ORDERS);
 
-  const [rows, setRows] = useState<DispatchRow[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
-  const [loading, setLoading] = useState(true);
   const tableView = useTableView("wacrm_dispatches_table_columns", {});
   const { filterState } = tableView;
-  const [globalSearch, setGlobalSearch] = useState('');
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
     if (!accountId) return;
-    setLoading(true);
-    const [{ data }, { data: fieldsData }] = await Promise.all([
-      supabase
-        .from('order_dispatches')
-        .select('id, dispatch_number, dispatched_at, invoice_no, order:orders(order_number, contacts(company, name), leads(name)), dispatch_items(quantity, order_item:order_items(price))')
-        .eq('account_id', accountId)
-        .order('created_at', { ascending: false }),
-      supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'dispatch'),
-    ]);
-
-    setCustomFields(fieldsData || []);
-
-    let dispatchValues: any[] = [];
-    if (data && data.length > 0) {
-      const dispatchIds = data.map((d: any) => d.id);
-      const { data: vals } = await supabase.from('dispatch_custom_values').select('*').in('dispatch_id', dispatchIds);
-      dispatchValues = vals || [];
-    }
-
-    setRows(((data || []) as any[]).map((d) => {
-      const dItems = (d.dispatch_items || []) as any[];
-      const subAmount = dItems.reduce((s, di) => s + Number(di.quantity || 0) * Number(di.order_item?.price || 0), 0);
-      const customData: Record<string, any> = {};
-      dispatchValues.filter((v: any) => v.dispatch_id === d.id).forEach((v: any) => {
-        customData[`cf_${v.custom_field_id}`] = v.value;
-      });
-      return {
-        id: d.id,
-        dispatch_number: d.dispatch_number,
-        order_number: d.order?.order_number || '—',
-        customerName: d.order?.contacts?.company || d.order?.contacts?.name || d.order?.leads?.name || 'Unknown',
-        date: d.dispatched_at,
-        itemCount: dItems.length,
-        invoice_no: d.invoice_no || '—',
-        subAmount,
-        ...customData,
-      };
-    }));
-    setLoading(false);
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from('custom_fields').select('*')
+        .eq('account_id', accountId).eq('module_name', 'dispatch');
+      if (alive) setCustomFields(data || []);
+    })();
+    return () => { alive = false; };
   }, [accountId, supabase]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  /**
+   * One page of dispatches, searched and filtered by the database.
+   * order_number, customer_name, search_text and custom_values are columns on
+   * the row (migrations 20261012110000 / 20261012130000), so the order and
+   * customer embeds are gone and the custom-value table is no longer read for
+   * the whole account.
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      let q = sb
+        .from('order_dispatches')
+        .select(
+          'id, dispatch_number, dispatched_at, invoice_no, order_number, customer_name, custom_values, dispatch_items(quantity, order_item:order_items(price))',
+          { count: 'exact' },
+        )
+        .eq('account_id', accountId!);
+
+      if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
+
+      q = applyTextFilter(q, 'customer_name', filters.customerName);
+      q = applyTextFilter(q, 'dispatch_number', filters.dispatch_number);
+      q = applyTextFilter(q, 'order_number', filters.order_number);
+      q = applyDateFilter(q, 'dispatched_at', filters.date);
+      q = applyCustomFieldFilters(q, filters, customFields);
+
+      return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [accountId, customFields],
+  );
+
+  /** Stable dep: only changes when an ACTIVE cf_* filter's type could change the query. */
+  const cfKey = customFieldFilterKey(filterState, customFields);
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    enabled: Boolean(accountId),
+    deps: [accountId, cfKey],
+  });
+
+  const fetchData = table.reload;
+  const loading = table.loading;
+
+  const toRow = (d: Record<string, any>): DispatchRow => {
+    const dItems = (d.dispatch_items || []) as { quantity?: number; order_item?: { price?: number } }[];
+    return {
+      id: d.id,
+      dispatch_number: d.dispatch_number,
+      order_number: d.order_number || '\u2014',
+      customerName: d.customer_name || 'Unknown',
+      date: d.dispatched_at,
+      itemCount: dItems.length,
+      invoice_no: d.invoice_no || '\u2014',
+      subAmount: dItems.reduce(
+        (sum, di) => sum + Number(di.quantity || 0) * Number(di.order_item?.price || 0),
+        0,
+      ),
+      ...(d.custom_values ?? {}),
+    } as DispatchRow;
+  };
+
+  const rows = useMemo(
+    () => table.rows.map((d) => toRow(d as Record<string, any>)),
+    [table.rows],
+  );
+
+  const exportAll = useCallback(async () => {
+    const { rows: all, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return { rows: all.map((d) => toRow(d as Record<string, any>)), truncated };
+  }, [supabase, buildQuery, table.search, filterState]);
+
 
   const columns: ColumnDef<DispatchRow>[] = [
     { id: 'dispatch_number', label: 'Dispatch #', type: 'text', render: (d) => <span className="font-medium font-mono text-sm">{d.dispatch_number}</span> },
@@ -102,20 +147,8 @@ export default function DispatchesPage() {
     return getVisibleTableColumns([...columns], customFields, rows);
   }, [columns, customFields, rows]);
 
-  const filtered = useMemo(() => rows.filter((d) => {
-    if (globalSearch) {
-      const q = globalSearch.toLowerCase();
-      if (!d.dispatch_number.toLowerCase().includes(q) && !d.order_number.toLowerCase().includes(q) && !d.customerName.toLowerCase().includes(q) && !matchesSearchableCustomFields(d, customFields, globalSearch)) return false;
-    }
-    for (const [colId, val] of Object.entries(filterState)) {
-      if (val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0)) continue;
-      if (colId === 'customerName') { if (!d.customerName.toLowerCase().includes((val as string).toLowerCase())) return false; }
-      else if (colId === 'dispatch_number') { if (!d.dispatch_number.toLowerCase().includes((val as string).toLowerCase())) return false; }
-      else if (colId === 'order_number') { if (!d.order_number.toLowerCase().includes((val as string).toLowerCase())) return false; }
-      else if (colId === 'date') { if (!isDateInFilter(d.date, val as string | string[])) return false; }
-    }
-    return true;
-  }), [rows, filterState, globalSearch, customFields]);
+  /** buildQuery already applied the search and every column filter. */
+  const filtered = rows;
 
   return (
     <PageLayout>
@@ -133,8 +166,8 @@ export default function DispatchesPage() {
 
       <PageToolbar
         search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
+          value: table.search,
+          onChange: table.setSearch,
           placeholder: "Search by dispatch #, order #, or customer...",
         }}
       />
@@ -146,6 +179,7 @@ export default function DispatchesPage() {
         isLoading={loading}
         rowKey={(d) => d.id}
         onRowClick={(d) => router.push(`/dispatches/${d.id}`)}
+        serverPagination={{ ...table.serverPagination, exportAll }}
       />
     </PageLayout>
   );

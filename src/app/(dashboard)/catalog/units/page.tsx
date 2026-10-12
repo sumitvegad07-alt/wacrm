@@ -25,6 +25,7 @@ import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
+import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
 
 interface UnitRow {
   id: string;
@@ -72,7 +73,8 @@ export default function CatalogUnitsPage() {
       .from("product_units")
       .select("*")
       .eq("account_id", accountId)
-      .order("name");
+      .order("name")
+      .limit(REFERENCE_ROW_CAP);
     if (error) toast.error("Could not load units");
     setUnits((data as UnitRow[]) ?? []);
     setLoading(false);

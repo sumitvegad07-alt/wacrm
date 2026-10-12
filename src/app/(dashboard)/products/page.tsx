@@ -39,7 +39,7 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
@@ -122,10 +122,13 @@ export default function ProductsPage() {
     [customFields],
   );
 
+  /** Stable dep: only changes when an ACTIVE cf_* filter's type could change the query. */
+  const cfKey = customFieldFilterKey(filterState, customFields);
+
   const table = useServerTable<Record<string, unknown>>({
     tableView,
     buildQuery,
-    deps: [customFields],
+    deps: [cfKey],
   });
 
   const fetchProducts = table.reload;

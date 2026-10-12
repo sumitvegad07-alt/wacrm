@@ -24,6 +24,7 @@ import {
 } from "@/lib/auth/permission-groups";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
 
 interface EmployeeRole {
   id: string;
@@ -163,7 +164,8 @@ export default function RolesPage() {
     const { data, error } = await supabase
       .from("employee_roles")
       .select("*")
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true })
+      .limit(REFERENCE_ROW_CAP);
 
     if (error) {
       console.error(error);

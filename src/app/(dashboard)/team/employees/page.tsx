@@ -20,6 +20,7 @@ import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
+import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
 
 interface Employee {
   id: string;
@@ -96,7 +97,8 @@ export default function EmployeesPage() {
     const { data: empData, error: empError } = await supabase
       .from("profiles")
       .select("*, employee_roles(name), holiday_lists(id, name, is_default)")
-      .order("full_name");
+      .order("full_name")
+      .limit(REFERENCE_ROW_CAP);
 
     if (empError) toast.error("Failed to load employees");
     else setEmployees(empData || []);

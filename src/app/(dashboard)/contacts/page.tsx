@@ -35,6 +35,10 @@ import { formatCurrency } from '@/lib/currency';
 import { GatedButton } from '@/components/ui/gated-button';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
+import { useServerTable } from '@/hooks/use-server-table';
+import { fetchAllPages } from '@/lib/table/export-all-pages';
+import type { ServerTableQuery } from '@/lib/table/server-query';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { Badge } from '@/components/ui/badge';
@@ -66,9 +70,7 @@ export default function ContactsPage() {
   const { accountId, isModuleEnabled, hasPermission, defaultCurrency, hasSFA } = useAuth();
   const territoryEnabled = isModuleEnabled('territory');
 
-  const [contacts, setContacts] = useState<ContactWithData[]>([]);
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string; color?: string }[] }>({ enabled: false, levels: [] });
-  const [loading, setLoading] = useState(true);
   
   // Modals
   const [formOpen, setFormOpen] = useState(false);
@@ -87,7 +89,6 @@ export default function ContactsPage() {
   // _v3: saved column layouts would otherwise hide the new geo-tag columns.
   const tableView = useTableView("wacrm_contacts_table_columns_v3", { status: ['active'] });
   const { filterState } = tableView;
-  const [globalSearch, setGlobalSearch] = useState("");
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
 
@@ -95,117 +96,203 @@ export default function ContactsPage() {
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    // Fetch all customers (active + inactive); the Status column filter (default Active) decides what shows.
-    const [{ data: contactsData }, { data: tagsData }, { data: fieldsData }, { data: profilesData }, { data: areaData }, { data: allTerritories }] = await Promise.all([
-      supabase.from('contacts').select('*').order('created_at', { ascending: false }),
-      supabase.from('tags').select('*').order('name'),
-      supabase.from('custom_fields').select('*').eq('module_name', 'contact'),
-      supabase.from('profiles').select('id, user_id, full_name'),
-      supabase.from('employee_area_assignments').select('employee_id, territory_id'),
-      supabase.from('territories').select('id, parent_id').is('deleted_at', null)
-    ]);
+  /**
+   * Reference data: tags, custom fields, people, area assignments and the
+   * territory tree. All small, fixed-size lookups — loaded once per account
+   * rather than alongside every page of customers.
+   */
+  const [refData, setRefData] = useState<{
+    nameOf: (id: string | null | undefined) => string | null;
+    areaEmployeesFor: (territoryId: string | null | undefined) => string[];
+    tagsMap: Record<string, Tag>;
+  }>({ nameOf: () => null, areaEmployeesFor: () => [], tagsMap: {} });
 
-    setAllTags(tagsData || []);
-    setCustomFields(fieldsData || []);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const [{ data: tagsData }, { data: fieldsData }, { data: profilesData }, { data: areaData }, { data: allTerritories }] =
+        await Promise.all([
+          supabase.from('tags').select('*').order('name'),
+          supabase.from('custom_fields').select('*').eq('module_name', 'contact'),
+          supabase.from('profiles').select('id, user_id, full_name'),
+          supabase.from('employee_area_assignments').select('employee_id, territory_id'),
+          supabase.from('territories').select('id, parent_id').is('deleted_at', null),
+        ]);
+      if (!alive) return;
 
-    // Resolve an employee id (a profiles.id OR an auth user id — the app stores both
-    // in different places) to a name.
-    const nameOf = (id: string | null | undefined): string | null => {
-      if (!id) return null;
-      const p = (profilesData || []).find((x: any) => x.id === id || x.user_id === id);
-      return p?.full_name ?? null;
+      setAllTags(tagsData || []);
+      setCustomFields(fieldsData || []);
+
+      // An employee id may be a profiles.id OR an auth user id — the app stores
+      // both in different places — so resolve against either.
+      const nameOf = (id: string | null | undefined): string | null => {
+        if (!id) return null;
+        const pr = (profilesData || []).find(
+          (x: { id: string; user_id: string }) => x.id === id || x.user_id === id,
+        );
+        return (pr as { full_name?: string } | undefined)?.full_name ?? null;
+      };
+
+      const areaNamesByTerritory: Record<string, string[]> = {};
+      (areaData || []).forEach((a: { employee_id: string; territory_id: string }) => {
+        const nm = nameOf(a.employee_id);
+        if (a.territory_id && nm) (areaNamesByTerritory[a.territory_id] ||= []).push(nm);
+      });
+
+      // An assignment on a parent territory (a State) covers customers tagged to
+      // its children (a City/Area), so walk up to the first assigned ancestor.
+      const territoryParent: Record<string, string | null> = {};
+      (allTerritories || []).forEach((t: { id: string; parent_id: string | null }) => {
+        territoryParent[t.id] = t.parent_id ?? null;
+      });
+      const areaEmployeesFor = (territoryId: string | null | undefined): string[] => {
+        let cur = territoryId ?? null;
+        let guard = 0;
+        while (cur && guard < 8) {
+          if (areaNamesByTerritory[cur]?.length) return areaNamesByTerritory[cur];
+          cur = territoryParent[cur] ?? null;
+          guard += 1;
+        }
+        return [];
+      };
+
+      const tagsMap: Record<string, Tag> = {};
+      tagsData?.forEach((t: Tag) => {
+        tagsMap[t.id] = t;
+      });
+
+      setRefData({ nameOf, areaEmployeesFor, tagsMap });
+    })();
+    return () => {
+      alive = false;
     };
-    // Area-wise assignment: territory_id → the employees assigned to that territory.
-    const areaNamesByTerritory: Record<string, string[]> = {};
-    (areaData || []).forEach((a: any) => {
-      const nm = nameOf(a.employee_id);
-      if (a.territory_id && nm) {
-        (areaNamesByTerritory[a.territory_id] ||= []).push(nm);
-      }
-    });
-    // An assignment on a parent territory (e.g. a State) covers customers tagged to
-    // its children (a City/Area), so walk up the tree to the first assigned ancestor.
-    const territoryParent: Record<string, string | null> = {};
-    (allTerritories || []).forEach((t: any) => { territoryParent[t.id] = t.parent_id ?? null; });
-    const areaEmployeesFor = (territoryId: string | null | undefined): string[] => {
-      let cur = territoryId ?? null;
-      let guard = 0;
-      while (cur && guard < 8) {
-        if (areaNamesByTerritory[cur]?.length) return areaNamesByTerritory[cur];
-        cur = territoryParent[cur] ?? null;
-        guard += 1;
-      }
-      return [];
-    };
+  }, [supabase]);
 
-    // Order-hierarchy config → drives the optional Customer Level column.
-    if (accountId) {
+  useEffect(() => {
+    if (!accountId) return;
+    let alive = true;
+    void (async () => {
       const { data: acct } = await supabase.from('accounts').select('settings').eq('id', accountId).single();
+      if (!alive) return;
       const os = acct?.settings?.order_settings;
       setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? os.levels : [] });
-    }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [supabase, accountId]);
 
-    let enhancedContacts = contactsData || [];
+  /**
+   * One page of customers, searched and filtered by the database.
+   *
+   * search_text covers company, contact person, phone, email and searchable
+   * custom values; territory_name and custom_values are columns on the row
+   * (migrations 20261012120000 / 20261012130000).
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      let q = sb.from('contacts').select('*', { count: 'exact' });
 
-    if (contactsData && contactsData.length > 0) {
-      const contactIds = contactsData.map(c => c.id);
-      
-      const [{ data: contactTags }, { data: valuesData }] = await Promise.all([
-        supabase.from('contact_tags').select('contact_id, tag_id').in('contact_id', contactIds),
-        supabase.from('contact_custom_values').select('*').in('contact_id', contactIds)
-      ]);
+      if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
-      const tagsByContact: Record<string, Tag[]> = {};
-      const tagsMap: Record<string, Tag> = {};
-      tagsData?.forEach(t => tagsMap[t.id] = t);
-
-      contactTags?.forEach((ct) => {
-        if (!tagsByContact[ct.contact_id]) tagsByContact[ct.contact_id] = [];
-        if (tagsMap[ct.tag_id]) tagsByContact[ct.contact_id].push(tagsMap[ct.tag_id]);
-      });
-
-      // Territory names via a separate lookup (not a PostgREST embed) — the
-      // contacts.territory_id FK is new, and embedding right after adding an FK
-      // risks a stale schema-cache failure that would blank the whole list
-      // (see CLAUDE Web.md, issue #294 pattern).
-      const territoryNames: Record<string, string> = {};
-      if (territoryEnabled) {
-        const tids = [...new Set(contactsData.map((c) => c.territory_id).filter(Boolean))] as string[];
-        if (tids.length > 0) {
-          const { data: terrs } = await supabase.from('territories').select('id, name').in('id', tids);
-          terrs?.forEach((t) => { territoryNames[t.id] = t.name; });
-        }
+      // The "Company Name" column filters on company; "Contact Person" on name.
+      q = applyTextFilter(q, 'company', filters.name);
+      q = applyTextFilter(q, 'name', filters.contact_person);
+      q = applyTextFilter(q, 'phone', filters.phone);
+      q = applyTextFilter(q, 'email', filters.email);
+      q = applyTextFilter(q, 'company', filters.company);
+      for (const col of ['address', 'area', 'city', 'state', 'country', 'pincode']) {
+        q = applyTextFilter(q, col, filters[col]);
       }
+      q = applyTextFilter(q, 'territory_name', filters.territory);
+      q = applyDateFilter(q, 'created_at', filters.created_at);
+      q = applyCustomFieldFilters(q, filters, customFields);
 
-      enhancedContacts = contactsData.map((contact: any) => {
-        const contactValues = valuesData?.filter((v: any) => v.contact_id === contact.id) || [];
-        const customData: any = {};
-        contactValues.forEach((v: any) => {
-          customData[`cf_${v.custom_field_id}`] = v.value;
-        });
+      const want = filters.status as string[] | undefined;
+      if (Array.isArray(want) && want.length === 1) q = q.eq('is_active', want[0] === 'active');
+
+      return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [customFields],
+  );
+
+  /** Stable dep: only changes when an ACTIVE cf_* filter's type could change the query. */
+  const cfKey = customFieldFilterKey(filterState, customFields);
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    deps: [cfKey],
+  });
+
+  const fetchData = table.reload;
+  const loading = table.loading;
+
+  /** Tags for the rows on screen only, not for every customer in the account. */
+  const [tagsByContact, setTagsByContact] = useState<Record<string, Tag[]>>({});
+  const pageIds = useMemo(() => table.rows.map((c) => String(c.id)).join(','), [table.rows]);
+  useEffect(() => {
+    if (!pageIds) {
+      setTagsByContact({});
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from('contact_tags')
+        .select('contact_id, tag_id')
+        .in('contact_id', pageIds.split(','));
+      if (!alive) return;
+      const byContact: Record<string, Tag[]> = {};
+      (data || []).forEach((ct: { contact_id: string; tag_id: string }) => {
+        const tag = refData.tagsMap[ct.tag_id];
+        if (tag) (byContact[ct.contact_id] ||= []).push(tag);
+      });
+      setTagsByContact(byContact);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [pageIds, supabase, refData.tagsMap]);
+
+  const contacts = useMemo(
+    () =>
+      table.rows.map((row) => {
+        const c = row as Record<string, any>;
         // Assigned Employee = direct assignment, else area-wise (via territory),
         // else the salesman who created the customer.
-        const areaNames = areaEmployeesFor(contact.territory_id);
-        const assignedEmployee =
-          nameOf(contact.employee_id) ||
-          (areaNames.length > 0 ? areaNames.join(', ') : null) ||
-          nameOf(contact.user_id) ||
-          null;
+        const areaNames = refData.areaEmployeesFor(c.territory_id);
         return {
-          ...contact,
-          tags: tagsByContact[contact.id] || [],
-          _territoryName: contact.territory_id ? (territoryNames[contact.territory_id] ?? null) : null,
-          _assignedEmployee: assignedEmployee,
-          ...customData
+          ...c,
+          ...(c.custom_values ?? {}),
+          tags: tagsByContact[c.id] || [],
+          _territoryName: c.territory_name ?? null,
+          _assignedEmployee:
+            refData.nameOf(c.employee_id) ||
+            (areaNames.length > 0 ? areaNames.join(', ') : null) ||
+            refData.nameOf(c.user_id) ||
+            null,
         };
-      });
-    }
+      }),
+    [table.rows, tagsByContact, refData],
+  );
 
-    setContacts(enhancedContacts);
-    setLoading(false);
-  }, [supabase, accountId]);
+  const exportAll = useCallback(async () => {
+    const { rows, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return {
+      rows: rows.map((r) => {
+        const c = r as Record<string, any>;
+        return { ...c, ...(c.custom_values ?? {}), _territoryName: c.territory_name ?? null };
+      }),
+      truncated,
+    };
+  }, [supabase, buildQuery, table.search, filterState]);
+
 
   useEffect(() => {
     fetchData();
@@ -584,67 +671,8 @@ export default function ContactsPage() {
     return getVisibleTableColumns([...columns], customFields, contacts);
   }, [columns, customFields, contacts]);
 
-  const filteredContacts = useMemo(() => {
-    return contacts.filter(contact => {
-      // Global search (company name is primary, then person, phone, email, and searchable custom fields)
-      if (globalSearch) {
-        const q = globalSearch.toLowerCase();
-        const hit =
-          contact.company?.toLowerCase().includes(q) ||
-          contact.name?.toLowerCase().includes(q) ||
-          contact.phone?.includes(globalSearch) ||
-          contact.email?.toLowerCase().includes(q) ||
-          matchesSearchableCustomFields(contact, customFields, globalSearch);
-        if (!hit) return false;
-      }
-
-      // Column filters
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
-
-        if (colId === "name") {
-          // "Company Name" column filters on the company field.
-          if (!contact.company?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "contact_person") {
-          if (!contact.name?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "phone") {
-          if (!contact.phone?.includes(val as string)) return false;
-        } else if (colId === "email") {
-          if (!contact.email?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "company") {
-          if (!contact.company?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (["address", "area", "city", "state", "country", "pincode"].includes(colId)) {
-          const field = (contact as Record<string, unknown>)[colId];
-          if (typeof field !== "string" || !field.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "territory") {
-          // Territory is a lookup column: its displayed value lives on _territoryName
-          // (resolved from territory_id), not a plain contact field — filter on that.
-          const territoryName = (contact as { _territoryName?: string | null })._territoryName;
-          if (!territoryName?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "created_at") {
-          if (!isDateInFilter(contact.created_at, val as string | string[])) return false;
-        } else if (colId === "status") {
-          const want = val as string[];
-          if (Array.isArray(want) && want.length) {
-            const state = (contact as any).is_active !== false ? "active" : "inactive";
-            if (!want.includes(state)) return false;
-          }
-        } else if (colId.startsWith("cf_")) {
-          const cfVal = contact[colId];
-          const typeOfCf = customFields.find(f => `cf_${f.id}` === colId)?.field_type;
-          
-          if (typeOfCf === 'date') {
-            if (!isDateInFilter(cfVal, val as string | string[])) return false;
-          } else if (typeOfCf === 'dropdown' || typeOfCf === 'radio' || typeOfCf === 'multi-select') {
-             if (!(val as string[]).includes(cfVal)) return false;
-          } else {
-             if (!cfVal?.toLowerCase().includes((val as string).toLowerCase())) return false;
-          }
-        }
-      }
-      return true;
-    });
-  }, [contacts, filterState, globalSearch]);
+  /** buildQuery already applied the search and every column filter. */
+  const filteredContacts = contacts;
 
   return (
     <PageLayout>
@@ -661,9 +689,18 @@ export default function ContactsPage() {
         ]}
       />
 
+      <PageToolbar
+        search={{
+          value: table.search,
+          onChange: table.setSearch,
+          placeholder: "Search customers by company, person, phone or email...",
+        }}
+      />
+
       <DataTable
         columns={visibleColumns}
         data={filteredContacts}
+        serverPagination={{ ...table.serverPagination, exportAll }}
         actions={
           <div className="flex items-center gap-2">
             <GatedButton data-tour="customer-import" variant="outline" size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="h-7 text-xs px-2.5">

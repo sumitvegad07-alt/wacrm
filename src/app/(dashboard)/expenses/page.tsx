@@ -19,7 +19,7 @@ import { useTableView } from "@/hooks/use-table-view";
 import { useServerTable } from "@/hooks/use-server-table";
 import { fetchAllPages } from "@/lib/table/export-all-pages";
 import type { ServerTableQuery } from "@/lib/table/server-query";
-import { applyCustomFieldFilters, applyDateFilter, applyInFilter, applyTextFilter } from "@/lib/table/apply-filters";
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from "@/lib/table/apply-filters";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -101,11 +101,14 @@ export default function ExpensesPage() {
    *  list started paging on the server. */
   const [busy, setBusy] = useState(false);
 
+  /** Stable dep: only changes when an ACTIVE cf_* filter's type could change the query. */
+  const cfKey = customFieldFilterKey(filterState, customFields);
+
   const table = useServerTable<Record<string, unknown>>({
     tableView,
     buildQuery,
     enabled: Boolean(accountId) && scope.ready,
-    deps: [accountId, scope.key, customFields],
+    deps: [accountId, scope.key, cfKey],
   });
 
   const loadExpenses = table.reload;

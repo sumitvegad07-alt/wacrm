@@ -39,6 +39,10 @@ import { useCan } from '@/hooks/use-can';
 
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
+import { useServerTable } from '@/hooks/use-server-table';
+import { fetchAllPages } from '@/lib/table/export-all-pages';
+import type { ServerTableQuery } from '@/lib/table/server-query';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
@@ -66,11 +70,8 @@ export default function QuotationsPage() {
   const canEditSettings = useCan('edit-settings');
   const { account } = useAuth();
 
-  const [quotations, setQuotations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   
   // DataTable state
-  const [globalSearch, setGlobalSearch] = useState('');
   // Default filter shows Active quotations (Inactive/all via the Status column filter).
   const tableView = useTableView("wacrm_quotations_table_columns", { record_status: ['active'] });
   const { filterState } = tableView;
@@ -97,62 +98,83 @@ export default function QuotationsPage() {
     }
   }, [searchParams, router]);
 
-  const fetchQuotations = useCallback(async () => {
-    setLoading(true);
-
-    const quotationsBase = supabase.from('quotations').select('*, contact:contacts!quotations_contact_id_fkey(name, company), lead:leads!quotations_lead_id_fkey(name, contact_person)').eq('is_latest_version', true).order('created_at', { ascending: false });
-    const [{ data: quotationsData, error: quotationsError }, { data: fieldsData }] = await Promise.all([
-      quotationsBase,
-      supabase.from('custom_fields').select('*').eq('module_name', 'quotation')
-    ]);
-
-    if (quotationsError) {
-      console.error('Error fetching quotations:', quotationsError.message);
-      toast.error('Failed to load quotations');
-    }
-
-    setCustomFields(fieldsData || []);
-
-    let enhancedQuotations = quotationsData || [];
-    if (quotationsData && quotationsData.length > 0) {
-      const quotationIds = quotationsData.map(q => q.id);
-
-      // Fetch creators separately: quotations.user_id references auth.users, not
-      // profiles, so it cannot be embedded via a PostgREST relationship hint.
-      const creatorIds = Array.from(new Set(quotationsData.map(q => q.user_id).filter(Boolean)));
-      const creatorMap: Record<string, { full_name: string | null; email: string | null }> = {};
-      if (creatorIds.length > 0) {
-        const { data: creatorsData } = await supabase
-          .from('profiles')
-          .select('user_id, full_name, email')
-          .in('user_id', creatorIds);
-        (creatorsData || []).forEach((c: any) => {
-          creatorMap[c.user_id] = { full_name: c.full_name, email: c.email };
-        });
-      }
-      enhancedQuotations = quotationsData.map(q => ({ ...q, creator: creatorMap[q.user_id] || null }));
-
-      const { data: valuesData } = await supabase
-        .from('quotation_custom_values')
-        .select('*')
-        .in('quotation_id', quotationIds);
-
-      if (valuesData && valuesData.length > 0) {
-        enhancedQuotations = enhancedQuotations.map(quotation => {
-          const quotationValues = valuesData.filter((v: any) => v.quotation_id === quotation.id);
-          const customData: any = {};
-          quotationValues.forEach((v: any) => {
-            customData[`cf_${v.custom_field_id}`] = v.value;
-          });
-          return { ...quotation, ...customData };
-        });
-      }
-    }
-
-    setQuotations(enhancedQuotations);
-    setLoading(false);
-    setSelectedIds(new Set());
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase.from('custom_fields').select('*').eq('module_name', 'quotation');
+      if (alive) setCustomFields(data || []);
+    })();
+    return () => { alive = false; };
   }, [supabase]);
+
+  /**
+   * One page of quotations, searched and filtered by the database.
+   *
+   * customer_name, creator_name, search_text and custom_values are columns on
+   * the row (migrations 20261012120000 / 20261012130000). creator_name matters
+   * here: quotations.user_id references auth.users, so the creator could never
+   * be embedded via a PostgREST relationship and used to need its own query.
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      let q = sb
+        .from('quotations')
+        .select(
+          '*, contact:contacts!quotations_contact_id_fkey(name, company), lead:leads!quotations_lead_id_fkey(name, contact_person)',
+          { count: 'exact' },
+        )
+        .eq('is_latest_version', true);
+
+      if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
+
+      q = applyTextFilter(q, 'quotation_number', filters.quotation_number);
+      q = applyInFilter(q, 'status', filters.status);
+      q = applyTextFilter(q, 'customer_name', filters.contact);
+      q = applyTextFilter(q, 'creator_name', filters.creator);
+      q = applyDateFilter(q, 'date', filters.date);
+      q = applyCustomFieldFilters(q, filters, customFields);
+
+      const want = filters.record_status as string[] | undefined;
+      if (Array.isArray(want) && want.length === 1) q = q.eq('is_active', want[0] === 'active');
+
+      return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [customFields],
+  );
+
+  /** Stable dep: only changes when an ACTIVE cf_* filter's type could change the query. */
+  const cfKey = customFieldFilterKey(filterState, customFields);
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    deps: [cfKey],
+  });
+
+  const fetchQuotations = table.reload;
+  const loading = table.loading;
+
+  const toRow = (q: Record<string, any>) => ({
+    ...q,
+    ...(q.custom_values ?? {}),
+    creator: q.creator_name ? { full_name: q.creator_name, email: null } : null,
+  });
+
+  const quotations = useMemo(
+    () => table.rows.map((q) => toRow(q as Record<string, any>)),
+    [table.rows],
+  );
+
+  const exportAll = useCallback(async () => {
+    const { rows, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return { rows: rows.map((q) => toRow(q as Record<string, any>)), truncated };
+  }, [supabase, buildQuery, table.search, filterState]);
+
 
   useEffect(() => {
     fetchQuotations();
@@ -326,59 +348,8 @@ export default function QuotationsPage() {
     return getVisibleTableColumns([...columns], customFields, quotations);
   }, [columns, customFields, quotations]);
 
-  const filteredQuotations = useMemo(() => {
-    return quotations.filter(quotation => {
-      // Global search (number, contact, lead, and searchable custom fields)
-      if (globalSearch) {
-        const search = globalSearch.toLowerCase();
-        const matchesNumber = quotation.quotation_number?.toLowerCase().includes(search);
-        const matchesContact = quotation.contact?.name?.toLowerCase().includes(search);
-        const matchesLead = quotation.lead?.name?.toLowerCase().includes(search);
-        const matchesCustom = matchesSearchableCustomFields(quotation, customFields, globalSearch);
-        if (!matchesNumber && !matchesContact && !matchesLead && !matchesCustom) {
-          return false;
-        }
-      }
-
-      // Column filters
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
-
-        if (colId === "quotation_number") {
-          if (!quotation.quotation_number?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "status") {
-          if (!(val as string[]).includes(quotation.status)) return false;
-        } else if (colId === "record_status") {
-          const want = val as string[];
-          if (Array.isArray(want) && want.length) {
-            const state = quotation.is_active !== false ? "active" : "inactive";
-            if (!want.includes(state)) return false;
-          }
-        } else if (colId === "contact") {
-          const matchC = quotation.contact?.name?.toLowerCase().includes((val as string).toLowerCase());
-          const matchL = quotation.lead?.name?.toLowerCase().includes((val as string).toLowerCase());
-          if (!matchC && !matchL) return false;
-        } else if (colId === "creator") {
-          const creatorName = quotation.creator?.full_name || quotation.creator?.email || "";
-          if (!creatorName.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "date") {
-          if (!isDateInFilter(quotation.date, val as string | string[])) return false;
-        } else if (colId.startsWith("cf_")) {
-          const cfVal = quotation[colId];
-          const typeOfCf = customFields.find(f => `cf_${f.id}` === colId)?.field_type;
-          
-          if (typeOfCf === 'date') {
-            if (!isDateInFilter(cfVal, val as string | string[])) return false;
-          } else if (typeOfCf === 'dropdown' || typeOfCf === 'radio' || typeOfCf === 'multi-select') {
-             if (!(val as string[]).includes(cfVal)) return false;
-          } else {
-             if (!cfVal?.toLowerCase().includes((val as string).toLowerCase())) return false;
-          }
-        }
-      }
-      return true;
-    });
-  }, [quotations, filterState, globalSearch, customFields]);
+  /** buildQuery already applied the search and every column filter. */
+  const filteredQuotations = quotations;
 
   return (
     <PageLayout>
@@ -445,8 +416,8 @@ export default function QuotationsPage() {
 
       <PageToolbar
         search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
+          value: table.search,
+          onChange: table.setSearch,
           placeholder: "Search by number or contact...",
         }}
       />
@@ -472,6 +443,7 @@ export default function QuotationsPage() {
         isLoading={loading}
         rowKey={(quotation) => quotation.id}
         onRowClick={(quotation) => router.push(`/quotations/${quotation.id}`)}
+        serverPagination={{ ...table.serverPagination, exportAll }}
         selection={{
           selectedIds: selectedIds,
           onSelectAll: (checked) => setSelectedIds(checked ? new Set(filteredQuotations.map(q => q.id)) : new Set()),
