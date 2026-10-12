@@ -49,6 +49,10 @@ import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from 
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
+import { useServerTable } from '@/hooks/use-server-table';
+import { fetchAllPages } from '@/lib/table/export-all-pages';
+import type { ServerTableQuery } from '@/lib/table/server-query';
+import { applyCustomFieldFilters, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
@@ -82,11 +86,8 @@ export default function TasksPage() {
   const searchParams = useSearchParams();
   const canEditSettings = useCan('edit-settings');
 
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   
   // DataTable state
-  const [globalSearch, setGlobalSearch] = useState('');
   const [hideCompleted, setHideCompleted] = useState(true);
   // Default filter shows Active tasks (Inactive/all via the Status column filter).
   const tableView = useTableView("wacrm_tasks_table_columns", { record_status: ['active'] });
@@ -107,41 +108,86 @@ export default function TasksPage() {
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchTasks = useCallback(async () => {
-    setLoading(true);
-
-    const tasksBase = supabase.from('tasks').select('*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), contact:contacts!tasks_contact_id_fkey(name, phone), deal:deals!tasks_deal_id_fkey(title)').order('created_at', { ascending: false });
-    const [{ data: tasksData }, { data: fieldsData }] = await Promise.all([
-      tasksBase,
-      supabase.from('custom_fields').select('*').eq('module_name', 'task')
-    ]);
-
-    setCustomFields(fieldsData || []);
-
-    let enhancedTasks = tasksData || [];
-    if (tasksData && tasksData.length > 0) {
-      const taskIds = tasksData.map(t => t.id);
-      const { data: valuesData } = await supabase
-        .from('task_custom_values')
-        .select('*')
-        .in('task_id', taskIds);
-
-      if (valuesData && valuesData.length > 0) {
-        enhancedTasks = tasksData.map(task => {
-          const taskValues = valuesData.filter((v: any) => v.task_id === task.id);
-          const customData: any = {};
-          taskValues.forEach((v: any) => {
-            customData[`cf_${v.custom_field_id}`] = v.value;
-          });
-          return { ...task, ...customData };
-        });
-      }
-    }
-
-    setTasks(enhancedTasks);
-    setLoading(false);
-    setSelectedTaskIds(new Set());
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase.from('custom_fields').select('*').eq('module_name', 'task');
+      if (alive) setCustomFields(data || []);
+    })();
+    return () => { alive = false; };
   }, [supabase]);
+
+  /**
+   * One page of tasks, searched and filtered by the database.
+   * assignee_name, linked_text, search_text and custom_values are columns on
+   * the row (migrations 20261012120000 / 20261012130000), so the two name
+   * filters hit real columns and the embeds are only for display.
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      let q = sb
+        .from('tasks')
+        .select(
+          '*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), contact:contacts!tasks_contact_id_fkey(name, phone), deal:deals!tasks_deal_id_fkey(title)',
+          { count: 'exact' },
+        );
+
+      if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
+
+      q = applyTextFilter(q, 'title', filters.title);
+      q = applyInFilter(q, 'status', filters.status);
+      q = applyInFilter(q, 'priority', filters.priority);
+      q = applyTextFilter(q, 'assignee_name', filters.assignee);
+      q = applyTextFilter(q, 'linked_text', filters.linked_to);
+      q = applyDateFilter(q, 'due_date', filters.due_date);
+      q = applyCustomFieldFilters(q, filters, customFields);
+
+      const want = filters.record_status as string[] | undefined;
+      if (Array.isArray(want) && want.length === 1) q = q.eq('is_active', want[0] === 'active');
+
+      // "Hide completed" is a toolbar toggle, not a column filter.
+      if (hideCompleted) q = q.not('status', 'in', '("Completed","Cancelled")');
+
+      return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [customFields, hideCompleted],
+  );
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    deps: [customFields, hideCompleted],
+  });
+
+  const fetchTasks = table.reload;
+  const loading = table.loading;
+
+  const tasks = useMemo(
+    () => table.rows.map((row) => {
+      const t = row as Record<string, any>;
+      return { ...t, ...(t.custom_values ?? {}) };
+    }),
+    [table.rows],
+  );
+
+  const pageIds = useMemo(() => tasks.map((t) => t.id).join(','), [tasks]);
+  useEffect(() => { setSelectedTaskIds(new Set()); }, [pageIds]);
+
+  const exportAll = useCallback(async () => {
+    const { rows, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return {
+      rows: rows.map((r) => {
+        const t = r as Record<string, any>;
+        return { ...t, ...(t.custom_values ?? {}) };
+      }),
+      truncated,
+    };
+  }, [supabase, buildQuery, table.search, filterState]);
 
   useEffect(() => {
     fetchTasks();
@@ -337,61 +383,8 @@ export default function TasksPage() {
     return getVisibleTableColumns([...columns], customFields, tasks);
   }, [columns, customFields, tasks]);
 
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
-      // Hide Completed
-      if (hideCompleted && (task.status === 'Completed' || task.status === 'Cancelled')) return false;
-
-      // Global search (title, description, and searchable custom fields)
-      if (
-        globalSearch &&
-        !task.title?.toLowerCase().includes(globalSearch.toLowerCase()) &&
-        !task.description?.toLowerCase().includes(globalSearch.toLowerCase()) &&
-        !matchesSearchableCustomFields(task, customFields, globalSearch)
-      ) {
-        return false;
-      }
-
-      // Column filters
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
-
-        if (colId === "title") {
-          if (!task.title?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "status") {
-          if (!(val as string[]).includes(task.status)) return false;
-        } else if (colId === "record_status") {
-          const want = val as string[];
-          if (Array.isArray(want) && want.length) {
-            const state = (task as any).is_active !== false ? "active" : "inactive";
-            if (!want.includes(state)) return false;
-          }
-        } else if (colId === "priority") {
-          if (!(val as string[]).includes(task.priority)) return false;
-        } else if (colId === "assignee") {
-          const assigneeName = task.assignee?.full_name || task.assignee?.email || "Unassigned";
-          if (!assigneeName.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "linked_to") {
-          const linkedText = `${task.contact?.name || ''} ${task.deal?.title || ''}`;
-          if (!linkedText.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "due_date") {
-          if (!isDateInFilter(task.due_date, val as string | string[])) return false;
-        } else if (colId.startsWith("cf_")) {
-          const cfVal = task[colId];
-          const typeOfCf = customFields.find(f => `cf_${f.id}` === colId)?.field_type;
-          
-          if (typeOfCf === 'date') {
-            if (!isDateInFilter(cfVal, val as string | string[])) return false;
-          } else if (typeOfCf === 'dropdown' || typeOfCf === 'radio' || typeOfCf === 'multi-select') {
-             if (!(val as string[]).includes(cfVal)) return false;
-          } else {
-             if (!cfVal?.toLowerCase().includes((val as string).toLowerCase())) return false;
-          }
-        }
-      }
-      return true;
-    });
-  }, [tasks, filterState, globalSearch, hideCompleted, customFields]);
+  /** buildQuery already applied the search, every filter and Hide Completed. */
+  const filteredTasks = tasks;
 
   return (
     <PageLayout>
@@ -412,8 +405,8 @@ export default function TasksPage() {
 
       <PageToolbar
         search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
+          value: table.search,
+          onChange: table.setSearch,
           placeholder: "Search tasks...",
         }}
         actions={
@@ -464,6 +457,7 @@ export default function TasksPage() {
         isLoading={loading}
         rowKey={(task) => task.id}
         onRowClick={(task) => router.push(`/tasks/${task.id}`)}
+        serverPagination={{ ...table.serverPagination, exportAll }}
         selection={{
           selectedIds: selectedTaskIds,
           onSelectAll: (checked) => setSelectedTaskIds(checked ? new Set(filteredTasks.map(t => t.id)) : new Set()),

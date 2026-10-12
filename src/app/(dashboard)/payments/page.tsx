@@ -11,6 +11,10 @@ import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
+import { useServerTable } from '@/hooks/use-server-table';
+import { fetchAllPages } from '@/lib/table/export-all-pages';
+import type { ServerTableQuery } from '@/lib/table/server-query';
+import { applyCustomFieldFilters, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
@@ -55,12 +59,10 @@ export default function PaymentsPage() {
   const searchParams = useSearchParams();
   const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner } = useAuth();
 
-  const [payments, setPayments] = useState<PaymentRow[]>([]);
+
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
-  const [loading, setLoading] = useState(true);
   const tableView = useTableView("wacrm_payments_table_columns", {});
   const { filterState } = tableView;
-  const [globalSearch, setGlobalSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -71,58 +73,107 @@ export default function PaymentsPage() {
   const canEdit = hasPermission(PERMISSIONS.PAYMENTS.EDIT);
   const canCancel = hasPermission(PERMISSIONS.PAYMENTS.CANCEL);
 
-  const fetchData = useCallback(async () => {
+  // Reference data, loaded once per account rather than per page of payments.
+  const [profileMap, setProfileMap] = useState<Record<string, string>>({});
+  useEffect(() => {
     if (!accountId) return;
-    setLoading(true);
-
-    const [{ data: paymentData }, { data: profiles }, { data: fieldsData }] = await Promise.all([
-      supabase
-        .from('payments')
-        .select('*, contacts(company, name), payment_types(name)')
-        .eq('account_id', accountId)
-        .order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id, user_id, full_name').eq('account_id', accountId),
-      supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'payment'),
-    ]);
-
-    setCustomFields(fieldsData || []);
-
-    let paymentValues: any[] = [];
-    if (paymentData && paymentData.length > 0) {
-      const paymentIds = paymentData.map((p: any) => p.id);
-      const { data: vals } = await supabase.from('payment_custom_values').select('*').in('payment_id', paymentIds);
-      paymentValues = vals || [];
-    }
-
-    const profileMap: Record<string, string> = {};
-    profiles?.forEach((p: { user_id: string; full_name: string }) => { profileMap[p.user_id] = p.full_name; });
-
-    const rows: PaymentRow[] = (paymentData || []).map((p: Record<string, any>) => {
-      const customData: Record<string, any> = {};
-      paymentValues.filter((v: any) => v.payment_id === p.id).forEach((v: any) => {
-        customData[`cf_${v.custom_field_id}`] = v.value;
-      });
-      return {
-        id: p.id,
-        payment_number: p.payment_number,
-        payment_date: p.payment_date,
-        amount: p.amount || 0,
-        verified_amount: p.verified_amount,
-        status: p.status,
-        source: p.source,
-        reference_number: p.reference_number,
-        payment_type_name: p.payment_types?.name || 'Unknown',
-        customerName: p.contacts?.company || p.contacts?.name || 'Unknown',
-        collectedByName: profileMap[p.user_id] || 'Unknown',
-        ...customData,
-      };
-    });
-    setPayments(rows);
-    setSelectedIds(new Set());
-    setLoading(false);
+    let alive = true;
+    void (async () => {
+      const [{ data: profiles }, { data: fieldsData }] = await Promise.all([
+        supabase.from('profiles').select('id, user_id, full_name').eq('account_id', accountId),
+        supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'payment'),
+      ]);
+      if (!alive) return;
+      const map: Record<string, string> = {};
+      profiles?.forEach((pr: { user_id: string; full_name: string }) => { map[pr.user_id] = pr.full_name; });
+      setProfileMap(map);
+      setCustomFields(fieldsData || []);
+    })();
+    return () => { alive = false; };
   }, [accountId, supabase]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  /**
+   * One page of payments, searched and filtered by the database.
+   *
+   * customer_name, payment_type_name, search_text and custom_values are columns
+   * on the row (migrations 20261012110000 / 20261012130000), so this no longer
+   * embeds contacts or payment_types and no longer fetches the custom-value
+   * table for the whole account.
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      let q = sb
+        .from('payments')
+        .select('*', { count: 'exact' })
+        .eq('account_id', accountId!);
+
+      if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
+
+      q = applyTextFilter(q, 'customer_name', filters.customerName);
+      q = applyTextFilter(q, 'payment_type_name', filters.payment_type_name);
+      q = applyTextFilter(q, 'payment_number', filters.payment_number);
+      q = applyInFilter(q, 'source', filters.source);
+      q = applyInFilter(q, 'status', filters.status);
+      q = applyDateFilter(q, 'payment_date', filters.payment_date);
+      q = applyCustomFieldFilters(q, filters, customFields);
+
+      return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [accountId, customFields],
+  );
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    enabled: Boolean(accountId),
+    deps: [accountId, customFields],
+  });
+
+  const fetchData = table.reload;
+  const loading = table.loading;
+
+  const payments: PaymentRow[] = useMemo(
+    () =>
+      table.rows.map((row) => {
+        const p = row as Record<string, any>;
+        return {
+          id: p.id,
+          payment_number: p.payment_number,
+          payment_date: p.payment_date,
+          amount: p.amount || 0,
+          verified_amount: p.verified_amount,
+          status: p.status,
+          source: p.source,
+          reference_number: p.reference_number,
+          payment_type_name: p.payment_type_name || 'Unknown',
+          customerName: p.customer_name || 'Unknown',
+          collectedByName: profileMap[p.user_id] || 'Unknown',
+          ...(p.custom_values ?? {}),
+        } as PaymentRow;
+      }),
+    [table.rows, profileMap],
+  );
+
+  // Selection is per page now, so a new page must not keep stale ticks.
+  const pageIds = useMemo(() => payments.map((p) => p.id).join(','), [payments]);
+  useEffect(() => { setSelectedIds(new Set()); }, [pageIds]);
+
+  const exportAll = useCallback(async () => {
+    const { rows, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return {
+      rows: rows.map((r) => {
+        const p = r as Record<string, any>;
+        return { ...p, customerName: p.customer_name || 'Unknown', ...(p.custom_values ?? {}) };
+      }),
+      truncated,
+    };
+  }, [supabase, buildQuery, table.search, filterState]);
+
   useRealtimeRefresh('payments', fetchData);
 
   useEffect(() => {
@@ -276,29 +327,11 @@ export default function PaymentsPage() {
     return getVisibleTableColumns([...columns], customFields, payments);
   }, [columns, customFields, payments]);
 
-  const filtered = useMemo(() => {
-    return payments.filter((p) => {
-      if (globalSearch) {
-        const q = globalSearch.toLowerCase();
-        if (
-          !p.payment_number.toLowerCase().includes(q) && 
-          !p.customerName.toLowerCase().includes(q) && 
-          !(p.reference_number || '').toLowerCase().includes(q) &&
-          !matchesSearchableCustomFields(p, customFields, globalSearch)
-        ) return false;
-      }
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0)) continue;
-        if (colId === 'customerName') { if (!p.customerName.toLowerCase().includes((val as string).toLowerCase())) return false; }
-        else if (colId === 'payment_type_name') { if (!p.payment_type_name.toLowerCase().includes((val as string).toLowerCase())) return false; }
-        else if (colId === 'payment_number') { if (!p.payment_number.toLowerCase().includes((val as string).toLowerCase())) return false; }
-        else if (colId === 'source') { if (!(val as string[]).includes(p.source)) return false; }
-        else if (colId === 'status') { if (!(val as string[]).includes(p.status)) return false; }
-        else if (colId === 'payment_date') { if (!isDateInFilter(p.payment_date, val as string | string[])) return false; }
-      }
-      return true;
-    });
-  }, [payments, filterState, globalSearch, customFields]);
+  /**
+   * buildQuery pushed the search, every column filter, the date range and the
+   * custom-field filters into the query, so every row returned belongs here.
+   */
+  const filtered = payments;
 
   return (
     <PageLayout>
@@ -318,8 +351,8 @@ export default function PaymentsPage() {
 
       <PageToolbar
         search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
+          value: table.search,
+          onChange: table.setSearch,
           placeholder: "Search by payment #, customer, or reference...",
         }}
       />
@@ -352,6 +385,7 @@ export default function PaymentsPage() {
         isLoading={loading}
         rowKey={(p) => p.id}
         onRowClick={(p) => router.push(`/payments/${p.id}`)}
+        serverPagination={{ ...table.serverPagination, exportAll }}
         selection={(canApprove || canReject) ? {
           selectedIds,
           onSelectAll: (checked: boolean) => setSelectedIds(checked ? new Set(filtered.map((p) => p.id)) : new Set()),

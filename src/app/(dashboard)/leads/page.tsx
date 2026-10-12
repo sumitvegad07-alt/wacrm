@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { Plus, Search, Filter, Upload, MapPin, Eye, EyeOff, Trash2 } from "lucide-react";
 import {
@@ -20,6 +20,10 @@ import { LeadForm } from "@/components/leads/lead-form";
 import { ImportWizard } from "@/components/import/import-wizard";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
+import { useServerTable } from "@/hooks/use-server-table";
+import { fetchAllPages } from "@/lib/table/export-all-pages";
+import type { ServerTableQuery } from "@/lib/table/server-query";
+import { applyCustomFieldFilters, applyDateFilter, applyInFilter, applyTextFilter } from "@/lib/table/apply-filters";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
@@ -45,7 +49,6 @@ export default function LeadsPage() {
   const { account } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [leads, setLeads] = useState<Lead[]>([]);
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   
@@ -54,10 +57,8 @@ export default function LeadsPage() {
   const [leadSources, setLeadSources] = useState<{id: string, name: string, color?: string | null}[]>([]);
   const [leadIndustries, setLeadIndustries] = useState<{id: string, name: string, color?: string | null}[]>([]);
 
-  const [loading, setLoading] = useState(true);
-  
-  // For the global search bar (optional, we might remove it later if column filters are enough)
-  const [globalSearch, setGlobalSearch] = useState("");
+  /** Resolves an owner/collaborator id (profiles.id OR auth uid) to a name. */
+  const [profiles, setProfiles] = useState<{ id: string; user_id: string; full_name: string }[]>([]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
@@ -81,82 +82,126 @@ export default function LeadsPage() {
     }
   }, [searchParams, router]);
 
-  async function loadLeads() {
-    if (!account) return;
-    const supabase = createClient();
-    
-    // Fetch all leads (active + inactive); the Record Status column filter
-    // (defaulting to Active) controls what shows.
-    const { data: leadsData } = await supabase
-      .from("leads")
-      .select("*")
-      .eq("account_id", account.id)
-      .order("created_at", { ascending: false });
-
-    // Fetch custom field definitions for leads
-    const { data: fieldsData } = await supabase
-      .from("custom_fields")
-      .select("*")
-      .eq("account_id", account.id)
-      .eq("module_name", "lead");
-
-    // If there are leads, fetch their custom values
-    let enhancedLeads = leadsData || [];
-    if (leadsData && leadsData.length > 0) {
-      const leadIds = leadsData.map((l: any) => l.id);
-      const { data: valuesData } = await supabase
-        .from("lead_custom_values")
-        .select("*")
-        .in("lead_id", leadIds);
-        
-      if (valuesData && valuesData.length > 0) {
-        enhancedLeads = leadsData.map((lead: any) => {
-          const leadValues = valuesData.filter((v: any) => v.lead_id === lead.id);
-          const customData: any = {};
-          leadValues.forEach((v: any) => {
-            customData[`cf_${v.custom_field_id}`] = v.value;
-          });
-          return { ...lead, ...customData };
-        });
-      }
-    }
-
-    // Fetch Lookups
-    const [statusesRes, sourcesRes, industriesRes, profilesRes] = await Promise.all([
-      supabase.from("lead_statuses").select("*").eq("account_id", account.id).order("position"),
-      supabase.from("lead_sources").select("*").eq("account_id", account.id).order("name"),
-      supabase.from("lead_industries").select("*").eq("account_id", account.id).order("name"),
-      supabase.from("profiles").select("id, user_id, full_name").eq("account_id", account.id)
-    ]);
-
-    // Owner and collaborator ids may be a profiles.id OR an auth user id (the app
-    // stores both), so resolve against either.
-    const nameOf = (id: string | null | undefined): string | null => {
-      if (!id) return null;
-      const p = (profilesRes.data || []).find((x: any) => x.id === id || x.user_id === id);
-      return p?.full_name ?? null;
-    };
-    enhancedLeads = enhancedLeads.map((l: any) => ({
-      ...l,
-      _leadOwner: nameOf(l.owner_id) ?? nameOf(l.user_id),
-      _leadCollaborators: (Array.isArray(l.collaborator_ids) ? l.collaborator_ids : [])
-        .map((id: string) => nameOf(id))
-        .filter(Boolean)
-        .join(', '),
-    }));
-
-    setLeads(enhancedLeads);
-    setCustomFields((fieldsData as CustomField[]) || []);
-    setLeadStatuses(statusesRes.data || []);
-    setLeadSources(sourcesRes.data || []);
-    setLeadIndustries(industriesRes.data || []);
-    setLoading(false);
-  }
-
+  // Reference data: small, fixed-size lookups the columns and filters need.
+  // Loaded once per account, not once per page of leads.
   useEffect(() => {
-    loadLeads();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!account) return;
+    let alive = true;
+    void (async () => {
+      const supabase = createClient();
+      const [fieldsRes, statusesRes, sourcesRes, industriesRes, profilesRes] = await Promise.all([
+        supabase.from("custom_fields").select("*").eq("account_id", account.id).eq("module_name", "lead"),
+        supabase.from("lead_statuses").select("*").eq("account_id", account.id).order("position"),
+        supabase.from("lead_sources").select("*").eq("account_id", account.id).order("name"),
+        supabase.from("lead_industries").select("*").eq("account_id", account.id).order("name"),
+        supabase.from("profiles").select("id, user_id, full_name").eq("account_id", account.id),
+      ]);
+      if (!alive) return;
+      setCustomFields((fieldsRes.data as CustomField[]) || []);
+      setLeadStatuses(statusesRes.data || []);
+      setLeadSources(sourcesRes.data || []);
+      setLeadIndustries(industriesRes.data || []);
+      setProfiles(profilesRes.data || []);
+    })();
+    return () => { alive = false; };
   }, [account]);
+
+  /**
+   * One page of leads, searched and filtered by the database.
+   *
+   * `search_text` (migration 20261012120000) covers name, whatsapp and every
+   * searchable custom field value, so the single search box is one indexed
+   * `ilike` instead of downloading the table. `custom_values` carries the
+   * `cf_*` values the custom columns render and filter on.
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      let q = sb
+        .from("leads")
+        .select("*", { count: "exact" })
+        .eq("account_id", account!.id);
+
+      if (search) q = q.ilike("search_text", `%${search.toLowerCase()}%`);
+
+      q = applyTextFilter(q, "name", filters.name);
+      q = applyTextFilter(q, "whatsapp", filters.whatsapp);
+      q = applyInFilter(q, "status", filters.status);
+      q = applyInFilter(q, "source", filters.source);
+      q = applyInFilter(q, "industry", filters.industry);
+      for (const col of ["company", "contact_person", "phone", "email", "address", "area", "city", "state", "country", "pincode"]) {
+        q = applyTextFilter(q, col, filters[col]);
+      }
+      q = applyDateFilter(q, "created_at", filters.created_at);
+      q = applyCustomFieldFilters(q, filters, customFields);
+
+      // Record Status: the screen shows Active by default, with Inactive and
+      // both reachable from the column filter.
+      const want = filters.record_status as string[] | undefined;
+      if (Array.isArray(want) && want.length === 1) {
+        q = q.eq("is_active", want[0] === "active");
+      }
+
+      return q.order("created_at", { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [account, customFields],
+  );
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    enabled: Boolean(account?.id),
+    deps: [account?.id, customFields],
+  });
+
+  const loadLeads = table.reload;
+  const loading = table.loading;
+
+  /** Flatten custom_values into cf_* keys and resolve owner names for display. */
+  const nameOf = useCallback(
+    (id: string | null | undefined): string | null => {
+      if (!id) return null;
+      const p = profiles.find((x) => x.id === id || x.user_id === id);
+      return p?.full_name ?? null;
+    },
+    [profiles],
+  );
+
+  const leads = useMemo(
+    () =>
+      table.rows.map((row) => {
+        const l = row as Record<string, unknown> & {
+          custom_values?: Record<string, unknown> | null;
+          owner_id?: string | null;
+          user_id?: string | null;
+          collaborator_ids?: unknown;
+        };
+        return {
+          ...l,
+          ...(l.custom_values ?? {}),
+          _leadOwner: nameOf(l.owner_id) ?? nameOf(l.user_id),
+          _leadCollaborators: (Array.isArray(l.collaborator_ids) ? l.collaborator_ids : [])
+            .map((id: string) => nameOf(id))
+            .filter(Boolean)
+            .join(", "),
+        } as unknown as Lead;
+      }),
+    [table.rows, nameOf],
+  );
+
+  const exportAll = useCallback(async () => {
+    const supabase = createClient();
+    const { rows, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return {
+      rows: rows.map((r) => ({ ...(r as object), ...((r as { custom_values?: object }).custom_values ?? {}) })),
+      truncated,
+    };
+  }, [buildQuery, table.search, filterState]);
+
   useRealtimeRefresh('leads', loadLeads);
 
   function confirmDelete(lead: Lead) {
@@ -402,57 +447,12 @@ export default function LeadsPage() {
   }, [columns, customFields, leads]);
 
   // Apply filters locally (since we fetch all leads for now)
-  const filteredLeads = useMemo(() => {
-    return leads.filter(lead => {
-      // Global search (name, whatsapp, and searchable custom fields)
-      if (
-        globalSearch &&
-        !lead.name.toLowerCase().includes(globalSearch.toLowerCase()) &&
-        !lead.whatsapp?.includes(globalSearch) &&
-        !matchesSearchableCustomFields(lead, customFields, globalSearch)
-      ) {
-        return false;
-      }
-
-      // Column filters
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
-
-        if (colId === "name") {
-          if (!lead.name?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "whatsapp") {
-          if (!lead.whatsapp?.includes(val as string)) return false;
-        } else if (colId === "status" || colId === "source" || colId === "industry") {
-          if (!(val as string[]).includes((lead as any)[colId])) return false;
-        } else if (colId === "record_status") {
-          const want = val as string[];
-          if (Array.isArray(want) && want.length) {
-            const state = (lead as any).is_active !== false ? "active" : "inactive";
-            if (!want.includes(state)) return false;
-          }
-        } else if (["company","contact_person","phone","email","address","area","city","state","country","pincode"].includes(colId)) {
-          const field = (lead as any)[colId];
-          if (field == null || !String(field).toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "created_at") {
-          if (!isDateInFilter(lead.created_at, val as string | string[])) return false;
-        } else if (colId.startsWith("cf_")) {
-          // Filter logic for custom fields
-          const cfVal = lead[colId];
-          const typeOfCf = customFields.find(f => `cf_${f.id}` === colId)?.field_type;
-          
-          if (typeOfCf === 'date') {
-            if (!isDateInFilter(cfVal, val as string | string[])) return false;
-          } else if (typeOfCf === 'dropdown' || typeOfCf === 'radio' || typeOfCf === 'multi-select') {
-             if (!(val as string[]).includes(cfVal)) return false;
-          } else {
-             if (!cfVal?.toLowerCase().includes((val as string).toLowerCase())) return false;
-          }
-        }
-      }
-
-      return true;
-    });
-  }, [leads, filterState, globalSearch]);
+  /**
+   * Nothing left to filter: buildQuery pushed the search, every column filter,
+   * the date range, the record-status toggle and the custom-field filters into
+   * the query, so every row the server returned belongs on screen.
+   */
+  const filteredLeads = leads;
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -486,9 +486,18 @@ export default function LeadsPage() {
         ]}
       />
 
+      <PageToolbar
+        search={{
+          value: table.search,
+          onChange: table.setSearch,
+          placeholder: "Search leads by name, WhatsApp or custom field...",
+        }}
+      />
+
       <DataTable
         columns={visibleColumns}
         data={filteredLeads}
+        serverPagination={{ ...table.serverPagination, exportAll }}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => setImportOpen(true)}>

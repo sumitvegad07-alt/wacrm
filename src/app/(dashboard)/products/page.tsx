@@ -36,6 +36,10 @@ import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from 
 import { useCan } from '@/hooks/use-can';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
+import { useServerTable } from '@/hooks/use-server-table';
+import { fetchAllPages } from '@/lib/table/export-all-pages';
+import type { ServerTableQuery } from '@/lib/table/server-query';
+import { applyCustomFieldFilters, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
@@ -60,11 +64,7 @@ export default function ProductsPage() {
   // Any catalogue write capability — used where the older single flag was needed.
   const canManageCatalogue = canCreateProducts || canEditProducts || canDeleteProducts;
 
-  const [products, setProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
   // DataTable state — default filter shows Active products (Inactive/all via the Status column filter).
-  const [globalSearch, setGlobalSearch] = useState('');
   const tableView = useTableView("wacrm_products_table_columns", { active: ['true'] });
   const { filterState } = tableView;
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
@@ -82,40 +82,80 @@ export default function ProductsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    
-    const [{ data: productsData }, { data: fieldsData }] = await Promise.all([
-      supabase.from('products').select('*, category_rel:product_categories(name), unit_rel:product_units(name, short_name)').order('created_at', { ascending: false }),
-      supabase.from('custom_fields').select('*').eq('module_name', 'product')
-    ]);
-
-    setCustomFields(fieldsData || []);
-
-    let enhancedProducts = productsData || [];
-    if (productsData && productsData.length > 0) {
-      const productIds = productsData.map(p => p.id);
-      const { data: valuesData } = await supabase
-        .from('product_custom_values')
-        .select('*')
-        .in('product_id', productIds);
-
-      if (valuesData && valuesData.length > 0) {
-        enhancedProducts = productsData.map(product => {
-          const productValues = valuesData.filter((v: any) => v.product_id === product.id);
-          const customData: any = {};
-          productValues.forEach((v: any) => {
-            customData[`cf_${v.custom_field_id}`] = v.value;
-          });
-          return { ...product, ...customData };
-        });
-      }
-    }
-
-    setProducts(enhancedProducts);
-    setLoading(false);
-    setSelectedProductIds(new Set());
+  // Custom field definitions: a small, fixed list, loaded once.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase.from('custom_fields').select('*').eq('module_name', 'product');
+      if (alive) setCustomFields(data || []);
+    })();
+    return () => { alive = false; };
   }, [supabase]);
+
+  /**
+   * One page of products, searched and filtered by the database.
+   * search_text covers name, sku and searchable custom values; category_name
+   * and custom_values are columns on the row (migrations 20261012120000 /
+   * 20261012130000), so no embeds and no whole-table custom-value fetch.
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      let q = sb
+        .from('products')
+        .select('*, unit_rel:product_units(name, short_name)', { count: 'exact' });
+
+      if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
+
+      q = applyTextFilter(q, 'name', filters.name);
+      q = applyTextFilter(q, 'category_name', filters.category);
+      q = applyTextFilter(q, 'sku', filters.sku);
+      q = applyDateFilter(q, 'created_at', filters.created_at);
+      q = applyCustomFieldFilters(q, filters, customFields);
+
+      const want = filters.active as string[] | undefined;
+      if (Array.isArray(want) && want.length === 1) q = q.eq('active', want[0] === 'true');
+
+      return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [customFields],
+  );
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    deps: [customFields],
+  });
+
+  const fetchProducts = table.reload;
+  const loading = table.loading;
+
+  const products = useMemo(
+    () =>
+      table.rows.map((row) => {
+        const p = row as Record<string, any>;
+        return { ...p, category: p.category_name, ...(p.custom_values ?? {}) };
+      }),
+    [table.rows],
+  );
+
+  const pageIds = useMemo(() => products.map((p) => p.id).join(','), [products]);
+  useEffect(() => { setSelectedProductIds(new Set()); }, [pageIds]);
+
+  const exportAll = useCallback(async () => {
+    const { rows, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return {
+      rows: rows.map((r) => {
+        const p = r as Record<string, any>;
+        return { ...p, category: p.category_name, ...(p.custom_values ?? {}) };
+      }),
+      truncated,
+    };
+  }, [supabase, buildQuery, table.search, filterState]);
 
   useEffect(() => {
     fetchProducts();
@@ -253,49 +293,8 @@ export default function ProductsPage() {
     return getVisibleTableColumns([...columns], customFields, products);
   }, [columns, customFields, products]);
 
-  const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      // Global search (name, sku, and searchable custom fields)
-      if (
-        globalSearch &&
-        !product.name?.toLowerCase().includes(globalSearch.toLowerCase()) &&
-        !product.sku?.toLowerCase().includes(globalSearch.toLowerCase()) &&
-        !matchesSearchableCustomFields(product, customFields, globalSearch)
-      ) {
-        return false;
-      }
-
-      // Column filters
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
-
-        if (colId === "name") {
-          if (!product.name?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "category") {
-          if (!product.category?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "sku") {
-          if (!product.sku?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "active") {
-          const stringActive = product.active ? 'true' : 'false';
-          if (!(val as string[]).includes(stringActive)) return false;
-        } else if (colId === "created_at") {
-          if (!isDateInFilter(product.created_at, val as string | string[])) return false;
-        } else if (colId.startsWith("cf_")) {
-          const cfVal = product[colId];
-          const typeOfCf = customFields.find(f => `cf_${f.id}` === colId)?.field_type;
-          
-          if (typeOfCf === 'date') {
-            if (!isDateInFilter(cfVal, val as string | string[])) return false;
-          } else if (typeOfCf === 'dropdown' || typeOfCf === 'radio' || typeOfCf === 'multi-select') {
-             if (!(val as string[]).includes(cfVal)) return false;
-          } else {
-             if (!cfVal?.toLowerCase().includes((val as string).toLowerCase())) return false;
-          }
-        }
-      }
-      return true;
-    });
-  }, [products, filterState, globalSearch, customFields]);
+  /** buildQuery already applied the search and every filter. */
+  const filteredProducts = products;
 
   return (
     <PageLayout>
@@ -334,6 +333,7 @@ export default function ProductsPage() {
         isLoading={loading}
         rowKey={(product) => product.id}
         onRowClick={(product) => router.push(`/products/${product.id}`)}
+        serverPagination={{ ...table.serverPagination, exportAll }}
         actions={
           canCreateProducts ? (
             <Button

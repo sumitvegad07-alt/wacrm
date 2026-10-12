@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
@@ -16,6 +16,10 @@ import { useDataScope } from "@/hooks/use-data-scope";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
+import { useServerTable } from "@/hooks/use-server-table";
+import { fetchAllPages } from "@/lib/table/export-all-pages";
+import type { ServerTableQuery } from "@/lib/table/server-query";
+import { applyCustomFieldFilters, applyDateFilter, applyInFilter, applyTextFilter } from "@/lib/table/apply-filters";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -31,10 +35,7 @@ export default function ExpensesPage() {
   const searchParams = useSearchParams();
   const supabase = createClient();
   
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [globalSearch, setGlobalSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
@@ -47,57 +48,90 @@ export default function ExpensesPage() {
 
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
-  async function loadExpenses() {
-    if (!accountId || !scope.ready) return;
-    setLoading(true);
+  useEffect(() => {
+    if (!accountId) return;
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from("custom_fields").select("*")
+        .eq("account_id", accountId).eq("module_name", "expense");
+      if (alive) setCustomFields((data as CustomField[]) || []);
+    })();
+    return () => { alive = false; };
+  }, [accountId, supabase]);
 
-    // Directional data-scoping on employee_id (profiles.id). No-op unless the account has
-    // Reporting Hierarchy on and the role isn't a bypass; otherwise RLS still caps non-admins at
-    // their own rows (expenses_select = admin OR own OR extends). See useDataScope.
-    const expensesBase = supabase
-      .from("expenses")
-      .select("*, expense_type:expense_types(*), employee:profiles!expenses_employee_id_fkey(*)")
-      .eq("account_id", accountId)
-      .order("created_at", { ascending: false });
-    const query = scope.apply(expensesBase, "employee_id", "profile");
+  /**
+   * One page of expenses, searched and filtered by the database.
+   * employee_name, expense_type_name, search_text and custom_values are columns
+   * on the row (migrations 20261012110000 / 20261012130000). The embeds remain
+   * only because the table renders other fields off them.
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      // Directional data-scoping on employee_id (a profiles.id). RLS remains
+      // the real boundary - see useDataScope.
+      let q = scope.apply(
+        sb
+          .from("expenses")
+          .select("*, expense_type:expense_types(*), employee:profiles!expenses_employee_id_fkey(*)", { count: "exact" })
+          .eq("account_id", accountId!),
+        "employee_id",
+        "profile",
+      );
 
-    const { data, error } = await query;
-    
-    // Fetch custom fields
-    const { data: fieldsData } = await supabase
-      .from("custom_fields")
-      .select("*")
-      .eq("account_id", accountId)
-      .eq("module_name", "expense");
+      if (search) q = q.ilike("search_text", `%${search.toLowerCase()}%`);
 
-    let enhancedExpenses = data || [];
-    if (data && data.length > 0) {
-      const ids = data.map((e: any) => e.id);
-      const { data: valuesData } = await supabase
-        .from("expense_custom_values")
-        .select("*")
-        .in("expense_id", ids);
-        
-      if (valuesData && valuesData.length > 0) {
-        enhancedExpenses = data.map((exp: any) => {
-          const expValues = valuesData.filter((v: any) => v.expense_id === exp.id);
-          const customData: any = {};
-          expValues.forEach((v: any) => {
-            customData[`cf_${v.custom_field_id}`] = v.value;
-          });
-          return { ...exp, ...customData };
-        });
-      }
-    }
+      q = applyDateFilter(q, "expense_date", filters.expense_date);
+      q = applyTextFilter(q, "employee_name", filters.employee);
+      q = applyInFilter(q, "expense_type_name", filters.expense_type);
+      q = applyInFilter(q, "status", filters.status);
+      q = applyCustomFieldFilters(q, filters, customFields);
 
-    if (error) {
-      toast.error("Failed to load expenses");
-    } else {
-      setExpenses(enhancedExpenses as any);
-      setCustomFields((fieldsData as CustomField[]) || []);
-    }
-    setLoading(false);
-  }
+      const want = filters.record_status as string[] | undefined;
+      if (Array.isArray(want) && want.length === 1) q = q.eq("is_active", want[0] === "active");
+
+      return q.order("created_at", { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [accountId, scope, customFields],
+  );
+
+  /** Bulk approve/reject spinner. Was the list's own loading flag before the
+   *  list started paging on the server. */
+  const [busy, setBusy] = useState(false);
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    enabled: Boolean(accountId) && scope.ready,
+    deps: [accountId, scope.key, customFields],
+  });
+
+  const loadExpenses = table.reload;
+  const loading = table.loading || busy;
+
+  const expenses = useMemo(
+    () => table.rows.map((row) => {
+      const e = row as Record<string, any>;
+      return { ...e, ...(e.custom_values ?? {}) };
+    }),
+    [table.rows],
+  );
+
+  const exportAll = useCallback(async () => {
+    const { rows, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
+    });
+    return {
+      rows: rows.map((r) => {
+        const e = r as Record<string, any>;
+        return { ...e, ...(e.custom_values ?? {}) };
+      }),
+      truncated,
+    };
+  }, [supabase, buildQuery, table.search, filterState]);
 
   useEffect(() => {
     loadExpenses();
@@ -184,7 +218,7 @@ export default function ExpensesPage() {
 
     if (!confirm(`Are you sure you want to approve ${pendingIds.length} expense(s)?`)) return;
 
-    setLoading(true);
+    setBusy(true);
     let successCount = 0;
     
     for (const id of pendingIds) {
@@ -210,7 +244,7 @@ export default function ExpensesPage() {
       loadExpenses();
     } else {
       toast.error("Failed to approve expenses");
-      setLoading(false);
+      setBusy(false);
     }
   };
 
@@ -229,7 +263,7 @@ export default function ExpensesPage() {
     const reason = prompt(`Enter rejection reason for ${pendingIds.length} expense(s):`);
     if (reason === null) return;
 
-    setLoading(true);
+    setBusy(true);
     let successCount = 0;
     
     for (const id of pendingIds) {
@@ -252,7 +286,7 @@ export default function ExpensesPage() {
       loadExpenses();
     } else {
       toast.error("Failed to reject expenses");
-      setLoading(false);
+      setBusy(false);
     }
   };
 
@@ -270,7 +304,7 @@ export default function ExpensesPage() {
 
     if (!confirm(`Move ${pendingIds.length} pending expense(s) to Inactive? They can be re-activated later.`)) return;
 
-    setLoading(true);
+    setBusy(true);
     let successCount = 0;
     
     for (const id of pendingIds) {
@@ -284,7 +318,7 @@ export default function ExpensesPage() {
       loadExpenses();
     } else {
       toast.error("Failed to update expenses");
-      setLoading(false);
+      setBusy(false);
     }
   };
 
@@ -393,40 +427,8 @@ export default function ExpensesPage() {
     return getVisibleTableColumns([...columns], customFields, expenses);
   }, [columns, customFields, expenses]);
 
-  const filteredExpenses = useMemo(() => {
-    return expenses.filter(expense => {
-      if (
-        globalSearch &&
-        !expense.employee?.full_name?.toLowerCase().includes(globalSearch.toLowerCase()) &&
-        !expense.expense_type?.expense_name?.toLowerCase().includes(globalSearch.toLowerCase()) &&
-        !matchesSearchableCustomFields(expense, customFields, globalSearch)
-      ) {
-        return false;
-      }
-
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) continue;
-
-        if (colId === "expense_date") {
-          if (!isDateInFilter(expense.expense_date, val as string | string[])) return false;
-        } else if (colId === "employee") {
-          if (!expense.employee?.full_name?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === "expense_type") {
-          if (!(val as string[]).includes(expense.expense_type?.expense_name || "")) return false;
-        } else if (colId === "status") {
-          if (!(val as string[]).includes(expense.status)) return false;
-        } else if (colId === "record_status") {
-          const want = val as string[];
-          if (Array.isArray(want) && want.length) {
-            const state = (expense as any).is_active !== false ? "active" : "inactive";
-            if (!want.includes(state)) return false;
-          }
-        }
-      }
-
-      return true;
-    });
-  }, [expenses, filterState, globalSearch]);
+  /** buildQuery already applied the search and every filter. */
+  const filteredExpenses = expenses;
 
   const handleRowClick = (expense: Expense) => {
     router.push(`/expenses/${expense.id}`);
@@ -499,6 +501,7 @@ export default function ExpensesPage() {
         }
         tableView={tableView}
         isLoading={loading}
+        serverPagination={{ ...table.serverPagination, exportAll }}
         rowKey={(expense) => expense.id}
         onRowClick={handleRowClick}
         selection={{
