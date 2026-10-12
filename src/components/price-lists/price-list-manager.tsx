@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, ListChecks, X } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, RotateCcw, ListChecks, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { PageLayout, PageHeader, EmptyState, StatusBadge, ConfirmDialog, FormPageShell, FormActions, BulkActionBar } from "@/components/shared";
+import { inactiveSelection, reactivateDisabledReason, reactivatedMessage } from "@/lib/table/bulk-activation";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import {
   getPriceLists, getPriceListWithItems, createPriceList, updatePriceList, setPriceListActive,
@@ -61,6 +62,29 @@ export function PriceListManager() {
     }
   }
 
+  /**
+   * Restore every selected price list that is currently Inactive.
+   *
+   * Looped like its deactivate counterpart: setPriceListActive is the one place
+   * that writes this flag, and a price list account holds a handful of rows, not
+   * thousands.
+   */
+  async function bulkReactivateLists() {
+    const ids = inactiveSelection(lists, selectedIds, (l) => l.id, (l) => l.active);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      for (const id of ids) await setPriceListActive(id, true);
+      setLists((prev) => prev.map((l) => (ids.includes(l.id) ? { ...l, active: true } : l)));
+      toast.success(reactivatedMessage(ids.length, "price list"));
+      setSelectedIds(new Set());
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update price lists.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   // Editor state
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -101,6 +125,13 @@ export function PriceListManager() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  // Selected price lists that are actually Inactive. Price Lists store the flag
+  // as `active`, not `is_active`.
+  const inactiveSelectedIds = useMemo(
+    () => inactiveSelection(lists, selectedIds, (l) => l.id, (l) => l.active),
+    [lists, selectedIds],
+  );
 
   const productName = useMemo(() => {
     const m = new Map(products.map((p) => [p.id, p.name]));
@@ -324,7 +355,17 @@ export function PriceListManager() {
           <BulkActionBar
             selectedCount={selectedIds.size}
             onClear={() => setSelectedIds(new Set())}
-            actions={[{ label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) }]}
+            actions={[
+              {
+                label: "Re-activate",
+                icon: <RotateCcw className="size-3.5" />,
+                variant: "outline",
+                onClick: bulkReactivateLists,
+                disabled: bulkBusy || inactiveSelectedIds.length === 0,
+                title: reactivateDisabledReason(selectedIds.size, inactiveSelectedIds.length),
+              },
+              { label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) },
+            ]}
           />
         )}
         <div className="rounded-lg border border-border overflow-x-auto">

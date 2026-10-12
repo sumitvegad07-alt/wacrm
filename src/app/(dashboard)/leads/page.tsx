@@ -2,13 +2,24 @@
 
 import { useCallback, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, Filter, Upload, MapPin, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Plus, Search, Filter, Upload, MapPin, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
 import {
   PointMapDialog,
   formatLatLng,
   hasPoint,
   type MapPoint,
 } from "@/components/location-tracking/point-map-dialog";
+import {
+  PointsMapDialog,
+  type PointsMapSelection,
+} from "@/components/location-tracking/points-map-dialog";
+import { splitMappableSelection, type GeoTaggedRow } from "@/lib/maps/selection-points";
+import {
+  inactiveSelection,
+  reactivateDisabledReason,
+  bulkReactivate,
+  reactivatedMessage,
+} from "@/lib/table/bulk-activation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -50,6 +61,7 @@ export default function LeadsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
+  const [mapSelection, setMapSelection] = useState<PointsMapSelection | null>(null);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   
   // Lookups for filters
@@ -245,6 +257,45 @@ export default function LeadsPage() {
     }
     setDeleting(false);
     setBulkDeleteOpen(false);
+  }
+
+  /**
+   * Restore every selected lead that is currently Inactive.
+   *
+   * Not confirmed: re-activating is not destructive, and the button is disabled
+   * unless the selection actually holds something Inactive.
+   */
+  async function handleBulkReactivate() {
+    const ids = inactiveSelection(leads, selectedLeads);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    const supabase = createClient();
+    const { error } = await bulkReactivate(supabase, "leads", ids);
+    if (error) toast.error("Failed to re-activate leads");
+    else {
+      toast.success(reactivatedMessage(ids.length, "lead"));
+      setSelectedLeads(new Set());
+      loadLeads();
+    }
+    setDeleting(false);
+  }
+
+  /** Plot every selected lead that has a saved coordinate on one map. */
+  function handleShowSelectionOnMap() {
+    const { points, skipped } = splitMappableSelection(leads, selectedLeads, {
+      titleOf: (l) => l.name || l.contact_person || l.whatsapp,
+      latOf: (l) => (l as GeoTaggedRow).latitude,
+      lngOf: (l) => (l as GeoTaggedRow).longitude,
+    });
+    if (points.length === 0) {
+      toast.error("None of the selected leads have a saved location");
+      return;
+    }
+    setMapSelection({
+      title: `${points.length} ${points.length === 1 ? "Lead" : "Leads"} on map`,
+      points,
+      skipped,
+    });
   }
 
   // Removed dynamic extraction in favor of fetched lookups
@@ -457,6 +508,22 @@ export default function LeadsPage() {
    */
   const filteredLeads = leads;
 
+  // Which bulk actions can run against this selection — derived, so they can
+  // never drift from what is actually selected.
+  const inactiveSelectedIds = useMemo(
+    () => inactiveSelection(leads, selectedLeads),
+    [leads, selectedLeads],
+  );
+  const mappableSelectedCount = useMemo(
+    () =>
+      splitMappableSelection(leads, selectedLeads, {
+        titleOf: (l) => l.name || l.contact_person || l.whatsapp,
+        latOf: (l) => (l as GeoTaggedRow).latitude,
+        lngOf: (l) => (l as GeoTaggedRow).longitude,
+      }).points.length,
+    [leads, selectedLeads],
+  );
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedLeads(new Set(filteredLeads.map(l => l.id)));
@@ -480,6 +547,24 @@ export default function LeadsPage() {
         selectedCount={selectedLeads.size}
         onClear={() => setSelectedLeads(new Set())}
         actions={[
+          {
+            label: "Show on Map",
+            icon: <MapPin className="size-3.5" />,
+            variant: "outline",
+            onClick: handleShowSelectionOnMap,
+            disabled: mappableSelectedCount === 0,
+            title: mappableSelectedCount === 0
+              ? "None of the selected leads have a saved location"
+              : undefined,
+          },
+          {
+            label: "Re-activate",
+            icon: <RotateCcw className="size-3.5" />,
+            variant: "outline",
+            onClick: handleBulkReactivate,
+            disabled: deleting || inactiveSelectedIds.length === 0,
+            title: reactivateDisabledReason(selectedLeads.size, inactiveSelectedIds.length),
+          },
           {
             label: "Move to Inactive",
             icon: <Trash2 className="size-3.5" />,
@@ -562,6 +647,7 @@ export default function LeadsPage() {
       />
 
       <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />
+      <PointsMapDialog selection={mapSelection} onClose={() => setMapSelection(null)} />
     </PageLayout>
   );
 }

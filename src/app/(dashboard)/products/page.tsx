@@ -25,14 +25,14 @@ import {
   Trash2,
   Loader2,
   Upload,
-  CheckCircle,
-  Ban,
+  RotateCcw,
   SlidersHorizontal,
 } from 'lucide-react';
 import { ProductForm } from '@/components/products/product-form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ImportWizard } from '@/components/import/import-wizard';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from "@/components/shared";
+import { inactiveSelection, reactivateDisabledReason } from "@/lib/table/bulk-activation";
 import { useCan } from '@/hooks/use-can';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
@@ -297,6 +297,12 @@ export default function ProductsPage() {
   }, [columns, customFields, products]);
 
   /** buildQuery already applied the search and every filter. */
+  // Products store the soft-delete flag as `active`, not `is_active`.
+  const inactiveSelectedIds = useMemo(
+    () => inactiveSelection(products, selectedProductIds, (p) => p.id, (p) => (p as { active?: boolean | null }).active),
+    [products, selectedProductIds],
+  );
+
   const filteredProducts = products;
 
   return (
@@ -304,20 +310,17 @@ export default function ProductsPage() {
       <BulkActionBar
         selectedCount={selectedProductIds.size}
         onClear={() => setSelectedProductIds(new Set())}
+        // Two buttons, same pair every other module shows. This used to offer
+        // "Active", "Inactive" AND "Move to Inactive", where the last two ran
+        // the identical update — three buttons for two outcomes.
         actions={[
           {
-            label: "Active",
-            icon: <CheckCircle className="size-4" />,
+            label: "Re-activate",
+            icon: <RotateCcw className="size-4" />,
             variant: "outline",
             onClick: () => handleBulkToggleActive(true),
-            disabled: bulkActionLoading,
-          },
-          {
-            label: "Inactive",
-            icon: <Ban className="size-4" />,
-            variant: "outline",
-            onClick: () => handleBulkToggleActive(false),
-            disabled: bulkActionLoading,
+            disabled: bulkActionLoading || inactiveSelectedIds.length === 0,
+            title: reactivateDisabledReason(selectedProductIds.size, inactiveSelectedIds.length),
           },
           {
             label: "Move to Inactive",

@@ -49,6 +49,13 @@ import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/cus
 import { isDateInFilter } from "@/lib/date-filters";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
 import {
+  inactiveSelection,
+  reactivateDisabledReason,
+  bulkReactivate,
+  reactivatedMessage,
+} from '@/lib/table/bulk-activation';
+
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -224,6 +231,27 @@ export default function QuotationsPage() {
     }
     setBulkActionLoading(false);
   }
+
+  /**
+   * Restore every selected quotation that is currently Inactive. Not confirmed:
+   * re-activating is not destructive, and the button is disabled unless the
+   * selection holds something Inactive.
+   */
+  async function handleBulkReactivate() {
+    const ids = inactiveSelection(quotations, selectedIds);
+    if (ids.length === 0) return;
+    setBulkActionLoading(true);
+    const { error } = await bulkReactivate(supabase, 'quotations', ids);
+    if (error) toast.error('Failed to re-activate quotations');
+    else {
+      toast.success(reactivatedMessage(ids.length, 'quotation'));
+      setSelectedIds(new Set());
+      fetchQuotations();
+    }
+    setBulkActionLoading(false);
+  }
+
+  const inactiveSelectedIds = inactiveSelection(quotations, selectedIds);
 
   const columns: ColumnDef<any>[] = [
     {
@@ -426,6 +454,14 @@ export default function QuotationsPage() {
         selectedCount={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
         actions={[
+          {
+            label: "Re-activate",
+            icon: <RotateCcw className="size-4" />,
+            variant: "outline",
+            onClick: handleBulkReactivate,
+            disabled: bulkActionLoading || inactiveSelectedIds.length === 0,
+            title: reactivateDisabledReason(selectedIds.size, inactiveSelectedIds.length),
+          },
           {
             label: "Move to Inactive",
             icon: <Trash2 className="size-4" />,

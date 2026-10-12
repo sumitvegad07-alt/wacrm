@@ -285,7 +285,11 @@ export default function DealDetailsPage() {
 
     setMarkingLost(true);
     try {
-      const patch: Record<string, unknown> = { status: "lost", is_active: false };
+      // Lost is a business outcome, not a deleted record. This used to also set
+      // `is_active: false`, which buried every lost deal in the Inactive list and
+      // made the loss invisible on the board an admin actually looks at. Inactive
+      // now means one thing only: an admin pressed the dustbin icon.
+      const patch: Record<string, unknown> = { status: "lost" };
       if (terminalStage) patch.stage_id = terminalStage.id;
       const { error } = await supabase
         .from("deals")

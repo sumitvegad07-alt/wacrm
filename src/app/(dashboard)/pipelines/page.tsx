@@ -26,7 +26,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { GitBranch, Plus, ChevronDown, Settings, Upload, CheckCircle, XCircle, MoreHorizontal, Eye, EyeOff } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, Upload, CheckCircle, XCircle, RotateCcw, MoreHorizontal, Eye, EyeOff } from "lucide-react";
+import {
+  inactiveSelection,
+  reactivateDisabledReason,
+  bulkReactivate,
+  reactivatedMessage,
+} from "@/lib/table/bulk-activation";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -107,6 +113,26 @@ export default function PipelinesPage() {
     const { error } = await supabase.from("deals").update({ is_active: false }).eq("id", deal.id);
     if (error) toast.error("Failed to deactivate deal");
     else { toast.success("Deal moved to Inactive"); refreshDeals(); }
+  };
+
+  /**
+   * Restore every selected deal that is currently Inactive. One statement for
+   * the whole batch, unlike the per-row loop the deactivate path still uses.
+   */
+  const handleBulkReactivate = async () => {
+    if (!canCreateDeals) return;
+    const ids = inactiveSelection(deals, selectedDealIds);
+    if (ids.length === 0) return;
+    setLoading(true);
+    const { error } = await bulkReactivate(supabase, "deals", ids);
+    if (error) {
+      toast.error("Failed to re-activate deals");
+      setLoading(false);
+      return;
+    }
+    toast.success(reactivatedMessage(ids.length, "deal"));
+    setSelectedDealIds(new Set());
+    refreshDeals();
   };
 
   const handleReactivateDeal = async (deal: any) => {
@@ -555,6 +581,12 @@ export default function PipelinesPage() {
     return getVisibleTableColumns([...columns], customFields, deals);
   }, [columns, customFields, deals]);
 
+  // Selected deals that are actually Inactive — derived so it cannot drift.
+  const inactiveSelectedDealIds = useMemo(
+    () => inactiveSelection(deals, selectedDealIds),
+    [deals, selectedDealIds],
+  );
+
   const filteredDeals = useMemo(() => {
     return deals.filter(deal => {
       for (const [colId, val] of Object.entries(filterState)) {
@@ -751,6 +783,14 @@ export default function PipelinesPage() {
                 selectedCount={selectedDealIds.size}
                 onClear={() => setSelectedDealIds(new Set())}
                 actions={[
+                  {
+                    label: "Re-activate",
+                    icon: <RotateCcw className="size-4" />,
+                    variant: "outline",
+                    onClick: handleBulkReactivate,
+                    disabled: inactiveSelectedDealIds.length === 0,
+                    title: reactivateDisabledReason(selectedDealIds.size, inactiveSelectedDealIds.length),
+                  },
                   {
                     label: "Move to Inactive",
                     icon: <XCircle className="size-4" />,

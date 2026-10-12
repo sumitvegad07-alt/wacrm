@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
-import { Plus, Search, Filter, CheckCircle, XCircle, FileText, Download, Eye, EyeOff } from "lucide-react";
+import { Plus, Search, Filter, CheckCircle, XCircle, RotateCcw, FileText, Download, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,12 @@ import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useAuth } from "@/hooks/use-auth";
 import { useDataScope } from "@/hooks/use-data-scope";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
+import {
+  inactiveSelection,
+  reactivateDisabledReason,
+  bulkReactivate,
+  reactivatedMessage,
+} from "@/lib/table/bulk-activation";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { useServerTable } from "@/hooks/use-server-table";
@@ -197,6 +203,26 @@ export default function ExpensesPage() {
       loadExpenses();
     }
     setDeleteTargetExp(null);
+  };
+
+  /**
+   * Restore every selected expense that is currently Inactive.
+   *
+   * No status restriction, unlike the bulk deactivate above: that one only
+   * touches Pending rows so an approved claim cannot be quietly withdrawn, but
+   * putting a row back the way it was carries no such risk.
+   */
+  const handleBulkReactivate = async () => {
+    if (!isAdmin) return;
+    const ids = inactiveSelection(expenses, selectedExpenseIds);
+    if (ids.length === 0) return;
+    const { error } = await bulkReactivate(supabase, "expenses", ids);
+    if (error) toast.error("Failed to re-activate expenses");
+    else {
+      toast.success(reactivatedMessage(ids.length, "expense"));
+      setSelectedExpenseIds(new Set());
+      loadExpenses();
+    }
   };
 
   const handleReactivate = async (id: string) => {
@@ -433,6 +459,12 @@ export default function ExpensesPage() {
   /** buildQuery already applied the search and every filter. */
   const filteredExpenses = expenses;
 
+  // Selected expenses that are actually Inactive — derived so it cannot drift.
+  const inactiveSelectedIds = useMemo(
+    () => inactiveSelection(expenses, selectedExpenseIds),
+    [expenses, selectedExpenseIds],
+  );
+
   const handleRowClick = (expense: Expense) => {
     router.push(`/expenses/${expense.id}`);
   };
@@ -483,6 +515,14 @@ export default function ExpensesPage() {
               icon: <XCircle className="size-3.5" />,
               variant: "outline",
               onClick: handleBulkReject,
+            },
+            {
+              label: "Re-activate",
+              icon: <RotateCcw className="size-3.5" />,
+              variant: "outline",
+              onClick: handleBulkReactivate,
+              disabled: inactiveSelectedIds.length === 0,
+              title: reactivateDisabledReason(selectedExpenseIds.size, inactiveSelectedIds.length),
             },
             {
               label: "Delete Selected",

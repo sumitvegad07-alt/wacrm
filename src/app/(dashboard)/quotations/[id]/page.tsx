@@ -7,13 +7,19 @@ import { sanitizeRichText } from '@/lib/security/sanitize-html';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Copy, Check, X, FileText, Loader2, Send, FilePlus2, Printer, Pencil } from 'lucide-react';
+import { ArrowLeft, Edit, Copy, Check, X, FileText, Loader2, Send, FilePlus2, Printer, Pencil, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { QuotationTimeline } from '@/components/quotations/quotation-timeline';
 import { Timeline } from '@/components/shared/timeline';
 import { logQuotationActivity } from '@/lib/quotations';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { QuotationForm } from '@/components/quotations/quotation-form';
+import { QuotationVersionsPanel } from '@/components/quotations/quotation-versions-panel';
+import {
+  fetchQuotationVersions,
+  supersededBy,
+  type QuotationVersion,
+} from '@/lib/quotation-versions';
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: 'bg-amber-600 text-white shadow-sm border-transparent',
@@ -34,6 +40,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
   const [items, setItems] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
+  const [versions, setVersions] = useState<QuotationVersion[]>([]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formQuotationId, setFormQuotationId] = useState<string | undefined>(undefined);
@@ -62,6 +69,10 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
       .eq('quotation_id', quotationId)
       .order('position');
     setItems(itemsData || []);
+
+    // The whole version family in one round trip, so an older version stays
+    // reachable from the newer one that replaced it.
+    setVersions(await fetchQuotationVersions(supabase, quotationId));
     
     // Fetch tasks and activities for timeline
     const [taskRes, actRes] = await Promise.all([
@@ -154,6 +165,10 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
     );
   }
 
+  // The version that replaced this one, when viewing an older version. Null on
+  // the newest version and on a quotation that was never versioned.
+  const replacedBy = quotation ? supersededBy(versions, quotation.id) : null;
+
   return (
     <div className="space-y-6 pb-20 w-full max-w-none px-6 mt-6">
       <header className="flex flex-col sm:flex-row shrink-0 items-start sm:items-center justify-between gap-4 bg-card p-6 rounded-lg border border-border shadow-sm">
@@ -184,9 +199,13 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
         </div>
         
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => handleDuplicate(true)} disabled={actionLoading} className="font-semibold text-muted-foreground uppercase rounded-sm border-border hover:bg-muted">
-            MAKE VERSION
-          </Button>
+          {/* Only from the newest version: branching off an older one would fork
+              the chain, and the `QT-0034-2` numbering assumes a single line. */}
+          {!replacedBy && (
+            <Button variant="outline" size="sm" onClick={() => handleDuplicate(true)} disabled={actionLoading} className="font-semibold text-muted-foreground uppercase rounded-sm border-border hover:bg-muted">
+              MAKE VERSION
+            </Button>
+          )}
           
           {(quotation.status === 'Draft' || quotation.status === 'Pending' || quotation.status === 'Sent') && (
             <>
@@ -226,6 +245,22 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
           </Button>
         </div>
       </header>
+
+      {replacedBy && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          <span className="text-foreground">
+            You are viewing <span className="font-medium">v{quotation.version}</span>. This
+            quotation was superseded by{' '}
+            <span className="font-medium">v{replacedBy.version}</span> (
+            {replacedBy.quotation_number}).
+          </span>
+          <Link href={`/quotations/${replacedBy.id}`}>
+            <Button variant="outline" size="sm" className="h-7 text-xs">
+              Open latest <ArrowUpRight className="ml-1 size-3.5" />
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -320,7 +355,8 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
           )}
         </div>
 
-        <div className="w-full lg:w-[400px]">
+        <div className="w-full lg:w-[400px] space-y-6">
+          <QuotationVersionsPanel versions={versions} currentId={quotation.id} />
           <Timeline 
             moduleName="quotation" 
             recordId={quotation.id} 

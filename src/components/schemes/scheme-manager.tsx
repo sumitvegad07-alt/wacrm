@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, Tag, Power, PowerOff, MoreHorizontal, Copy } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, RotateCcw, Tag, Power, PowerOff, MoreHorizontal, Copy } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { PageLayout, PageHeader, PageToolbar, EmptyState, StatusBadge, ConfirmDialog, BulkActionBar } from "@/components/shared";
+import { inactiveSelection, reactivateDisabledReason, reactivatedMessage } from "@/lib/table/bulk-activation";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { getSchemes, setSchemeActive } from "@/lib/schemes/api";
 import {
@@ -94,6 +95,29 @@ export function SchemeManager() {
     }
   }
 
+  /**
+   * Restore every selected scheme that is currently Inactive.
+   *
+   * Looped like its deactivate counterpart, because setSchemeActive also writes
+   * the module activity log for each scheme — a single bulk UPDATE would lose
+   * that history.
+   */
+  async function bulkReactivateSchemes() {
+    const ids = inactiveSelection(schemes, selectedIds, (s) => s.id, (s) => s.active);
+    if (ids.length === 0) return;
+    setBusy(true);
+    try {
+      for (const id of ids) await setSchemeActive(id, true);
+      toast.success(reactivatedMessage(ids.length, "scheme"));
+      setSelectedIds(new Set());
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const load = useCallback(async () => {
     if (!accountId) return;
     setLoading(true);
@@ -107,6 +131,13 @@ export function SchemeManager() {
   }, [accountId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Selected schemes that are actually Inactive. Schemes store the flag as
+  // `active`, not `is_active`.
+  const inactiveSelectedIds = useMemo(
+    () => inactiveSelection(schemes, selectedIds, (s) => s.id, (s) => s.active),
+    [schemes, selectedIds],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -190,7 +221,17 @@ export function SchemeManager() {
           <BulkActionBar
             selectedCount={selectedIds.size}
             onClear={() => setSelectedIds(new Set())}
-            actions={[{ label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) }]}
+            actions={[
+              {
+                label: "Re-activate",
+                icon: <RotateCcw className="size-3.5" />,
+                variant: "outline",
+                onClick: bulkReactivateSchemes,
+                disabled: busy || inactiveSelectedIds.length === 0,
+                title: reactivateDisabledReason(selectedIds.size, inactiveSelectedIds.length),
+              },
+              { label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) },
+            ]}
           />
         )}
         <div className="rounded-md border border-border overflow-x-auto">

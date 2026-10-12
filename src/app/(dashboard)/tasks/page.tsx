@@ -35,6 +35,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  RotateCcw,
   Loader2,
   CheckSquare,
   Upload,
@@ -46,6 +47,13 @@ import { TaskForm } from '@/components/tasks/task-form';
 import { ImportWizard } from '@/components/import/import-wizard';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
+import {
+  inactiveSelection,
+  reactivateDisabledReason,
+  bulkReactivate,
+  reactivatedMessage,
+} from '@/lib/table/bulk-activation';
+
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
@@ -263,6 +271,27 @@ export default function TasksPage() {
     setBulkActionLoading(false);
   }
 
+  /**
+   * Restore every selected task that is currently Inactive. Not confirmed:
+   * re-activating is not destructive, and the button is disabled unless the
+   * selection holds something Inactive.
+   */
+  async function handleBulkReactivate() {
+    const ids = inactiveSelection(tasks, selectedTaskIds);
+    if (ids.length === 0) return;
+    setBulkActionLoading(true);
+    const { error } = await bulkReactivate(supabase, 'tasks', ids);
+    if (error) toast.error('Failed to re-activate tasks');
+    else {
+      toast.success(reactivatedMessage(ids.length, 'task'));
+      setSelectedTaskIds(new Set());
+      fetchTasks();
+    }
+    setBulkActionLoading(false);
+  }
+
+  const inactiveSelectedIds = inactiveSelection(tasks, selectedTaskIds);
+
   const columns: ColumnDef<any>[] = [
     {
       id: "title",
@@ -427,6 +456,14 @@ export default function TasksPage() {
         selectedCount={selectedTaskIds.size}
         onClear={() => setSelectedTaskIds(new Set())}
         actions={[
+          {
+            label: "Re-activate",
+            icon: <RotateCcw className="size-4" />,
+            variant: "outline",
+            onClick: handleBulkReactivate,
+            disabled: bulkActionLoading || inactiveSelectedIds.length === 0,
+            title: reactivateDisabledReason(selectedTaskIds.size, inactiveSelectedIds.length),
+          },
           {
             label: "Move to Inactive",
             icon: <Trash2 className="size-4" />,

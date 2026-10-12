@@ -20,7 +20,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { PageLayout, ConfirmDialog, BulkActionBar } from "@/components/shared";
-import { Trash2 } from "lucide-react";
+import {
+  inactiveSelection,
+  reactivateDisabledReason,
+  bulkReactivate,
+  reactivatedMessage,
+} from "@/lib/table/bulk-activation";
+import { Trash2, RotateCcw } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
@@ -64,6 +70,21 @@ export default function CatalogUnitsPage() {
     if (error) toast.error("Could not update units");
     else { toast.success(`${ids.length} unit(s) moved to Inactive`); setSelectedIds(new Set()); load(); }
     setBulkOpen(false);
+  }
+
+  /** Restore every selected unit that is currently Inactive. */
+  async function bulkReactivateUnits() {
+    const ids = inactiveSelection(units, selectedIds);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    const { error } = await bulkReactivate(supabase, "product_units", ids);
+    setDeleting(false);
+    if (error) toast.error("Could not re-activate units");
+    else {
+      toast.success(reactivatedMessage(ids.length, "unit"));
+      setSelectedIds(new Set());
+      load();
+    }
   }
 
   const load = useCallback(async () => {
@@ -173,6 +194,12 @@ export default function CatalogUnitsPage() {
     },
   ];
 
+  // Selected units that are actually Inactive — derived so it cannot drift.
+  const inactiveSelectedIds = useMemo(
+    () => inactiveSelection(units, selectedIds),
+    [units, selectedIds],
+  );
+
   const filtered = useMemo(() => {
     return units.filter((u) => {
       for (const [colId, val] of Object.entries(filterState)) {
@@ -197,7 +224,17 @@ export default function CatalogUnitsPage() {
         <BulkActionBar
           selectedCount={selectedIds.size}
           onClear={() => setSelectedIds(new Set())}
-          actions={[{ label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) }]}
+          actions={[
+            {
+              label: "Re-activate",
+              icon: <RotateCcw className="size-3.5" />,
+              variant: "outline",
+              onClick: bulkReactivateUnits,
+              disabled: deleting || inactiveSelectedIds.length === 0,
+              title: reactivateDisabledReason(selectedIds.size, inactiveSelectedIds.length),
+            },
+            { label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) },
+          ]}
         />
       )}
       <DataTable

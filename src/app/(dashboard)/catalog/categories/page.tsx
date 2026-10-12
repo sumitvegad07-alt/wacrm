@@ -21,7 +21,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { PageLayout, PageHeader, ConfirmDialog, BulkActionBar } from "@/components/shared";
-import { Trash2 } from "lucide-react";
+import {
+  inactiveSelection,
+  reactivateDisabledReason,
+  bulkReactivate,
+  reactivatedMessage,
+} from "@/lib/table/bulk-activation";
+import { Trash2, RotateCcw } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
@@ -75,6 +81,21 @@ export default function CatalogCategoriesPage() {
     if (error) toast.error("Could not update categories");
     else { toast.success(`${ids.length} category(ies) moved to Inactive`); setSelectedIds(new Set()); load(); }
     setBulkOpen(false);
+  }
+
+  /** Restore every selected category that is currently Inactive. */
+  async function bulkReactivateCategories() {
+    const ids = inactiveSelection(categories, selectedIds);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    const { error } = await bulkReactivate(supabase, "product_categories", ids);
+    setDeleting(false);
+    if (error) toast.error("Could not re-activate categories");
+    else {
+      toast.success(reactivatedMessage(ids.length, "category", "categories"));
+      setSelectedIds(new Set());
+      load();
+    }
   }
 
   const load = useCallback(async () => {
@@ -221,6 +242,12 @@ export default function CatalogCategoriesPage() {
     },
   ];
 
+  // Selected categories that are actually Inactive — derived so it cannot drift.
+  const inactiveSelectedIds = useMemo(
+    () => inactiveSelection(categories, selectedIds),
+    [categories, selectedIds],
+  );
+
   const filtered = useMemo(() => {
     return categories.filter((c) => {
       for (const [colId, val] of Object.entries(filterState)) {
@@ -290,7 +317,17 @@ export default function CatalogCategoriesPage() {
         <BulkActionBar
           selectedCount={selectedIds.size}
           onClear={() => setSelectedIds(new Set())}
-          actions={[{ label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) }]}
+          actions={[
+            {
+              label: "Re-activate",
+              icon: <RotateCcw className="size-3.5" />,
+              variant: "outline",
+              onClick: bulkReactivateCategories,
+              disabled: deleting || inactiveSelectedIds.length === 0,
+              title: reactivateDisabledReason(selectedIds.size, inactiveSelectedIds.length),
+            },
+            { label: "Move to Inactive", icon: <Trash2 className="size-3.5" />, variant: "destructive", onClick: () => setBulkOpen(true) },
+          ]}
         />
       )}
       <DataTable

@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   Loader2,
   Trash2,
+  RotateCcw,
   Eye,
   EyeOff,
 } from 'lucide-react';
@@ -54,6 +55,17 @@ import {
   hasPoint,
   type MapPoint,
 } from '@/components/location-tracking/point-map-dialog';
+import {
+  PointsMapDialog,
+  type PointsMapSelection,
+} from '@/components/location-tracking/points-map-dialog';
+import { splitMappableSelection, type GeoTaggedRow } from '@/lib/maps/selection-points';
+import {
+  inactiveSelection,
+  reactivateDisabledReason,
+  bulkReactivate,
+  reactivatedMessage,
+} from '@/lib/table/bulk-activation';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 
 interface ContactWithData extends Contact {
@@ -91,6 +103,7 @@ export default function ContactsPage() {
   const { filterState } = tableView;
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
+  const [mapSelection, setMapSelection] = useState<PointsMapSelection | null>(null);
 
   // Lookups
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -376,6 +389,49 @@ export default function ContactsPage() {
 
     setDeleting(false);
     setBulkDeleteOpen(false);
+  }
+
+  /**
+   * Restore every selected customer that is currently Inactive.
+   *
+   * Not confirmed: re-activating is not destructive, and an admin who picked
+   * the rows and pressed the button has already said what they want. The button
+   * itself is disabled unless the selection actually holds something Inactive.
+   */
+  async function handleBulkReactivate() {
+    const ids = inactiveSelection(contacts, selectedContacts);
+    if (ids.length === 0) return;
+    setDeleting(true);
+
+    const { error } = await bulkReactivate(supabase, 'contacts', ids);
+
+    if (error) {
+      toast.error('Failed to re-activate customers');
+    } else {
+      toast.success(reactivatedMessage(ids.length, 'customer'));
+      setSelectedContacts(new Set());
+      fetchData();
+    }
+
+    setDeleting(false);
+  }
+
+  /** Plot every selected customer that has a saved coordinate on one map. */
+  function handleShowSelectionOnMap() {
+    const { points, skipped } = splitMappableSelection(contacts, selectedContacts, {
+      titleOf: (c) => c.company || c.name || c.phone,
+      latOf: (c) => (c as GeoTaggedRow).latitude,
+      lngOf: (c) => (c as GeoTaggedRow).longitude,
+    });
+    if (points.length === 0) {
+      toast.error('None of the selected customers have a saved location');
+      return;
+    }
+    setMapSelection({
+      title: `${points.length} ${points.length === 1 ? 'Customer' : 'Customers'} on map`,
+      points,
+      skipped,
+    });
   }
 
   const columns: ColumnDef<ContactWithData>[] = [
@@ -674,12 +730,46 @@ export default function ContactsPage() {
   /** buildQuery already applied the search and every column filter. */
   const filteredContacts = contacts;
 
+  // Which bulk actions can actually run against this selection. Both are
+  // derived rather than stored so they cannot drift from the selection.
+  const inactiveSelectedIds = useMemo(
+    () => inactiveSelection(contacts, selectedContacts),
+    [contacts, selectedContacts],
+  );
+  const mappableSelectedCount = useMemo(
+    () =>
+      splitMappableSelection(contacts, selectedContacts, {
+        titleOf: (c) => c.company || c.name || c.phone,
+        latOf: (c) => (c as GeoTaggedRow).latitude,
+        lngOf: (c) => (c as GeoTaggedRow).longitude,
+      }).points.length,
+    [contacts, selectedContacts],
+  );
+
   return (
     <PageLayout>
       <BulkActionBar
         selectedCount={selectedContacts.size}
         onClear={() => setSelectedContacts(new Set())}
         actions={[
+          {
+            label: "Show on Map",
+            icon: <MapPin className="size-3.5" />,
+            variant: "outline",
+            onClick: handleShowSelectionOnMap,
+            disabled: mappableSelectedCount === 0,
+            title: mappableSelectedCount === 0
+              ? "None of the selected customers have a saved location"
+              : undefined,
+          },
+          {
+            label: "Re-activate",
+            icon: <RotateCcw className="size-3.5" />,
+            variant: "outline",
+            onClick: handleBulkReactivate,
+            disabled: deleting || inactiveSelectedIds.length === 0,
+            title: reactivateDisabledReason(selectedContacts.size, inactiveSelectedIds.length),
+          },
           {
             label: "Move to Inactive",
             icon: <Trash2 className="size-3.5" />,
@@ -756,6 +846,7 @@ export default function ContactsPage() {
       />
 
       <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />
+      <PointsMapDialog selection={mapSelection} onClose={() => setMapSelection(null)} />
     </PageLayout>
   );
 }
