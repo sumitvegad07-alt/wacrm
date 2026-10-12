@@ -419,9 +419,32 @@ export function appendCustomFieldColumns<T extends Record<string, any>>(
       cf.field_type === 'multi-select'
     ) {
       type = 'select';
-      const uniqueVals = Array.from(
-        new Set(dataRows.map((r) => r[`cf_${cf.id}`]).filter(Boolean))
-      ) as string[];
+      /**
+       * Prefer the choices the admin configured on the field.
+       *
+       * Scanning `dataRows` only ever worked because every screen had the whole
+       * table in memory. Now that list screens hold one page at a time, that
+       * would offer the filter only the values that happen to appear on the
+       * page you are looking at. `field_options` is the full list by
+       * definition; the scan stays as the fallback for fields saved before it
+       * was populated.
+       */
+      const configured = Array.isArray(cf.field_options)
+        ? (cf.field_options as unknown[])
+            .map((opt) =>
+              typeof opt === 'string'
+                ? opt
+                : ((opt as { value?: string; label?: string })?.value ??
+                   (opt as { value?: string; label?: string })?.label ?? ''),
+            )
+            .filter((v): v is string => Boolean(v))
+        : [];
+
+      const uniqueVals = configured.length
+        ? configured
+        : (Array.from(
+            new Set(dataRows.map((r) => r[`cf_${cf.id}`]).filter(Boolean))
+          ) as string[]);
       options = uniqueVals.map((val) => ({ label: val, value: val }));
     } else if (cf.field_type === 'date') {
       type = 'date';

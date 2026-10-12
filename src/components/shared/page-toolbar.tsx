@@ -53,7 +53,12 @@ export function PageToolbar({
   className,
   ...props
 }: PageToolbarProps) {
-  if (!filters && !actions && !onExportCsv && !onRefresh) {
+  // `search` counts. Leaving it out of this test meant a screen whose only
+  // toolbar content was a search box rendered no toolbar at all — which is how
+  // ten screens (Orders, Payments, Quotations, Tasks, Dispatches, Pending
+  // Dispatch, Visits, Employees, Announcements, Routes) all shipped with a
+  // search box that was passed in and silently dropped.
+  if (!search && !filters && !actions && !onExportCsv && !onRefresh) {
     return null;
   }
 
@@ -67,6 +72,19 @@ export function PageToolbar({
       {...props}
     >
       <div className="flex items-center gap-2 flex-wrap min-w-0">
+        {search && (
+          <div className="relative w-full sm:w-72">
+            <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={search.value}
+              onChange={(e) => search.onChange(e.target.value)}
+              placeholder={search.placeholder ?? "Search..."}
+              aria-label={search.placeholder ?? "Search"}
+              className="pl-8"
+            />
+          </div>
+        )}
         {filters}
       </div>
 

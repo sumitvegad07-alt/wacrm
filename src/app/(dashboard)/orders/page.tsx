@@ -13,16 +13,35 @@ import { useAuth } from '@/hooks/use-auth';
 import { useDataScope } from '@/hooks/use-data-scope';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
+import { useServerTable } from '@/hooks/use-server-table';
+import { fetchAllPages } from '@/lib/table/export-all-pages';
+import type { ServerTableQuery } from '@/lib/table/server-query';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
-import { isDateInFilter } from '@/lib/date-filters';
+import { dateFilterToRange } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
 import { OrderForm } from '@/components/orders/order-form';
-import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
+import { getVisibleTableColumns } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from '@/components/shared';
 import { ORDER_STATUSES } from '@/lib/orders/statuses';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
+
+/** Exactly the columns buildQuery selects. */
+interface OrderQueryRow {
+  id: string;
+  order_number: string;
+  date: string;
+  total_amount: number | null;
+  status: string;
+  classification: 'direct' | 'primary' | 'secondary';
+  user_id: string;
+  contact_id: string | null;
+  lead_id: string | null;
+  customer_name: string | null;
+  salesman_name: string | null;
+  order_items?: { count: number }[] | null;
+}
 
 interface OrderRow {
   id: string;
@@ -85,12 +104,10 @@ export default function OrdersPage() {
   const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner } = useAuth();
   const scope = useDataScope();
 
-  const [orders, setOrders] = useState<OrderRow[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
-  const [loading, setLoading] = useState(true);
   const tableView = useTableView("wacrm_orders_table_columns", {});
-  const { filterState } = tableView;
-  const [globalSearch, setGlobalSearch] = useState('');
+  /** Custom field values for the rows on the CURRENT page only, keyed by order id. */
+  const [customValues, setCustomValues] = useState<Record<string, Record<string, unknown>>>({});
   const [createOpen, setCreateOpen] = useState(false);
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -102,72 +119,144 @@ export default function OrdersPage() {
   const canEditOrder = hasPermission(PERMISSIONS.CRM.EDIT_ORDERS);
   const canManageStatus = hasPermission(PERMISSIONS.CRM.MANAGE_ORDER_STATUS);
 
-  const fetchData = useCallback(async () => {
-    if (!accountId || !scope.ready) return;
-    setLoading(true);
+  // Reference data, loaded once. Small, fixed-size, and needed to render the
+  // custom-field columns — not something to re-fetch per page of orders.
+  useEffect(() => {
+    if (!accountId) return;
+    let alive = true;
+    void (async () => {
+      const [{ data: fieldsData }, { data: acctData }] = await Promise.all([
+        supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'order'),
+        supabase.from('accounts').select('settings').eq('id', accountId).single(),
+      ]);
+      if (!alive) return;
+      setCustomFields(fieldsData || []);
+      setHierarchyEnabled(!!acctData?.settings?.order_settings?.hierarchy_enabled);
+    })();
+    return () => { alive = false; };
+  }, [accountId, supabase]);
 
-    // Directional data-scoping (app-level; RLS is the real boundary). No-op unless the account
-    // has Reporting Hierarchy on and the role isn't a bypass — see useDataScope.
-    const ordersQuery = scope.apply(
-      supabase
-        .from('orders')
-        .select('*, order_items(count), contacts(company, name), leads(name)')
-        .eq('account_id', accountId)
-        .order('created_at', { ascending: false }),
-      'user_id',
-    );
+  /**
+   * One page of orders, searched and filtered by the database.
+   *
+   * This screen used to download every order in the account, join contacts,
+   * leads and profiles in the browser to work out a customer and salesman
+   * name, pull every order_custom_values row, and then search and filter the
+   * lot in JavaScript. `customer_name`, `salesman_name` and `search_text` are
+   * now columns on the row (migration 20261012100000), kept current by
+   * triggers, so all of that is one indexed query.
+   */
+  const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
+    (sb, { search, filters, from, to }) => {
+      // Directional data-scoping (app-level; RLS is the real boundary).
+      let q = scope.apply(
+        sb
+          .from('orders')
+          .select(
+            'id, order_number, date, total_amount, status, classification, user_id, contact_id, lead_id, customer_name, salesman_name, order_items(count)',
+            { count: 'exact' },
+          )
+          .eq('account_id', accountId!),
+        'user_id',
+      );
 
-    const [{ data: orderData }, { data: profiles }, { data: fieldsData }, { data: acctData }] = await Promise.all([
-      ordersQuery,
-      supabase.from('profiles').select('id, full_name, user_id').eq('account_id', accountId),
-      supabase.from('custom_fields').select('*').eq('account_id', accountId).eq('module_name', 'order'),
-      supabase.from('accounts').select('settings').eq('id', accountId).single(),
-    ]);
+      if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
-    setHierarchyEnabled(!!acctData?.settings?.order_settings?.hierarchy_enabled);
-    setCustomFields(fieldsData || []);
+      const f = filters as FilterState;
+      if (f.customerName) q = q.ilike('customer_name', `%${String(f.customerName)}%`);
+      if (f.salesmanName) q = q.ilike('salesman_name', `%${String(f.salesmanName)}%`);
+      if (f.order_number) q = q.ilike('order_number', `%${String(f.order_number)}%`);
+      if (Array.isArray(f.classification) && f.classification.length) {
+        q = q.in('classification', f.classification as string[]);
+      }
+      if (Array.isArray(f.status) && f.status.length) {
+        q = q.in('status', f.status as string[]);
+      }
+      if (f.date) {
+        const { gte, lte } = dateFilterToRange(f.date as string | string[]);
+        if (gte) q = q.gte('date', gte);
+        if (lte) q = q.lte('date', lte);
+      }
 
-    let orderValues: any[] = [];
-    if (orderData && orderData.length > 0) {
-      const orderIds = orderData.map((o: any) => o.id);
-      const { data: vals } = await supabase.from('order_custom_values').select('*').in('order_id', orderIds);
-      orderValues = vals || [];
+      return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
+        ServerTableQuery<Record<string, unknown>>
+      >;
+    },
+    [accountId, scope],
+  );
+
+  const table = useServerTable<Record<string, unknown>>({
+    tableView,
+    buildQuery,
+    enabled: Boolean(accountId) && scope.ready,
+    deps: [accountId, scope.key],
+  });
+
+  const fetchData = table.reload;
+
+  /**
+   * Custom field values for the twenty rows on screen, not for the whole table.
+   * Runs after each page lands; `cf_<id>` is the shape the column renderers and
+   * the export expect.
+   */
+  const pageIds = useMemo(
+    () => table.rows.map((o) => String(o.id)).join(','),
+    [table.rows],
+  );
+  useEffect(() => {
+    if (!pageIds) {
+      setCustomValues({});
+      return;
     }
-
-    // Key by auth user_id: orders.user_id is the auth uid (= profiles.user_id),
-    // NOT profiles.id — keying by p.id made every salesman read "Unknown".
-    const profileMap: Record<string, string> = {};
-    profiles?.forEach((p: { id: string; full_name: string; user_id: string }) => {
-      if (p.user_id) profileMap[p.user_id] = p.full_name;
-    });
-
-    const rows: OrderRow[] = (orderData || []).map((o: Record<string, any>) => {
-      const customData: Record<string, any> = {};
-      orderValues.filter((v: any) => v.order_id === o.id).forEach((v: any) => {
-        customData[`cf_${v.custom_field_id}`] = v.value;
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from('order_custom_values')
+        .select('order_id, custom_field_id, value')
+        .in('order_id', pageIds.split(','));
+      if (!alive) return;
+      const byOrder: Record<string, Record<string, unknown>> = {};
+      (data || []).forEach((v: { order_id: string; custom_field_id: string; value: unknown }) => {
+        (byOrder[v.order_id] ??= {})[`cf_${v.custom_field_id}`] = v.value;
       });
-      return {
-        id: o.id,
-        order_number: o.order_number,
-        date: o.date,
-        total_amount: o.total_amount || 0,
-        status: Object.keys(LEGAL_TO).find(k => k.toLowerCase() === (o.status || '').toLowerCase()) || o.status,
-        classification: o.classification,
-        user_id: o.user_id,
-        contact_id: o.contact_id,
-        lead_id: o.lead_id,
-        customerName: o.contacts?.company || o.contacts?.name || o.leads?.name || 'Unknown',
-        itemCount: o.order_items?.[0]?.count ?? 0,
-        salesmanName: profileMap[o.user_id] || 'Unknown',
-        ...customData,
-      };
-    });
-    setOrders(rows);
-    setSelectedIds(new Set());
-    setLoading(false);
-  }, [accountId, supabase, scope.ready, scope.key, scope.apply]);
+      setCustomValues(byOrder);
+    })();
+    return () => { alive = false; };
+  }, [pageIds, supabase]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const orders: OrderRow[] = useMemo(
+    () =>
+      table.rows.map((o) => {
+        const row = o as unknown as OrderQueryRow;
+        return {
+          id: row.id,
+          order_number: row.order_number,
+          date: row.date,
+          total_amount: row.total_amount || 0,
+          status:
+            Object.keys(LEGAL_TO).find((k) => k.toLowerCase() === (row.status || '').toLowerCase()) ||
+            row.status,
+          classification: row.classification,
+          user_id: row.user_id,
+          contact_id: row.contact_id,
+          lead_id: row.lead_id,
+          customerName: row.customer_name || 'Unknown',
+          itemCount: row.order_items?.[0]?.count ?? 0,
+          salesmanName: row.salesman_name || 'Unknown',
+          ...(customValues[row.id] ?? {}),
+        } as OrderRow;
+      }),
+    [table.rows, customValues],
+  );
+
+  const loading = table.loading;
+  const { filterState } = tableView;
+
+  // Selecting rows is per-page now, so a new page must not keep stale ticks.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [pageIds]);
+
   useRealtimeRefresh('orders', fetchData);
 
   useEffect(() => {
@@ -297,24 +386,35 @@ export default function OrdersPage() {
     return getVisibleTableColumns([...columns], customFields, orders);
   }, [columns, customFields, orders]);
 
-  const filtered = useMemo(() => {
-    return orders.filter((o) => {
-      if (globalSearch) {
-        const q = globalSearch.toLowerCase();
-        if (!o.order_number.toLowerCase().includes(q) && !o.customerName.toLowerCase().includes(q) && !o.salesmanName.toLowerCase().includes(q) && !matchesSearchableCustomFields(o, customFields, globalSearch)) return false;
-      }
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0)) continue;
-        if (colId === 'customerName') { if (!o.customerName.toLowerCase().includes((val as string).toLowerCase())) return false; }
-        else if (colId === 'salesmanName') { if (!o.salesmanName.toLowerCase().includes((val as string).toLowerCase())) return false; }
-        else if (colId === 'order_number') { if (!o.order_number.toLowerCase().includes((val as string).toLowerCase())) return false; }
-        else if (colId === 'classification') { if (!(val as string[]).includes(o.classification)) return false; }
-        else if (colId === 'status') { if (!(val as string[]).includes(o.status)) return false; }
-        else if (colId === 'date') { if (!isDateInFilter(o.date, val as string | string[])) return false; }
-      }
-      return true;
+  /**
+   * Nothing to filter here any more — `buildQuery` pushed the search, the
+   * per-column filters and the date range into the query, so every row the
+   * server returned is a row that belongs on screen.
+   */
+  const filtered = orders;
+
+  /**
+   * Export CSV must still mean "everything matching the current search and
+   * filters", not "the twenty rows on screen", so it walks the same query.
+   */
+  const exportAll = useCallback(async () => {
+    const { rows, truncated } = await fetchAllPages(supabase, buildQuery, {
+      search: table.search.trim(),
+      filters: filterState,
     });
-  }, [orders, filterState, globalSearch, customFields]);
+    return {
+      rows: rows.map((o) => {
+        const row = o as unknown as OrderQueryRow;
+        return {
+          ...row,
+          customerName: row.customer_name || 'Unknown',
+          salesmanName: row.salesman_name || 'Unknown',
+          itemCount: row.order_items?.[0]?.count ?? 0,
+        };
+      }),
+      truncated,
+    };
+  }, [supabase, buildQuery, table.search, filterState]);
 
   return (
     <PageLayout>
@@ -339,8 +439,8 @@ export default function OrdersPage() {
 
       <PageToolbar
         search={{
-          value: globalSearch,
-          onChange: setGlobalSearch,
+          value: table.search,
+          onChange: table.setSearch,
           placeholder: "Search by order #, customer, or salesman...",
         }}
       />
@@ -385,6 +485,7 @@ export default function OrdersPage() {
         isLoading={loading}
         rowKey={(o) => o.id}
         onRowClick={(o) => router.push(`/orders/${o.id}`)}
+        serverPagination={{ ...table.serverPagination, exportAll }}
         selection={canManageStatus ? {
           selectedIds,
           onSelectAll: (checked: boolean) => setSelectedIds(checked ? new Set(filtered.map((o) => o.id)) : new Set()),
