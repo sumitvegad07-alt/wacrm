@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status: Stages 1–3 COMPLETE** (2026-10-12). All eleven growing list screens
+page on the server; setup data is capped; the deals board is capped pending
+per-stage paging. Stage 4 (SQL aggregates for the dashboard and the
+report/stock/attendance screens) is still open — that is what makes today's
+small screens faster, as opposed to stopping them breaking at scale.
+
 **Goal:** Stop every list screen downloading its whole table, so the app stays
 fast when an account holds hundreds of thousands of rows instead of hundreds.
 

@@ -81,7 +81,28 @@ visit to the page. The browser tab will run out of memory before that finishes.
 
 **This is the one that turns "a bit slow" into "the app does not work."**
 
-### The fix is already half-built
+### DONE — shipped 2026-10-12
+
+All eleven growing list screens now page on the server: Orders, Leads,
+Contacts, Payments, Products, Tasks, Expenses, Quotations, Dispatches, Pending
+Dispatch and Visits. Each sends one indexed query per page instead of
+downloading its table.
+
+Verified on a production build against the live database: every screen sends
+exactly one paged request, makes no unbounded request for its own table, and
+fires one debounced search query rather than one per keystroke.
+
+The search itself was proved equivalent rather than assumed — the old
+client-side predicate was rebuilt in SQL from its source tables and diffed
+against the new `search_text` column over ~42,000 real rows, for six search
+terms, on all ten tables. Zero rows differed.
+
+Setup data (categories, units, roles, announcements, broadcasts, employees)
+deliberately keeps client paging with a 500-row tripwire; the deals kanban is
+capped at 1,000 because a board must show every stage at once and needs
+per-stage paging as its own piece of work.
+
+### How the fix was built
 
 `src/components/ui/data-table/data-table.tsx` already supports a
 `serverPagination` mode: the page hands it one page of rows plus a total count,
