@@ -19,6 +19,8 @@ import { useDataExport } from "@/hooks/use-data-export";
 import type { TableViewApi } from "@/hooks/use-table-view";
 import { reconcileColumns } from "@/lib/table-views";
 import { TableSkeleton, EmptyState } from "@/components/shared";
+import { toast } from "sonner";
+import { EXPORT_MAX_ROWS } from "@/lib/table/export-all-pages";
 
 interface DataTableProps<T> {
   columns: ColumnDef<T>[];
@@ -66,6 +68,15 @@ interface DataTableProps<T> {
     pageSizeOptions?: number[];
     onPageChange: (page: number) => void;
     onPageSizeChange: (pageSize: number) => void;
+    /**
+     * Fetches EVERY row of the current search/filter, for Export CSV.
+     *
+     * Without it the button could only ever export the twenty rows on screen,
+     * which is never what the user means — so a screen that omits this gets no
+     * Export button at all rather than a misleading one. `useServerTable`
+     * callers pass `exportAll: () => fetchAllPages(...)`.
+     */
+    exportAll?: () => Promise<{ rows: unknown[]; truncated: boolean }>;
   };
 }
 
@@ -85,6 +96,7 @@ export function DataTable<T>({
   const [isManageColumnsOpen, setIsManageColumnsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [isExporting, setIsExporting] = useState(false);
   const { exportToCsv } = useDataExport();
 
   const safeData = data || [];
@@ -120,6 +132,46 @@ export function DataTable<T>({
   useEffect(() => {
     reportEffectiveColumns({ active: activeColumnIds, visible: visibleColumnIds });
   }, [reportEffectiveColumns, activeColumnIds, visibleColumnIds]);
+
+  /**
+   * Export CSV.
+   *
+   * In local mode the whole table is already in `safeData`, so it exports that.
+   * In server mode only one page is in memory, so it asks the screen for every
+   * row of the current search and filter — see fetchAllPages. A server-paged
+   * screen that supplies no `exportAll` gets no button, because exporting the
+   * twenty rows on screen is never what the user means.
+   */
+  const canExport = !serverPagination || Boolean(serverPagination.exportAll);
+
+  const handleExport = async () => {
+    const filename = `${storageKey.replace("wacrm_", "").replace("_table_columns", "")}_export_${new Date().toISOString().split("T")[0]}.csv`;
+
+    if (!serverPagination) {
+      exportToCsv(safeData, visibleColumns, filename);
+      return;
+    }
+    if (!serverPagination.exportAll) return;
+
+    setIsExporting(true);
+    const toastId = toast.loading("Preparing export…");
+    try {
+      const { rows, truncated } = await serverPagination.exportAll();
+      exportToCsv(rows as T[], visibleColumns, filename);
+      if (truncated) {
+        toast.warning(
+          `Exported the first ${EXPORT_MAX_ROWS.toLocaleString()} rows. Narrow the filter to export the rest.`,
+          { id: toastId },
+        );
+      } else {
+        toast.success(`Exported ${rows.length.toLocaleString()} rows.`, { id: toastId });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed.", { id: toastId });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleSaveColumns = (active: string[], visible: string[]) => {
     tableView.setColumnState({ active, visible });
@@ -180,14 +232,15 @@ export function DataTable<T>({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 text-xs">
               {menuActions}
-              {menuActions && !serverPagination && <DropdownMenuSeparator />}
-              {!serverPagination && (
+              {menuActions && canExport && <DropdownMenuSeparator />}
+              {canExport && (
                 <DropdownMenuItem
-                  onClick={() => exportToCsv(safeData, visibleColumns, `${storageKey.replace('wacrm_', '').replace('_table_columns', '')}_export_${new Date().toISOString().split('T')[0]}.csv`)}
+                  onClick={handleExport}
+                  disabled={isExporting}
                   className="cursor-pointer gap-2"
                 >
                   <Download className="size-3.5" />
-                  Export CSV
+                  {isExporting ? "Exporting…" : "Export CSV"}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
