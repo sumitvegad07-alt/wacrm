@@ -33,3 +33,73 @@ test.describe("table filter row", () => {
     });
   });
 });
+
+test.describe("filter row value lists", () => {
+  test("the Lead Owner dropdown offers the account's staff", async ({ page }, testInfo) => {
+    await page.goto("/leads");
+
+    const filterRow = page.locator("table thead tr").nth(1);
+    await expect(filterRow).toBeVisible({ timeout: 30_000 });
+
+    await filterRow.getByRole("button", { name: "Filter by Lead Owner" }).click();
+
+    // Nothing is fetched until the dropdown opens, so the names arrive after
+    // the click rather than with the page.
+    const options = page.getByRole("checkbox");
+    await expect(options.first()).toBeVisible({ timeout: 15_000 });
+    expect(await options.count()).toBeGreaterThan(0);
+
+    await testInfo.attach("lead-owner-dropdown", {
+      body: await page.screenshot({ fullPage: false }),
+      contentType: "image/png",
+    });
+  });
+
+  test("the Customers table has a filter row too", async ({ page }, testInfo) => {
+    await page.goto("/contacts");
+
+    const headerRows = page.locator("table thead tr");
+    await expect(headerRows.first()).toBeVisible({ timeout: 30_000 });
+    await expect(headerRows).toHaveCount(2);
+
+    const headingCells = await headerRows.nth(0).locator("th").count();
+    const filterCells = await headerRows.nth(1).locator("th").count();
+    expect(filterCells).toBe(headingCells);
+
+    await testInfo.attach("customers-filter-row", {
+      body: await page.screenshot({ fullPage: false }),
+      contentType: "image/png",
+    });
+  });
+});
+
+test.describe("distinct value lists", () => {
+  test("the Company Name dropdown lists companies from the account's own rows", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/contacts");
+
+    const filterRow = page.locator("table thead tr").nth(1);
+    await expect(filterRow).toBeVisible({ timeout: 30_000 });
+
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().includes("/api/table/column-values") && r.request().method() === "GET",
+        { timeout: 20_000 },
+      ),
+      filterRow.getByRole("button", { name: "Filter by Company Name" }).click(),
+    ]);
+
+    expect(response.ok(), "column-values must not error").toBe(true);
+    const payload = await response.json();
+    expect(Array.isArray(payload.values)).toBe(true);
+    expect(payload.values.length, "this account has customers, so it has companies").toBeGreaterThan(0);
+
+    await expect(page.getByRole("checkbox").first()).toBeVisible({ timeout: 10_000 });
+
+    await testInfo.attach("company-name-dropdown", {
+      body: await page.screenshot({ fullPage: false }),
+      contentType: "image/png",
+    });
+  });
+});

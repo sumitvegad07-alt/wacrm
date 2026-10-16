@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TableHead, TableRow } from "@/components/ui/table";
+import { useColumnFilterOptions } from "@/hooks/use-column-filter-options";
 import { ColumnDef, ColumnOption, FilterState } from "./data-table-types";
 
 /**
@@ -136,8 +137,16 @@ function SelectFilterCell({
 }) {
   const [open, setOpen] = useState(false);
   const selected = Array.isArray(value) ? (value as string[]) : [];
-  const options = column.options ?? [];
+  const { options, loading, error, truncated, search, setSearch } = useColumnFilterOptions(
+    column,
+    open,
+  );
 
+  /**
+   * The chip has to name a chosen value even before the list has loaded, and
+   * for a value no longer in the list. Fall back to the raw value rather than
+   * showing a blank chip.
+   */
   const labelFor = (v: string) => options.find((o) => o.value === v)?.label ?? v;
   const summary =
     selected.length === 0 ? null : selected.length === 1 ? labelFor(selected[0]) : `${selected.length} selected`;
@@ -170,7 +179,27 @@ function SelectFilterCell({
         <div className="mb-2 border-b border-border px-2 pb-2 text-sm font-medium">
           Filter by {column.label}
         </div>
-        {options.length === 0 ? (
+        {/* The search box appears once the list is long enough to be worth
+            searching, or when more values exist than came back — so the long
+            tail is always reachable by typing. It stays once the user has
+            typed, even if their search narrowed the list below the threshold. */}
+        {(truncated || search !== "" || options.length > 8) && (
+          <div className="relative mb-2 flex items-center px-1">
+            <Search className="pointer-events-none absolute left-3 size-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`Search ${column.label}...`}
+              className="h-11 pl-7 text-xs md:h-8"
+              autoFocus
+            />
+          </div>
+        )}
+        {loading ? (
+          <p className="px-2 py-3 text-xs text-muted-foreground">Loading values…</p>
+        ) : error ? (
+          <p className="px-2 py-3 text-xs text-destructive">{error}</p>
+        ) : options.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">No values to choose from.</p>
         ) : (
           <div className="max-h-60 space-y-1 overflow-y-auto p-1">

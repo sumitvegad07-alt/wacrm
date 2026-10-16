@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomField } from "@/types";
 import {
+  applyArrayOverlapFilter,
   applyCustomFieldFilters,
   applyDateFilter,
   applyInFilter,
+  applyInWithFallbackFilter,
   applyTextFilter,
   isEmptyFilterValue,
 } from "./apply-filters";
@@ -22,6 +24,14 @@ function fakeQuery(): FakeQuery {
   }
   q.filter = (column: string, operator: string, value: unknown) => {
     calls.push(`filter(${column}, ${operator}, ${JSON.stringify(value)})`);
+    return q;
+  };
+  q.or = (expression: string) => {
+    calls.push(`or(${expression})`);
+    return q;
+  };
+  q.overlaps = (column: string, value: unknown) => {
+    calls.push(`overlaps(${column}, ${JSON.stringify(value)})`);
     return q;
   };
   return q as unknown as FakeQuery;
@@ -140,5 +150,76 @@ describe("applyCustomFieldFilters", () => {
     const q = fakeQuery();
     applyCustomFieldFilters(q, { cf_aaa: "", cf_bbb: [] }, fields);
     expect(q.calls).toEqual([]);
+  });
+});
+
+
+const U1 = "11111111-1111-4111-8111-111111111111";
+const U2 = "22222222-2222-4222-8222-222222222222";
+
+// ============================================================
+// Owner and Collaborator filters.
+//
+// `leads.owner_id` holds an AUTH user id, not a profiles.id, and falls back to
+// `user_id` (the creator) when it is null — which is exactly what the Lead
+// Owner column displays. A filter that only looked at owner_id would silently
+// miss every lead whose owner was never set, which is most of them on an
+// account that does not assign owners.
+// ============================================================
+describe("applyInWithFallbackFilter", () => {
+  it("matches the column, or the fallback where the column is null", () => {
+    const q = fakeQuery();
+    applyInWithFallbackFilter(q, "owner_id", "user_id", [U1, U2]);
+    expect(q.calls).toEqual([
+      `or(owner_id.in.(${U1},${U2}),and(owner_id.is.null,user_id.in.(${U1},${U2})))`,
+    ]);
+  });
+
+  it("accepts a single value as well as a list", () => {
+    const q = fakeQuery();
+    applyInWithFallbackFilter(q, "owner_id", "user_id", U1);
+    expect(q.calls).toEqual([
+      `or(owner_id.in.(${U1}),and(owner_id.is.null,user_id.in.(${U1})))`,
+    ]);
+  });
+
+  it("adds nothing when no filter is set", () => {
+    for (const empty of [null, undefined, "", []]) {
+      const q = fakeQuery();
+      applyInWithFallbackFilter(q, "owner_id", "user_id", empty);
+      expect(q.calls).toEqual([]);
+    }
+  });
+
+  it("drops values that could break out of the PostgREST expression", () => {
+    // The ids are uuids. Anything carrying a comma, a bracket or a quote is
+    // not one, and must never be pasted into an `or(...)` string.
+    const q = fakeQuery();
+    applyInWithFallbackFilter(q, "owner_id", "user_id", [U1, "a,b", "c)d", 'e"f', "g(h"]);
+    expect(q.calls).toEqual([
+      `or(owner_id.in.(${U1}),and(owner_id.is.null,user_id.in.(${U1})))`,
+    ]);
+  });
+
+  it("adds nothing when every value was rejected", () => {
+    const q = fakeQuery();
+    applyInWithFallbackFilter(q, "owner_id", "user_id", ["a,b", "not-a-uuid"]);
+    expect(q.calls).toEqual([]);
+  });
+});
+
+describe("applyArrayOverlapFilter", () => {
+  it("matches a row whose array column holds any of the chosen values", () => {
+    const q = fakeQuery();
+    applyArrayOverlapFilter(q, "collaborator_ids", [U1, U2]);
+    expect(q.calls).toEqual([`overlaps(collaborator_ids, ${JSON.stringify([U1, U2])})`]);
+  });
+
+  it("adds nothing when no filter is set", () => {
+    for (const empty of [null, undefined, "", []]) {
+      const q = fakeQuery();
+      applyArrayOverlapFilter(q, "collaborator_ids", empty);
+      expect(q.calls).toEqual([]);
+    }
   });
 });

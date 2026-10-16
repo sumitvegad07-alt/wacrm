@@ -32,6 +32,8 @@ type Builder = {
   gte: (column: string, value: unknown) => Builder;
   lte: (column: string, value: unknown) => Builder;
   filter: (column: string, operator: string, value: unknown) => Builder;
+  or: (expression: string) => Builder;
+  overlaps: (column: string, value: readonly unknown[]) => Builder;
 };
 
 /** `contains` text match, matching the old `.toLowerCase().includes(...)`. */
@@ -45,6 +47,57 @@ export function applyInFilter<T>(query: T, column: string, value: unknown): T {
   if (isEmptyFilterValue(value)) return query;
   const list = Array.isArray(value) ? value : [value];
   return (query as Builder).in(column, list) as T;
+}
+
+/**
+ * A uuid, and nothing else.
+ *
+ * `applyInWithFallbackFilter` builds a PostgREST `or(...)` expression by hand,
+ * which is a string PostgREST parses — so a value carrying a comma, a bracket
+ * or a quote could change the shape of the condition. Every id these filters
+ * carry is a uuid, so anything that is not one is dropped rather than escaped.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function safeIds(value: unknown): string[] {
+  const list = Array.isArray(value) ? value : [value];
+  return list.filter((v): v is string => typeof v === "string" && UUID.test(v));
+}
+
+/**
+ * Match `column`, falling back to `fallbackColumn` where `column` is null.
+ *
+ * For Lead Owner: `leads.owner_id` is the assigned owner and may be null, in
+ * which case the screen shows the creator from `user_id`. Filtering on
+ * `owner_id` alone would miss every lead whose owner was never set — which is
+ * most of them on an account that does not assign owners — so the filter has
+ * to ask the same question the column answers.
+ */
+export function applyInWithFallbackFilter<T>(
+  query: T,
+  column: string,
+  fallbackColumn: string,
+  value: unknown,
+): T {
+  if (isEmptyFilterValue(value)) return query;
+  const ids = safeIds(value);
+  if (ids.length === 0) return query;
+  const list = ids.join(",");
+  return (query as Builder).or(
+    `${column}.in.(${list}),and(${column}.is.null,${fallbackColumn}.in.(${list}))`,
+  ) as T;
+}
+
+/**
+ * Match a row whose array column holds any of the chosen values.
+ *
+ * For Lead Collaborator: `collaborator_ids` is a `uuid[]`, so "is one of these
+ * people a collaborator" is an overlap, not an `in`.
+ */
+export function applyArrayOverlapFilter<T>(query: T, column: string, value: unknown): T {
+  if (isEmptyFilterValue(value)) return query;
+  const list = Array.isArray(value) ? value : [value];
+  return (query as Builder).overlaps(column, list as readonly unknown[]) as T;
 }
 
 /** Date preset or custom range, matching the old `isDateInFilter`. */
