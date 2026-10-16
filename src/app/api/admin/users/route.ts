@@ -5,21 +5,45 @@ import { requireSuperadmin, requireFounder, serviceClient } from "@/lib/auth/sup
 /**
  * Cross-tenant user list for the superadmin panel.
  *
- * The page used to query `profiles` directly from the browser, but
- * `profiles_select` is account-scoped, so it only ever returned the
- * superadmin's own company.
+ * Every superadmin screen that needs other tenants' profiles comes through
+ * here, because the browser cannot read them any more: `profiles_select` is
+ * account-scoped again (see migration 20261016120000). It used to carry an
+ * `OR is_superadmin()` branch, which also fired inside the ordinary tenant
+ * admin area and showed the founder every tenant's staff — in the Employees
+ * list and in every owner / assignee picker.
+ *
+ * Query params:
+ *   - `accountId` — only that company's profiles, for the company detail screen.
+ *   - `count=1`   — return just `{ count }`, for the dashboard tile.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await requireSuperadmin();
     const admin = serviceClient();
 
-    const { data, error } = await admin
+    const accountId = req.nextUrl.searchParams.get("accountId");
+    const countOnly = req.nextUrl.searchParams.get("count") === "1";
+
+    if (countOnly) {
+      let countQuery = admin
+        .from("profiles")
+        .select("id", { count: "exact", head: true });
+      if (accountId) countQuery = countQuery.eq("account_id", accountId);
+
+      const { count, error } = await countQuery;
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ count: count ?? 0 });
+    }
+
+    let query = admin
       .from("profiles")
       .select(
         "id, full_name, email, account_role, is_superadmin, account_id, accounts(name)",
-      )
-      .order("email");
+      );
+
+    if (accountId) query = query.eq("account_id", accountId);
+
+    const { data, error } = await query.order("email");
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 

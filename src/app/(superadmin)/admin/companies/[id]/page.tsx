@@ -75,13 +75,16 @@ export default function CompanyDetailPage() {
 
   useEffect(() => {
     async function load() {
+      // Members come from the server route, not from the browser: the browser
+      // can only read its own company's profiles now (see migration
+      // 20261016120000, which took the superadmin branch back out of
+      // `profiles_select` because it was also leaking other tenants' staff
+      // into the ordinary admin area).
       const [companyRes, membersRes] = await Promise.all([
         supabase.from("accounts").select("*").eq("id", id).single(),
-        supabase
-          .from("profiles")
-          .select("id, full_name, email, account_role")
-          .eq("account_id", id)
-          .order("account_role"),
+        fetch(`/api/admin/users?accountId=${id}`)
+          .then((r) => (r.ok ? r.json() : { users: [] }))
+          .catch(() => ({ users: [] })),
       ]);
 
       if (companyRes.data) {
@@ -98,7 +101,10 @@ export default function CompanyDetailPage() {
         setUserCount(c.user_count || "");
         setNotes(c.notes || "");
       }
-      setMembers(membersRes.data || []);
+      // The route orders by email; this screen has always listed owner first.
+      const memberRows = ((membersRes as { users?: Member[] }).users ?? []).slice();
+      memberRows.sort((a, b) => a.account_role.localeCompare(b.account_role));
+      setMembers(memberRows);
       setLoading(false);
     }
     load();

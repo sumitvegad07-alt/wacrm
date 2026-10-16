@@ -55,15 +55,22 @@ export default function SuperAdminDashboard() {
 
   useEffect(() => {
     async function loadStats() {
+      // The user count comes from the server route, not from the browser: the
+      // browser can only read its own company's profiles now (see migration
+      // 20261016120000, which took the superadmin branch back out of
+      // `profiles_select` because it was also leaking other tenants' staff
+      // into the ordinary admin area).
       const [accountsRes, usersRes] = await Promise.all([
         supabase
           .from("accounts")
           .select("id, name, created_at, subscription_status, subscription_plan"),
-        supabase.from("profiles").select("id", { count: "exact", head: true }),
+        fetch("/api/admin/users?count=1")
+          .then((r) => (r.ok ? r.json() : { count: 0 }))
+          .catch(() => ({ count: 0 })),
       ]);
 
       const accounts = accountsRes.data || [];
-      const totalUsers = usersRes.count ?? 0;
+      const totalUsers = (usersRes as { count?: number }).count ?? 0;
 
       const planBreakdown: Record<string, number> = {};
       let activeAccounts = 0;

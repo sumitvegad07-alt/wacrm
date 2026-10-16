@@ -94,9 +94,15 @@ export default function EmployeesPage() {
   const fetchData = async () => {
     setLoading(true);
     
+    // The account filter is belt and braces, not decoration. `profiles_select`
+    // used to carry an `OR is_superadmin()` branch, and because a row policy
+    // cannot tell which screen is asking, this list showed the founder every
+    // tenant's staff. The branch is gone (migration 20261016120000); the filter
+    // means a future policy mistake cannot leak the list again.
     const { data: empData, error: empError } = await supabase
       .from("profiles")
       .select("*, employee_roles(name), holiday_lists(id, name, is_default)")
+      .eq("account_id", accountId)
       .order("full_name")
       .limit(REFERENCE_ROW_CAP);
 
