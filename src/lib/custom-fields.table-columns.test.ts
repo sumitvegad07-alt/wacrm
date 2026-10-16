@@ -67,9 +67,42 @@ describe("getVisibleTableColumns — system key matching", () => {
     expect(cols.find((c) => c.id === "contact_person")!.label).toBe("Owner");
   });
 
-  it("hides the company column when the COMPANY field is hidden", () => {
+  it("hides the company column by default when the COMPANY field is hidden", () => {
     const fields = [
       field({ system_key: "company", field_name: "Company Name", show_in_table: false }),
+      field({ system_key: "name", field_name: "Contact Person" }),
+    ];
+    const cols = getVisibleTableColumns(contactColumns(), fields, []);
+    // Still listed, so Manage Column can offer it back…
+    expect(cols.map((c) => c.id)).toContain("name");
+    // …but off until the user asks for it.
+    expect(cols.find((c) => c.id === "name")!.visibleByDefault).toBe(false);
+    // The other column is untouched. This is the system-key mismatch guard.
+    expect(cols.find((c) => c.id === "contact_person")!.visibleByDefault).not.toBe(false);
+  });
+
+  it("hides the contact-person column by default when the NAME field is hidden", () => {
+    // Previously this hid the company column instead — the same mismatch,
+    // with a worse outcome than a wrong heading.
+    const fields = [
+      field({ system_key: "company", field_name: "Company Name" }),
+      field({ system_key: "name", field_name: "Contact Person", show_in_table: false }),
+    ];
+    const cols = getVisibleTableColumns(contactColumns(), fields, []);
+    expect(cols.find((c) => c.id === "contact_person")!.visibleByDefault).toBe(false);
+    expect(cols.find((c) => c.id === "name")!.visibleByDefault).not.toBe(false);
+  });
+
+  // ==========================================================
+  // A hidden column must stay in the list, because a removed column never
+  // reaches ManageColumnsDialog and so can never be switched back on. That is
+  // how Leads lost Area, Pincode, WhatsApp, Address, City, State and Country
+  // from Manage Column entirely — 32 fields across 10 modules were in that
+  // state. Only a field DEACTIVATED in Field Settings removes its column.
+  // ==========================================================
+  it("removes a column whose field was deactivated", () => {
+    const fields = [
+      field({ system_key: "company", field_name: "Company Name", is_active: false }),
       field({ system_key: "name", field_name: "Contact Person" }),
     ];
     const ids = getVisibleTableColumns(contactColumns(), fields, []).map((c) => c.id);
@@ -77,16 +110,58 @@ describe("getVisibleTableColumns — system key matching", () => {
     expect(ids).toContain("contact_person");
   });
 
-  it("hides the contact-person column when the NAME field is hidden", () => {
-    // Previously this hid the company column instead — the same mismatch,
-    // with a worse outcome than a wrong heading.
+  it("keeps every column when the account has no field rows at all", () => {
+    // Three live tenants are in exactly this state: predefined fields are
+    // seeded the first time a form builder is opened, so an account that has
+    // never opened one has no rows. Absence must never mean "off".
+    const before = contactColumns().map((c) => c.id);
+    const after = getVisibleTableColumns(contactColumns(), [], []).map((c) => c.id);
+    expect(after).toEqual(before);
+    expect(after.every((id) => id)).toBe(true);
+    for (const col of getVisibleTableColumns(contactColumns(), [], [])) {
+      expect(col.visibleByDefault).not.toBe(false);
+      expect(col.type).toBe("text");
+    }
+  });
+
+  it("does not edit the columns it was handed", () => {
+    // The screens pass a memoised array. Editing it in place outlives the
+    // render, so switching a field back on in Field Settings would not bring
+    // its column back until a full page reload.
+    const original = contactColumns();
+    getVisibleTableColumns(original, [
+      field({ system_key: "company", field_name: "Renamed", show_in_table: false, is_filterable: false }),
+    ], []);
+    expect(original[0].label).toBe("Company Name");
+    expect(original[0].visibleByDefault).toBeUndefined();
+    expect(original[0].type).toBe("text");
+  });
+
+  it("brings a column back once its field is shown again", () => {
+    const columns = contactColumns();
+    const hidden = getVisibleTableColumns(columns, [
+      field({ system_key: "company", field_name: "Company Name", show_in_table: false }),
+    ], []);
+    expect(hidden.find((c) => c.id === "name")!.visibleByDefault).toBe(false);
+
+    const shown = getVisibleTableColumns(columns, [
+      field({ system_key: "company", field_name: "Company Name", show_in_table: true }),
+    ], []);
+    expect(shown.find((c) => c.id === "name")!.visibleByDefault).not.toBe(false);
+  });
+
+  it("drops the filter from a column whose field is not filterable", () => {
+    // No new flag: a column with no `type` renders no filter cell, which is
+    // the same contract appendCustomFieldColumns already uses.
     const fields = [
-      field({ system_key: "company", field_name: "Company Name" }),
-      field({ system_key: "name", field_name: "Contact Person", show_in_table: false }),
+      field({ system_key: "company", field_name: "Company Name", is_filterable: false }),
+      field({ system_key: "name", field_name: "Contact Person" }),
     ];
-    const ids = getVisibleTableColumns(contactColumns(), fields, []).map((c) => c.id);
-    expect(ids).toContain("name");
-    expect(ids).not.toContain("contact_person");
+    const cols = getVisibleTableColumns(contactColumns(), fields, []);
+    expect(cols.find((c) => c.id === "name")!.type).toBeUndefined();
+    expect(cols.find((c) => c.id === "contact_person")!.type).toBe("text");
+    // No field row for this one, so it stays filterable.
+    expect(cols.find((c) => c.id === "phone")!.type).toBe("text");
   });
 
   it("falls back to the column id when no systemKey is declared", () => {

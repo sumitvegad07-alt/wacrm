@@ -364,23 +364,44 @@ export function getVisibleTableColumns<T extends Record<string, any>>(
   }
 
   // 1. Filter base columns and update labels/sortability per admin configuration
-  const visibleColumns = baseColumns.filter((col) => {
+  //
+  // `show_in_table: false` means HIDDEN, not gone. A column removed here never
+  // reaches ManageColumnsDialog, so the user has no way to switch it back on —
+  // which is how Leads lost Area, Pincode, WhatsApp, Address, City, State and
+  // Country from Manage Column entirely. Only `is_active: false`, the field
+  // switched off in Field Settings, removes the column.
+  //
+  // A field with no row at all leaves the column exactly as the screen defined
+  // it. Absence never means "off": predefined fields are seeded on first use of
+  // a module's form builder, so an account that has never opened one has no
+  // rows and must still get every column.
+  // Returns new column objects rather than editing the ones it was handed.
+  // The screens pass a memoised array, so an edit here outlives the render:
+  // once a column had been forced hidden or unfilterable, switching the field
+  // back on in Field Settings would not have brought it back until a full page
+  // reload. Deriving instead of mutating makes the config change take effect
+  // on the next render.
+  const visibleColumns = baseColumns.flatMap<ColumnDef<T>>((col) => {
     // Actions column is always shown
-    if (col.id === 'actions') return true;
+    if (col.id === 'actions') return [col];
     // `systemKey` where the column says which field governs it, otherwise its
     // id. A column whose id differs from the field it renders must declare
     // one, or it inherits another field's label and visibility.
     const sysField = systemFieldMap.get(col.systemKey ?? col.id);
-    if (sysField && (sysField.show_in_table === false || sysField.is_active === false)) {
-      return false;
+    if (!sysField) return [col];
+    if (sysField.is_active === false) return [];
+
+    const next: ColumnDef<T> = { ...col };
+    next.label = sysField.field_name || col.label;
+    if (sysField.is_sortable === false) next.sortable = false;
+    if (sysField.show_in_table === false) next.visibleByDefault = false;
+    if (sysField.is_filterable === false) {
+      // No separate flag: a column with no `type` renders no filter cell,
+      // the same contract appendCustomFieldColumns already uses below.
+      next.type = undefined;
+      next.options = undefined;
     }
-    if (sysField) {
-      col.label = sysField.field_name || col.label;
-      if (sysField.is_sortable === false) {
-        col.sortable = false;
-      }
-    }
-    return true;
+    return [next];
   });
 
   // 2. Append custom fields without a system_key
@@ -408,7 +429,10 @@ export function appendCustomFieldColumns<T extends Record<string, any>>(
   dataRows: T[]
 ): void {
   customFields.forEach((cf) => {
-    if (cf.show_in_table === false || cf.is_active === false) return;
+    // Same rule as the base columns above: deactivated means gone, hidden
+    // means listed-but-off so Manage Column can offer it back.
+    if (cf.is_active === false) return;
+    const hiddenByDefault = cf.show_in_table === false;
 
     let type: ColumnFilterType | undefined = 'text';
     let options: { label: string; value: string }[] | undefined = undefined;
@@ -467,7 +491,7 @@ export function appendCustomFieldColumns<T extends Record<string, any>>(
       label: cf.field_name,
       type: type,
       options: options && options.length > 0 ? options : undefined,
-      visibleByDefault: true,
+      visibleByDefault: !hiddenByDefault,
       sortable: sortable,
       render: (row) => {
         const val = row[`cf_${cf.id}`];
