@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ColumnDef } from "./data-table-types";
 import { DataTableHeader } from "./data-table-header";
+import { DataTableFilterRow } from "./data-table-filter-row";
 import { ManageColumnsDialog } from "./manage-columns-dialog";
 import { TableViewsBar } from "./table-views-bar";
 import { useDataExport } from "@/hooks/use-data-export";
@@ -286,10 +287,18 @@ export function DataTable<T>({
                   key={col.id}
                   column={col}
                   filterValue={filterState[col.id]}
-                  onFilterChange={tableView.setFilter}
                 />
               ))}
             </TableRow>
+            {/* Filters sit in their own permanent row under the headings, so
+                what a table is filtered by is visible rather than hidden
+                behind a click on the heading. */}
+            <DataTableFilterRow
+              columns={visibleColumns}
+              filterState={filterState}
+              onFilterChange={tableView.setFilter}
+              leadingColSpan={leadingColSpan}
+            />
           </TableHeader>
           <TableBody>
             {isLoading ? (
