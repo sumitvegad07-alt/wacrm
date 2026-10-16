@@ -462,7 +462,7 @@ export default function LeadsPage() {
       // The geo-tag captured when a rep tagged this lead on site.
       id: "latLng",
       label: "Latitude, Longitude",
-      type: "text",
+      // A map point, not text you can search.
       render: (lead) => (
         <span className="font-mono text-xs whitespace-nowrap">
           {formatLatLng((lead as any).latitude, (lead as any).longitude)}

@@ -17,6 +17,7 @@ import { normalizeTrackingSettings } from "@/lib/location/tracking-window";
 import { computeFilteredDistanceKm, isTrustworthyPing } from "@/lib/location/distance";
 import { useAuth } from "@/hooks/use-auth";
 import { ScreenAccessDenied } from "@/components/location-tracking/screen-access-denied";
+import { matchesColumnFilters } from "@/lib/table/match-filters";
 
 /**
  * Tracking Health — the single location-quality report.
@@ -59,11 +60,20 @@ function needsAttention(row: HealthRow): boolean {
   return row.punchedIn && row.expectedPings > 0 && row.coveragePct < LOW_COVERAGE_PCT;
 }
 
+/** The wording the badge shows. Shared so the Status filter cannot drift from it. */
+function statusLabel(row: HealthRow): string {
+  if (needsAttention(row)) return "Needs attention";
+  if (row.worstSeverity === "medium") return "Check";
+  if (row.worstSeverity === "info") return "Info";
+  return "Healthy";
+}
+
 function statusBadge(row: HealthRow) {
-  if (needsAttention(row)) return <Badge variant="destructive">Needs attention</Badge>;
-  if (row.worstSeverity === "medium") return <Badge variant="warning">Check</Badge>;
-  if (row.worstSeverity === "info") return <Badge variant="neutral">Info</Badge>;
-  return <Badge variant="success">Healthy</Badge>;
+  const label = statusLabel(row);
+  if (label === "Needs attention") return <Badge variant="destructive">{label}</Badge>;
+  if (label === "Check") return <Badge variant="warning">{label}</Badge>;
+  if (label === "Info") return <Badge variant="neutral">{label}</Badge>;
+  return <Badge variant="success">{label}</Badge>;
 }
 
 const todayStr = () => new Date().toISOString().split("T")[0];
@@ -292,13 +302,20 @@ export default function TrackingHealthPage() {
     {
       id: "status",
       label: "Status",
-      type: "text",
+      type: "select",
+      options: [
+        { label: "Needs attention", value: "Needs attention" },
+        { label: "Check", value: "Check" },
+        { label: "Info", value: "Info" },
+        { label: "Healthy", value: "Healthy" },
+      ],
+      filterValue: (row) => statusLabel(row),
       render: (row) => statusBadge(row),
     },
     {
       id: "coverage",
       label: "Coverage",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       render: (row) => (
         <span
           className={`block text-right tabular-nums ${
@@ -317,6 +334,8 @@ export default function TrackingHealthPage() {
       id: "issue",
       label: "Likely issue",
       type: "text",
+      filterValue: (row) =>
+        row.issueCodes.length ? ISSUE_CATALOG[row.issueCodes[0]].title : "Tracking normally",
       render: (row) =>
         row.issueCodes.length ? (
           <span className="text-muted-foreground">{ISSUE_CATALOG[row.issueCodes[0]].title}</span>
@@ -327,25 +346,25 @@ export default function TrackingHealthPage() {
     {
       id: "distanceKm",
       label: "Distance (km)",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       render: (row) => num(row.distanceKm),
     },
     {
       id: "expectedPings",
       label: "Expected",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       render: (row) => num(row.expectedPings),
     },
     {
       id: "regular",
       label: "Regular",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       render: (row) => num(row.receivedPings),
     },
     {
       id: "accuracyPct",
       label: "Accuracy",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       render: (row) => num(row.accuracyPct, "%"),
     },
     {
@@ -357,26 +376,26 @@ export default function TrackingHealthPage() {
     {
       id: "gpsOffCount",
       label: "GPS off",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       render: (row) => num(row.gpsOffCount),
     },
     {
       id: "switchedOffCount",
       label: "Switched off",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       render: (row) => num(row.switchedOffCount),
     },
     {
       id: "criticalCount",
       label: "Critical",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       visibleByDefault: false,
       render: (row) => num(row.criticalCount),
     },
     {
       id: "mockCount",
       label: "Mock",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       render: (row) =>
         row.mockCount > 0 ? (
           <span className="block text-right font-semibold text-destructive tabular-nums">
@@ -389,20 +408,20 @@ export default function TrackingHealthPage() {
     {
       id: "avgAccuracyM",
       label: "Avg accuracy",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       visibleByDefault: false,
       render: (row) => num(row.avgAccuracyM, " m"),
     },
     {
       id: "gaps",
       label: "Gaps",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       render: (row) => num(row.gaps.length),
     },
     {
       id: "activeHours",
       label: "Time on duty",
-      type: "text",
+      // A metric, not something you filter by typing part of it.
       visibleByDefault: false,
       render: (row) => (
         <span className="block text-right tabular-nums">
@@ -427,8 +446,13 @@ export default function TrackingHealthPage() {
 
   const filtered = useMemo(
     () =>
-      rows.filter((r) => !globalSearch || r.name.toLowerCase().includes(globalSearch.toLowerCase())),
-    [rows, globalSearch],
+      rows
+        .filter((r) => !globalSearch || r.name.toLowerCase().includes(globalSearch.toLowerCase()))
+        // The column filters. This screen read `filterState` and never used
+        // it, so every control in the filter row was decorative.
+        .filter((r) => matchesColumnFilters(r, filterState, columns)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, globalSearch, filterState],
   );
 
   // Direct-URL guard — the sidebar hides this without view_tracking_health. Owner/admin pass.

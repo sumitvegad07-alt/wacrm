@@ -381,7 +381,7 @@ export default function ExpensesPage() {
     {
       id: "amount",
       label: "Amount",
-      type: "text",
+      // Money — needs a range filter, not a contains match.
       render: (expense) => (
         <span className="font-semibold text-foreground">₹{expense.amount}</span>
       )
@@ -402,7 +402,7 @@ export default function ExpensesPage() {
     {
       id: "proof_file",
       label: "Proof",
-      type: "text",
+      // An attachment, not text you can search.
       render: (expense) => (
         expense.proof_file ? (
           <a href={expense.proof_file} target="_blank" rel="noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline" onClick={(e) => e.stopPropagation()}>

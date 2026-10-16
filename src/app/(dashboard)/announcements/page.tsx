@@ -16,7 +16,22 @@ import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
-import { isDateInFilter } from "@/lib/date-filters";
+import { matchesColumnFilters } from "@/lib/table/match-filters";
+
+/**
+ * Who an announcement is aimed at, as one of four fixed wordings.
+ *
+ * Shared by the cell and its filter so the two cannot drift apart — the filter
+ * offers exactly the labels the column shows.
+ */
+function targetAudience(row: { employee_ids?: unknown[] | null; employee_role_ids?: unknown[] | null }): string {
+  const hasUsers = Boolean(row.employee_ids && row.employee_ids.length > 0);
+  const hasRoles = Boolean(row.employee_role_ids && row.employee_role_ids.length > 0);
+  if (hasUsers && hasRoles) return "Specific Users & Roles";
+  if (hasUsers) return "Specific Users";
+  if (hasRoles) return "Specific Roles";
+  return "All Users";
+}
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
 
@@ -97,14 +112,19 @@ export default function AnnouncementsPage() {
       {
         id: "target",
         label: "Target Audience",
-        type: "text",
+        type: "select",
+        options: [
+          { label: "All Users", value: "All Users" },
+          { label: "Specific Users", value: "Specific Users" },
+          { label: "Specific Roles", value: "Specific Roles" },
+          { label: "Specific Users & Roles", value: "Specific Users & Roles" },
+        ],
+        filterValue: (row) => targetAudience(row),
         render: (row) => {
-          const hasUsers = row.employee_ids && row.employee_ids.length > 0;
-          const hasRoles = row.employee_role_ids && row.employee_role_ids.length > 0;
-          if (hasUsers && hasRoles) return <Badge variant="outline">Specific Users & Roles</Badge>;
-          if (hasUsers) return <Badge variant="outline">Specific Users</Badge>;
-          if (hasRoles) return <Badge variant="outline">Specific Roles</Badge>;
-          return <Badge variant="secondary">All Users</Badge>;
+          const label = targetAudience(row);
+          return (
+            <Badge variant={label === "All Users" ? "secondary" : "outline"}>{label}</Badge>
+          );
         }
       },
       {
@@ -152,6 +172,8 @@ export default function AnnouncementsPage() {
         type: "select",
         visibleByDefault: true,
         options: [ { label: "Active", value: "active" }, { label: "Inactive", value: "inactive" } ],
+        // Soft-delete state lives in is_active, not in a record_status field.
+        filterValue: (row) => (row.is_active !== false ? "active" : "inactive"),
         render: (row) => {
           const active = row.is_active !== false;
           return (
@@ -196,28 +218,15 @@ export default function AnnouncementsPage() {
         }
       }
 
-      // Column Filters
-      for (const [colId, val] of Object.entries(filterState)) {
-        if (val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0)) continue;
-        
-        if (colId === 'title') {
-          if (!item.title?.toLowerCase().includes((val as string).toLowerCase())) return false;
-        } else if (colId === 'record_status') {
-          const want = val as string[];
-          if (Array.isArray(want) && want.length) {
-            const state = item.is_active !== false ? 'active' : 'inactive';
-            if (!want.includes(state)) return false;
-          }
-        } else if (colId === 'created_at') {
-          if (!isDateInFilter(item.created_at, val as string | string[])) return false;
-        } else if (colId === 'expiry_date') {
-          if (!item.expiry_date) return false;
-          if (!isDateInFilter(item.expiry_date, val as string | string[])) return false;
-        }
-      }
+      // Column filters, driven by the column definitions so a control can
+      // never be offered for a column nobody wired. Target Audience and Link
+      // were both in that state.
+      if (!matchesColumnFilters(item, filterState, columns)) return false;
+
       return true;
     });
-  }, [announcements, globalSearch, filterState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [announcements, globalSearch, filterState, columns]);
 
   return (
     <PageLayout>

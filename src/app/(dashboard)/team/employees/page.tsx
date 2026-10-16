@@ -21,6 +21,8 @@ import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
+import { getVisibleTableColumns } from "@/lib/custom-fields";
+import type { CustomField } from "@/types";
 
 interface Employee {
   id: string;
@@ -82,6 +84,7 @@ export default function EmployeesPage() {
     employee_role_id: "",
   });
   const [creating, setCreating] = useState(false);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
   const supabase = createClient();
 
@@ -108,6 +111,15 @@ export default function EmployeesPage() {
 
     if (empError) toast.error("Failed to load employees");
     else setEmployees(empData || []);
+
+    // The account's own field configuration for this module — its headings,
+    // which fields it hides from the table, and any field it added itself.
+    const { data: cfData } = await supabase
+      .from("custom_fields")
+      .select("*")
+      .eq("account_id", accountId)
+      .eq("module_name", "user");
+    setCustomFields((cfData ?? []) as CustomField[]);
 
     // Needed for the Holiday List column filter options and to name the default list.
     const { data: listData } = await supabase
@@ -309,8 +321,21 @@ export default function EmployeesPage() {
     // Column filter: Role (select array)
     const roleFilters = filterState.role as string[] | undefined;
     const matchesRole = !roleFilters || roleFilters.length === 0 || roleFilters.includes(e.employee_role_id);
-    
-    return matchesSearch && matchesEmp && matchesStatus && matchesRole;
+
+    // Column filter: Holiday List (select array). The control existed but was
+    // never applied. A NULL assignment is not "none" — it means the employee
+    // follows the account default, exactly as the cell renders it, so it has
+    // to match the default list.
+    const holidayFilters = filterState.holiday_list as string[] | undefined;
+    const effectiveListId =
+      (e as { holiday_list_id?: string | null }).holiday_list_id ??
+      holidayLists.find((l) => l.is_default)?.id;
+    const matchesHoliday =
+      !holidayFilters ||
+      holidayFilters.length === 0 ||
+      (effectiveListId !== undefined && holidayFilters.includes(effectiveListId));
+
+    return matchesSearch && matchesEmp && matchesStatus && matchesRole && matchesHoliday;
   });
 
   const columns: ColumnDef<Employee>[] = useMemo(() => [
@@ -395,6 +420,65 @@ export default function EmployeesPage() {
     },
   ], [roles, router, holidayLists]);
 
+  /**
+   * Every other stored employee field, so Manage Column can offer it.
+   *
+   * This screen defined four columns, so Contact Number, Employee Code,
+   * Email, Department, Designation and Branch could not be shown at all — the
+   * account has `mobile` configured as "Contact Number" with show-in-table on,
+   * and it still never reached Manage Column because no column existed for it.
+   *
+   * All hidden by default, so nothing about the current table changes until
+   * somebody ticks one.
+   */
+  const extraColumns: ColumnDef<Employee>[] = useMemo(
+    () =>
+      (
+        [
+          ["employee_code", "Employee Code", "text"],
+          ["email", "Email", "text"],
+          ["mobile", "Contact Number", "text"],
+          ["phone", "Phone", "text"],
+          ["department", "Department", "text"],
+          ["designation", "Designation", "text"],
+          ["branch", "Branch", "text"],
+          ["created_at", "Joined", "date"],
+        ] as const
+      ).map(([id, label, type]) => ({
+        id,
+        label,
+        type,
+        visibleByDefault: false,
+        render: (emp: Employee) => {
+          const value = (emp as unknown as Record<string, unknown>)[id];
+          if (value === null || value === undefined || value === "") {
+            return <span className="text-muted-foreground">-</span>;
+          }
+          if (id === "created_at") {
+            return (
+              <span className="text-sm text-muted-foreground">
+                {new Date(String(value)).toLocaleDateString()}
+              </span>
+            );
+          }
+          return <span className="text-sm">{String(value)}</span>;
+        },
+      })),
+    [],
+  );
+
+  /**
+   * The account's own configuration for this module, matched by system key:
+   * its headings, which fields it hides, and any field it added itself —
+   * "Joining Date" and "Ulternate Number" on this account. Every other module
+   * with custom fields already did this; Employees did not, so none of them
+   * could ever appear.
+   */
+  const tableColumns = useMemo(
+    () => getVisibleTableColumns([...columns, ...extraColumns], customFields, employees),
+    [columns, extraColumns, customFields, employees],
+  );
+
   // Permission guard — safe here because every hook above has already run, so the
   // hook count is identical whether or not this returns early (avoids React #310).
   if (!hasPermission("view_team_management") && !isSuperadmin) {
@@ -431,7 +515,7 @@ export default function EmployeesPage() {
       />
 
       <DataTable
-        columns={columns}
+        columns={tableColumns}
         data={filtered}
         tableView={tableView}
         isLoading={loading}

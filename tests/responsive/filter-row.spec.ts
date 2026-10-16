@@ -103,3 +103,82 @@ test.describe("distinct value lists", () => {
     });
   });
 });
+
+// ============================================================
+// Filters that were offered and never applied.
+//
+// Ten screens read `filterState` and either ignored it or hand-handled a
+// subset, so 49 controls did nothing. Invisible while filters hid behind a
+// click on the heading; a visibly dead control once the filter row became
+// permanent. These check the row count actually moves.
+// ============================================================
+test.describe("column filters really filter", () => {
+  /** The footer's "1 - 10 of 696", which both paging modes keep honest. */
+  async function totalRecords(page: import("@playwright/test").Page): Promise<number> {
+    const text = await page.getByText(/\d+\s*-\s*\d+\s+of\s+\d+/).first().innerText();
+    return Number(/of\s+(\d+)/.exec(text)![1]);
+  }
+
+  for (const [name, path] of [
+    ["Customers", "/contacts"],
+    ["Employees", "/team/employees"],
+  ] as const) {
+    test(`${name}: typing in the filter row changes what is listed`, async ({ page }) => {
+      await page.goto(path);
+
+      // Wait for the count to settle rather than racing the loading skeleton,
+      // which is itself a single row and would read as "already filtered".
+      await expect
+        .poll(() => totalRecords(page), { timeout: 30_000 })
+        .toBeGreaterThan(0);
+      const before = await totalRecords(page);
+
+      const firstText = page.locator("table thead tr").nth(1).locator("input").first();
+      await firstText.fill("zzzqqqxxx"); // a string no record should contain
+
+      await expect
+        .poll(() => totalRecords(page), { timeout: 20_000 })
+        .toBeLessThan(before);
+    });
+  }
+});
+
+test("the clear button clears the filter instead of opening the dropdown", async ({ page }) => {
+  // A button inside a button is invalid HTML, and the click reached the
+  // popover trigger first — so the x opened the dropdown and left the filter
+  // in place.
+  await page.goto("/contacts");
+
+  const filterRow = page.locator("table thead tr").nth(1);
+  await expect(filterRow).toBeVisible({ timeout: 30_000 });
+
+  // Status ships filtered to Active, so there is a chip to clear on arrival.
+  const clear = filterRow.getByRole("button", { name: "Clear Status filter" });
+  await expect(clear).toBeVisible();
+  await clear.click();
+
+  // The chip is gone and no dropdown opened over the page.
+  await expect(clear).toBeHidden();
+  await expect(page.getByText("Filter by Status")).toBeHidden();
+});
+
+test("Manage Column on Employees lists every stored field", async ({ page }, testInfo) => {
+  // The screen defined four columns and never loaded the account's field
+  // configuration, so Contact Number — configured with show-in-table ON —
+  // could not be added to the table at all. This was the missing phone number.
+  await page.goto("/team/employees");
+  await expect(page.locator("table thead tr").first()).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: /MANAGE COLUMN/i }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible({ timeout: 10_000 });
+  for (const label of ["Contact Number", "Employee Code", "Email", "Department", "Designation"]) {
+    await expect(dialog.getByText(label, { exact: true })).toBeVisible();
+  }
+
+  await testInfo.attach("employees-manage-column", {
+    body: await page.screenshot({ fullPage: false }),
+    contentType: "image/png",
+  });
+});

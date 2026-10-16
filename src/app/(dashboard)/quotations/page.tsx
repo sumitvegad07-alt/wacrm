@@ -309,7 +309,7 @@ export default function QuotationsPage() {
     {
       id: "amount",
       label: "Amount",
-      type: "text",
+      // Money — needs a range filter, not a contains match.
       render: (quotation) => (
         <span className="font-medium text-foreground">
           ₹{quotation.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

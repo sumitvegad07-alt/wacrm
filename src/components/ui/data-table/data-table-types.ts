@@ -53,6 +53,20 @@ export interface ColumnDef<T> {
     | { kind: "distinct"; module: string; column: string };
   visibleByDefault?: boolean;
   sortable?: boolean;
+  /**
+   * What this column's filter should compare against, when that is not simply
+   * `row[id]`.
+   *
+   * Needed wherever the filter target differs from the field name: Record
+   * Status filters on `is_active`, an owner column filters on a looked-up
+   * name, a tags column holds several values at once. Return an array to mean
+   * "the row holds all of these" — a select filter then matches if any chosen
+   * value is among them.
+   *
+   * Used by `matchesColumnFilters` on screens that filter in the browser.
+   * Server-paged screens push their filters into the query instead.
+   */
+  filterValue?: (row: T) => unknown;
   render?: (row: T) => ReactNode;
 }
 

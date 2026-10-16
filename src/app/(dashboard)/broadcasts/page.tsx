@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { matchesColumnFilters } from '@/lib/table/match-filters';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Broadcast } from '@/types';
@@ -169,12 +170,14 @@ export default function BroadcastsPage() {
       id: "delivery",
       label: "Delivery",
       type: "text",
+      filterValue: (b) => b.delivered_count,
       render: (b) => <RateCell value={b.delivered_count} total={b.total_recipients} color="bg-primary" />,
     },
     {
       id: "read",
       label: "Read",
       type: "text",
+      filterValue: (b) => b.read_count,
       render: (b) => <RateCell value={b.read_count} total={b.total_recipients} color="bg-blue-500" />,
     },
     {
@@ -188,6 +191,9 @@ export default function BroadcastsPage() {
         { label: "Completed", value: "completed" },
         { label: "Failed", value: "failed" },
       ],
+      // The option values are lower case and the stored value may not be —
+      // the cell renders `b.status.toLowerCase()` for the same reason.
+      filterValue: (b) => String(b.status ?? "").toLowerCase(),
       render: (b) => {
         const status = getBroadcastStatus(b.status);
         return <StatusBadge status={b.status.toLowerCase()} label={status.label} />;
@@ -197,9 +203,23 @@ export default function BroadcastsPage() {
       id: "date",
       label: "Date",
       type: "date",
+      filterValue: (b) => b.created_at,
       render: (b) => <span className="text-muted-foreground">{new Date(b.created_at).toLocaleDateString()}</span>,
     },
   ];
+
+  /**
+   * The column filters.
+   *
+   * This screen never read `filterState` at all, so every control in the
+   * filter row was decorative. Matching is driven by the column definitions,
+   * so a column cannot be offered a filter that nobody wired again.
+   */
+  const visibleBroadcasts = useMemo(
+    () => broadcasts.filter((b) => matchesColumnFilters(b, tableView.filterState, columns)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [broadcasts, tableView.filterState],
+  );
 
   return (
     <PageLayout>
@@ -266,7 +286,7 @@ export default function BroadcastsPage() {
       ) : (
         <DataTable
           columns={columns}
-          data={broadcasts}
+          data={visibleBroadcasts}
           tableView={tableView}
           isLoading={loading}
           rowKey={(b) => b.id}

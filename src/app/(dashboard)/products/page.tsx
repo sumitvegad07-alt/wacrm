@@ -234,7 +234,7 @@ export default function ProductsPage() {
     {
       id: "price",
       label: "Price",
-      type: "text",
+      // Money — needs a range filter, not a contains match.
       render: (product) => {
         const unitName = product.unit_rel?.short_name || product.unit_rel?.name || product.unit;
         return (

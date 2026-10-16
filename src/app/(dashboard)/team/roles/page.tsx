@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
+import { matchesColumnFilters } from "@/lib/table/match-filters";
 
 interface EmployeeRole {
   id: string;
@@ -362,11 +363,10 @@ export default function RolesPage() {
     },
   ];
 
-  const filteredRoles = roles.filter((r) => {
-    const nameF = filterState["name"];
-    if (nameF && !r.name.toLowerCase().includes((nameF as string).toLowerCase())) return false;
-    return true;
-  });
+  // Driven by the column definitions, so Description and Created — which were
+  // offered as filters and never applied — work like Name does, and a column
+  // added later cannot be offered a filter nobody wired.
+  const filteredRoles = roles.filter((r) => matchesColumnFilters(r, filterState, roleColumns));
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-background">

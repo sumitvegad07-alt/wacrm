@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { matchesColumnFilters } from "@/lib/table/match-filters";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
@@ -126,21 +127,36 @@ export default function PaymentReportPage() {
   const currencyCode = defaultCurrency || "USD";
 
   // Tab 2 Columns
+  // The money and status columns carry no filter. A contains match on an
+  // amount misleads — searching 100 matches 1,100 — and these want a range
+  // filter, which the filter row does not offer yet. They were offered as
+  // filters before and never reached the query, so nothing is lost.
   const financialColumns: ColumnDef<any>[] = [
-    { id: "customer", label: "Customer", type: "text", render: (r: any) => <span className="font-medium">{r.customer_name}</span> },
-    { id: "credit_limit", label: "Credit Limit", type: "text", render: (r: any) => <span>{r.credit_limit ? formatCurrency(r.credit_limit, currencyCode) : "-"}</span> },
-    { id: "credit_days", label: "Credit Days", type: "text", render: (r: any) => <span>{r.credit_days ? `${r.credit_days} days` : "-"}</span> },
-    { id: "outstanding_amount", label: "Outstanding", type: "text", render: (r: any) => (
+    { id: "customer", label: "Customer", type: "text", filterValue: (r: any) => r.customer_name, render: (r: any) => <span className="font-medium">{r.customer_name}</span> },
+    { id: "credit_limit", label: "Credit Limit", render: (r: any) => <span>{r.credit_limit ? formatCurrency(r.credit_limit, currencyCode) : "-"}</span> },
+    { id: "credit_days", label: "Credit Days", render: (r: any) => <span>{r.credit_days ? `${r.credit_days} days` : "-"}</span> },
+    { id: "outstanding_amount", label: "Outstanding", render: (r: any) => (
       <span className={`font-medium ${r.outstanding_amount > 0 ? "text-amber-600 dark:text-amber-500" : ""}`}>
         {formatCurrency(r.outstanding_amount, currencyCode)}
       </span>
     )},
-    { id: "available_credit", label: "Available Credit", type: "text", render: (r: any) => <span>{r.available_credit != null ? formatCurrency(r.available_credit, currencyCode) : "-"}</span> },
-    { id: "overdue", label: "Overdue Status", type: "text", render: (r: any) => {
+    { id: "available_credit", label: "Available Credit", render: (r: any) => <span>{r.available_credit != null ? formatCurrency(r.available_credit, currencyCode) : "-"}</span> },
+    { id: "overdue", label: "Overdue Status", render: (r: any) => {
         if (!r.is_overdue) return <Badge variant="outline" className="bg-green-100 text-green-800">Good Standing</Badge>;
         return <Badge variant="outline" className="bg-red-100 text-red-800">Overdue ({r.overdue_days} days)</Badge>;
     }},
   ];
+
+  // The Customer filter was offered and never applied. Driven by the column
+  // definitions, so a column cannot be given a filter nobody wired again.
+  const visibleFinancials = useMemo(
+    () =>
+      (financialsData ?? []).filter((r: any) =>
+        matchesColumnFilters(r, tableView.filterState, financialColumns),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [financialsData, tableView.filterState],
+  );
 
   if (!hasPermission("view_payment_reports")) {
     return <div className="p-8">You do not have permission to view payment reports.</div>;
@@ -181,7 +197,7 @@ export default function PaymentReportPage() {
               </div>
               <DataTable
                 columns={financialColumns}
-                data={financialsData}
+                data={visibleFinancials}
                 tableView={tableView}
                 isLoading={isLoadingFinancials}
                 rowKey={(r) => r.id}

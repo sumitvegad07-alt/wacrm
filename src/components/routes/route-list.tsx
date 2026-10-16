@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { matchesColumnFilters } from "@/lib/table/match-filters";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useRoutes } from "@/hooks/route/use-routes";
@@ -88,7 +89,7 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
   const statusMutation = useUpdateRouteStatus(accountId);
   const bulkStatusMutation = useBulkUpdateRouteStatus(accountId);
 
-  const rows = useMemo(() => {
+  const allRows = useMemo(() => {
     return (data?.rows ?? []).slice();
   }, [data?.rows]);
 
@@ -196,6 +197,7 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
       id: "assignee",
       label: "Primary Assignee",
       type: "text",
+      filterValue: (r) => r.primary_assignee_name,
       render: (r) => (
         <span className="text-muted-foreground">
           {r.primary_assignee_name ?? <span className="italic opacity-60">Unassigned</span>}
@@ -218,6 +220,7 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
       id: "customers",
       label: "Customers",
       type: "text",
+      filterValue: (r) => r.customer_count,
       render: (r) => (
         <span className="tabular-nums text-foreground font-medium">
           {r.customer_count}
@@ -315,6 +318,19 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
       },
     },
   ], [onSelectRoute, router, canClone, canArchive]);
+
+  /**
+   * The column filters, applied to the page the server returned.
+   *
+   * These controls existed but did nothing: the screen read `filterState` and
+   * never used it, so every box in the filter row was decorative. Matching is
+   * driven by the column definitions, so a column cannot be offered a filter
+   * that nobody wired again.
+   */
+  const rows = useMemo(
+    () => allRows.filter((r: any) => matchesColumnFilters(r, filterState, columns)),
+    [allRows, filterState, columns],
+  );
 
   const content = (
     <>

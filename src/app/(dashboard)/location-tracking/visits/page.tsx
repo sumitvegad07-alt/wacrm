@@ -68,6 +68,8 @@ export default function CustomerVisitsPage() {
       q = applyTextFilter(q, 'customer_name', filters.name);
       q = applyTextFilter(q, 'visited_by_name', filters.visitedBy);
       q = applyInFilter(q, 'feedback_type', filters.feedbackType);
+      // The Feedback column was offered as a filter and never wired.
+      q = applyTextFilter(q, 'feedback_text', filters.feedback);
       q = applyDateFilter(q, 'check_in_at', filters.checkIn);
       q = applyDateFilter(q, 'check_out_at', filters.checkOut);
 
@@ -200,7 +202,7 @@ export default function CustomerVisitsPage() {
     {
       id: "contactPerson",
       label: "Contact Person",
-      type: "text",
+      // Derived for display; site_visits has no column to filter on.
       render: (row) => (
         <span className="text-sm text-muted-foreground whitespace-nowrap">{row.contactPerson}</span>
       )
@@ -220,13 +222,13 @@ export default function CustomerVisitsPage() {
     {
       id: "duration",
       label: "Duration",
-      type: "text",
+      // Derived for display; site_visits has no column to filter on.
       render: (row) => <span className="text-sm text-muted-foreground">{row.duration}</span>
     },
     {
       id: "img",
       label: "Image",
-      type: "text",
+      // A map point or a photo, not text you can search.
       visibleByDefault: true,
       render: (row) => (
         <div className="flex justify-center">
@@ -289,7 +291,7 @@ export default function CustomerVisitsPage() {
     {
       id: "checkInLatLng",
       label: "Check-in location",
-      type: "text",
+      // A map point or a photo, not text you can search.
       render: (row) => (
         <span className="font-mono text-xs whitespace-nowrap">{row.checkInLatLng}</span>
       )
@@ -297,7 +299,7 @@ export default function CustomerVisitsPage() {
     {
       id: "checkOutLatLng",
       label: "Check-out location",
-      type: "text",
+      // A map point or a photo, not text you can search.
       render: (row) => (
         <span className="font-mono text-xs whitespace-nowrap">{row.checkOutLatLng}</span>
       )
