@@ -39,7 +39,7 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { Badge } from '@/components/ui/badge';
@@ -209,14 +209,20 @@ export default function ContactsPage() {
       if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
       // The "Company Name" column filters on company; "Contact Person" on name.
-      q = applyTextFilter(q, 'company', filters.name);
+      // Company is a value list now, so it matches exactly rather than partly.
+      q = applyInFilter(q, 'company', filters.name);
       q = applyTextFilter(q, 'name', filters.contact_person);
       q = applyTextFilter(q, 'phone', filters.phone);
       q = applyTextFilter(q, 'email', filters.email);
-      q = applyTextFilter(q, 'company', filters.company);
-      for (const col of ['address', 'area', 'city', 'state', 'country', 'pincode']) {
+      // Columns the filter row offers as a value list match exactly; the rest
+      // are still typed, so they stay a contains match.
+      for (const col of ['area', 'city', 'state', 'country']) {
+        q = applyInFilter(q, col, filters[col]);
+      }
+      for (const col of ['address', 'pincode']) {
         q = applyTextFilter(q, col, filters[col]);
       }
+      q = applyInFilter(q, 'hierarchy_level', filters.hierarchy_level);
       q = applyTextFilter(q, 'territory_name', filters.territory);
       q = applyDateFilter(q, 'created_at', filters.created_at);
       q = applyCustomFieldFilters(q, filters, customFields);
@@ -443,7 +449,8 @@ export default function ContactsPage() {
       id: "name",
       systemKey: "company",
       label: "Company Name",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "contact", column: "company" },
       render: (contact) => (
         <span className="font-medium">{contact.company || contact.name || <span className="text-muted-foreground italic">Unnamed</span>}</span>
       )
@@ -460,7 +467,8 @@ export default function ContactsPage() {
     {
       id: "assigned_employee",
       label: "Assigned Employee",
-      type: "text",
+      // No filter yet — see Phase 2. A control that does nothing is worse
+      // than none now that the filter row is always visible.
       // Visible by default; admins can hide it via Manage Columns.
       visibleByDefault: true,
       render: (contact) => {
@@ -510,7 +518,8 @@ export default function ContactsPage() {
     {
       id: "tags",
       label: "Tags",
-      type: "text",
+      // No filter yet — see Phase 2. A control that does nothing is worse
+      // than none now that the filter row is always visible.
       visibleByDefault: false,
       render: (contact) => (
         <div className="flex flex-wrap gap-1">
@@ -526,28 +535,32 @@ export default function ContactsPage() {
     {
       id: "area",
       label: "Area",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "contact", column: "area" },
       visibleByDefault: false,
       render: (contact) => <span className="text-sm">{contact.area || "-"}</span>
     },
     {
       id: "city",
       label: "City",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "contact", column: "city" },
       visibleByDefault: false,
       render: (contact) => <span className="text-sm">{contact.city || "-"}</span>
     },
     {
       id: "state",
       label: "State",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "contact", column: "state" },
       visibleByDefault: false,
       render: (contact) => <span className="text-sm">{contact.state || "-"}</span>
     },
     {
       id: "country",
       label: "Country",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "contact", column: "country" },
       visibleByDefault: false,
       render: (contact) => <span className="text-sm">{contact.country || "-"}</span>
     },
@@ -562,7 +575,8 @@ export default function ContactsPage() {
       // The geo-tag captured when a rep tagged this customer on site.
       id: "latLng",
       label: "Latitude, Longitude",
-      type: "text",
+      // No filter yet — see Phase 2. A control that does nothing is worse
+      // than none now that the filter row is always visible.
       render: (contact) => (
         <span className="font-mono text-xs whitespace-nowrap">
           {formatLatLng((contact as any).latitude, (contact as any).longitude)}
@@ -647,7 +661,8 @@ export default function ContactsPage() {
       {
         id: "credit_limit",
         label: "Credit Limit",
-        type: "text",
+        // No filter yet — see Phase 2. A control that does nothing is worse
+      // than none now that the filter row is always visible.
         visibleByDefault: false,
         render: (contact) => {
           const val = (contact as any).credit_limit;
@@ -658,7 +673,8 @@ export default function ContactsPage() {
       {
         id: "credit_days",
         label: "Credit Days",
-        type: "text",
+        // No filter yet — see Phase 2. A control that does nothing is worse
+      // than none now that the filter row is always visible.
         visibleByDefault: false,
         render: (contact) => {
           const val = (contact as any).credit_days;
@@ -669,7 +685,8 @@ export default function ContactsPage() {
       {
         id: "opening_balance",
         label: "Opening Balance",
-        type: "text",
+        // No filter yet — see Phase 2. A control that does nothing is worse
+      // than none now that the filter row is always visible.
         visibleByDefault: false,
         render: (contact) => {
           const val = (contact as any).opening_balance;
@@ -683,7 +700,8 @@ export default function ContactsPage() {
       columns.splice(columns.length - 1, 0, {
         id: "outstanding_amount",
         label: "Outstanding (Calculated)",
-        type: "text",
+        // No filter yet — see Phase 2. A control that does nothing is worse
+      // than none now that the filter row is always visible.
         visibleByDefault: false,
         render: (contact) => {
           const val = (contact as any).outstanding_amount ?? (contact as any).opening_balance;

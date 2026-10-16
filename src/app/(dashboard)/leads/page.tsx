@@ -34,7 +34,7 @@ import { useTableView } from "@/hooks/use-table-view";
 import { useServerTable } from "@/hooks/use-server-table";
 import { fetchAllPages } from "@/lib/table/export-all-pages";
 import type { ServerTableQuery } from "@/lib/table/server-query";
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from "@/lib/table/apply-filters";
+import { applyArrayOverlapFilter, applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyInWithFallbackFilter, applyTextFilter } from "@/lib/table/apply-filters";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
@@ -140,9 +140,21 @@ export default function LeadsPage() {
       q = applyInFilter(q, "status", filters.status);
       q = applyInFilter(q, "source", filters.source);
       q = applyInFilter(q, "industry", filters.industry);
-      for (const col of ["company", "contact_person", "phone", "email", "address", "area", "city", "state", "country", "pincode"]) {
+      // Columns the filter row offers as a value list match exactly; the rest
+      // are still typed, so they stay a contains match.
+      for (const col of ["company", "area", "city", "state", "country"]) {
+        q = applyInFilter(q, col, filters[col]);
+      }
+      for (const col of ["contact_person", "phone", "email", "address", "pincode"]) {
         q = applyTextFilter(q, col, filters[col]);
       }
+
+      // Owner and Collaborator never reached the query at all before: the
+      // columns rendered names but filtering by them did nothing. Both hold
+      // AUTH user ids, and Owner falls back to the creator when `owner_id` is
+      // null, exactly as the column displays it.
+      q = applyInWithFallbackFilter(q, "owner_id", "user_id", filters.lead_owner);
+      q = applyArrayOverlapFilter(q, "collaborator_ids", filters.lead_collaborator);
       q = applyDateFilter(q, "created_at", filters.created_at);
       q = applyCustomFieldFilters(q, filters, customFields);
 
@@ -353,7 +365,9 @@ export default function LeadsPage() {
     {
       id: "lead_owner",
       label: "Lead Owner",
-      type: "text",
+      type: "select",
+      // `leads.owner_id` holds an AUTH user id, not a profiles.id.
+      valueSource: { kind: "people", idSpace: "auth" },
       // Owner = area-assigned employee / the creator set as owner. Visible by
       // default; admins can hide it via Manage Columns.
       visibleByDefault: true,
@@ -365,7 +379,9 @@ export default function LeadsPage() {
     {
       id: "lead_collaborator",
       label: "Lead Collaborator",
-      type: "text",
+      type: "select",
+      // `collaborator_ids` is a uuid[] of AUTH user ids.
+      valueSource: { kind: "people", idSpace: "auth" },
       visibleByDefault: true,
       render: (lead) => {
         const c = (lead as any)._leadCollaborators;
@@ -414,15 +430,15 @@ export default function LeadsPage() {
     },
     // All remaining lead fields are exposed here so an admin can add any of them
     // from Manage Columns (hidden by default to keep the initial view compact).
-    { id: "company", label: "Company", type: "text", visibleByDefault: false, render: (l) => <span>{(l as any).company || "-"}</span> },
+    { id: "company", label: "Company", type: "select", valueSource: { kind: "distinct", module: "lead", column: "company" }, visibleByDefault: false, render: (l) => <span>{(l as any).company || "-"}</span> },
     { id: "contact_person", label: "Contact Person", type: "text", visibleByDefault: false, render: (l) => <span>{(l as any).contact_person || "-"}</span> },
     { id: "phone", label: "Phone", type: "text", visibleByDefault: false, render: (l) => <span className="font-mono text-xs">{(l as any).phone || "-"}</span> },
     { id: "email", label: "Email", type: "text", visibleByDefault: false, render: (l) => <span>{(l as any).email || "-"}</span> },
     { id: "address", label: "Address", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).address || "-"}</span> },
-    { id: "area", label: "Area", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).area || "-"}</span> },
-    { id: "city", label: "City", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).city || "-"}</span> },
-    { id: "state", label: "State", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).state || "-"}</span> },
-    { id: "country", label: "Country", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).country || "-"}</span> },
+    { id: "area", label: "Area", type: "select", valueSource: { kind: "distinct", module: "lead", column: "area" }, visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).area || "-"}</span> },
+    { id: "city", label: "City", type: "select", valueSource: { kind: "distinct", module: "lead", column: "city" }, visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).city || "-"}</span> },
+    { id: "state", label: "State", type: "select", valueSource: { kind: "distinct", module: "lead", column: "state" }, visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).state || "-"}</span> },
+    { id: "country", label: "Country", type: "select", valueSource: { kind: "distinct", module: "lead", column: "country" }, visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).country || "-"}</span> },
     { id: "pincode", label: "Pincode", type: "text", visibleByDefault: false, render: (l) => <span className="text-sm">{(l as any).pincode || "-"}</span> },
     {
       // Soft-delete status (Active / Inactive), distinct from the workflow "Lead Status".
