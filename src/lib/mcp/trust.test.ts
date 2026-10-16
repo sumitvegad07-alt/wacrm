@@ -311,24 +311,29 @@ describe.skipIf(!canRun)("questions from real use", () => {
     expect(span).toBe(15);
 
     // Cross-check one employee's figure against plain SQL.
-    const { from, end } = {
-      from: r.period_resolved!.start_date,
-      end: r.period_resolved!.end_date,
-    };
-    const { data } = await db
+    //
+    // Counted in the database, not by fetching every row and filtering here.
+    // An unbounded select is capped at 1000 rows by PostgREST, and a busy
+    // employee has more than that — and because the rows it drops are the
+    // newest ones, they are exactly the rows inside a recent window. The
+    // cross-check therefore undercounted and failed the test against output
+    // that was correct: 1017 visits, 1000 returned, 17 missing, 74 reported
+    // against a cross-check of 57.
+    //
+    // `count: "exact", head: true` fetches no rows at all, so no row cap can
+    // apply. IST is a fixed +05:30 with no daylight saving, so the window's
+    // IST days convert to timestamps exactly.
+    const from = r.period_resolved!.start_date;
+    const end = r.period_resolved!.end_date;
+    const { count: expected, error } = await db
       .from("mcp_visit_details")
-      .select("id, employee_name, check_in_at")
+      .select("id", { count: "exact", head: true })
       .eq("account_id", accountId)
-      .eq("employee_name", employee);
-    const expected = (data ?? []).filter((v) => {
-      const day = new Intl.DateTimeFormat("en-CA", {
-        timeZone: IST,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date((v as { check_in_at: string }).check_in_at));
-      return day >= from && day <= end;
-    }).length;
+      .eq("employee_name", employee)
+      .gte("check_in_at", `${from}T00:00:00+05:30`)
+      .lte("check_in_at", `${end}T23:59:59.999+05:30`);
+
+    expect(error).toBeNull();
     const row = r.rows.find((x) => x.user === employee);
     expect(Number(row?.visit_count ?? 0)).toBe(expected);
   });
