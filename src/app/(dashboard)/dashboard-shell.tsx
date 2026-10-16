@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 // import { AskOzzo } from "@/components/ozzo/ask-ozzo";
 import { BrandSplash } from "@/components/shared/brand";
 import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcuts-provider";
+import { TableFilterNavReset } from "@/components/layout/table-filter-nav-reset";
 import { BackToGettingStarted } from "@/components/getting-started/BackToGettingStarted";
 import { TourRunner } from "@/components/tour/TourRunner";
 
@@ -317,6 +318,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <AppQueryProvider>
       <AuthProvider>
+        {/* Out here rather than inside DashboardShellInner: that component
+            early-returns for its loading and error states, which would unmount
+            the watcher and lose the pathname it is comparing against. */}
+        <TableFilterNavReset />
         <DashboardShellInner>{children}</DashboardShellInner>
       </AuthProvider>
     </AppQueryProvider>

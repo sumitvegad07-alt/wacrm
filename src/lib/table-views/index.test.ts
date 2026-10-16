@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ColumnDef } from "@/components/ui/data-table/data-table-types";
 import {
+  bumpTableNavSeq,
   configsEqual,
   countActiveFilters,
   isFilterActive,
@@ -11,6 +12,7 @@ import {
   readStoredColumns,
   readStoredPageSize,
   reconcileColumns,
+  scratchStorageKey,
   writeScratchFilters,
   writeStoredColumns,
   writeStoredPageSize,
@@ -59,7 +61,7 @@ describe("normalizeTableKey", () => {
 describe("scratch filters", () => {
   const key = "wacrm_leads_table_columns_v2";
 
-  it("survives a round trip, which is what keeps filters on across navigation", () => {
+  it("survives a round trip, which is what keeps filters on across a refresh", () => {
     writeScratchFilters(key, { status: ["hot"], city: "Pune" });
     expect(readScratchFilters(key)).toEqual({ status: ["hot"], city: "Pune" });
   });
@@ -79,6 +81,67 @@ describe("scratch filters", () => {
   it("is keyed per table, so one list cannot pick up another's filters", () => {
     writeScratchFilters("wacrm_leads_table_columns_v2", { status: ["hot"] });
     expect(readScratchFilters("wacrm_orders_table_columns")).toBeUndefined();
+  });
+});
+
+/**
+ * An ad-hoc filter lasts one visit: a refresh or a browser-tab switch keeps it,
+ * moving to another screen inside the app clears it. Those cases cannot be told
+ * apart by pathname — leaving and coming back lands on the same one — so the
+ * filters record the navigation count they were set under, and are restored
+ * only while it still matches.
+ *
+ * Saved views are unaffected: they are deliberate, and persist in the database.
+ */
+describe("scratch filters last one visit", () => {
+  const key = "wacrm_leads_table_columns_v2";
+
+  it("restores filters when no navigation happened, which is a refresh", () => {
+    writeScratchFilters(key, { status: ["New"] });
+    expect(readScratchFilters(key)).toEqual({ status: ["New"] });
+  });
+
+  it("drops filters after a single move to another screen", () => {
+    writeScratchFilters(key, { status: ["New"] });
+    bumpTableNavSeq();
+    expect(readScratchFilters(key)).toBeUndefined();
+  });
+
+  it("drops filters after navigating away and back", () => {
+    writeScratchFilters(key, { status: ["New"] });
+    bumpTableNavSeq(); // to another screen
+    bumpTableNavSeq(); // and back again
+    expect(readScratchFilters(key)).toBeUndefined();
+  });
+
+  it("clears the stale entry on read, so a later read cannot resurrect it", () => {
+    writeScratchFilters(key, { status: ["New"] });
+    bumpTableNavSeq();
+    readScratchFilters(key);
+    expect(
+      (globalThis as unknown as { window: { sessionStorage: Storage } }).window.sessionStorage.getItem(
+        scratchStorageKey(key),
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps a filter set after the move, because it belongs to the new visit", () => {
+    bumpTableNavSeq();
+    writeScratchFilters(key, { status: ["New"] });
+    expect(readScratchFilters(key)).toEqual({ status: ["New"] });
+  });
+
+  it("still tells 'cleared everything' apart from 'never stored' within a visit", () => {
+    writeScratchFilters(key, {});
+    expect(readScratchFilters(key)).toEqual({});
+  });
+
+  it("leaves each table independent across a move", () => {
+    writeScratchFilters(key, { status: ["New"] });
+    bumpTableNavSeq();
+    writeScratchFilters("wacrm_contacts_table_columns", { city: "Surat" });
+    expect(readScratchFilters(key)).toBeUndefined();
+    expect(readScratchFilters("wacrm_contacts_table_columns")).toEqual({ city: "Surat" });
   });
 });
 

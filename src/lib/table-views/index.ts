@@ -129,21 +129,53 @@ export function writeStoredPageSize(storageKey: string, pageSize: number): void 
   writeJson("local", columnStorageKey(storageKey), { ...existing, pageSize });
 }
 
+const NAV_SEQ_KEY = "wacrm_table_nav_seq";
+
+function currentNavSeq(): number {
+  const parsed = readJson<{ n?: unknown }>("session", NAV_SEQ_KEY);
+  return typeof parsed?.n === "number" ? parsed.n : 0;
+}
+
 /**
- * Working filters for this tab.
+ * Count one move to a different screen.
+ *
+ * An ad-hoc filter lasts one visit: a refresh or a switch to another browser
+ * tab keeps it, moving to another screen inside the app clears it. Those cases
+ * cannot be told apart by pathname — leaving a screen and coming back lands on
+ * the same one — so filters record the count they were written under and are
+ * restored only while it still matches.
+ *
+ * Called from `TableFilterNavReset`, mounted once in the dashboard shell.
+ */
+export function bumpTableNavSeq(): void {
+  writeJson("session", NAV_SEQ_KEY, { n: currentNavSeq() + 1 });
+}
+
+/**
+ * Working filters for this tab, for this visit to the screen.
  *
  * Returns `undefined` for "nothing stored" and distinguishes it from `{}`. That
  * difference decides behaviour: a user who cleared every filter on purpose must
  * get an empty table filter set back, not the module's defaults.
  */
 export function readScratchFilters(storageKey: string): FilterState | undefined {
-  const parsed = readJson<{ filters?: FilterState }>("session", scratchStorageKey(storageKey));
+  const parsed = readJson<{ filters?: FilterState; nav?: unknown }>(
+    "session",
+    scratchStorageKey(storageKey),
+  );
   if (!parsed || typeof parsed.filters !== "object" || parsed.filters === null) return undefined;
+  if (parsed.nav !== currentNavSeq()) {
+    // Written before the user moved to another screen. Drop it rather than
+    // merely ignoring it, so a later read cannot resurrect it if the counter
+    // ever came back round.
+    removeItem("session", scratchStorageKey(storageKey));
+    return undefined;
+  }
   return parsed.filters;
 }
 
 export function writeScratchFilters(storageKey: string, filters: FilterState): void {
-  writeJson("session", scratchStorageKey(storageKey), { filters });
+  writeJson("session", scratchStorageKey(storageKey), { filters, nav: currentNavSeq() });
 }
 
 export function clearScratchFilters(storageKey: string): void {
