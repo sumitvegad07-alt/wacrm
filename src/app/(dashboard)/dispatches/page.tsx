@@ -20,6 +20,7 @@ import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/cus
 import { CustomField } from '@/types';
 import { PageLayout, PageHeader, PageToolbar } from '@/components/shared';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
+import { extraColumns } from '@/lib/table/extra-columns';
 
 interface DispatchRow {
   id: string;
@@ -141,6 +142,17 @@ export default function DispatchesPage() {
     { id: 'itemCount', label: 'Items', type: 'text', render: (d) => <span className="text-sm">{d.itemCount}</span> },
     { id: 'invoice_no', label: 'Invoice No', type: 'text', visibleByDefault: false, render: (d) => <span className="text-sm">{d.invoice_no}</span> },
     { id: 'subAmount', label: 'Sub Amount', type: 'text', render: (d) => <span className="font-medium">{formatCurrency(d.subAmount, defaultCurrency)}</span> },
+    // The rest of what a dispatch stores, so Manage Column can offer it.
+    ...extraColumns<DispatchRow>([
+      ['transport_name', 'Transport Name', 'text'],
+      ['transport_contact_no', 'Transport Contact', 'text'],
+      ['tracking_number', 'Tracking No', 'text'],
+      ['lr_no', 'LR No', 'text'],
+      ['lr_date', 'LR Date', 'date'],
+      ['invoice_date', 'Invoice Date', 'date'],
+      ['dispatched_at', 'Dispatched On', 'date'],
+      ['notes', 'Notes', 'text'],
+    ]),
   ];
 
   const visibleColumns = useMemo(() => {

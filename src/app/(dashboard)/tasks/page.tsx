@@ -72,6 +72,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { extraColumns } from '@/lib/table/extra-columns';
 
 const PRIORITY_COLORS: Record<string, string> = {
   Low: 'bg-slate-600 text-white shadow-sm border-transparent',
@@ -408,7 +409,17 @@ export default function TasksPage() {
           />
         );
       }
-    }
+    },
+    // The rest of what a task stores, so Manage Column can offer it.
+    ...extraColumns<any>([
+      ['description', 'Description', 'text'],
+      ['activity_type', 'Activity Type', 'text'],
+      ['start_date', 'Start Date', 'date'],
+      ['due_time', 'Due Time', 'text'],
+      ['reminder_date', 'Reminder Date', 'date'],
+      ['reminder_time', 'Reminder Time', 'text'],
+      ['created_at', 'Created', 'date'],
+    ]),
   ];
 
   const visibleColumns = useMemo(() => {

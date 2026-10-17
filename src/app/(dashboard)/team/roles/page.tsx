@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
 import { matchesColumnFilters } from "@/lib/table/match-filters";
+import { extraColumns } from "@/lib/table/extra-columns";
 
 interface EmployeeRole {
   id: string;
@@ -361,6 +362,8 @@ export default function RolesPage() {
         />
       ),
     },
+    // The rest of what a role stores, so Manage Column can offer it.
+    ...extraColumns<EmployeeRole>([["status", "Status", "text"]]),
   ];
 
   // Driven by the column definitions, so Description and Created — which were

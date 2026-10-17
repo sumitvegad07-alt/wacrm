@@ -67,6 +67,7 @@ import {
   reactivatedMessage,
 } from '@/lib/table/bulk-activation';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
+import { extraColumns } from '@/lib/table/extra-columns';
 
 interface ContactWithData extends Contact {
   tags?: Tag[];
@@ -632,7 +633,13 @@ export default function ContactsPage() {
           />
         );
       }
-    }
+    },
+    // The rest of what a customer stores, so Manage Column can offer it.
+    ...extraColumns<ContactWithData>([
+      ["whatsapp", "WhatsApp Number", "text"],
+      ["gst_number", "GST Number", "text"],
+      ["customer_code", "Customer Code", "text"],
+    ]),
   ];
 
   // Territory Master replaces the flat country/state/city/area columns when enabled.

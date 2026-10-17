@@ -62,6 +62,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { extraColumns } from '@/lib/table/extra-columns';
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: 'bg-amber-600 text-white shadow-sm border-transparent',
@@ -369,7 +370,16 @@ export default function QuotationsPage() {
           deleteTitle="Move to Inactive"
         />
       )
-    }
+    },
+    // The rest of what a quotation stores, so Manage Column can offer it.
+    ...extraColumns<any>([
+      ['version', 'Version', 'number'],
+      ['valid_until', 'Valid Until', 'date'],
+      ['sub_total', 'Sub Total', 'currency'],
+      ['tax_total', 'Tax', 'currency'],
+      ['terms_conditions', 'Terms & Conditions', 'text'],
+      ['created_at', 'Created', 'date'],
+    ]),
   ];
 
   const visibleColumns = useMemo(() => {

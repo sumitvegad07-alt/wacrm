@@ -182,3 +182,31 @@ test("Manage Column on Employees lists every stored field", async ({ page }, tes
     contentType: "image/png",
   });
 });
+
+test.describe("Manage Column lists every stored field", () => {
+  for (const [name, path, expected] of [
+    ["Orders", "/orders", ["Sub Total", "Discount", "Tax", "Notes"]],
+    ["Quotations", "/quotations", ["Version", "Valid Until", "Sub Total"]],
+    ["Tasks", "/tasks", ["Description", "Start Date", "Reminder Date"]],
+  ] as const) {
+    test(`${name}`, async ({ page }) => {
+      await page.goto(path);
+      const header = page.locator("table thead tr").first();
+      await expect(header).toBeVisible({ timeout: 30_000 });
+
+      // The added columns are hidden until the user ticks one, so none of
+      // them may be a heading on arrival.
+      for (const label of expected) {
+        await expect(header.getByText(label, { exact: true })).toHaveCount(0);
+      }
+
+      // …but every one of them must be offered.
+      await page.getByRole("button", { name: /MANAGE COLUMN/i }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible({ timeout: 10_000 });
+      for (const label of expected) {
+        await expect(dialog.getByText(label, { exact: true })).toBeVisible();
+      }
+    });
+  }
+});

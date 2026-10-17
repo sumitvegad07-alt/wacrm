@@ -20,6 +20,7 @@ import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { dateFilterToRange } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
+import { extraColumns } from '@/lib/table/extra-columns';
 import { OrderForm } from '@/components/orders/order-form';
 import { getVisibleTableColumns } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -380,6 +381,17 @@ export default function OrdersPage() {
         );
       },
     }] : []),
+    // The rest of what an order stores, so Manage Column can offer it. All
+    // hidden until somebody ticks one.
+    ...extraColumns<OrderRow>([
+      ['sub_total', 'Sub Total', 'currency'],
+      ['discount_total', 'Discount', 'currency'],
+      ['tax_total', 'Tax', 'currency'],
+      ['notes', 'Notes', 'text'],
+      ['gst_type', 'GST Type', 'text'],
+      ['party_gstin', 'Party GSTIN', 'text'],
+      ['created_at', 'Created', 'date'],
+    ]),
   ];
 
   const visibleColumns = useMemo(() => {

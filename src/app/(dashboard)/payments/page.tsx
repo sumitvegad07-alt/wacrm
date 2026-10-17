@@ -25,6 +25,7 @@ import { CustomField } from '@/types';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
 import { PAYMENT_STATUSES, PAYMENT_SOURCES, getSourceLabel } from '@/lib/payments/statuses';
 import { PaymentStatusBadge } from '@/components/payments/payment-status-badge';
+import { extraColumns } from '@/lib/table/extra-columns';
 
 interface PaymentRow {
   id: string;
@@ -290,6 +291,17 @@ export default function PaymentsPage() {
         <RowActions onEdit={() => router.push(`/payments/${p.id}`)} />
       ),
     },
+    // The rest of what a payment stores, so Manage Column can offer it.
+    ...extraColumns<PaymentRow>([
+      ['reference_number', 'Reference No', 'text'],
+      ['receipt_number', 'Receipt No', 'text'],
+      ['notes', 'Notes', 'text'],
+      ['approved_at', 'Approved On', 'date'],
+      ['rejection_reason', 'Rejection Reason', 'text'],
+      ['cancellation_reason', 'Cancellation Reason', 'text'],
+      ['erp_reference', 'ERP Reference', 'text'],
+      ['created_at', 'Created', 'date'],
+    ]),
   ];
 
   const handleInlineApprove = async (p: PaymentRow) => {

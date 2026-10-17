@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
+import { extraColumns } from '@/lib/table/extra-columns';
 import { useAuth } from "@/hooks/use-auth";
 import { useDataScope } from "@/hooks/use-data-scope";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
@@ -429,7 +430,20 @@ export default function ExpensesPage() {
           </Badge>
         );
       }
-    }
+    },
+    // The rest of what an expense stores, so Manage Column can offer it.
+    ...extraColumns<Expense>([
+      ['expense_number', 'Expense No', 'text'],
+      ['travel_km', 'Travel (km)', 'number'],
+      ['rate_per_km', 'Rate per km', 'currency'],
+      ['odometer_start', 'Odometer Start', 'number'],
+      ['odometer_end', 'Odometer End', 'number'],
+      ['approved_amount', 'Approved Amount', 'currency'],
+      ['approved_at', 'Approved On', 'date'],
+      ['rejection_reason', 'Rejection Reason', 'text'],
+      ['remarks', 'Remarks', 'text'],
+      ['created_at', 'Created', 'date'],
+    ]),
   ];
 
   if (isAdmin) {

@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
+import { extraColumns } from '@/lib/table/extra-columns';
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LeadForm } from "@/components/leads/lead-form";
@@ -508,7 +509,12 @@ export default function LeadsPage() {
           />
         );
       }
-    }
+    },
+    // The rest of what a lead stores, so Manage Column can offer it.
+    ...extraColumns<Lead>([
+      ["estimated_value", "Estimated Value", "currency"],
+      ["is_converted", "Converted", "boolean"],
+    ]),
   ];
 
   // Transform base columns and append custom fields (controlled by admin show_in_table, sortable, filterable flags)

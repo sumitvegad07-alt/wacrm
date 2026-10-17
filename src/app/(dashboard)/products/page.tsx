@@ -46,6 +46,7 @@ import { isDateInFilter } from "@/lib/date-filters";
 import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import { extraColumns } from '@/lib/table/extra-columns';
 
 export default function ProductsPage() {
   const supabase = createClient();
@@ -288,7 +289,16 @@ export default function ProductsPage() {
           />
         );
       }
-    }
+    },
+    // The rest of what a product stores, so Manage Column can offer it.
+    ...extraColumns<any>([
+      ['description', 'Description', 'text'],
+      ['unit', 'Unit', 'text'],
+      ['hsn_code', 'HSN Code', 'text'],
+      ['min_price', 'Minimum Price', 'currency'],
+      ['opening_stock', 'Opening Stock', 'number'],
+      ['track_stock', 'Track Stock', 'boolean'],
+    ]),
   ];
 
   // Transform base columns and append custom fields (controlled by admin show_in_table, sortable, filterable flags)

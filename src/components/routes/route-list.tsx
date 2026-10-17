@@ -35,6 +35,7 @@ import { PageLayout, PageHeader, PageToolbar, BulkActionBar } from "@/components
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { type ColumnDef, type FilterState } from "@/components/ui/data-table/data-table-types";
+import { extraColumns } from "@/lib/table/extra-columns";
 
 const PAGE_SIZE = 25;
 
@@ -317,6 +318,11 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
         );
       },
     },
+    // The rest of what a route stores, so Manage Column can offer it.
+    ...extraColumns<any>([
+      ["description", "Description", "text"],
+      ["created_at", "Created", "date"],
+    ]),
   ], [onSelectRoute, router, canClone, canArchive]);
 
   /**
