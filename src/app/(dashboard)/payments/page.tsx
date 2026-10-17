@@ -110,8 +110,8 @@ export default function PaymentsPage() {
 
       if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
-      q = applyTextFilter(q, 'customer_name', filters.customerName);
-      q = applyTextFilter(q, 'payment_type_name', filters.payment_type_name);
+      q = applyInFilter(q, 'customer_name', filters.customerName);
+      q = applyInFilter(q, 'payment_type_name', filters.payment_type_name);
       q = applyTextFilter(q, 'payment_number', filters.payment_number);
       q = applyInFilter(q, 'source', filters.source);
       q = applyInFilter(q, 'status', filters.status);
@@ -230,7 +230,8 @@ export default function PaymentsPage() {
     {
       id: 'customerName',
       label: 'Customer',
-      type: 'text',
+      type: 'select',
+      valueSource: { kind: 'distinct', module: 'payment', column: 'customer_name' },
       render: (p) => <span className="font-medium">{p.customerName}</span>,
     },
     {
@@ -242,7 +243,8 @@ export default function PaymentsPage() {
     {
       id: 'payment_type_name',
       label: 'Type',
-      type: 'text',
+      type: 'select',
+      valueSource: { kind: 'distinct', module: 'payment', column: 'payment_type_name' },
       render: (p) => <span className="text-sm">{p.payment_type_name}</span>,
     },
     {

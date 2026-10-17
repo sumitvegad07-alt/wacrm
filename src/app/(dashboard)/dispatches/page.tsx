@@ -12,7 +12,7 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
@@ -76,7 +76,7 @@ export default function DispatchesPage() {
 
       if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
-      q = applyTextFilter(q, 'customer_name', filters.customerName);
+      q = applyInFilter(q, 'customer_name', filters.customerName);
       q = applyTextFilter(q, 'dispatch_number', filters.dispatch_number);
       q = applyTextFilter(q, 'order_number', filters.order_number);
       q = applyDateFilter(q, 'dispatched_at', filters.date);
@@ -137,7 +137,9 @@ export default function DispatchesPage() {
   const columns: ColumnDef<DispatchRow>[] = [
     { id: 'dispatch_number', label: 'Dispatch #', type: 'text', render: (d) => <span className="font-medium font-mono text-sm">{d.dispatch_number}</span> },
     { id: 'order_number', label: 'Order #', type: 'text', render: (d) => <span className="font-mono text-sm">{d.order_number}</span> },
-    { id: 'customerName', label: 'Customer', type: 'text', render: (d) => <span className="font-medium">{d.customerName}</span> },
+    { id: 'customerName', label: 'Customer', type: 'select',
+      valueSource: { kind: 'distinct', module: 'dispatch', column: 'customer_name' },
+      render: (d) => <span className="font-medium">{d.customerName}</span> },
     { id: 'date', label: 'Date', type: 'date', render: (d) => <span className="text-sm text-muted-foreground">{d.date ? new Date(d.date).toLocaleDateString('en-IN') : '—'}</span> },
     { id: 'itemCount', label: 'Items', type: 'text', render: (d) => <span className="text-sm">{d.itemCount}</span> },
     { id: 'invoice_no', label: 'Invoice No', type: 'text', visibleByDefault: false, render: (d) => <span className="text-sm">{d.invoice_no}</span> },

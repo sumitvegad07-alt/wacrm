@@ -137,8 +137,8 @@ export default function QuotationsPage() {
 
       q = applyTextFilter(q, 'quotation_number', filters.quotation_number);
       q = applyInFilter(q, 'status', filters.status);
-      q = applyTextFilter(q, 'customer_name', filters.contact);
-      q = applyTextFilter(q, 'creator_name', filters.creator);
+      q = applyInFilter(q, 'customer_name', filters.contact);
+      q = applyInFilter(q, 'creator_name', filters.creator);
       q = applyDateFilter(q, 'date', filters.date);
       q = applyCustomFieldFilters(q, filters, customFields);
 
@@ -284,7 +284,8 @@ export default function QuotationsPage() {
     {
       id: "contact",
       label: "Quotation For",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "quotation", column: "customer_name" },
       render: (quotation) => {
         if (quotation.lead) {
           return (
@@ -329,7 +330,8 @@ export default function QuotationsPage() {
     {
       id: "creator",
       label: "Created By",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "quotation", column: "creator_name" },
       render: (quotation) => <span className="text-muted-foreground text-sm">{quotation.creator?.full_name || quotation.creator?.email || '-'}</span>
     },
     {

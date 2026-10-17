@@ -146,7 +146,7 @@ export default function TasksPage() {
       q = applyTextFilter(q, 'title', filters.title);
       q = applyInFilter(q, 'status', filters.status);
       q = applyInFilter(q, 'priority', filters.priority);
-      q = applyTextFilter(q, 'assignee_name', filters.assignee);
+      q = applyInFilter(q, 'assignee_name', filters.assignee);
       q = applyTextFilter(q, 'linked_text', filters.linked_to);
       q = applyDateFilter(q, 'due_date', filters.due_date);
       q = applyCustomFieldFilters(q, filters, customFields);
@@ -342,7 +342,8 @@ export default function TasksPage() {
     {
       id: "assignee",
       label: "Assigned To",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "task", column: "assignee_name" },
       render: (task) => <span className="text-muted-foreground text-sm">{task.assignee?.full_name || task.assignee?.email || <span className="italic">Unassigned</span>}</span>
     },
     {

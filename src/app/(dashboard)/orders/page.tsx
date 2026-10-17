@@ -164,8 +164,13 @@ export default function OrdersPage() {
       if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
       const f = filters as FilterState;
-      if (f.customerName) q = q.ilike('customer_name', `%${String(f.customerName)}%`);
-      if (f.salesmanName) q = q.ilike('salesman_name', `%${String(f.salesmanName)}%`);
+      // Customer and Salesman are value lists, so they match exactly.
+      if (Array.isArray(f.customerName) && f.customerName.length) {
+        q = q.in('customer_name', f.customerName as string[]);
+      }
+      if (Array.isArray(f.salesmanName) && f.salesmanName.length) {
+        q = q.in('salesman_name', f.salesmanName as string[]);
+      }
       if (f.order_number) q = q.ilike('order_number', `%${String(f.order_number)}%`);
       if (Array.isArray(f.classification) && f.classification.length) {
         q = q.in('classification', f.classification as string[]);
@@ -313,7 +318,8 @@ export default function OrdersPage() {
     {
       id: 'customerName',
       label: 'Customer',
-      type: 'text',
+      type: 'select',
+      valueSource: { kind: 'distinct', module: 'order', column: 'customer_name' },
       render: (o) => <span className="font-medium">{o.customerName}</span>,
     },
     {
@@ -360,7 +366,8 @@ export default function OrdersPage() {
     {
       id: 'salesmanName',
       label: 'Salesman',
-      type: 'text',
+      type: 'select',
+      valueSource: { kind: 'distinct', module: 'order', column: 'salesman_name' },
       visibleByDefault: false,
       render: (o) => <span className="text-sm">{o.salesmanName}</span>,
     },

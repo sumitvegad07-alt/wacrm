@@ -89,7 +89,7 @@ export default function ExpensesPage() {
       if (search) q = q.ilike("search_text", `%${search.toLowerCase()}%`);
 
       q = applyDateFilter(q, "expense_date", filters.expense_date);
-      q = applyTextFilter(q, "employee_name", filters.employee);
+      q = applyInFilter(q, "employee_name", filters.employee);
       q = applyInFilter(q, "expense_type_name", filters.expense_type);
       q = applyInFilter(q, "status", filters.status);
       q = applyCustomFieldFilters(q, filters, customFields);
@@ -362,7 +362,8 @@ export default function ExpensesPage() {
     {
       id: "employee",
       label: "Employee",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "expense", column: "employee_name" },
       render: (expense) => <span>{expense.employee?.full_name || "-"}</span>
     },
     {

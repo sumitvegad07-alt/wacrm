@@ -66,8 +66,8 @@ export default function CustomerVisitsPage() {
 
       if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
-      q = applyTextFilter(q, 'customer_name', filters.name);
-      q = applyTextFilter(q, 'visited_by_name', filters.visitedBy);
+      q = applyInFilter(q, 'customer_name', filters.name);
+      q = applyInFilter(q, 'visited_by_name', filters.visitedBy);
       q = applyInFilter(q, 'feedback_type', filters.feedbackType);
       // The Feedback column was offered as a filter and never wired.
       q = applyTextFilter(q, 'feedback_text', filters.feedback);
@@ -184,7 +184,8 @@ export default function CustomerVisitsPage() {
     {
       id: "name",
       label: "Name",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "visit", column: "customer_name" },
       render: (row) => (
         <span className="font-medium whitespace-nowrap inline-flex items-center gap-2">
           {row.name}
@@ -286,7 +287,8 @@ export default function CustomerVisitsPage() {
     {
       id: "visitedBy",
       label: "Visited By",
-      type: "text",
+      type: "select",
+      valueSource: { kind: "distinct", module: "visit", column: "visited_by_name" },
       render: (row) => <span>{row.visitedBy}</span>
     },
     {

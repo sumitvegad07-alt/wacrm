@@ -21,6 +21,20 @@ export const ALLOWED_MODULES: Readonly<
     table: "contacts",
     columns: ["city", "state", "country", "area", "company", "pincode"],
   },
+  // The transaction tables keep a denormalised name beside each id — the same
+  // column the screen already filters on — so the list is the names actually
+  // present, and matching is exact rather than a contains match.
+  order: { table: "orders", columns: ["customer_name", "salesman_name"] },
+  payment: { table: "payments", columns: ["customer_name", "payment_type_name"] },
+  quotation: { table: "quotations", columns: ["customer_name", "creator_name"] },
+  task: { table: "tasks", columns: ["assignee_name", "activity_type"] },
+  expense: { table: "expenses", columns: ["employee_name", "expense_type_name"] },
+  visit: { table: "site_visits", columns: ["customer_name", "visited_by_name"] },
+  dispatch: {
+    table: "order_dispatches",
+    columns: ["customer_name", "transport_name"],
+  },
+  deal: { table: "deals", columns: ["contact_name", "assignee_name"] },
 });
 
 /**

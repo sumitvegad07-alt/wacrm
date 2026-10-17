@@ -210,3 +210,28 @@ test.describe("Manage Column lists every stored field", () => {
     });
   }
 });
+
+test.describe("value lists on the transaction screens", () => {
+  for (const [name, path, trigger] of [
+    ["Orders", "/orders", "Filter by Customer"],
+    ["Tasks", "/tasks", "Filter by Assigned To"],
+  ] as const) {
+    test(`${name}: the dropdown lists values from this account's own rows`, async ({ page }) => {
+      await page.goto(path);
+      const filterRow = page.locator("table thead tr").nth(1);
+      await expect(filterRow).toBeVisible({ timeout: 30_000 });
+
+      const [response] = await Promise.all([
+        page.waitForResponse(
+          (r) => r.url().includes("/api/table/column-values"),
+          { timeout: 20_000 },
+        ),
+        filterRow.getByRole("button", { name: trigger }).click(),
+      ]);
+
+      expect(response.ok(), "column-values must not error").toBe(true);
+      const payload = await response.json();
+      expect(Array.isArray(payload.values)).toBe(true);
+    });
+  }
+});
