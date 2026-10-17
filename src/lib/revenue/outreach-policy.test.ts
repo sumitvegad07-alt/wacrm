@@ -169,6 +169,7 @@ describe("pickVariant", () => {
   it("stays in range for two variants", () => {
     expect(pickVariant(1, 2)).toBeLessThan(2);
     expect(pickVariant(5000, 2)).toBeLessThan(2);
+    expect(pickVariant(5000, 2)).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -200,6 +201,29 @@ describe("renderMessage", () => {
     expect(out).not.toContain("  ");
   });
 
+  it("never lets a brace reach a prospect, however the token is malformed", () => {
+    for (const template of [
+      "Hi {first name}, hello",
+      "Hi { name }, hello",
+      "Hi {city-name}, hello",
+      "Hi {{name}}, hello",
+      "Hi {name, hello",
+      "Hi name}, hello",
+    ]) {
+      const out = renderMessage(template, { name: "Shah Industries" });
+      expect(out).not.toMatch(/[{}]/);
+    }
+  });
+
+  it("drops the whole {{name}} group rather than sending {Shah Industries}", () => {
+    // The inner token is substituted first, leaving `{Shah Industries}`, which
+    // the brace pass then removes. The name is lost but the message stays
+    // clean: failing safe, not failing visibly to the prospect.
+    const out = renderMessage("Hi {{name}}, hello", { name: "Shah Industries" });
+    expect(out).not.toContain("Shah Industries");
+    expect(out).toContain("Hi, hello");
+  });
+
   it("appends the opt-out line exactly once", () => {
     const withIt = renderMessage(`Hi {name}. ${OPT_OUT_LINE}`, { name: "A" });
     expect(withIt.split(OPT_OUT_LINE)).toHaveLength(2);
@@ -227,11 +251,30 @@ describe("decide", () => {
     expect(decide(base)).toEqual({ kind: "send" });
   });
 
-  it("pauses after three failures in a row, before anything else", () => {
-    // Checked first on purpose: a campaign failing every send must stop even
-    // if it is inside the window with plenty queued.
+  it("pauses after three failures in a row", () => {
+    // A campaign failing every send must stop even if it is inside the
+    // window with plenty queued.
     const d = decide({ ...base, consecutiveFailures: 3 });
     expect(d.kind).toBe("paused");
+  });
+
+  it("pauses on three failures even with an empty queue", () => {
+    expect(decide({ ...base, consecutiveFailures: 3, queuedRemaining: 0 }).kind)
+      .toBe("paused");
+  });
+
+  it("pauses on three failures even outside the send window", () => {
+    expect(
+      decide({
+        ...base,
+        consecutiveFailures: 3,
+        now: ist("2026-10-19", "21:00"),
+      }).kind,
+    ).toBe("paused");
+  });
+
+  it("still sends after two failures", () => {
+    expect(decide({ ...base, consecutiveFailures: 2 }).kind).toBe("send");
   });
 
   it("is done when nothing is queued", () => {
@@ -254,8 +297,26 @@ describe("decide", () => {
     if (d.kind === "wait") expect(d.reason).toContain("20");
   });
 
-  it("still sends at 20 when the number is warm", () => {
+  it("still sends at 19 when the number is warm", () => {
     expect(decide({ ...base, sentToday: 19, firstSentOn: "2026-10-01" }).kind).toBe("send");
+  });
+
+  it("waits at the campaign's own cap once the number is fully warm", () => {
+    expect(decide({ ...base, sentToday: 80 }).kind).toBe("wait");
+  });
+
+  it("still sends one short of the cap", () => {
+    expect(decide({ ...base, sentToday: 79 }).kind).toBe("send");
+  });
+
+  it("lets a lower campaign cap bind before the ramp does", () => {
+    const d = decide({ ...base, dailyCap: 30, sentToday: 30 });
+    expect(d.kind).toBe("wait");
+    if (d.kind === "wait") expect(d.reason).toContain("30");
+  });
+
+  it("stops rather than sends when a counter arrives as NaN", () => {
+    expect(decide({ ...base, sentToday: Number.NaN }).kind).not.toBe("send");
   });
 
   it("spaces messages out when the last one was too recent", () => {
@@ -278,6 +339,25 @@ describe("decide", () => {
       lastSentAt: new Date(base.now.getTime() - 121_000),
     });
     expect(d).toEqual({ kind: "send" });
+  });
+
+  it("sends exactly when the elapsed time equals the required gap", () => {
+    // The 121s test above sits past the 120s maximum and never touches the
+    // boundary. Compute the real gap for one count and land exactly on it.
+    const sentToday = 7;
+    const needed = requiredGapSeconds(sentToday, 45, 120);
+    const justShort = decide({
+      ...base,
+      sentToday,
+      lastSentAt: new Date(base.now.getTime() - (needed - 1) * 1000),
+    });
+    expect(justShort.kind).toBe("wait");
+    const onTheDot = decide({
+      ...base,
+      sentToday,
+      lastSentAt: new Date(base.now.getTime() - needed * 1000),
+    });
+    expect(onTheDot).toEqual({ kind: "send" });
   });
 
   it("takes a long break on the 20th, not a short gap", () => {

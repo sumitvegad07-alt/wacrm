@@ -34,7 +34,9 @@ export const LONG_BREAK_MIN_SEC = 300;
 export const LONG_BREAK_MAX_SEC = 720;
 
 /**
- * The longest the extension is ever told to sleep.
+ * The cap on the window-closed and cap-reached waits only. It is not a
+ * ceiling on every wait: a long break can be up to LONG_BREAK_MAX_SEC (720s),
+ * and a spacing wait is whatever is left of the gap.
  *
  * Out-of-window and cap-reached waits could be computed exactly, which means
  * multi-day calendar arithmetic for a wait nobody is watching. Capping the
@@ -207,7 +209,13 @@ export function renderMessage(
     return MERGE_FALLBACKS[key] ?? "";
   });
 
-  const tidied = filled.replace(/[ \t]{2,}/g, " ").replace(/ +([,.])/g, "$1").trim();
+  // Anything still carrying a brace never reaches a prospect. The pass above
+  // only matches \w+ tokens, so `{first name}`, `{ name }` and the outer
+  // braces of `{{name}}` survive it — and a literal brace in a cold message
+  // reads as a bot to a human long before WhatsApp notices anything.
+  const debraced = filled.replace(/\{[^{}]*\}/g, "").replace(/[{}]/g, "");
+
+  const tidied = debraced.replace(/[ \t]{2,}/g, " ").replace(/ +([,.])/g, "$1").trim();
 
   return tidied.includes(OPT_OUT_LINE) ? tidied : `${tidied}\n\n${OPT_OUT_LINE}`;
 }
@@ -243,7 +251,11 @@ export type Decision =
  * carrying on is how a restriction becomes a ban.
  */
 export function decide(input: DecideInput): Decision {
-  if (input.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+  // Written as a negated "<" on purpose, here and in the two checks below:
+  // a NaN counter makes every comparison false, so ">=" would let NaN fall
+  // through to a send. These guards protect a real business number, so NaN
+  // must stop, not pass. Do not "simplify" this back to ">=".
+  if (!(input.consecutiveFailures < MAX_CONSECUTIVE_FAILURES)) {
     return {
       kind: "paused",
       reason: `${input.consecutiveFailures} sends failed in a row`,
@@ -268,7 +280,7 @@ export function decide(input: DecideInput): Decision {
     daysSending(input.firstSentOn, clock.ymd),
     input.dailyCap,
   );
-  if (input.sentToday >= cap) {
+  if (!(input.sentToday < cap)) {
     return {
       kind: "wait",
       waitSeconds: MAX_POLL_WAIT_SEC,
@@ -285,7 +297,7 @@ export function decide(input: DecideInput): Decision {
     const elapsed = Math.floor(
       (input.now.getTime() - input.lastSentAt.getTime()) / 1000,
     );
-    if (elapsed < needed) {
+    if (!(elapsed >= needed)) {
       return {
         kind: "wait",
         waitSeconds: needed - elapsed,
