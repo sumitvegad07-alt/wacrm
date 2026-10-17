@@ -61,15 +61,22 @@ export default function SuperAdminDashboard() {
       // `profiles_select` because it was also leaking other tenants' staff
       // into the ordinary admin area).
       const [accountsRes, usersRes] = await Promise.all([
-        supabase
-          .from("accounts")
-          .select("id, name, created_at, subscription_status, subscription_plan"),
+        fetch("/api/admin/companies")
+          .then((r) => (r.ok ? r.json() : { companies: [] }))
+          .catch(() => ({ companies: [] })),
         fetch("/api/admin/users?count=1")
           .then((r) => (r.ok ? r.json() : { count: 0 }))
           .catch(() => ({ count: 0 })),
       ]);
 
-      const accounts = accountsRes.data || [];
+      type CompanyRow = {
+        id: string;
+        name: string;
+        created_at: string;
+        subscription_plan: string;
+        subscription_status: string;
+      };
+      const accounts = ((accountsRes as { companies?: CompanyRow[] }).companies ?? []) as CompanyRow[];
       const totalUsers = (usersRes as { count?: number }).count ?? 0;
 
       const planBreakdown: Record<string, number> = {};

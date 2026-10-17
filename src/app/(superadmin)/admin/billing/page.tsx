@@ -71,6 +71,8 @@ interface AccountBilling {
   deleted_at: string | null;
   created_at: string;
   user_count: number;
+  /** Seats billed for, which is what revenue is computed from. */
+  seat_count: number;
   addons: string[];
 }
 
@@ -82,13 +84,16 @@ export default function BillingPage() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from("accounts")
-        .select(
-          "id, name, subscription_plan, subscription_status, subscription_expires_at, created_at, user_count, addons, deleted_at"
-        )
-        .order("subscription_plan");
-      setAccounts(data || []);
+      // Through the service-role route: the browser cannot read other
+      // tenants' accounts any more. See migration 20261017120000.
+      const res = await fetch("/api/admin/companies?includeDeleted=1");
+      const payload = res.ok ? await res.json() : { companies: [] };
+      const rows = (payload.companies ?? []) as typeof accounts;
+      setAccounts(
+        [...rows].sort((a, b) =>
+          String(a.subscription_plan).localeCompare(String(b.subscription_plan)),
+        ),
+      );
       setLoading(false);
     }
     load();
@@ -108,7 +113,7 @@ export default function BillingPage() {
   // Any legacy value prices at 0 — the only one left is the super-admin's own
   // account, which is not a paying customer.
   const mrrEstimate = liveAccounts.reduce(
-    (mrr, a) => mrr + monthlyRevenue(a.subscription_plan, a.user_count),
+    (mrr, a) => mrr + monthlyRevenue(a.subscription_plan, a.seat_count),
     0,
   );
 

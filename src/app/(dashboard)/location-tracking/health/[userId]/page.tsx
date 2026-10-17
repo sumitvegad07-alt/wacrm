@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -61,6 +62,7 @@ function SnapshotRow({ label, value, ok }: { label: string; value: string; ok?: 
 
 export default function AgentHealthDetailPage() {
   const params = useParams();
+  const { accountId } = useAuth();
   const userId = params.userId as string;
   const supabase = createClient();
 
@@ -71,9 +73,12 @@ export default function AgentHealthDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Wait for the account: the shift-times lookup is filtered by it, and
+    // running before it resolves would read no settings at all.
+    if (!accountId) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, selectedDate]);
+  }, [userId, selectedDate, accountId]);
 
   const load = async () => {
     setIsLoading(true);
@@ -114,9 +119,14 @@ export default function AgentHealthDetailPage() {
           // All of the day's heartbeats, not just the newest: their ABSENCE inside a gap is
           // what proves the app wasn't running. [0] is still the latest for the device card.
           .order("recorded_at", { ascending: false }),
-        // Working window — decides whether a missing punch-in counts as "late" (RLS scopes
-        // this to the viewer's own account, so no explicit filter is needed).
-        supabase.from("accounts").select("settings").limit(1).maybeSingle(),
+        // Working window — decides whether a missing punch-in counts as "late".
+        //
+        // Filtered by id on purpose. The comment here used to say RLS scoped
+        // this to the viewer's own account so no filter was needed, and that
+        // was not true for a platform superadmin: `accounts_select` carried an
+        // `OR is_superadmin()` branch, so this took whichever account came
+        // first and could apply another tenant's shift times to this agent.
+        supabase.from("accounts").select("settings").eq("id", accountId).maybeSingle(),
       ]);
 
     setName((profile as any)?.full_name || "Agent");

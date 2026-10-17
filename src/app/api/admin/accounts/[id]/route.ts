@@ -15,6 +15,37 @@ import {
  * adjustments, trial extensions and module toggles. Validation lives in
  * lib/admin/billing.ts; this route owns auth, persistence and audit.
  */
+/**
+ * One tenant's account row, for the superadmin company screen.
+ *
+ * The screen used to read `accounts` straight from the browser, which worked
+ * only because `accounts_select` carried an `OR is_superadmin()` branch — and
+ * that branch fired inside the ordinary tenant area too. See migration
+ * 20261017120000.
+ */
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    await requireSuperadmin();
+    const { id } = await params;
+
+    const { data, error } = await serviceClient()
+      .from("accounts")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    return NextResponse.json({ account: data });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -81,14 +81,17 @@ export default function CompanyDetailPage() {
       // `profiles_select` because it was also leaking other tenants' staff
       // into the ordinary admin area).
       const [companyRes, membersRes] = await Promise.all([
-        supabase.from("accounts").select("*").eq("id", id).single(),
+        fetch(`/api/admin/accounts/${id}`)
+          .then((r) => (r.ok ? r.json() : { account: null }))
+          .catch(() => ({ account: null })),
         fetch(`/api/admin/users?accountId=${id}`)
           .then((r) => (r.ok ? r.json() : { users: [] }))
           .catch(() => ({ users: [] })),
       ]);
 
-      if (companyRes.data) {
-        const c = companyRes.data;
+      const company = (companyRes as { account?: Record<string, unknown> | null }).account;
+      if (company) {
+        const c = company as any;
         setModules((c.module_settings as Record<string, boolean>) ?? {});
         setCompany(c);
         setStatus(c.subscription_status || "active");
