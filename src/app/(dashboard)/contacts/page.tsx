@@ -39,7 +39,7 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters, applyRangeFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { Badge } from '@/components/ui/badge';
@@ -67,12 +67,19 @@ import {
   reactivatedMessage,
 } from '@/lib/table/bulk-activation';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 
 interface ContactWithData extends Contact {
   tags?: Tag[];
   [key: string]: any;
 }
+
+/** Stored contacts fields with no hand-written column, shown via Manage Column. */
+const CONTACT_EXTRA_COLUMNS: readonly ExtraColumnSpec<ContactWithData>[] = [
+      ["whatsapp", "WhatsApp Number", "text"],
+      ["gst_number", "GST Number", "text"],
+      ["customer_code", "Customer Code", "text"],
+];
 
 export default function ContactsPage() {
   const supabase = createClient();
@@ -224,12 +231,21 @@ export default function ContactsPage() {
         q = applyTextFilter(q, col, filters[col]);
       }
       q = applyInFilter(q, 'hierarchy_level', filters.hierarchy_level);
+      q = applyRangeFilter(q, 'credit_limit', filters.credit_limit);
+      q = applyRangeFilter(q, 'credit_days', filters.credit_days);
+      q = applyRangeFilter(q, 'opening_balance', filters.opening_balance);
+      q = applyRangeFilter(q, 'outstanding_amount', filters.outstanding_amount);
       q = applyTextFilter(q, 'territory_name', filters.territory);
       q = applyDateFilter(q, 'created_at', filters.created_at);
       q = applyCustomFieldFilters(q, filters, customFields);
 
       const want = filters.status as string[] | undefined;
       if (Array.isArray(want) && want.length === 1) q = q.eq('is_active', want[0] === 'active');
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, CONTACT_EXTRA_COLUMNS);
+
 
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -635,11 +651,7 @@ export default function ContactsPage() {
       }
     },
     // The rest of what a customer stores, so Manage Column can offer it.
-    ...extraColumns<ContactWithData>([
-      ["whatsapp", "WhatsApp Number", "text"],
-      ["gst_number", "GST Number", "text"],
-      ["customer_code", "Customer Code", "text"],
-    ]),
+    ...extraColumns<ContactWithData>(CONTACT_EXTRA_COLUMNS),
   ];
 
   // Territory Master replaces the flat country/state/city/area columns when enabled.
@@ -668,8 +680,7 @@ export default function ContactsPage() {
       {
         id: "credit_limit",
         label: "Credit Limit",
-        // No filter yet — see Phase 2. A control that does nothing is worse
-      // than none now that the filter row is always visible.
+        type: "range",
         visibleByDefault: false,
         render: (contact) => {
           const val = (contact as any).credit_limit;
@@ -680,8 +691,7 @@ export default function ContactsPage() {
       {
         id: "credit_days",
         label: "Credit Days",
-        // No filter yet — see Phase 2. A control that does nothing is worse
-      // than none now that the filter row is always visible.
+        type: "range",
         visibleByDefault: false,
         render: (contact) => {
           const val = (contact as any).credit_days;
@@ -692,8 +702,7 @@ export default function ContactsPage() {
       {
         id: "opening_balance",
         label: "Opening Balance",
-        // No filter yet — see Phase 2. A control that does nothing is worse
-      // than none now that the filter row is always visible.
+        type: "range",
         visibleByDefault: false,
         render: (contact) => {
           const val = (contact as any).opening_balance;
@@ -707,8 +716,7 @@ export default function ContactsPage() {
       columns.splice(columns.length - 1, 0, {
         id: "outstanding_amount",
         label: "Outstanding (Calculated)",
-        // No filter yet — see Phase 2. A control that does nothing is worse
-      // than none now that the filter row is always visible.
+        type: "range",
         visibleByDefault: false,
         render: (contact) => {
           const val = (contact as any).outstanding_amount ?? (contact as any).opening_balance;

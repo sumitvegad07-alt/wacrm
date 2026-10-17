@@ -39,14 +39,24 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters, applyRangeFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
 import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
+
+/** Stored products fields with no hand-written column, shown via Manage Column. */
+const PRODUCT_EXTRA_COLUMNS: readonly ExtraColumnSpec<any>[] = [
+      ['description', 'Description', 'text'],
+      ['unit', 'Unit', 'text'],
+      ['hsn_code', 'HSN Code', 'text'],
+      ['min_price', 'Minimum Price', 'currency'],
+      ['opening_stock', 'Opening Stock', 'number'],
+      ['track_stock', 'Track Stock', 'boolean'],
+];
 
 export default function ProductsPage() {
   const supabase = createClient();
@@ -108,6 +118,7 @@ export default function ProductsPage() {
       if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
       q = applyTextFilter(q, 'name', filters.name);
+      q = applyRangeFilter(q, 'price', filters.price);
       q = applyTextFilter(q, 'category_name', filters.category);
       q = applyTextFilter(q, 'sku', filters.sku);
       q = applyDateFilter(q, 'created_at', filters.created_at);
@@ -115,6 +126,11 @@ export default function ProductsPage() {
 
       const want = filters.active as string[] | undefined;
       if (Array.isArray(want) && want.length === 1) q = q.eq('active', want[0] === 'true');
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, PRODUCT_EXTRA_COLUMNS);
+
 
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -235,7 +251,7 @@ export default function ProductsPage() {
     {
       id: "price",
       label: "Price",
-      // Money — needs a range filter, not a contains match.
+      type: "range",
       render: (product) => {
         const unitName = product.unit_rel?.short_name || product.unit_rel?.name || product.unit;
         return (
@@ -291,14 +307,7 @@ export default function ProductsPage() {
       }
     },
     // The rest of what a product stores, so Manage Column can offer it.
-    ...extraColumns<any>([
-      ['description', 'Description', 'text'],
-      ['unit', 'Unit', 'text'],
-      ['hsn_code', 'HSN Code', 'text'],
-      ['min_price', 'Minimum Price', 'currency'],
-      ['opening_stock', 'Opening Stock', 'number'],
-      ['track_stock', 'Track Stock', 'boolean'],
-    ]),
+    ...extraColumns<any>(PRODUCT_EXTRA_COLUMNS),
   ];
 
   // Transform base columns and append custom fields (controlled by admin show_in_table, sortable, filterable flags)

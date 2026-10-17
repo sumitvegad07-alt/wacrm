@@ -42,7 +42,7 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters, applyRangeFilter } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
@@ -62,7 +62,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: 'bg-amber-600 text-white shadow-sm border-transparent',
@@ -70,6 +70,16 @@ const STATUS_COLORS: Record<string, string> = {
   Approved: 'bg-emerald-600 text-white shadow-sm border-transparent',
   Rejected: 'bg-red-600 text-white shadow-sm border-transparent',
 };
+
+/** Stored quotations fields with no hand-written column, shown via Manage Column. */
+const QUOTATION_EXTRA_COLUMNS: readonly ExtraColumnSpec<any>[] = [
+      ['version', 'Version', 'number'],
+      ['valid_until', 'Valid Until', 'date'],
+      ['sub_total', 'Sub Total', 'currency'],
+      ['tax_total', 'Tax', 'currency'],
+      ['terms_conditions', 'Terms & Conditions', 'text'],
+      ['created_at', 'Created', 'date'],
+];
 
 export default function QuotationsPage() {
   const supabase = createClient();
@@ -138,12 +148,18 @@ export default function QuotationsPage() {
       q = applyTextFilter(q, 'quotation_number', filters.quotation_number);
       q = applyInFilter(q, 'status', filters.status);
       q = applyInFilter(q, 'customer_name', filters.contact);
+      q = applyRangeFilter(q, 'total_amount', filters.amount);
       q = applyInFilter(q, 'creator_name', filters.creator);
       q = applyDateFilter(q, 'date', filters.date);
       q = applyCustomFieldFilters(q, filters, customFields);
 
       const want = filters.record_status as string[] | undefined;
       if (Array.isArray(want) && want.length === 1) q = q.eq('is_active', want[0] === 'active');
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, QUOTATION_EXTRA_COLUMNS);
+
 
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -311,7 +327,7 @@ export default function QuotationsPage() {
     {
       id: "amount",
       label: "Amount",
-      // Money — needs a range filter, not a contains match.
+      type: "range",
       render: (quotation) => (
         <span className="font-medium text-foreground">
           ₹{quotation.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -374,14 +390,7 @@ export default function QuotationsPage() {
       )
     },
     // The rest of what a quotation stores, so Manage Column can offer it.
-    ...extraColumns<any>([
-      ['version', 'Version', 'number'],
-      ['valid_until', 'Valid Until', 'date'],
-      ['sub_total', 'Sub Total', 'currency'],
-      ['tax_total', 'Tax', 'currency'],
-      ['terms_conditions', 'Terms & Conditions', 'text'],
-      ['created_at', 'Created', 'date'],
-    ]),
+    ...extraColumns<any>(QUOTATION_EXTRA_COLUMNS),
   ];
 
   const visibleColumns = useMemo(() => {

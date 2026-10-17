@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 import { useAuth } from "@/hooks/use-auth";
 import { useDataScope } from "@/hooks/use-data-scope";
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
@@ -26,7 +26,7 @@ import { useTableView } from "@/hooks/use-table-view";
 import { useServerTable } from "@/hooks/use-server-table";
 import { fetchAllPages } from "@/lib/table/export-all-pages";
 import type { ServerTableQuery } from "@/lib/table/server-query";
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from "@/lib/table/apply-filters";
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters, applyRangeFilter } from "@/lib/table/apply-filters";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -34,6 +34,20 @@ import { isDateInFilter } from "@/lib/date-filters";
 import { ExpenseForm } from "@/components/expenses/expense-form";
 import { getVisibleTableColumns, matchesSearchableCustomFields } from "@/lib/custom-fields";
 import { Expense, CustomField } from "@/types";
+
+/** Stored expenses fields with no hand-written column, shown via Manage Column. */
+const EXPENSE_EXTRA_COLUMNS: readonly ExtraColumnSpec<Expense>[] = [
+      ['expense_number', 'Expense No', 'text'],
+      ['travel_km', 'Travel (km)', 'number'],
+      ['rate_per_km', 'Rate per km', 'currency'],
+      ['odometer_start', 'Odometer Start', 'number'],
+      ['odometer_end', 'Odometer End', 'number'],
+      ['approved_amount', 'Approved Amount', 'currency'],
+      ['approved_at', 'Approved On', 'date'],
+      ['rejection_reason', 'Rejection Reason', 'text'],
+      ['remarks', 'Remarks', 'text'],
+      ['created_at', 'Created', 'date'],
+];
 
 export default function ExpensesPage() {
   const { accountId, profile, accountRole, user } = useAuth();
@@ -90,12 +104,18 @@ export default function ExpensesPage() {
 
       q = applyDateFilter(q, "expense_date", filters.expense_date);
       q = applyInFilter(q, "employee_name", filters.employee);
+      q = applyRangeFilter(q, "amount", filters.amount);
       q = applyInFilter(q, "expense_type_name", filters.expense_type);
       q = applyInFilter(q, "status", filters.status);
       q = applyCustomFieldFilters(q, filters, customFields);
 
       const want = filters.record_status as string[] | undefined;
       if (Array.isArray(want) && want.length === 1) q = q.eq("is_active", want[0] === "active");
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, EXPENSE_EXTRA_COLUMNS);
+
 
       return q.order("created_at", { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -383,7 +403,7 @@ export default function ExpensesPage() {
     {
       id: "amount",
       label: "Amount",
-      // Money — needs a range filter, not a contains match.
+      type: "range",
       render: (expense) => (
         <span className="font-semibold text-foreground">₹{expense.amount}</span>
       )
@@ -433,18 +453,7 @@ export default function ExpensesPage() {
       }
     },
     // The rest of what an expense stores, so Manage Column can offer it.
-    ...extraColumns<Expense>([
-      ['expense_number', 'Expense No', 'text'],
-      ['travel_km', 'Travel (km)', 'number'],
-      ['rate_per_km', 'Rate per km', 'currency'],
-      ['odometer_start', 'Odometer Start', 'number'],
-      ['odometer_end', 'Odometer End', 'number'],
-      ['approved_amount', 'Approved Amount', 'currency'],
-      ['approved_at', 'Approved On', 'date'],
-      ['rejection_reason', 'Rejection Reason', 'text'],
-      ['remarks', 'Remarks', 'text'],
-      ['created_at', 'Created', 'date'],
-    ]),
+    ...extraColumns<Expense>(EXPENSE_EXTRA_COLUMNS),
   ];
 
   if (isAdmin) {

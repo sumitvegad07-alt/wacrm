@@ -39,6 +39,19 @@ export function matchesColumnFilters<T>(
       continue;
     }
 
+    if (column.type === "range") {
+      // Either end may be blank — "over 10,000" has no upper bound — and zero
+      // is a real bound, so each end is tested for being a number.
+      const [rawMin, rawMax] = Array.isArray(filterValue) ? filterValue : [filterValue, undefined];
+      const amount = Number(actual);
+      if (!Number.isFinite(amount)) return false;
+      const min = Number(rawMin);
+      const max = Number(rawMax);
+      if (rawMin !== "" && rawMin != null && Number.isFinite(min) && amount < min) return false;
+      if (rawMax !== "" && rawMax != null && Number.isFinite(max) && amount > max) return false;
+      continue;
+    }
+
     if (column.type === "select") {
       const wanted = (Array.isArray(filterValue) ? filterValue : [filterValue]).map(String);
       // A row may itself hold several values — tags, collaborators — in which

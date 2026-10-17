@@ -118,3 +118,30 @@ describe("matchesColumnFilters", () => {
     expect(matchesColumnFilters({ qty: 1250 }, { qty: "99" }, cols)).toBe(false);
   });
 });
+
+describe("range filters in the browser", () => {
+  const cols: ColumnDef<Row>[] = [{ id: "total", label: "Total", type: "range" }];
+
+  it("keeps a row inside both bounds", () => {
+    expect(matchesColumnFilters({ total: 250 }, { total: ["100", "500"] }, cols)).toBe(true);
+    expect(matchesColumnFilters({ total: 50 }, { total: ["100", "500"] }, cols)).toBe(false);
+    expect(matchesColumnFilters({ total: 900 }, { total: ["100", "500"] }, cols)).toBe(false);
+  });
+
+  it("treats a blank end as no bound", () => {
+    expect(matchesColumnFilters({ total: 9000 }, { total: ["100", ""] }, cols)).toBe(true);
+    expect(matchesColumnFilters({ total: 1 }, { total: ["", "500"] }, cols)).toBe(true);
+  });
+
+  it("treats the bounds as inclusive, and zero as a real bound", () => {
+    expect(matchesColumnFilters({ total: 100 }, { total: ["100", "500"] }, cols)).toBe(true);
+    expect(matchesColumnFilters({ total: 500 }, { total: ["100", "500"] }, cols)).toBe(true);
+    expect(matchesColumnFilters({ total: 0 }, { total: ["0", "0"] }, cols)).toBe(true);
+    expect(matchesColumnFilters({ total: 5 }, { total: ["", "0"] }, cols)).toBe(false);
+  });
+
+  it("drops a row with no number in that column", () => {
+    expect(matchesColumnFilters({ total: null }, { total: ["100", ""] }, cols)).toBe(false);
+    expect(matchesColumnFilters({ total: "abc" }, { total: ["100", ""] }, cols)).toBe(false);
+  });
+});

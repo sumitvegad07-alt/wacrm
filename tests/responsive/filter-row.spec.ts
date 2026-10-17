@@ -235,3 +235,26 @@ test.describe("value lists on the transaction screens", () => {
     });
   }
 });
+
+test("a money column filters by a from/to range", async ({ page }) => {
+  // Money had no filter at all: a contains match on an amount misleads,
+  // because searching 100 matches 1,100.
+  await page.goto("/products");
+
+  const filterRow = page.locator("table thead tr").nth(1);
+  await expect(filterRow).toBeVisible({ timeout: 30_000 });
+
+  async function total(): Promise<number> {
+    const text = await page.getByText(/\d+\s*-\s*\d+\s+of\s+\d+/).first().innerText();
+    return Number(/of\s+(\d+)/.exec(text)![1]);
+  }
+  await expect.poll(total, { timeout: 30_000 }).toBeGreaterThan(0);
+  const before = await total();
+
+  await filterRow.getByRole("button", { name: "Filter by Price" }).click();
+  // A floor no product should reach.
+  await page.getByRole("dialog").or(page.locator("[data-slot=popover-content]"))
+    .getByLabel("Price from").fill("99999999");
+
+  await expect.poll(total, { timeout: 20_000 }).toBeLessThan(before);
+});

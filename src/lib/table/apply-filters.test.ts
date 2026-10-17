@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomField } from "@/types";
 import {
   applyArrayOverlapFilter,
+  applyExtraColumnFilters,
+  applyRangeFilter,
   applyCustomFieldFilters,
   applyDateFilter,
   applyInFilter,
@@ -221,5 +223,108 @@ describe("applyArrayOverlapFilter", () => {
       applyArrayOverlapFilter(q, "collaborator_ids", empty);
       expect(q.calls).toEqual([]);
     }
+  });
+});
+
+// ============================================================
+// Range filters.
+//
+// Money columns had no filter at all, because a contains match on an amount
+// misleads: searching 100 matches 1,100. A from/to pair is what they actually
+// need, and it has to treat each end as optional — "over 10,000" is a filter
+// with no upper bound.
+// ============================================================
+describe("applyRangeFilter", () => {
+  it("applies both ends when both are given", () => {
+    const q = fakeQuery();
+    applyRangeFilter(q, "total_amount", ["100", "500"]);
+    expect(q.calls).toEqual(['gte(total_amount, 100)', 'lte(total_amount, 500)']);
+  });
+
+  it("applies only the end that was filled in", () => {
+    const lower = fakeQuery();
+    applyRangeFilter(lower, "total_amount", ["100", ""]);
+    expect(lower.calls).toEqual(['gte(total_amount, 100)']);
+
+    const upper = fakeQuery();
+    applyRangeFilter(upper, "total_amount", ["", "500"]);
+    expect(upper.calls).toEqual(['lte(total_amount, 500)']);
+  });
+
+  it("adds nothing when neither end is filled in", () => {
+    for (const empty of [null, undefined, "", [], ["", ""]]) {
+      const q = fakeQuery();
+      applyRangeFilter(q, "total_amount", empty);
+      expect(q.calls).toEqual([]);
+    }
+  });
+
+  it("ignores an end that is not a number, rather than sending NaN", () => {
+    const q = fakeQuery();
+    applyRangeFilter(q, "total_amount", ["abc", "500"]);
+    expect(q.calls).toEqual(['lte(total_amount, 500)']);
+  });
+
+  it("accepts zero as a real bound", () => {
+    const q = fakeQuery();
+    applyRangeFilter(q, "total_amount", ["0", "0"]);
+    expect(q.calls).toEqual(['gte(total_amount, 0)', 'lte(total_amount, 0)']);
+  });
+});
+
+// ============================================================
+// The generated columns have to reach the query too.
+//
+// extraColumns builds a column per stored field so Manage Column can offer it.
+// Each one carries a filter, and a filter that never reaches the query is a
+// control that visibly does nothing — the exact problem the filter row was
+// built to expose.
+// ============================================================
+describe("applyExtraColumnFilters", () => {
+  const specs = [
+    ["notes", "Notes", "text"],
+    ["total", "Total", "currency"],
+    ["qty", "Qty", "number"],
+    ["due", "Due", "date"],
+    ["flag", "Flag", "boolean"],
+  ] as const;
+
+  it("applies each kind the way that kind is filtered", () => {
+    const q = fakeQuery();
+    applyExtraColumnFilters(q, { notes: "urgent", total: ["10", "20"], flag: ["true"] }, specs);
+    expect(q.calls).toEqual([
+      'ilike(notes, "%urgent%")',
+      "gte(total, 10)",
+      "lte(total, 20)",
+      "eq(flag, true)",
+    ]);
+  });
+
+  it("filters a number column by range, like money", () => {
+    const q = fakeQuery();
+    applyExtraColumnFilters(q, { qty: ["5", ""] }, specs);
+    expect(q.calls).toEqual(["gte(qty, 5)"]);
+  });
+
+  it("ignores filters for columns it does not own", () => {
+    const q = fakeQuery();
+    applyExtraColumnFilters(q, { somethingElse: "x" }, specs);
+    expect(q.calls).toEqual([]);
+  });
+
+  it("adds nothing when no filter is set", () => {
+    const q = fakeQuery();
+    applyExtraColumnFilters(q, { notes: "", total: [], due: null }, specs);
+    expect(q.calls).toEqual([]);
+  });
+
+  it("skips a spec that reads its value from somewhere else", () => {
+    // A reader means the value is not stored under that column name, so there
+    // is nothing for the database to match on.
+    const q = fakeQuery();
+    applyExtraColumnFilters(q, { derived: "x" }, [
+      ["derived", "Derived", "text", () => "x"],
+    ] as const);
+    expect(q.calls).toEqual([]);
   });
 });

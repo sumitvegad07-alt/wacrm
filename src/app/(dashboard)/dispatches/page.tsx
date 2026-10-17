@@ -12,7 +12,7 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters } from '@/lib/table/apply-filters';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
@@ -20,7 +20,7 @@ import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/cus
 import { CustomField } from '@/types';
 import { PageLayout, PageHeader, PageToolbar } from '@/components/shared';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 
 interface DispatchRow {
   id: string;
@@ -32,6 +32,18 @@ interface DispatchRow {
   invoice_no: string;
   subAmount: number;
 }
+
+/** Stored dispatches fields with no hand-written column, shown via Manage Column. */
+const DISPATCH_EXTRA_COLUMNS: readonly ExtraColumnSpec<DispatchRow>[] = [
+      ['transport_name', 'Transport Name', 'text'],
+      ['transport_contact_no', 'Transport Contact', 'text'],
+      ['tracking_number', 'Tracking No', 'text'],
+      ['lr_no', 'LR No', 'text'],
+      ['lr_date', 'LR Date', 'date'],
+      ['invoice_date', 'Invoice Date', 'date'],
+      ['dispatched_at', 'Dispatched On', 'date'],
+      ['notes', 'Notes', 'text'],
+];
 
 export default function DispatchesPage() {
   const supabase = createClient();
@@ -81,6 +93,11 @@ export default function DispatchesPage() {
       q = applyTextFilter(q, 'order_number', filters.order_number);
       q = applyDateFilter(q, 'dispatched_at', filters.date);
       q = applyCustomFieldFilters(q, filters, customFields);
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, DISPATCH_EXTRA_COLUMNS);
+
 
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -145,16 +162,7 @@ export default function DispatchesPage() {
     { id: 'invoice_no', label: 'Invoice No', type: 'text', visibleByDefault: false, render: (d) => <span className="text-sm">{d.invoice_no}</span> },
     { id: 'subAmount', label: 'Sub Amount', type: 'text', render: (d) => <span className="font-medium">{formatCurrency(d.subAmount, defaultCurrency)}</span> },
     // The rest of what a dispatch stores, so Manage Column can offer it.
-    ...extraColumns<DispatchRow>([
-      ['transport_name', 'Transport Name', 'text'],
-      ['transport_contact_no', 'Transport Contact', 'text'],
-      ['tracking_number', 'Tracking No', 'text'],
-      ['lr_no', 'LR No', 'text'],
-      ['lr_date', 'LR Date', 'date'],
-      ['invoice_date', 'Invoice Date', 'date'],
-      ['dispatched_at', 'Dispatched On', 'date'],
-      ['notes', 'Notes', 'text'],
-    ]),
+    ...extraColumns<DispatchRow>(DISPATCH_EXTRA_COLUMNS),
   ];
 
   const visibleColumns = useMemo(() => {

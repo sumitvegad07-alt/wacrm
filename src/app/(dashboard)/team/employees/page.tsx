@@ -22,6 +22,8 @@ import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { REFERENCE_ROW_CAP } from "@/lib/table/reference-cap";
 import { getVisibleTableColumns } from "@/lib/custom-fields";
+import { extraColumns, type ExtraColumnSpec } from "@/lib/table/extra-columns";
+import { matchesColumnFilters } from "@/lib/table/match-filters";
 import type { CustomField } from "@/types";
 
 interface Employee {
@@ -48,6 +50,21 @@ interface Device {
   status: string;
   last_login: string;
 }
+
+/** Stored employee fields with no hand-written column, shown via Manage Column. */
+const EMPLOYEE_EXTRA_COLUMNS: readonly ExtraColumnSpec<Employee>[] = [
+  ["employee_code", "Employee Code", "text"],
+  ["email", "Email", "text"],
+  ["mobile", "Contact Number", "text"],
+  ["phone", "Phone", "text"],
+  ["department", "Department", "text"],
+  ["designation", "Designation", "text"],
+  ["branch", "Branch", "text"],
+  ["created_at", "Joined", "date"],
+];
+
+/** Built once: the match below needs them, and they never change. */
+const EMPLOYEE_EXTRA_DEFS = extraColumns<Employee>(EMPLOYEE_EXTRA_COLUMNS);
 
 export default function EmployeesPage() {
   const router = useRouter();
@@ -335,7 +352,12 @@ export default function EmployeesPage() {
       holidayFilters.length === 0 ||
       (effectiveListId !== undefined && holidayFilters.includes(effectiveListId));
 
-    return matchesSearch && matchesEmp && matchesStatus && matchesRole && matchesHoliday;
+    // The columns Manage Column offers for the rest of the stored fields.
+    const matchesExtra = matchesColumnFilters(e, filterState, EMPLOYEE_EXTRA_DEFS);
+
+    return (
+      matchesSearch && matchesEmp && matchesStatus && matchesRole && matchesHoliday && matchesExtra
+    );
   });
 
   const columns: ColumnDef<Employee>[] = useMemo(() => [
@@ -431,39 +453,8 @@ export default function EmployeesPage() {
    * All hidden by default, so nothing about the current table changes until
    * somebody ticks one.
    */
-  const extraColumns: ColumnDef<Employee>[] = useMemo(
-    () =>
-      (
-        [
-          ["employee_code", "Employee Code", "text"],
-          ["email", "Email", "text"],
-          ["mobile", "Contact Number", "text"],
-          ["phone", "Phone", "text"],
-          ["department", "Department", "text"],
-          ["designation", "Designation", "text"],
-          ["branch", "Branch", "text"],
-          ["created_at", "Joined", "date"],
-        ] as const
-      ).map(([id, label, type]) => ({
-        id,
-        label,
-        type,
-        visibleByDefault: false,
-        render: (emp: Employee) => {
-          const value = (emp as unknown as Record<string, unknown>)[id];
-          if (value === null || value === undefined || value === "") {
-            return <span className="text-muted-foreground">-</span>;
-          }
-          if (id === "created_at") {
-            return (
-              <span className="text-sm text-muted-foreground">
-                {new Date(String(value)).toLocaleDateString()}
-              </span>
-            );
-          }
-          return <span className="text-sm">{String(value)}</span>;
-        },
-      })),
+  const employeeExtraColumns = useMemo(
+    () => extraColumns<Employee>(EMPLOYEE_EXTRA_COLUMNS),
     [],
   );
 
@@ -475,8 +466,8 @@ export default function EmployeesPage() {
    * could ever appear.
    */
   const tableColumns = useMemo(
-    () => getVisibleTableColumns([...columns, ...extraColumns], customFields, employees),
-    [columns, extraColumns, customFields, employees],
+    () => getVisibleTableColumns([...columns, ...employeeExtraColumns], customFields, employees),
+    [columns, employeeExtraColumns, customFields, employees],
   );
 
   // Permission guard — safe here because every hook above has already run, so the

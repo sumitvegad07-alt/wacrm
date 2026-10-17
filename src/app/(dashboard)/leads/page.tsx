@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LeadForm } from "@/components/leads/lead-form";
@@ -35,7 +35,7 @@ import { useTableView } from "@/hooks/use-table-view";
 import { useServerTable } from "@/hooks/use-server-table";
 import { fetchAllPages } from "@/lib/table/export-all-pages";
 import type { ServerTableQuery } from "@/lib/table/server-query";
-import { applyArrayOverlapFilter, applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyInWithFallbackFilter, applyTextFilter } from "@/lib/table/apply-filters";
+import { applyArrayOverlapFilter, applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyInWithFallbackFilter, applyTextFilter, applyExtraColumnFilters } from "@/lib/table/apply-filters";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
@@ -56,6 +56,12 @@ interface Lead {
   is_converted: boolean;
   [key: string]: any; // To allow custom field keys (e.g., cf_uuid)
 }
+
+/** Stored leads fields with no hand-written column, shown via Manage Column. */
+const LEAD_EXTRA_COLUMNS: readonly ExtraColumnSpec<Lead>[] = [
+      ["estimated_value", "Estimated Value", "currency"],
+      ["is_converted", "Converted", "boolean"],
+];
 
 export default function LeadsPage() {
   const { account } = useAuth();
@@ -165,6 +171,11 @@ export default function LeadsPage() {
       if (Array.isArray(want) && want.length === 1) {
         q = q.eq("is_active", want[0] === "active");
       }
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, LEAD_EXTRA_COLUMNS);
+
 
       return q.order("created_at", { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -511,10 +522,7 @@ export default function LeadsPage() {
       }
     },
     // The rest of what a lead stores, so Manage Column can offer it.
-    ...extraColumns<Lead>([
-      ["estimated_value", "Estimated Value", "currency"],
-      ["is_converted", "Converted", "boolean"],
-    ]),
+    ...extraColumns<Lead>(LEAD_EXTRA_COLUMNS),
   ];
 
   // Transform base columns and append custom fields (controlled by admin show_in_table, sortable, filterable flags)

@@ -15,9 +15,9 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters } from '@/lib/table/apply-filters';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 import { isDateInFilter } from "@/lib/date-filters";
 import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
 import {
@@ -26,6 +26,15 @@ import {
   hasPoint,
   type MapPoint,
 } from "@/components/location-tracking/point-map-dialog";
+
+/** Stored visits fields with no hand-written column, shown via Manage Column. */
+const VISIT_EXTRA_COLUMNS: readonly ExtraColumnSpec<any>[] = [
+      ['notes', 'Visit Notes', 'text'],
+      ['target_type', 'Visited', 'text'],
+      ['check_in_method', 'Check-in Method', 'text'],
+      ['check_in_distance_m', 'Check-in Distance (m)', 'number'],
+      ['check_out_distance_m', 'Check-out Distance (m)', 'number'],
+];
 
 export default function CustomerVisitsPage() {
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
@@ -82,6 +91,11 @@ export default function CustomerVisitsPage() {
         endOfDay.setHours(23, 59, 59, 999);
         q = q.gte('check_in_at', startOfDay.toISOString()).lte('check_in_at', endOfDay.toISOString());
       }
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, VISIT_EXTRA_COLUMNS);
+
 
       return q.order('check_in_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -334,13 +348,7 @@ export default function CustomerVisitsPage() {
       )
     },
     // The rest of what a visit stores, so Manage Column can offer it.
-    ...extraColumns<any>([
-      ['notes', 'Visit Notes', 'text'],
-      ['target_type', 'Visited', 'text'],
-      ['check_in_method', 'Check-in Method', 'text'],
-      ['check_in_distance_m', 'Check-in Distance (m)', 'number'],
-      ['check_out_distance_m', 'Check-out Distance (m)', 'number'],
-    ]),
+    ...extraColumns<any>(VISIT_EXTRA_COLUMNS),
   ];
 
   /** buildQuery already applied the search and every column filter. */

@@ -14,7 +14,7 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
@@ -25,7 +25,7 @@ import { CustomField } from '@/types';
 import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
 import { PAYMENT_STATUSES, PAYMENT_SOURCES, getSourceLabel } from '@/lib/payments/statuses';
 import { PaymentStatusBadge } from '@/components/payments/payment-status-badge';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 
 interface PaymentRow {
   id: string;
@@ -52,6 +52,18 @@ const LEGAL_TO: Record<string, string[]> = {
 const BULK_ACTIONS = [
   { to: 'Approved', label: 'Approve', icon: CheckCircle2, variant: 'default' as const },
   { to: 'Rejected', label: 'Reject', icon: XCircle, variant: 'destructive' as const },
+];
+
+/** Stored payments fields with no hand-written column, shown via Manage Column. */
+const PAYMENT_EXTRA_COLUMNS: readonly ExtraColumnSpec<PaymentRow>[] = [
+      ['reference_number', 'Reference No', 'text'],
+      ['receipt_number', 'Receipt No', 'text'],
+      ['notes', 'Notes', 'text'],
+      ['approved_at', 'Approved On', 'date'],
+      ['rejection_reason', 'Rejection Reason', 'text'],
+      ['cancellation_reason', 'Cancellation Reason', 'text'],
+      ['erp_reference', 'ERP Reference', 'text'],
+      ['created_at', 'Created', 'date'],
 ];
 
 export default function PaymentsPage() {
@@ -117,6 +129,11 @@ export default function PaymentsPage() {
       q = applyInFilter(q, 'status', filters.status);
       q = applyDateFilter(q, 'payment_date', filters.payment_date);
       q = applyCustomFieldFilters(q, filters, customFields);
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, PAYMENT_EXTRA_COLUMNS);
+
 
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -294,16 +311,7 @@ export default function PaymentsPage() {
       ),
     },
     // The rest of what a payment stores, so Manage Column can offer it.
-    ...extraColumns<PaymentRow>([
-      ['reference_number', 'Reference No', 'text'],
-      ['receipt_number', 'Receipt No', 'text'],
-      ['notes', 'Notes', 'text'],
-      ['approved_at', 'Approved On', 'date'],
-      ['rejection_reason', 'Rejection Reason', 'text'],
-      ['cancellation_reason', 'Cancellation Reason', 'text'],
-      ['erp_reference', 'ERP Reference', 'text'],
-      ['created_at', 'Created', 'date'],
-    ]),
+    ...extraColumns<PaymentRow>(PAYMENT_EXTRA_COLUMNS),
   ];
 
   const handleInlineApprove = async (p: PaymentRow) => {

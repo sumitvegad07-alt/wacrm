@@ -100,6 +100,29 @@ export function applyArrayOverlapFilter<T>(query: T, column: string, value: unkn
   return (query as Builder).overlaps(column, list as readonly unknown[]) as T;
 }
 
+/**
+ * A numeric from/to range, as `[min, max]`.
+ *
+ * Money columns carried no filter at all, because a contains match on an
+ * amount misleads — searching 100 matches 1,100. Either end may be left blank:
+ * "over 10,000" is a filter with no upper bound, and zero is a real bound, so
+ * the test is "is this a number", not "is this truthy".
+ */
+export function applyRangeFilter<T>(query: T, column: string, value: unknown): T {
+  if (isEmptyFilterValue(value)) return query;
+  const [rawMin, rawMax] = Array.isArray(value) ? value : [value, undefined];
+  const min = Number(rawMin);
+  const max = Number(rawMax);
+  let next = query as Builder;
+  if (rawMin !== "" && rawMin !== null && rawMin !== undefined && Number.isFinite(min)) {
+    next = next.gte(column, min);
+  }
+  if (rawMax !== "" && rawMax !== null && rawMax !== undefined && Number.isFinite(max)) {
+    next = next.lte(column, max);
+  }
+  return next as T;
+}
+
 /** Date preset or custom range, matching the old `isDateInFilter`. */
 export function applyDateFilter<T>(query: T, column: string, value: unknown): T {
   if (isEmptyFilterValue(value)) return query;
@@ -182,4 +205,42 @@ export function customFieldFilterKey(
     .map((key) => `${key}:${customFields.find((f) => `cf_${f.id}` === key)?.field_type ?? "?"}`)
     .sort()
     .join("|");
+}
+
+/**
+ * Every `extraColumns` field, pushed into the query.
+ *
+ * Those columns exist so Manage Column can offer a stored field the screen
+ * never wrote a column for. Each carries a filter, and a filter that never
+ * reaches the query is a control that visibly does nothing — exactly what the
+ * permanent filter row was built to expose. This keeps the two in step: one
+ * spec list defines the columns and the filters together.
+ *
+ * A spec with a reader is skipped: its value is not stored under that column
+ * name, so the database has nothing to match on.
+ */
+export function applyExtraColumnFilters<T, R>(
+  query: T,
+  filters: Record<string, unknown>,
+  specs: readonly (readonly [string, string, string, ((row: R) => unknown)?])[],
+): T {
+  let next = query;
+  for (const [id, , kind, read] of specs) {
+    if (read) continue;
+    const value = filters?.[id];
+    if (isEmptyFilterValue(value)) continue;
+
+    if (kind === "currency" || kind === "number") {
+      next = applyRangeFilter(next, id, value);
+    } else if (kind === "date" || kind === "datetime") {
+      next = applyDateFilter(next, id, value);
+    } else if (kind === "boolean") {
+      const chosen = Array.isArray(value) ? value : [value];
+      // Yes and No together is the same as no filter at all.
+      if (chosen.length === 1) next = (next as Builder).eq(id, chosen[0] === "true") as T;
+    } else {
+      next = applyTextFilter(next, id, value);
+    }
+  }
+  return next;
 }

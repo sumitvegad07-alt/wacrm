@@ -20,7 +20,8 @@ import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { dateFilterToRange } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
+import { applyExtraColumnFilters } from '@/lib/table/apply-filters';
 import { OrderForm } from '@/components/orders/order-form';
 import { getVisibleTableColumns } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -96,6 +97,17 @@ const BULK_ACTIONS: { to: string; label: string; icon: typeof CheckCircle2; vari
   { to: 'Rejected', label: 'Reject', icon: XCircle, variant: 'destructive' },
   { to: 'Cancelled', label: 'Cancel', icon: Ban, variant: 'outline' },
   { to: 'Closed', label: 'Close Order', icon: CheckCircle2, variant: 'outline' },
+];
+
+/** Stored orders fields with no hand-written column, shown via Manage Column. */
+const ORDER_EXTRA_COLUMNS: readonly ExtraColumnSpec<OrderRow>[] = [
+      ['sub_total', 'Sub Total', 'currency'],
+      ['discount_total', 'Discount', 'currency'],
+      ['tax_total', 'Tax', 'currency'],
+      ['notes', 'Notes', 'text'],
+      ['gst_type', 'GST Type', 'text'],
+      ['party_gstin', 'Party GSTIN', 'text'],
+      ['created_at', 'Created', 'date'],
 ];
 
 export default function OrdersPage() {
@@ -183,6 +195,11 @@ export default function OrdersPage() {
         if (gte) q = q.gte('date', gte);
         if (lte) q = q.lte('date', lte);
       }
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, ORDER_EXTRA_COLUMNS);
+
 
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -390,15 +407,7 @@ export default function OrdersPage() {
     }] : []),
     // The rest of what an order stores, so Manage Column can offer it. All
     // hidden until somebody ticks one.
-    ...extraColumns<OrderRow>([
-      ['sub_total', 'Sub Total', 'currency'],
-      ['discount_total', 'Discount', 'currency'],
-      ['tax_total', 'Tax', 'currency'],
-      ['notes', 'Notes', 'text'],
-      ['gst_type', 'GST Type', 'text'],
-      ['party_gstin', 'Party GSTIN', 'text'],
-      ['created_at', 'Created', 'date'],
-    ]),
+    ...extraColumns<OrderRow>(ORDER_EXTRA_COLUMNS),
   ];
 
   const visibleColumns = useMemo(() => {

@@ -60,7 +60,7 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
@@ -72,7 +72,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { extraColumns } from '@/lib/table/extra-columns';
+import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 
 const PRIORITY_COLORS: Record<string, string> = {
   Low: 'bg-slate-600 text-white shadow-sm border-transparent',
@@ -88,6 +88,17 @@ const STATUS_COLORS: Record<string, string> = {
   Completed: 'bg-emerald-600 text-white shadow-sm border-transparent',
   Cancelled: 'bg-red-600 text-white shadow-sm border-transparent',
 };
+
+/** Stored tasks fields with no hand-written column, shown via Manage Column. */
+const TASK_EXTRA_COLUMNS: readonly ExtraColumnSpec<any>[] = [
+      ['description', 'Description', 'text'],
+      ['activity_type', 'Activity Type', 'text'],
+      ['start_date', 'Start Date', 'date'],
+      ['due_time', 'Due Time', 'text'],
+      ['reminder_date', 'Reminder Date', 'date'],
+      ['reminder_time', 'Reminder Time', 'text'],
+      ['created_at', 'Created', 'date'],
+];
 
 export default function TasksPage() {
   const supabase = createClient();
@@ -156,6 +167,11 @@ export default function TasksPage() {
 
       // "Hide completed" is a toolbar toggle, not a column filter.
       if (hideCompleted) q = q.not('status', 'in', '("Completed","Cancelled")');
+
+      // The columns Manage Column offers for the rest of the stored fields.
+
+      q = applyExtraColumnFilters(q, filters, TASK_EXTRA_COLUMNS);
+
 
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -412,15 +428,7 @@ export default function TasksPage() {
       }
     },
     // The rest of what a task stores, so Manage Column can offer it.
-    ...extraColumns<any>([
-      ['description', 'Description', 'text'],
-      ['activity_type', 'Activity Type', 'text'],
-      ['start_date', 'Start Date', 'date'],
-      ['due_time', 'Due Time', 'text'],
-      ['reminder_date', 'Reminder Date', 'date'],
-      ['reminder_time', 'Reminder Time', 'text'],
-      ['created_at', 'Created', 'date'],
-    ]),
+    ...extraColumns<any>(TASK_EXTRA_COLUMNS),
   ];
 
   const visibleColumns = useMemo(() => {

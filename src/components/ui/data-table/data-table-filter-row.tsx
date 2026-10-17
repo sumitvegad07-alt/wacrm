@@ -279,6 +279,121 @@ function SelectFilterCell({
 }
 
 /** Date presets, or a custom range. */
+/**
+ * A from/to pair, for amounts.
+ *
+ * Money columns used to carry no filter at all, because a contains match on an
+ * amount misleads: searching 100 matches 1,100. Either end may be left blank,
+ * so "over 10,000" and "under 500" are both expressible.
+ */
+function RangeFilterCell({
+  column,
+  value,
+  onChange,
+}: {
+  column: ColumnDef<unknown>;
+  value: unknown;
+  onChange: (id: string, value: unknown) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [min, max] = Array.isArray(value)
+    ? [String(value[0] ?? ''), String(value[1] ?? '')]
+    : ['', ''];
+
+  const commit = (nextMin: string, nextMax: string) =>
+    onChange(column.id, nextMin === '' && nextMax === '' ? null : [nextMin, nextMax]);
+
+  let summary: string | null = null;
+  if (min !== '' && max !== '') summary = `${min} – ${max}`;
+  else if (min !== '') summary = `≥ ${min}`;
+  else if (max !== '') summary = `≤ ${max}`;
+
+  return (
+    <div className="relative flex items-center">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          aria-label={`Filter by ${column.label}`}
+          className="border-border bg-background hover:bg-muted flex h-11 w-full min-w-[7rem] items-center gap-1 rounded border pr-7 pl-2 text-left text-xs transition-colors outline-none md:h-7"
+        >
+          {summary ? (
+            <span className={chipClass}>
+              <span className="truncate">{summary}</span>
+            </span>
+          ) : (
+            <>
+              <Search className="text-muted-foreground size-3.5 shrink-0" />
+              <span className="text-muted-foreground truncate">{column.label}</span>
+            </>
+          )}
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-56 p-3" sideOffset={6}>
+          <div className="border-border mb-3 border-b pb-2 text-sm font-medium">
+            Filter by {column.label}
+          </div>
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <label className="text-muted-foreground text-xs" htmlFor={`${column.id}-from`}>
+                From
+              </label>
+              <Input
+                id={`${column.id}-from`}
+                aria-label={`${column.label} from`}
+                type="number"
+                inputMode="decimal"
+                className="h-11 text-xs md:h-8"
+                value={min}
+                placeholder="Any"
+                onChange={(e) => commit(e.target.value, max)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-muted-foreground text-xs" htmlFor={`${column.id}-to`}>
+                To
+              </label>
+              <Input
+                id={`${column.id}-to`}
+                aria-label={`${column.label} to`}
+                type="number"
+                inputMode="decimal"
+                className="h-11 text-xs md:h-8"
+                value={max}
+                placeholder="Any"
+                onChange={(e) => commit(min, e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-border pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                onChange(column.id, null);
+                setOpen(false);
+              }}
+              className="text-muted-foreground h-11 text-xs md:h-7"
+            >
+              Clear
+            </Button>
+            <Button size="sm" className="h-11 text-xs md:h-7" onClick={() => setOpen(false)}>
+              Done
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+      <span className="pointer-events-none absolute right-1 flex items-center">
+        {summary ? (
+          <span className="pointer-events-auto">
+            <ClearButton label={column.label} onClear={() => onChange(column.id, null)} />
+          </span>
+        ) : (
+          <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
+        )}
+      </span>
+    </div>
+  );
+}
+
+
 function DateFilterCell({
   column,
   value,
@@ -356,10 +471,12 @@ function DateFilterCell({
               </div>
               <div className="space-y-2">
                 <div className="space-y-1">
-                  <label className="text-muted-foreground text-xs">
+                  <label className="text-muted-foreground text-xs" htmlFor={`${column.id}-start`}>
                     Start Date
                   </label>
                   <Input
+                    id={`${column.id}-start`}
+                    aria-label={`${column.label} start date`}
                     type="date"
                     className="h-11 md:h-8"
                     value={customStart}
@@ -369,10 +486,12 @@ function DateFilterCell({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-muted-foreground text-xs">
+                  <label className="text-muted-foreground text-xs" htmlFor={`${column.id}-end`}>
                     End Date
                   </label>
                   <Input
+                    id={`${column.id}-end`}
+                    aria-label={`${column.label} end date`}
                     type="date"
                     className="h-11 md:h-8"
                     value={customEnd}
@@ -453,6 +572,13 @@ export function DataTableFilterRow<T>({
           )}
           {column.type === 'select' && (
             <SelectFilterCell
+              column={column as ColumnDef<unknown>}
+              value={filterState[column.id]}
+              onChange={onFilterChange}
+            />
+          )}
+          {column.type === 'range' && (
+            <RangeFilterCell
               column={column as ColumnDef<unknown>}
               value={filterState[column.id]}
               onChange={onFilterChange}

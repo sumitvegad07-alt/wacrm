@@ -24,21 +24,19 @@ describe("extraColumns", () => {
     expect(cols.every((c) => c.visibleByDefault === false)).toBe(true);
   });
 
-  it("gives text and number fields a text filter, and dates a date filter", () => {
-    const [text, num, date] = extraColumns<Row>([
+  it("gives text a text filter, dates a date filter, and amounts a range", () => {
+    const [text, num, date, money] = extraColumns<Row>([
       ["notes", "Notes", "text"],
       ["qty", "Qty", "number"],
       ["due", "Due", "date"],
+      ["total", "Total", "currency"],
     ]);
     expect(text.type).toBe("text");
-    expect(num.type).toBe("text");
     expect(date.type).toBe("date");
-  });
-
-  it("leaves money unfilterable, because a contains match on an amount misleads", () => {
-    // Searching 100 would match 1,100. These want a range filter.
-    const [money] = extraColumns<Row>([["total", "Total", "currency"]]);
-    expect(money.type).toBeUndefined();
+    // A contains match on an amount misleads — searching 100 matches 1,100 —
+    // so amounts and counts get a from/to pair instead.
+    expect(num.type).toBe("range");
+    expect(money.type).toBe("range");
   });
 
   it("gives a yes/no field a pick list rather than a text box", () => {

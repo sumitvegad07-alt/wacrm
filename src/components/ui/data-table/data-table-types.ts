@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 
-export type ColumnFilterType = "text" | "select" | "date";
+export type ColumnFilterType = "text" | "select" | "date" | "range";
 
 export interface ColumnOption {
   label: string;

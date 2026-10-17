@@ -28,12 +28,12 @@ export type ExtraColumnSpec<T> = readonly [
 const dash = () => React.createElement("span", { className: "text-muted-foreground" }, "-");
 
 /**
- * Money gets no filter. A contains match on an amount misleads — searching
- * 100 matches 1,100 — and these want a range filter, which the filter row
- * does not offer yet.
+ * Money and counts get a from/to range. A contains match on an amount
+ * misleads — searching 100 matches 1,100 — so these were left unfilterable
+ * until the filter row learned ranges.
  */
 function filterTypeFor(kind: ExtraColumnKind): ColumnFilterType | undefined {
-  if (kind === "currency") return undefined;
+  if (kind === "currency" || kind === "number") return "range";
   if (kind === "date" || kind === "datetime") return "date";
   if (kind === "boolean") return "select";
   return "text";
