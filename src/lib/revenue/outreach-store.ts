@@ -11,7 +11,7 @@
 // hours late, which on this codebase is the DSR bug in another costume — see
 // the comment on localRangeToUtc. resolvePeriod("today", "Asia/Kolkata")
 // gives the local date; localRangeToUtc turns it into the two instants to
-// compare created_at against, with `to` exclusive.
+// compare sent_at against, with `to` exclusive.
 // ============================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -111,52 +111,84 @@ export async function readCounters(
   consecutiveFailures: number;
 }> {
   const today = localRangeToUtc(resolvePeriod("today", OUTREACH_TIMEZONE));
+  const staleCutoffIso = new Date(
+    Date.now() - CLAIM_STALE_MINUTES * 60_000,
+  ).toISOString();
 
+  // Every query here throws on error rather than returning null data. The
+  // throttle trusts whatever numbers it is handed, so a wrong number is more
+  // dangerous than an exception: a swallowed error would read as 0 sent today,
+  // no previous send and no failures, and every guard would wave the send
+  // through. A throw becomes a 500, the extension retries, and nothing is sent
+  // on a guess.
   const senderCampaigns = await admin
     .from("re_outreach_campaigns")
     .select("id")
-    .eq("sender_phone", senderPhone);
+    .eq("sender_phone", senderPhone)
+    .throwOnError();
 
   const ids = (senderCampaigns.data ?? []).map((row) => row.id as string);
   // A campaign that has not recorded a sender yet is still this one.
   if (!ids.includes(campaignId)) ids.push(campaignId);
 
-  const [sentTodayRes, lastSentRes, queuedRes, recentRes] = await Promise.all([
-    admin
-      .from("re_outreach_recipients")
-      .select("id", { count: "exact", head: true })
-      .in("campaign_id", ids)
-      .eq("status", "sent")
-      .eq("is_test", false)
-      .gte("sent_at", today.from)
-      .lt("sent_at", today.to),
-    admin
-      .from("re_outreach_recipients")
-      .select("sent_at")
-      .in("campaign_id", ids)
-      .eq("status", "sent")
-      .order("sent_at", { ascending: false })
-      .limit(1),
-    admin
-      .from("re_outreach_recipients")
-      .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .in("status", ["queued", "in_flight"]),
-    // Only `sent` and `failed` count; a skip is not a failure. Read a few more
-    // than the threshold so the run of failures can be measured, not guessed.
-    //
-    // Scoped to after the last resume: the rows that paused this campaign are
-    // still here once the founder has fixed whatever broke, and recounting
-    // them would re-pause the moment he pressed Start.
-    admin
-      .from("re_outreach_recipients")
-      .select("status")
-      .eq("campaign_id", campaignId)
-      .in("status", ["sent", "failed"])
-      .gt("claimed_at", failureStreakResetAt)
-      .order("claimed_at", { ascending: false })
-      .limit(MAX_CONSECUTIVE_FAILURES + 1),
-  ]);
+  const [sentTodayRes, lastSentRes, inFlightRes, queuedRes, recentRes] =
+    await Promise.all([
+      admin
+        .from("re_outreach_recipients")
+        .select("id", { count: "exact", head: true })
+        .in("campaign_id", ids)
+        .eq("status", "sent")
+        .eq("is_test", false)
+        .gte("sent_at", today.from)
+        .lt("sent_at", today.to)
+        .throwOnError(),
+      // Postgres sorts NULLs first in a DESC order, so a `sent` row with a null
+      // sent_at would win the limit and hide the real last send. Exclude them.
+      admin
+        .from("re_outreach_recipients")
+        .select("sent_at")
+        .in("campaign_id", ids)
+        .eq("status", "sent")
+        .not("sent_at", "is", null)
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .throwOnError(),
+      // A row claimed but not yet reported is a message that is probably in
+      // flight right now. If the gap only counted `sent`, a second /next
+      // arriving before the first result lands would see a stale timestamp and
+      // release the next recipient immediately — two messages back-to-back,
+      // which is the pattern the gap exists to prevent.
+      admin
+        .from("re_outreach_recipients")
+        .select("claimed_at")
+        .in("campaign_id", ids)
+        .eq("status", "in_flight")
+        .gt("claimed_at", staleCutoffIso)
+        .order("claimed_at", { ascending: false })
+        .limit(1)
+        .throwOnError(),
+      admin
+        .from("re_outreach_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId)
+        .in("status", ["queued", "in_flight"])
+        .throwOnError(),
+      // Only `sent` and `failed` count; a skip is not a failure. Read a few more
+      // than the threshold so the run of failures can be measured, not guessed.
+      //
+      // Scoped to after the last resume: the rows that paused this campaign are
+      // still here once the founder has fixed whatever broke, and recounting
+      // them would re-pause the moment he pressed Start.
+      admin
+        .from("re_outreach_recipients")
+        .select("status")
+        .eq("campaign_id", campaignId)
+        .in("status", ["sent", "failed"])
+        .gt("claimed_at", failureStreakResetAt)
+        .order("claimed_at", { ascending: false })
+        .limit(MAX_CONSECUTIVE_FAILURES + 1)
+        .throwOnError(),
+    ]);
 
   let consecutiveFailures = 0;
   for (const row of recentRes.data ?? []) {
@@ -164,9 +196,19 @@ export async function readCounters(
     consecutiveFailures++;
   }
 
-  const lastSentAt = lastSentRes.data?.[0]?.sent_at
+  const lastReported = lastSentRes.data?.[0]?.sent_at
     ? new Date(lastSentRes.data[0].sent_at as string)
     : null;
+  const lastClaimed = inFlightRes.data?.[0]?.claimed_at
+    ? new Date(inFlightRes.data[0].claimed_at as string)
+    : null;
+  // Whichever is later: the last reported send or the live claim.
+  const lastSentAt =
+    lastReported && lastClaimed
+      ? lastReported > lastClaimed
+        ? lastReported
+        : lastClaimed
+      : (lastReported ?? lastClaimed);
 
   return {
     sentToday: sentTodayRes.count ?? 0,
@@ -203,14 +245,25 @@ export async function claimNext(
   return row && row.id != null ? row : null;
 }
 
-/** Put a claimed row back when the send never happened. */
+/**
+ * Put a claimed row back when the send never happened.
+ *
+ * Only the agent that holds the claim may release it. If agent A stalls past
+ * the stale window, the row is requeued and agent B claims it, then A wakes up
+ * and releases: without the claimed_by check that would un-claim B's live
+ * send, the row could be claimed a third time, and the prospect would be
+ * messaged twice.
+ */
 export async function releaseClaim(
   admin: Admin,
   recipientId: number,
+  agentId: string,
 ): Promise<void> {
   await admin
     .from("re_outreach_recipients")
     .update({ status: "queued", claimed_by: null, claimed_at: null })
     .eq("id", recipientId)
-    .eq("status", "in_flight");
+    .eq("status", "in_flight")
+    .eq("claimed_by", agentId)
+    .throwOnError();
 }
