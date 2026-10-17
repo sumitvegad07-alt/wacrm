@@ -38,8 +38,6 @@
   }
   window.__ozzoShimInstalled = true;
 
-  const ready = () => window.WPP && window.WPP.isReady;
-
   window.addEventListener("message", async (event) => {
     // Ignore other windows and frames. This does NOT make the channel
     // trustworthy: any script in this same page, WhatsApp's own code included,
@@ -54,7 +52,25 @@
       window.postMessage({ __ozzo: "response", id: msg.id, ...payload }, "*");
 
     try {
-      if (!ready()) return reply({ outcome: "logged_out" });
+      // "WA-JS is broken" and "you are signed out" are different problems and
+      // must not share an answer. Reporting the first as the second pauses the
+      // campaign with "WhatsApp Web is not logged in" while a signed-in
+      // session sits on screen, which sends the founder looking in the wrong
+      // place — and a WhatsApp update breaking WA-JS is the failure the README
+      // tells him to expect.
+      //
+      // No WPP at all means the bundle did not take. The three-tick grace in
+      // background.js covers WhatsApp Web still loading, but nothing covers
+      // WA-JS being permanently broken, so that has to arrive as a failure.
+      if (!window.WPP) {
+        return reply({
+          outcome: "failed",
+          error: "WA-JS did not initialise on this page",
+        });
+      }
+      // WPP is there but not ready: this one really is a session that is not
+      // signed in, or is still coming up.
+      if (!window.WPP.isReady) return reply({ outcome: "logged_out" });
 
       if (msg.op === "whoami") {
         const me = window.WPP.whatsapp.UserPrefs.getMaybeMeUser();

@@ -25,6 +25,11 @@ const IDLE_POLL_SEC = 600;
 // too short re-opens the overlap.
 const LEASE_MS = 240_000;
 
+// Slack for a wall clock that steps backwards under a renewed lease. Big
+// enough for a routine NTP correction, far smaller than the stall the clamp
+// exists to escape.
+const CLOCK_SKEW_MS = 60_000;
+
 async function config() {
   const { token, baseUrl } = await chrome.storage.local.get(["token", "baseUrl"]);
   return { token, baseUrl: (baseUrl || "https://app.ozzo.co.in").replace(/\/+$/, "") };
@@ -120,6 +125,34 @@ async function onLoggedOut() {
   await sleep(60);
 }
 
+/**
+ * Gives a claimed recipient back untried.
+ *
+ * Called when this tick decided not to send after /next had already claimed
+ * and stamped the row - Stop pressed, or the lease lost to another tick.
+ * Without it the row sits in flight until the 15-minute sweep and is then
+ * recorded as a possible duplicate, burning a prospect who was never
+ * messaged.
+ */
+async function handBack(recipientId, senderPhone) {
+  try {
+    await post("result", { recipientId, outcome: "abandoned", senderPhone });
+  } catch (error) {
+    // Nothing left to do about it here, and the sweep plus the duplicate guard
+    // are the backstop. But put it where the founder can see it: the row will
+    // come back as a possible duplicate and he deserves to know why a prospect
+    // he never messaged was burned.
+    console.warn("[OZZO] could not hand back", recipientId, error);
+    await chrome.storage.local.set({
+      lastError:
+        "Could not hand recipient " +
+        recipientId +
+        " back: " +
+        ((error && error.message) || error),
+    });
+  }
+}
+
 async function tick() {
   // Nothing to do if Stop has been pressed. The watchdog below can outlive a
   // Stop, and without this check it would claim a recipient only to hand it
@@ -135,7 +168,16 @@ async function tick() {
   // stop in silence with the portal still showing "running". Every normal exit
   // replaces this alarm by name, so it costs nothing and only ever fires for a
   // tick that died. Longer than LEASE_MS, so it cannot race the lease.
-  chrome.alarms.create(ALARM, { delayInMinutes: (LEASE_MS + 60_000) / 60_000 });
+  // Awaited so the guarantee above is real rather than nearly real.
+  //
+  // It MAY fire while its own tick is still going: renewLease() below pushes
+  // the lease out as a slow tick progresses, so a tick's effective life is
+  // unbounded while the watchdog delay is fixed. That is safe, and is why the
+  // lease is what makes it safe rather than the delay: the tick the watchdog
+  // starts sees a live lease, backs off with sleep(30), and does no real work.
+  await chrome.alarms.create(ALARM, {
+    delayInMinutes: (LEASE_MS + 60_000) / 60_000,
+  });
 
   // One tick at a time. Start and a firing alarm both land here, and an alarm
   // chain can still be live when the founder presses Start again.
@@ -152,7 +194,12 @@ async function tick() {
   // an NTP step, a resume with a bad RTC, the date being changed by hand -
   // would otherwise park a lease years in the future and stall the loop for
   // good, with no way back but wiping extension storage.
-  if (leaseUntil > now && leaseUntil - now <= LEASE_MS) {
+  //
+  // CLOCK_SKEW_MS of slack, because renewLease() resets the headroom to
+  // exactly LEASE_MS on every call. Without the slack a two-second backwards
+  // NTP correction makes a freshly renewed lease look stale, and the tick that
+  // then takes it runs alongside the live one.
+  if (leaseUntil > now && leaseUntil - now <= LEASE_MS + CLOCK_SKEW_MS) {
     // Ask again rather than returning: this alarm is consumed, and the only
     // other thing that arms one is the tick holding the lease. If that tick
     // dies with the worker, a bare return would end the run in silence with
@@ -162,12 +209,16 @@ async function tick() {
   }
   await chrome.storage.local.set({ leaseUntil: now + LEASE_MS, leaseOwner: mine });
 
-  /** Pushes the lease out while a slow tick is still genuinely working. */
+  /**
+   * Pushes the lease out while a slow tick is still genuinely working.
+   * Returns false if the lease is no longer ours, which means another tick has
+   * taken over and this one must not act.
+   */
   const renewLease = async () => {
     const { leaseOwner } = await chrome.storage.local.get("leaseOwner");
-    if (leaseOwner === mine) {
-      await chrome.storage.local.set({ leaseUntil: Date.now() + LEASE_MS });
-    }
+    if (leaseOwner !== mine) return false;
+    await chrome.storage.local.set({ leaseUntil: Date.now() + LEASE_MS });
+    return true;
   };
 
   try {
@@ -251,30 +302,22 @@ async function tick() {
     // as a possible duplicate, burning a prospect who was never messaged. Hand
     // it back instead.
     if (!(await isRunning())) {
-      await post("result", {
-        recipientId: decision.recipientId,
-        outcome: "abandoned",
-        senderPhone: me.phone,
-      }).catch(async (error) => {
-        // Nothing left to do about it here, and the sweep plus the duplicate
-        // guard are the backstop. But put it where the founder can see it: the
-        // row will come back as a possible duplicate and he deserves to know
-        // why a prospect he never messaged was burned.
-        console.warn("[OZZO] could not hand back", decision.recipientId, error);
-        await chrome.storage.local.set({
-          lastError:
-            "Could not hand recipient " +
-            decision.recipientId +
-            " back: " +
-            ((error && error.message) || error),
-        });
-      });
+      await handBack(decision.recipientId, me.phone);
       return;
     }
 
     // The send is the longest single step; renew before it rather than relying
     // on whatever the lease has left.
-    await renewLease();
+    //
+    // And if the lease is gone, do not send. Losing it means another tick has
+    // taken over, so sending here is the unspaced pair the lease exists to
+    // prevent. This is the cheapest place to catch that, because it is the
+    // last moment before the one irreversible act in this file. Hand the
+    // recipient back exactly as the Stop branch does.
+    if (!(await renewLease())) {
+      await handBack(decision.recipientId, me.phone);
+      return;
+    }
 
     const result = await ask(tab, "send", {
       phone: decision.phone,

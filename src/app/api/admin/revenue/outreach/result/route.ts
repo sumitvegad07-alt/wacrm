@@ -64,6 +64,12 @@ export async function POST(req: NextRequest) {
     // Put the recipient back — it was never attempted. releaseClaim only acts
     // on a row this agent still holds in flight, so a retried or late
     // logged_out cannot requeue a message that has since been sent.
+    //
+    // This one stays ABOVE the two 409 guards below, unlike `abandoned`, and
+    // deliberately so: its job is to pause the campaign and tell the founder
+    // WhatsApp is signed out, and that has to work even for a row that was
+    // never issued or is no longer ours. A 409 here would swallow the only
+    // warning he gets. Do not "tidy" it down to join `abandoned`.
     await releaseClaim(admin, recipientId, agent.id);
     await admin
       .from("re_outreach_campaigns")
