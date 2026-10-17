@@ -1,198 +1,155 @@
 "use client";
 
-// ============================================================
-// WhatsApp outreach — founder page.
-//
-// This page does not send anything. The messages go out from the founder's own
-// WhatsApp Web tab, driven by the browser extension; the server decides when
-// each one may go. Everything here is a view of that: build a campaign, press
-// Start / Pause / Stop, and watch the counts.
-//
-// Closing this page does NOT stop a campaign. Only Pause and Stop do, or the
-// server's own dead-man switch.
-// ============================================================
+/**
+ * Upload a CSV, pick the column with the numbers, write the message, send.
+ *
+ * WHAT THIS REPLACED, AND WHY
+ *
+ * The first version of this screen built a campaign out of Lead Discovery:
+ * pick a run, pick states, pick districts, pick industries, preview a funnel,
+ * then create. The founder used it once end to end and said it was too
+ * confusing, so it is gone. Anything he wants to message now arrives as a CSV
+ * - Lead Discovery results included, exported first - and there is one path
+ * into the sender instead of two.
+ *
+ * What did NOT get simplified away, because none of it is ceremony:
+ *   - two to four wordings, because fifty identical messages a day is the
+ *     pattern spam detection looks for
+ *   - the suppression list, because it is how a STOP reply is honoured
+ *   - a test send, because the first real send should never be the first send
+ *   - the sending window, enforced at 10:00-18:30 IST on weekdays and shown
+ *     here as text with no control, because business hours look human
+ */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  Copy,
-  KeyRound,
-  Loader2,
-  MessageSquareText,
-  Pause,
-  Play,
-  Plus,
-  Square,
-  X,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { MultiSelect } from "@/components/ui/multi-select";
-import { Textarea } from "@/components/ui/textarea";
-import { listDistricts, listStates } from "@/lib/revenue/discovery-geography";
-import { DISCOVERY_INDUSTRIES } from "@/lib/revenue/discovery-taxonomy";
+  describeColumns,
+  extractRecipients,
+  parseCsv,
+  type CsvTable,
+} from "@/lib/revenue/outreach-csv";
 
-const API = "/api/admin/revenue/outreach";
+const GAP_CHOICES = [1, 2, 5, 10, 15] as const;
+const MAX_DAILY_CAP = 50;
 
-/** How often the page asks how a running campaign is getting on. */
-const POLL_MS = 15_000;
+/** Mirrors the API's own ceiling so the founder hears about it before uploading. */
+const MAX_CSV_ROWS = 20_000;
 
-/** The route's own default and the extension's slow-start both assume this. */
-const DEFAULT_DAILY_CAP = 80;
-
-const MIN_VARIANTS = 2;
-const MAX_VARIANTS = 4;
-
-interface Campaign {
+interface CampaignRow {
   id: string;
   name: string;
   status: string;
   daily_cap: number;
+  gap_min_sec: number;
+  gap_max_sec: number;
   paused_reason: string | null;
   sender_phone: string | null;
   created_at: string;
 }
 
-interface Agent {
+interface AgentRow {
   id: string;
   label: string;
   sender_phone: string | null;
-  sender_first_sent_on: string | null;
   last_seen_at: string | null;
   revoked_at: string | null;
 }
 
-interface RecentRow {
-  phone: string;
-  name: string | null;
-  status: string;
-  error: string | null;
-  sent_at: string | null;
-}
-
 interface Progress {
   counts: Record<string, number>;
-  recent: RecentRow[];
+  recent: {
+    phone: string;
+    name: string;
+    status: string;
+    error: string | null;
+    sent_at: string | null;
+  }[];
 }
 
-interface Funnel {
-  matched: number;
-  unusablePhone: number;
-  duplicate: number;
-  alreadySent: number;
-  suppressed: number;
-  toSend: number;
+interface Payload {
+  campaigns: CampaignRow[];
+  agents: AgentRow[];
+  progress: Progress | null;
 }
 
-/** What a section says after an action: the outcome, and any pieces refused. */
-interface Note {
-  tone: "ok" | "error";
-  text: string;
-  rejected?: string[];
+const ENDPOINT = "/api/admin/revenue/outreach";
+
+async function callApi<T>(body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data?.error ?? `Request failed (${response.status})`);
+    Object.assign(error, { payload: data });
+    throw error;
+  }
+  return data as T;
 }
 
-type Section = "agents" | "campaign" | "state" | "test" | "suppress";
-
-/** Order and wording for the eight recipient statuses. */
-const STATUS_LABELS: Array<[string, string]> = [
-  ["queued", "Waiting"],
-  ["in_flight", "Sending now"],
-  ["sent", "Sent"],
-  ["failed", "Failed"],
-  ["skipped_not_on_whatsapp", "Not on WhatsApp"],
-  ["skipped_blocked", "Blocked"],
-  ["skipped_suppressed", "Do not contact"],
-  ["skipped_already_sent", "Already messaged"],
-];
-
-const STATUS_WORDS: Record<string, string> = Object.fromEntries(STATUS_LABELS);
+function statusWord(status: string): string {
+  switch (status) {
+    case "sent":
+      return "Sent";
+    case "failed":
+      return "Failed";
+    case "queued":
+      return "Waiting";
+    case "in_flight":
+      return "Sending now";
+    case "skipped_not_on_whatsapp":
+      return "Not on WhatsApp";
+    case "skipped_blocked":
+      return "Blocked you";
+    case "skipped_suppressed":
+      return "Opted out";
+    case "skipped_already_sent":
+      return "Messaged before";
+    default:
+      return status;
+  }
+}
 
 export default function OutreachClient() {
-  const router = useRouter();
+  const [data, setData] = useState<Payload | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [problem, setProblem] = useState("");
 
-  // ── server state ──
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [progress, setProgress] = useState<Progress | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  // ---- the upload ----
+  const [fileName, setFileName] = useState("");
+  const [table, setTable] = useState<CsvTable | null>(null);
+  const [firstRowIsHeader, setFirstRowIsHeader] = useState(true);
+  const [phoneColumn, setPhoneColumn] = useState<number | null>(null);
+  const [nameColumn, setNameColumn] = useState<number | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  const [busy, setBusy] = useState<string | null>(null);
-  const [notes, setNotes] = useState<Partial<Record<Section, Note>>>({});
+  // ---- the message ----
+  const [variants, setVariants] = useState(["", ""]);
+  const [gapMinutes, setGapMinutes] = useState<number>(5);
+  const [dailyCap, setDailyCap] = useState(String(MAX_DAILY_CAP));
 
-  // ── new campaign form ──
-  const [name, setName] = useState("");
-  const [states, setStates] = useState<string[]>([]);
-  const [districts, setDistricts] = useState<string[]>([]);
-  const [industries, setIndustries] = useState<string[]>([]);
-  const [variants, setVariants] = useState<string[]>(["", ""]);
-  const [dailyCap, setDailyCap] = useState(String(DEFAULT_DAILY_CAP));
-  const [funnel, setFunnel] = useState<Funnel | null>(null);
-
-  // ── other boxes ──
-  const [agentLabel, setAgentLabel] = useState("");
-  const [minted, setMinted] = useState<{ label: string; token: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  // ---- the extras ----
+  const [newToken, setNewToken] = useState("");
+  const [suppressText, setSuppressText] = useState("");
   const [testNumbers, setTestNumbers] = useState("");
-  const [suppressNumbers, setSuppressNumbers] = useState("");
-  const [suppressNote, setSuppressNote] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const stateOptions = useMemo(() => listStates(), []);
-  const industryOptions = useMemo(
-    () => DISCOVERY_INDUSTRIES.map((i) => ({ value: i.value, label: i.label })),
-    [],
+  const live = data?.campaigns.find(
+    (c) => c.status === "running" || c.status === "paused",
   );
 
-  /** Districts of every chosen state, so two states never hide each other's. */
-  const districtOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const out: Array<{ value: string; label: string }> = [];
-    for (const state of states) {
-      for (const d of listDistricts(state)) {
-        if (seen.has(d.value)) continue;
-        seen.add(d.value);
-        out.push(d);
-      }
-    }
-    return out.sort((a, b) => a.label.localeCompare(b.label));
-  }, [states]);
-
-  /** Districts of a state that is no longer chosen are dropped at render. */
-  const activeDistricts = useMemo(() => {
-    const allowed = new Set(districtOptions.map((o) => o.value));
-    return districts.filter((d) => allowed.has(d));
-  }, [districts, districtOptions]);
-
-  /**
-   * `isStale` lets a caller drop an answer that arrives after it stopped caring,
-   * the way discover-client's `live` flag does: a slow poll that lands after
-   * Pause must not paint "running" over the state the founder just set.
-   */
-  const load = useCallback(async (isStale?: () => boolean) => {
+  const load = useCallback(async () => {
     try {
-      const res = await fetch(API);
-      const payload = await res.json().catch(() => null);
-      if (isStale?.()) return;
-      if (!res.ok || !payload) {
-        setLoadError(payload?.error ?? "Could not load the outreach page");
-        return;
-      }
-      setCampaigns(payload.campaigns ?? []);
-      setAgents(payload.agents ?? []);
-      setProgress(payload.progress ?? null);
-      setLoadError(null);
-      setNow(Date.now());
-    } catch {
-      if (isStale?.()) return;
-      setLoadError("Could not reach the server");
-    } finally {
-      setLoaded(true);
+      const response = await fetch(ENDPOINT, { cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.error ?? "Could not load");
+      setData(body as Payload);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error));
     }
   }, []);
 
@@ -200,872 +157,673 @@ export default function OutreachClient() {
     void load();
   }, [load]);
 
-  // Keeps "last spoke N seconds ago" honest between fetches.
+  // Poll only while something is actually moving, so an idle tab is not
+  // hitting the production database every five seconds for ever.
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 5000);
+    if (!live || live.status !== "running") return;
+    const timer = setInterval(() => void load(), 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [live, load]);
 
-  const anyRunning = campaigns.some((c) => c.status === "running");
-
-  // Polling, not a subscription, like Lead Discovery. It runs ONLY while a
-  // campaign is running: a paused or stopped one changes only when the founder
-  // does something, and he reloads after each action himself.
-  useEffect(() => {
-    if (!anyRunning) return;
-
-    let live = true;
-    let inFlight = false;
-    const timer = setInterval(() => {
-      // Skip the tick if the last request has not come back, so a slow server
-      // is not buried under overlapping polls.
-      if (inFlight) return;
-      inFlight = true;
-      void load(() => !live).finally(() => {
-        inFlight = false;
-      });
-    }, POLL_MS);
-
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [anyRunning, load]);
-
-  /** One request, one outcome. Never throws, so callers only handle results. */
-  async function call(body: Record<string, unknown>) {
-    try {
-      const res = await fetch(API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data: Record<string, any> = await res.json().catch(() => ({}));
-      return { ok: res.ok, data };
-    } catch {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return { ok: false, data: { error: "Could not reach the server" } as Record<string, any> };
-    }
-  }
-
-  function say(section: Section, note: Note | null) {
-    setNotes((prev) => ({ ...prev, [section]: note ?? undefined }));
-  }
-
-  // ── which campaign the progress and test boxes are about ──
-  const openCampaigns = campaigns.filter(
-    (c) => c.status === "draft" || c.status === "running" || c.status === "paused",
+  const columns = useMemo(
+    () => (table ? describeColumns(table, firstRowIsHeader) : []),
+    [table, firstRowIsHeader],
   );
-  const activeCampaign = campaigns.find((c) => c.status === "running" || c.status === "paused");
-  const current =
-    openCampaigns.find((c) => c.id === selectedId) ?? activeCampaign ?? openCampaigns[0] ?? null;
 
-  // The server counts recipients for one campaign only, the running or paused
-  // one. Showing those numbers under a different campaign's name would be wrong.
-  const currentProgress = current && activeCampaign && current.id === activeCampaign.id ? progress : null;
+  const chosen = useMemo(() => {
+    if (!table || phoneColumn === null) return [];
+    return extractRecipients(table, firstRowIsHeader, phoneColumn, nameColumn);
+  }, [table, firstRowIsHeader, phoneColumn, nameColumn]);
 
-  // ── actions ──
-
-  function filters() {
-    return {
-      ...(states.length ? { states } : {}),
-      ...(activeDistricts.length ? { districts: activeDistricts } : {}),
-      ...(industries.length ? { industries } : {}),
-    };
-  }
-
-  async function preview() {
-    setBusy("preview");
-    say("campaign", null);
-    const { ok, data } = await call({ action: "preview", filters: filters() });
-    setBusy(null);
-    if (!ok) {
-      setFunnel(null);
-      say("campaign", { tone: "error", text: data.error ?? "Could not preview that selection" });
-      return;
-    }
-    setFunnel(data.funnel ?? null);
-  }
-
-  async function create() {
-    setBusy("create");
-    say("campaign", null);
-    const { ok, data } = await call({
-      action: "create",
-      name: name.trim(),
-      variants: variants.map((v) => v.trim()).filter(Boolean),
-      dailyCap: Number(dailyCap),
-      filters: filters(),
-    });
-    setBusy(null);
-    if (!ok) {
-      say("campaign", { tone: "error", text: data.error ?? "Could not create the campaign" });
-      return;
-    }
-    setFunnel(data.funnel ?? null);
-    setSelectedId(data.campaignId ?? null);
-    setName("");
-    setVariants(["", ""]);
-    say("campaign", {
-      tone: "ok",
-      text: `Campaign created with ${fmt(data.funnel?.toSend ?? 0)} people. It is a draft: nothing is sent until you press Start.`,
-    });
-    await load();
-  }
-
-  async function setCampaignState(campaignId: string, status: "running" | "paused" | "stopped") {
-    if (
-      status === "stopped" &&
-      !window.confirm("Stop this campaign for good? A stopped campaign cannot be started again.")
-    ) {
-      return;
-    }
-    // Start is the action that begins messaging the whole list from the
-    // business number, so it asks like Stop does.
-    if (
-      status === "running" &&
-      !window.confirm(
-        "Start sending from this campaign? Messages go out to real prospects.",
-      )
-    ) {
-      return;
-    }
-    setBusy(status);
-    say("state", null);
-    const { ok, data } = await call({ action: "state", campaignId, status });
-    setBusy(null);
-    // A 409 here is the server explaining why the move is not allowed, such as
-    // pressing Start twice. It is shown as it came, never swallowed.
-    if (!ok) say("state", { tone: "error", text: data.error ?? "Could not change the campaign" });
-    await load();
-  }
-
-  async function testSend() {
-    if (!current) return;
-    setBusy("test");
-    say("test", null);
-    const { ok, data } = await call({
-      action: "testSend",
-      campaignId: current.id,
-      numbers: testNumbers,
-    });
-    setBusy(null);
-    if (!ok) {
-      say("test", {
-        tone: "error",
-        text: data.error ?? "Could not queue the test",
-        rejected: data.rejected,
-      });
-      return;
-    }
-    const already: string[] = data.alreadyQueued ?? [];
-    const queued: number = data.queued ?? 0;
-    const alreadyText = already.length
-      ? ` ${already.length} already queued on this campaign — each number can be tested once per campaign (${already.join(", ")}).`
-      : "";
-    say("test", {
-      // Nothing queued is not a success, even though the server answered 200.
-      tone: queued > 0 ? "ok" : "error",
-      text: `${queued} test number${queued === 1 ? "" : "s"} queued on "${current.name}".${alreadyText}`,
-      rejected: data.rejected,
-    });
-    // Only what was refused stays in the box, so he can fix it and press again.
-    if (!data.rejected?.length) setTestNumbers("");
-    await load();
-  }
-
-  async function suppress() {
-    setBusy("suppress");
-    say("suppress", null);
-    const { ok, data } = await call({
-      action: "suppress",
-      numbers: suppressNumbers,
-      note: suppressNote.trim(),
-    });
-    setBusy(null);
-    if (!ok) {
-      say("suppress", {
-        tone: "error",
-        text: data.error ?? "Could not add those numbers",
-        rejected: data.rejected,
-      });
-      return;
-    }
-    say("suppress", {
-      tone: "ok",
-      text: `${data.added} number${data.added === 1 ? "" : "s"} added to do-not-contact.`,
-      rejected: data.rejected,
-    });
-    // Whatever was refused stays in the box; everything that went in is cleared.
-    setSuppressNumbers(data.rejected?.length ? data.rejected.join("\n") : "");
-    setFunnel(null);
-  }
-
-  async function mintAgent() {
-    setBusy("mint");
-    say("agents", null);
-    setCopied(false);
-    const { ok, data } = await call({ action: "mintAgent", label: agentLabel.trim() });
-    setBusy(null);
-    if (!ok || !data.token) {
-      say("agents", { tone: "error", text: data.error ?? "Could not create a token" });
-      return;
-    }
-    setMinted({ label: agentLabel.trim() || "This computer", token: data.token });
-    setAgentLabel("");
-    await load();
-  }
-
-  async function revokeAgent(agent: Agent) {
-    if (
-      !window.confirm(
-        `Revoke "${agent.label}"? That computer stops working at once and cannot be switched back on.`,
-      )
-    ) {
-      return;
-    }
-    setBusy(`revoke-${agent.id}`);
-    say("agents", null);
-    const { ok, data } = await call({ action: "revokeAgent", agentId: agent.id });
-    setBusy(null);
-    if (!ok) say("agents", { tone: "error", text: data.error ?? "Could not revoke that token" });
-    await load();
-  }
-
-  async function copyToken() {
-    if (!minted) return;
+  async function onFile(file: File) {
+    setProblem("");
+    setNotice("");
     try {
-      await navigator.clipboard.writeText(minted.token);
-      setCopied(true);
-    } catch {
-      // Clipboard blocked: the field is selectable, so he can copy it by hand.
-      setCopied(false);
+      const text = await file.text();
+      const parsed = parseCsv(text);
+      if (!parsed.header.length) {
+        setProblem("That file looks empty.");
+        return;
+      }
+      setTable(parsed);
+      setFileName(file.name);
+      setPhoneColumn(null);
+      setNameColumn(null);
+
+      // A guess, not a decision: the founder still has to confirm the column,
+      // and the sample value next to it is what tells him whether the guess
+      // was right.
+      const guess = describeColumns(parsed, true).find(
+        (c) =>
+          /phone|mobile|contact|number|whatsapp/i.test(c.label) ||
+          /^[+ ]?\d[\d\s-]{8,}$/.test(c.sample),
+      );
+      if (guess) setPhoneColumn(guess.index);
+      const nameGuess = describeColumns(parsed, true).find((c) =>
+        /name|company|firm|business/i.test(c.label),
+      );
+      if (nameGuess) setNameColumn(nameGuess.index);
+    } catch (error) {
+      setProblem(
+        `Could not read that file: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
-  function setVariant(index: number, value: string) {
-    setVariants((prev) => prev.map((v, i) => (i === index ? value : v)));
+  function resetUpload() {
+    setTable(null);
+    setFileName("");
+    setPhoneColumn(null);
+    setNameColumn(null);
+    if (fileInput.current) fileInput.current.value = "";
   }
 
-  const filledVariants = variants.filter((v) => v.trim() !== "").length;
-  const capNumber = Number(dailyCap);
-  const capOk = Number.isInteger(capNumber) && capNumber >= 1 && capNumber <= 500;
-  const canCreate =
-    name.trim() !== "" && filledVariants >= MIN_VARIANTS && capOk && busy === null;
+  const filledVariants = variants.map((v) => v.trim()).filter(Boolean);
+  const canSend =
+    !busy &&
+    chosen.length > 0 &&
+    filledVariants.length >= 2 &&
+    !live;
+
+  async function startSending() {
+    if (chosen.length > MAX_CSV_ROWS) {
+      setProblem(
+        `That file has ${chosen.length.toLocaleString()} numbers. The most this will take at once is ${MAX_CSV_ROWS.toLocaleString()}.`,
+      );
+      return;
+    }
+    const ok = window.confirm(
+      `Send to ${chosen.length.toLocaleString()} numbers from ${fileName}?\n\n` +
+        `These are real WhatsApp messages from whichever number Chrome is signed in as. ` +
+        `Up to ${dailyCap} a day, about ${gapMinutes} minute${gapMinutes === 1 ? "" : "s"} apart, 10:00am to 6:30pm on weekdays.`,
+    );
+    if (!ok) return;
+
+    setBusy(true);
+    setProblem("");
+    setNotice("");
+    try {
+      const created = await callApi<{
+        campaignId: string;
+        funnel: Record<string, number>;
+        rejected: string[];
+        rejectedCount: number;
+      }>({
+        action: "create",
+        name: fileName || "CSV upload",
+        rows: chosen,
+        variants: filledVariants,
+        dailyCap: Number(dailyCap),
+        gapMinutes,
+      });
+
+      await callApi({
+        action: "state",
+        campaignId: created.campaignId,
+        status: "running",
+      });
+
+      const f = created.funnel;
+      const skipped: string[] = [];
+      if (f.alreadySent) skipped.push(`${f.alreadySent} messaged before`);
+      if (f.suppressed) skipped.push(`${f.suppressed} opted out`);
+      if (f.duplicate) skipped.push(`${f.duplicate} duplicate`);
+      if (created.rejectedCount) skipped.push(`${created.rejectedCount} not valid numbers`);
+
+      setNotice(
+        `Started. ${f.toSend.toLocaleString()} will be messaged` +
+          (skipped.length ? `; skipped ${skipped.join(", ")}.` : ".") +
+          " Keep WhatsApp Web open and press Start sending in the extension.",
+      );
+      resetUpload();
+      await load();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function act(body: Record<string, unknown>, success: string) {
+    setBusy(true);
+    setProblem("");
+    setNotice("");
+    try {
+      await callApi(body);
+      setNotice(success);
+      await load();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const counts = data?.progress?.counts ?? {};
+  const doneCount = (counts.sent ?? 0) + (counts.failed ?? 0);
+  const totalCount = Object.values(counts).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
-      <div>
-        <button
-          onClick={() => router.push("/admin")}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Dashboard
-        </button>
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2 mt-2">
-          <MessageSquareText className="h-5 w-5" />
-          WhatsApp outreach
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Sends your message to the leads from Lead Discovery, one at a time, from your own
-          WhatsApp number.
+    <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+      <header>
+        <h1 className="text-2xl font-semibold">WhatsApp sender</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Upload a CSV, pick the column with the phone numbers, write the message, send.
+          Sends 10:00am&ndash;6:30pm, Monday to Friday, up to {MAX_DAILY_CAP} a day.
         </p>
-      </div>
+      </header>
 
-      {/* ── The standing note ── */}
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300 flex gap-2">
-        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-        <span>
-          <b>Keep WhatsApp Web open in another tab.</b> The messages are sent from that tab. Closing
-          this page does <b>not</b> stop a campaign — only Pause or Stop does.
-        </span>
-      </div>
+      {loadError ? (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          {loadError}
+        </p>
+      ) : null}
+      {problem ? (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm whitespace-pre-wrap">
+          {problem}
+        </p>
+      ) : null}
+      {notice ? (
+        <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+          {notice}
+        </p>
+      ) : null}
 
-      {loadError && <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>}
-
-      {/* ── 1. Extension status ── */}
-      <Panel
-        title="Extension"
-        hint="Each computer that sends needs its own token. The extension signs in with it."
-      >
-        {!loaded ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : agents.length === 0 ? (
-          // A failed load also leaves this empty; saying "none set up" under the
-          // error banner would be wrong.
-          loadError ? null : (
-            <p className="text-sm text-muted-foreground">
-              No extension is set up yet. Make a token below and paste it into the extension.
-            </p>
-          )
-        ) : (
-          <ul className="divide-y divide-border">
-            {agents.map((agent) => (
-              <li key={agent.id} className="py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1">
-                <div className="flex-1 min-w-[12rem]">
-                  <p className="text-sm font-medium text-foreground">
-                    {agent.label}
-                    {agent.revoked_at && (
-                      <span className="ml-2 text-xs font-normal text-red-600 dark:text-red-400">
-                        Revoked
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {agent.sender_phone
-                      ? `Number ${agent.sender_phone}`
-                      : "No number yet — it appears after the first message"}
-                  </p>
-                </div>
-                <p className="text-xs text-muted-foreground">{lastSpoke(agent, now)}</p>
-                {!agent.revoked_at && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy !== null}
-                    onClick={() => void revokeAgent(agent)}
-                  >
-                    {busy === `revoke-${agent.id}` ? (
-                      <Loader2 className="animate-spin" />
-                    ) : (
-                      <X />
-                    )}
-                    Revoke
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="flex flex-wrap items-end gap-2 pt-1">
-          <div className="flex-1 min-w-[12rem] space-y-1.5">
-            <Label htmlFor="agent-label">Name for this computer</Label>
-            <Input
-              id="agent-label"
-              value={agentLabel}
-              onChange={(e) => setAgentLabel(e.target.value)}
-              placeholder="e.g. Office laptop"
-              maxLength={60}
-            />
-          </div>
-          <Button disabled={busy !== null} onClick={() => void mintAgent()}>
-            {busy === "mint" ? <Loader2 className="animate-spin" /> : <KeyRound />}
-            Mint token
-          </Button>
-        </div>
-
-        {minted && (
-          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-            <p className="text-sm text-foreground">
-              <b>Token for &ldquo;{minted.label}&rdquo;.</b> This is the only time you will see
-              this. Copy it now and paste it into the extension. If you lose it, revoke it and make
-              a new one.
-            </p>
+      {/* ---------------- live campaign ---------------- */}
+      {live ? (
+        <section className="rounded-lg border p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-medium">
+                {live.status === "running" ? "Sending now" : "Paused"}
+                {": "}
+                {live.name}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {doneCount.toLocaleString()} of {totalCount.toLocaleString()} done
+                {live.sender_phone ? ` · from ${live.sender_phone}` : ""}
+                {` · about ${Math.round(live.gap_min_sec / 60)}-${Math.round(
+                  live.gap_max_sec / 60,
+                )} min apart · ${live.daily_cap}/day`}
+              </p>
+            </div>
             <div className="flex gap-2">
-              <Input
-                readOnly
-                value={minted.token}
-                aria-label="New token"
-                onFocus={(e) => e.currentTarget.select()}
-                className="font-mono"
-              />
-              <Button variant="outline" onClick={() => void copyToken()}>
-                {copied ? <Check /> : <Copy />}
-                {copied ? "Copied" : "Copy"}
-              </Button>
-              <Button
-                variant="ghost"
+              {live.status === "running" ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    act(
+                      { action: "state", campaignId: live.id, status: "paused" },
+                      "Paused.",
+                    )
+                  }
+                  className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                >
+                  Pause
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    act(
+                      { action: "state", campaignId: live.id, status: "running" },
+                      "Running again.",
+                    )
+                  }
+                  className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                >
+                  Resume
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={busy}
                 onClick={() => {
-                  setMinted(null);
-                  setCopied(false);
+                  if (!window.confirm("Stop this campaign for good? It cannot be resumed."))
+                    return;
+                  void act(
+                    { action: "state", campaignId: live.id, status: "stopped" },
+                    "Stopped.",
+                  );
                 }}
+                className="rounded-md border border-destructive/40 px-3 py-1.5 text-sm disabled:opacity-50"
               >
-                I have saved it
-              </Button>
+                Stop
+              </button>
             </div>
           </div>
-        )}
-        <NoteView note={notes.agents} />
-      </Panel>
 
-      {/* ── 4. Progress (placed high: it is what he returns to) ── */}
-      <Panel
-        title="Progress"
-        hint={
-          anyRunning
-            ? "Refreshes every 15 seconds while a campaign is running."
-            : "Refreshes only while a campaign is running."
-        }
-      >
-        {!loaded ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : !current ? (
-          loadError ? null : campaigns.length > 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No campaign is running or waiting. Latest: {campaigns[0].name} (
-              {campaigns[0].status}).
+          {live.paused_reason ? (
+            <p className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
+              {live.paused_reason}
             </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No campaign yet. Build one below, then come back here to start it.
+          ) : null}
+
+          <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            {Object.entries(counts)
+              .filter(([, n]) => n > 0)
+              .map(([status, n]) => (
+                <div key={status} className="flex gap-1">
+                  <dt className="text-muted-foreground">{statusWord(status)}:</dt>
+                  <dd className="font-medium">{n.toLocaleString()}</dd>
+                </div>
+              ))}
+          </dl>
+
+          {data?.progress?.recent?.length ? (
+            <ul className="mt-3 space-y-1 text-sm">
+              {data.progress.recent.map((r) => (
+                <li key={`${r.phone}-${r.sent_at ?? ""}`} className="flex gap-2">
+                  <span className="font-mono">{r.phone}</span>
+                  <span className="text-muted-foreground">{statusWord(r.status)}</span>
+                  {r.error ? (
+                    <span className="text-muted-foreground">&mdash; {r.error}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <div className="mt-4 border-t pt-3">
+            <label className="block text-sm font-medium" htmlFor="test">
+              Send a test to your own number
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Up to three numbers. Test messages jump the queue and ignore the daily
+              limit, so you can check the wording before the rest go out.
             </p>
-          )
-        ) : (
+            <div className="mt-2 flex gap-2">
+              <input
+                id="test"
+                value={testNumbers}
+                onChange={(e) => setTestNumbers(e.target.value)}
+                placeholder="9876543210"
+                className="flex-1 rounded-md border px-3 py-1.5 text-sm"
+              />
+              <button
+                type="button"
+                disabled={busy || !testNumbers.trim()}
+                onClick={async () => {
+                  await act(
+                    {
+                      action: "testSend",
+                      campaignId: live.id,
+                      numbers: testNumbers,
+                    },
+                    "Test queued. It goes out on the extension's next check.",
+                  );
+                  setTestNumbers("");
+                }}
+                className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+              >
+                Send test
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* ---------------- step 1: the file ---------------- */}
+      <section className="rounded-lg border p-4">
+        <h2 className="font-medium">1. Your list</h2>
+
+        {!table ? (
           <>
-            <div className="flex flex-wrap items-center gap-3">
-              {openCampaigns.length > 1 ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              A CSV file with the phone numbers in one of the columns. Indian mobile
+              numbers, with or without +91.
+            </p>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".csv,text/csv,text/plain"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void onFile(file);
+              }}
+              className="mt-3 block w-full text-sm"
+            />
+          </>
+        ) : (
+          <div className="mt-3 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm">
+                <span className="font-medium">{fileName}</span>{" "}
+                <span className="text-muted-foreground">
+                  &mdash; {table.rows.length.toLocaleString()} rows,{" "}
+                  {table.header.length} columns
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={resetUpload}
+                className="rounded-md border px-2 py-1 text-xs"
+              >
+                Choose a different file
+              </button>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={firstRowIsHeader}
+                onChange={(e) => setFirstRowIsHeader(e.target.checked)}
+              />
+              The first row is a header, not a contact
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium" htmlFor="phoneCol">
+                  Which column has the phone numbers?
+                </label>
                 <select
-                  value={current.id}
-                  onChange={(e) => setSelectedId(e.target.value)}
-                  aria-label="Campaign"
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm min-w-0"
+                  id="phoneCol"
+                  value={phoneColumn ?? ""}
+                  onChange={(e) =>
+                    setPhoneColumn(e.target.value === "" ? null : Number(e.target.value))
+                  }
+                  className="mt-1 w-full rounded-md border px-3 py-1.5 text-sm"
                 >
-                  {openCampaigns.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.status})
+                  <option value="">Choose a column&hellip;</option>
+                  {columns.map((c) => (
+                    <option key={c.index} value={c.index}>
+                      {c.label}
+                      {c.sample ? ` — e.g. ${c.sample}` : ""}
                     </option>
                   ))}
                 </select>
-              ) : (
-                <p className="text-sm font-semibold text-foreground">{current.name}</p>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {statusWord(current.status)} · up to {current.daily_cap} a day
-                {current.sender_phone ? ` · from ${current.sender_phone}` : ""}
-              </span>
-              <div className="flex gap-2 ml-auto">
-                <Button
-                  disabled={
-                    busy !== null || (current.status !== "draft" && current.status !== "paused")
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium" htmlFor="nameCol">
+                  Name column <span className="font-normal">(optional)</span>
+                </label>
+                <select
+                  id="nameCol"
+                  value={nameColumn ?? ""}
+                  onChange={(e) =>
+                    setNameColumn(e.target.value === "" ? null : Number(e.target.value))
                   }
-                  onClick={() => void setCampaignState(current.id, "running")}
+                  className="mt-1 w-full rounded-md border px-3 py-1.5 text-sm"
                 >
-                  {busy === "running" ? <Loader2 className="animate-spin" /> : <Play />}
-                  Start
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={busy !== null || current.status !== "running"}
-                  onClick={() => void setCampaignState(current.id, "paused")}
-                >
-                  {busy === "paused" ? <Loader2 className="animate-spin" /> : <Pause />}
-                  Pause
-                </Button>
-                <Button
-                  variant="destructive"
-                  disabled={busy !== null}
-                  onClick={() => void setCampaignState(current.id, "stopped")}
-                >
-                  {busy === "stopped" ? <Loader2 className="animate-spin" /> : <Square />}
-                  Stop
-                </Button>
+                  <option value="">Don&apos;t use a name</option>
+                  {columns.map((c) => (
+                    <option key={c.index} value={c.index}>
+                      {c.label}
+                      {c.sample ? ` — e.g. ${c.sample}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <NoteView note={notes.state} />
-
-            {/* How the founder learns the dead-man switch fired. */}
-            {current.status === "paused" && current.paused_reason && (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 flex gap-2">
-                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>
-                  <b>Paused: </b>
-                  {current.paused_reason}
-                </span>
-              </div>
-            )}
-            {current.status === "paused" && !current.paused_reason && (
-              <p className="text-sm text-muted-foreground">Paused by you.</p>
-            )}
-
-            {currentProgress ? (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {STATUS_LABELS.map(([key, label]) => (
-                    <Stat key={key} label={label} value={fmt(currentProgress.counts[key] ?? 0)} />
-                  ))}
-                </div>
-
-                <div className="rounded-lg border border-border overflow-hidden">
-                  <p className="px-4 py-2 text-xs font-medium text-muted-foreground bg-muted/40">
-                    Last {currentProgress.recent.length || 10} results, newest first
+            {phoneColumn !== null ? (
+              <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                <p className="font-medium">
+                  {chosen.length.toLocaleString()} numbers found in that column
+                </p>
+                {chosen.length ? (
+                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                    {chosen.slice(0, 3).map((r, i) => (
+                      <li key={i} className="font-mono text-xs">
+                        {r.phone}
+                        {r.name ? `  (${r.name})` : ""}
+                      </li>
+                    ))}
+                    {chosen.length > 3 ? (
+                      <li className="text-xs">
+                        &hellip;and {(chosen.length - 3).toLocaleString()} more
+                      </li>
+                    ) : null}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-muted-foreground">
+                    That column looks empty. Try another one.
                   </p>
-                  {currentProgress.recent.length === 0 ? (
-                    <p className="px-4 py-3 text-sm text-muted-foreground">
-                      Nothing has been tried yet.
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <tbody>
-                          {currentProgress.recent.map((row, i) => (
-                            <tr key={`${row.phone}-${i}`} className="border-t border-border">
-                              <td className="px-4 py-2 text-foreground whitespace-nowrap">
-                                {row.name || "—"}
-                                <span className="block text-xs text-muted-foreground">
-                                  {row.phone}
-                                </span>
-                              </td>
-                              <td className="px-4 py-2 text-foreground whitespace-nowrap">
-                                {statusWord(row.status)}
-                                {row.error && (
-                                  <span className="block text-xs text-red-600 dark:text-red-400 whitespace-normal">
-                                    {row.error}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-4 py-2 text-right text-xs text-muted-foreground whitespace-nowrap">
-                                {row.sent_at ? whenShort(row.sent_at) : ""}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {current.status === "draft"
-                  ? "This campaign has not started. Counts appear here once you press Start."
-                  : activeCampaign && activeCampaign.id !== current.id
-                    ? `Counts are shown only for the running campaign, "${activeCampaign.name}".`
-                    : "No counts to show."}
-              </p>
-            )}
-          </>
-        )}
-      </Panel>
-
-      {/* ── 2. New campaign ── */}
-      <Panel
-        title="New campaign"
-        hint="Pick who to message. Leave a box empty to include everyone."
-      >
-        <div className="space-y-1.5">
-          <Label htmlFor="campaign-name">Campaign name</Label>
-          <Input
-            id="campaign-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Seed dealers, Karnataka"
-            maxLength={120}
-          />
-        </div>
-
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Field label={`States (${states.length})`}>
-            <MultiSelect
-              options={stateOptions}
-              selectedValues={states}
-              onChange={(next) => {
-                setStates(next);
-                setFunnel(null);
-              }}
-              searchable
-              placeholder="All states"
-            />
-          </Field>
-          <Field label={`Industries (${industries.length})`}>
-            <MultiSelect
-              options={industryOptions}
-              selectedValues={industries}
-              onChange={(next) => {
-                setIndustries(next);
-                setFunnel(null);
-              }}
-              searchable
-              placeholder="All industries"
-            />
-          </Field>
-        </div>
-
-        <Field label={`Districts (${activeDistricts.length} of ${districtOptions.length})`}>
-          <MultiSelect
-            options={districtOptions}
-            selectedValues={activeDistricts}
-            onChange={(next) => {
-              setDistricts(next);
-              setFunnel(null);
-            }}
-            disabled={states.length === 0}
-            searchable
-            placeholder={states.length === 0 ? "Pick a state first…" : "All districts"}
-          />
-        </Field>
-
-        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm space-y-2">
-          {funnel ? (
-            <p className="text-foreground">
-              <b>{fmt(funnel.matched)}</b> matched ·{" "}
-              {fmt(funnel.unusablePhone)} no usable number · {fmt(funnel.duplicate)} duplicates ·{" "}
-              {fmt(funnel.alreadySent)} already messaged · {fmt(funnel.suppressed)} suppressed ·{" "}
-              <b>{fmt(funnel.toSend)}</b> to send
-            </p>
-          ) : (
-            <p className="text-muted-foreground">
-              Press Preview to see how many people this reaches.
-            </p>
-          )}
-          <Button variant="outline" disabled={busy !== null} onClick={() => void preview()}>
-            {busy === "preview" && <Loader2 className="animate-spin" />}
-            Preview
-          </Button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <Label>Wordings ({MIN_VARIANTS} to {MAX_VARIANTS})</Label>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Each person gets one of these, so the messages are not all identical. You can use{" "}
-              <code>{"{name}"}</code>, <code>{"{city}"}</code> and <code>{"{industry}"}</code>; they
-              are filled in for each person. The line &ldquo;Reply STOP and I won&apos;t message you
-              again.&rdquo; is added to every message automatically.
-            </p>
-          </div>
-          {variants.map((text, i) => (
-            <div key={i} className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor={`variant-${i}`} className="text-xs text-muted-foreground">
-                  Wording {i + 1}
-                </Label>
-                {variants.length > MIN_VARIANTS && (
-                  <button
-                    type="button"
-                    onClick={() => setVariants((prev) => prev.filter((_, j) => j !== i))}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    Remove
-                  </button>
                 )}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Numbers that aren&apos;t valid, anyone who opted out, and anyone already
+                  messaged by an earlier run are removed when you press send. You&apos;ll be
+                  told how many.
+                </p>
               </div>
-              <Textarea
+            ) : null}
+          </div>
+        )}
+      </section>
+
+      {/* ---------------- step 2: the message ---------------- */}
+      <section className="rounded-lg border p-4">
+        <h2 className="font-medium">2. Your message</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Write the same message two different ways, so all {MAX_DAILY_CAP} a day
+          aren&apos;t identical &mdash; that is the main thing that gets a number banned.
+          Write <code className="rounded bg-muted px-1">{"{name}"}</code> where the
+          person&apos;s name should go. An opt-out line is added automatically.
+        </p>
+
+        <div className="mt-3 space-y-3">
+          {variants.map((value, i) => (
+            <div key={i}>
+              <label className="block text-sm font-medium" htmlFor={`variant-${i}`}>
+                Wording {i + 1}
+                {i < 2 ? "" : " (optional)"}
+              </label>
+              <textarea
                 id={`variant-${i}`}
-                value={text}
-                onChange={(e) => setVariant(i, e.target.value)}
-                placeholder="Hi {name}, …"
                 rows={3}
+                value={value}
+                onChange={(e) =>
+                  setVariants((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))
+                }
+                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                placeholder={
+                  i === 0
+                    ? "Hi {name}, I run OZZO — field-sales software for teams like yours. Worth a quick look?"
+                    : "Hello {name}, we build OZZO, a field-sales app. Can I send you a 2-minute overview?"
+                }
               />
             </div>
           ))}
-          {variants.length < MAX_VARIANTS && (
-            <Button
-              variant="ghost"
-              size="sm"
+          {variants.length < 4 ? (
+            <button
+              type="button"
               onClick={() => setVariants((prev) => [...prev, ""])}
+              className="rounded-md border px-3 py-1.5 text-sm"
             >
-              <Plus />
-              Add a wording
-            </Button>
-          )}
+              Add another wording
+            </button>
+          ) : null}
         </div>
+      </section>
 
-        <div className="max-w-xs space-y-1.5">
-          <Label htmlFor="daily-cap">Messages per day</Label>
-          <Input
-            id="daily-cap"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={500}
-            value={dailyCap}
-            onChange={(e) => setDailyCap(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            A new number is held below this for its first weeks, whatever you enter.
-          </p>
+      {/* ---------------- step 3: the speed ---------------- */}
+      <section className="rounded-lg border p-4">
+        <h2 className="font-medium">3. How fast</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium" htmlFor="gap">
+              Gap between messages
+            </label>
+            <select
+              id="gap"
+              value={gapMinutes}
+              onChange={(e) => setGapMinutes(Number(e.target.value))}
+              className="mt-1 w-full rounded-md border px-3 py-1.5 text-sm"
+            >
+              {GAP_CHOICES.map((m) => (
+                <option key={m} value={m}>
+                  {m} minute{m === 1 ? "" : "s"}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Varied by about a fifth either way, so the timing doesn&apos;t look
+              automated.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium" htmlFor="cap">
+              Most per day
+            </label>
+            <input
+              id="cap"
+              type="number"
+              min={1}
+              max={MAX_DAILY_CAP}
+              value={dailyCap}
+              onChange={(e) => setDailyCap(e.target.value)}
+              className="mt-1 w-full rounded-md border px-3 py-1.5 text-sm"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {MAX_DAILY_CAP} is the limit. A new number starts at 20 on day one and 40
+              on day two by itself.
+            </p>
+          </div>
         </div>
+      </section>
 
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={!canCreate} onClick={() => void create()}>
-            {busy === "create" && <Loader2 className="animate-spin" />}
-            Create
-          </Button>
-        </div>
-        <NoteView note={notes.campaign} />
-      </Panel>
-
-      {/* ── 3. Test send ── */}
-      <Panel
-        title="Test send"
-        hint="These go through the same path as a real send, but skip the cap and the window."
-      >
-        {current ? (
-          <p className="text-xs text-muted-foreground">
-            Goes with the campaign &ldquo;{current.name}&rdquo; ({current.status}), so it uses that
-            campaign&apos;s wordings. It is sent even before you press Start, and only the test
-            numbers are messaged. The extension must be running with WhatsApp Web open.
+      {/* ---------------- send ---------------- */}
+      <section className="rounded-lg border p-4">
+        {live ? (
+          <p className="text-sm text-muted-foreground">
+            &ldquo;{live.name}&rdquo; is {live.status}. Stop it before starting another
+            list.
           </p>
         ) : (
-          <p className="text-sm text-muted-foreground">Create a campaign first.</p>
+          <>
+            <button
+              type="button"
+              disabled={!canSend}
+              onClick={() => void startSending()}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {busy ? "Starting…" : `Start sending to ${chosen.length.toLocaleString()}`}
+            </button>
+            {!chosen.length ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Upload a file and choose the phone column first.
+              </p>
+            ) : filledVariants.length < 2 ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Write at least two wordings first.
+              </p>
+            ) : null}
+          </>
         )}
-        <div className="space-y-1.5">
-          <Label htmlFor="test-numbers">Up to three numbers</Label>
-          <Textarea
-            id="test-numbers"
-            value={testNumbers}
-            onChange={(e) => setTestNumbers(e.target.value)}
-            placeholder={"+91 98765 43210\n+91 91234 56789"}
-            rows={3}
-          />
-          <p className="text-xs text-muted-foreground">
-            Separate numbers with a new line, a comma or a semicolon — not a space, so{" "}
-            <code>+91 98765 43210</code> stays one number.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          disabled={!current || testNumbers.trim() === "" || busy !== null}
-          onClick={() => void testSend()}
-        >
-          {busy === "test" && <Loader2 className="animate-spin" />}
-          Send test
-        </Button>
-        <NoteView note={notes.test} />
-      </Panel>
+      </section>
 
-      {/* ── 5. Do not contact ── */}
-      <Panel
-        title="Do not contact"
-        hint="Anyone who replied STOP. Nothing reads replies automatically, so this is the only way they get removed."
-      >
-        <div className="space-y-1.5">
-          <Label htmlFor="suppress-numbers">Numbers to remove</Label>
-          <Textarea
-            id="suppress-numbers"
-            value={suppressNumbers}
-            onChange={(e) => setSuppressNumbers(e.target.value)}
-            placeholder={"+91 98765 43210\n+91 91234 56789"}
-            rows={4}
-          />
-          <p className="text-xs text-muted-foreground">
-            Separate numbers with a new line, a comma or a semicolon — not a space, so{" "}
-            <code>+91 98765 43210</code> stays one number. Check WhatsApp for replies regularly and
-            paste them here.
-          </p>
-        </div>
-        <div className="space-y-1.5 max-w-md">
-          <Label htmlFor="suppress-note">Note (optional)</Label>
-          <Input
-            id="suppress-note"
-            value={suppressNote}
-            onChange={(e) => setSuppressNote(e.target.value)}
-            placeholder="e.g. Replied STOP on 17 Oct"
-          />
-        </div>
-        <Button
-          variant="outline"
-          disabled={suppressNumbers.trim() === "" || busy !== null}
-          onClick={() => void suppress()}
-        >
-          {busy === "suppress" && <Loader2 className="animate-spin" />}
-          Add to do-not-contact
-        </Button>
-        <NoteView note={notes.suppress} />
-      </Panel>
-    </div>
-  );
-}
+      {/* ---------------- the extension's token ---------------- */}
+      <section className="rounded-lg border p-4">
+        <h2 className="font-medium">Chrome extension</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          The extension does the actual sending through WhatsApp Web. It needs a token
+          from here, pasted into its options page once.
+        </p>
 
-/** "1,240" — Indian grouping, like the rest of the revenue tools. */
-function fmt(value: number): string {
-  return value.toLocaleString("en-IN");
-}
+        {newToken ? (
+          <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+            <p className="text-sm font-medium">
+              Copy this now &mdash; it is not shown again.
+            </p>
+            <code className="mt-1 block break-all font-mono text-xs">{newToken}</code>
+            <button
+              type="button"
+              onClick={() => setNewToken("")}
+              className="mt-2 rounded-md border px-2 py-1 text-xs"
+            >
+              Done
+            </button>
+          </div>
+        ) : null}
 
-function statusWord(status: string): string {
-  return STATUS_WORDS[status] ?? status.replace(/_/g, " ");
-}
-
-function whenShort(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-/** "Last spoke 12 seconds ago", scaled to something readable. */
-function lastSpoke(agent: Agent, now: number): string {
-  if (agent.revoked_at) return "Switched off";
-  if (!agent.last_seen_at) return "Has not spoken yet";
-  const seconds = Math.max(0, Math.round((now - new Date(agent.last_seen_at).getTime()) / 1000));
-  if (seconds < 90) return `Last spoke ${seconds} second${seconds === 1 ? "" : "s"} ago`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 90) return `Last spoke ${minutes} minutes ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `Last spoke ${hours} hours ago`;
-  return `Last spoke ${Math.round(hours / 24)} days ago`;
-}
-
-function Panel({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="bg-card border border-border rounded-xl p-5 space-y-4">
-      <div>
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        {hint && <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-card border border-border rounded-xl px-4 py-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-lg font-bold text-foreground mt-0.5">{value}</p>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
-    </div>
-  );
-}
-
-/** An action's outcome, with the pieces the server refused listed by name. */
-function NoteView({ note }: { note?: Note }) {
-  if (!note) return null;
-  const tone =
-    note.tone === "error"
-      ? "text-red-600 dark:text-red-400"
-      : "text-emerald-700 dark:text-emerald-400";
-  return (
-    <div className="space-y-1.5 text-sm" role={note.tone === "error" ? "alert" : "status"}>
-      <p className={tone}>{note.text}</p>
-      {note.rejected && note.rejected.length > 0 && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-800 dark:text-amber-200">
-          <p className="font-medium">
-            {note.rejected.length} could not be used and {note.rejected.length === 1 ? "was" : "were"}{" "}
-            NOT used:
-          </p>
-          <ul className="mt-1 list-disc pl-5 text-xs space-y-0.5">
-            {note.rejected.map((piece, i) => (
-              <li key={`${piece}-${i}`} className="break-all">
-                {piece}
+        <ul className="mt-3 space-y-1 text-sm">
+          {(data?.agents ?? [])
+            .filter((a) => !a.revoked_at)
+            .map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{a.label}</span>
+                <span className="text-muted-foreground">
+                  {a.sender_phone ? `sends from ${a.sender_phone}` : "not used yet"}
+                  {a.last_seen_at
+                    ? ` · last seen ${new Date(a.last_seen_at).toLocaleString()}`
+                    : ""}
+                </span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    if (!window.confirm(`Revoke "${a.label}"? The extension stops.`))
+                      return;
+                    void act({ action: "revokeAgent", agentId: a.id }, "Revoked.");
+                  }}
+                  className="rounded-md border px-2 py-0.5 text-xs disabled:opacity-50"
+                >
+                  Revoke
+                </button>
               </li>
             ))}
-          </ul>
-        </div>
-      )}
+        </ul>
+
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setProblem("");
+            setNotice("");
+            try {
+              const made = await callApi<{ token: string }>({
+                action: "mintAgent",
+                label: `Chrome ${new Date().toLocaleDateString()}`,
+              });
+              setNewToken(made.token);
+              await load();
+            } catch (error) {
+              setProblem(error instanceof Error ? error.message : String(error));
+            } finally {
+              setBusy(false);
+            }
+          }}
+          className="mt-3 rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          Create a token
+        </button>
+      </section>
+
+      {/* ---------------- suppression ---------------- */}
+      <section className="rounded-lg border p-4">
+        <h2 className="font-medium">Never message these</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          When someone replies STOP, paste their number here. They are skipped by every
+          campaign from then on, including lists you upload later. One per line.
+        </p>
+        <textarea
+          rows={3}
+          value={suppressText}
+          onChange={(e) => setSuppressText(e.target.value)}
+          placeholder={"9876543210\n+91 91234 56789"}
+          className="mt-2 w-full rounded-md border px-3 py-2 text-sm"
+        />
+        <button
+          type="button"
+          disabled={busy || !suppressText.trim()}
+          onClick={async () => {
+            await act(
+              { action: "suppress", numbers: suppressText, note: "Replied STOP" },
+              "Added to the never-message list.",
+            );
+            setSuppressText("");
+          }}
+          className="mt-2 rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          Add
+        </button>
+      </section>
     </div>
   );
 }

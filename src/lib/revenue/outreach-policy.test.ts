@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_DAILY_CAP,
+  GAP_CHOICES_MIN,
+  MAX_DAILY_CAP,
+  gapFromMinutes,
   LONG_BREAK_MAX_SEC,
   LONG_BREAK_MIN_SEC,
   MAX_POLL_WAIT_SEC,
@@ -146,16 +149,66 @@ describe("daysBetween / daysSending", () => {
 });
 
 describe("warmUpCap", () => {
+  // An explicit cap, not DEFAULT_DAILY_CAP: these pin the shape of the ramp,
+  // and tying them to the constant made them fail the day the founder lowered
+  // it to 50 - which told us nothing about the ramp.
   it("opens at 20 and climbs 20 a day", () => {
-    expect(warmUpCap(1, DEFAULT_DAILY_CAP)).toBe(20);
-    expect(warmUpCap(2, DEFAULT_DAILY_CAP)).toBe(40);
-    expect(warmUpCap(3, DEFAULT_DAILY_CAP)).toBe(60);
+    expect(warmUpCap(1, 200)).toBe(20);
+    expect(warmUpCap(2, 200)).toBe(40);
+    expect(warmUpCap(3, 200)).toBe(60);
   });
 
   it("never exceeds the cap the founder set", () => {
-    expect(warmUpCap(4, DEFAULT_DAILY_CAP)).toBe(80);
-    expect(warmUpCap(99, DEFAULT_DAILY_CAP)).toBe(80);
+    expect(warmUpCap(4, 80)).toBe(80);
+    expect(warmUpCap(99, 80)).toBe(80);
     expect(warmUpCap(99, 30)).toBe(30);
+  });
+
+  it("reaches the 50 cap on day three and stops there", () => {
+    // The ramp the founder will actually see: 20, 40, then 50 for ever.
+    expect(warmUpCap(1, DEFAULT_DAILY_CAP)).toBe(20);
+    expect(warmUpCap(2, DEFAULT_DAILY_CAP)).toBe(40);
+    expect(warmUpCap(3, DEFAULT_DAILY_CAP)).toBe(50);
+    expect(warmUpCap(99, DEFAULT_DAILY_CAP)).toBe(50);
+  });
+});
+
+describe("the daily cap", () => {
+  it("is 50, and nothing may raise it", () => {
+    // Both pinned deliberately. The founder asked for 50 after his first real
+    // run; a later edit that quietly restored 80 should break a test, not a
+    // WhatsApp account.
+    expect(DEFAULT_DAILY_CAP).toBe(50);
+    expect(MAX_DAILY_CAP).toBe(50);
+  });
+});
+
+describe("gapFromMinutes", () => {
+  it("centres a band on the chosen gap", () => {
+    expect(gapFromMinutes(5)).toEqual({ gapMinSec: 240, gapMaxSec: 360 });
+  });
+
+  it("covers every choice offered, and all of them are slower than the old default", () => {
+    for (const minutes of GAP_CHOICES_MIN) {
+      const { gapMinSec, gapMaxSec } = gapFromMinutes(minutes);
+      expect(gapMinSec).toBeLessThan(gapMaxSec);
+      // The column is `check (gap_min_sec >= 5)`.
+      expect(gapMinSec).toBeGreaterThanOrEqual(5);
+      // The old default floor was 45s; every choice must be gentler than that.
+      expect(gapMinSec).toBeGreaterThanOrEqual(45);
+      expect(Math.round((gapMinSec + gapMaxSec) / 2)).toBe(minutes * 60);
+    }
+  });
+
+  it("never returns a gap the database would reject", () => {
+    // Guards a future smaller option rather than today's list.
+    expect(gapFromMinutes(0).gapMinSec).toBeGreaterThanOrEqual(5);
+    expect(gapFromMinutes(0.01).gapMinSec).toBeGreaterThanOrEqual(5);
+  });
+
+  it("is not metronomic, which is the whole point of the band", () => {
+    const { gapMinSec, gapMaxSec } = gapFromMinutes(1);
+    expect(gapMaxSec - gapMinSec).toBeGreaterThan(0);
   });
 });
 
@@ -312,11 +365,18 @@ describe("decide", () => {
   });
 
   it("waits at the campaign's own cap once the number is fully warm", () => {
-    expect(decide({ ...base, sentToday: 80 }).kind).toBe("wait");
+    // An explicit cap rather than whatever base carries, so this keeps testing
+    // the boundary and not the current value of DEFAULT_DAILY_CAP.
+    expect(decide({ ...base, dailyCap: 80, sentToday: 80 }).kind).toBe("wait");
   });
 
   it("still sends one short of the cap", () => {
-    expect(decide({ ...base, sentToday: 79 }).kind).toBe("send");
+    expect(decide({ ...base, dailyCap: 80, sentToday: 79 }).kind).toBe("send");
+  });
+
+  it("waits at 50, which is the cap the founder actually runs", () => {
+    expect(decide({ ...base, sentToday: 50 }).kind).toBe("wait");
+    expect(decide({ ...base, sentToday: 49 }).kind).toBe("send");
   });
 
   it("lets a lower campaign cap bind before the ramp does", () => {

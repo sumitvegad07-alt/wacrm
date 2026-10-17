@@ -13,7 +13,12 @@ import { normalisePhone } from "@/lib/revenue/discovery-query";
 import { mintToken } from "@/lib/revenue/outreach-agents";
 import { selectEligible, type DiscoveryLeadRow } from "@/lib/revenue/outreach-eligibility";
 import { CAMPAIGN_COLUMNS, type Admin } from "@/lib/revenue/outreach-store";
-import { DEFAULT_DAILY_CAP } from "@/lib/revenue/outreach-policy";
+import {
+  DEFAULT_DAILY_CAP,
+  GAP_CHOICES_MIN,
+  MAX_DAILY_CAP,
+  gapFromMinutes,
+} from "@/lib/revenue/outreach-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +35,6 @@ export const maxDuration = 300;
  * readStoredRows in discovery-runner.ts does it.
  */
 const PAGE = 1000;
-
-/** A ceiling on the leads one campaign can be built from. */
-const MAX_LEADS = 20_000;
 
 /**
  * A ceiling on the sent and suppressed lists. These are the opt-out guarantee,
@@ -54,13 +56,6 @@ const RECIPIENT_STATUSES = [
   "skipped_suppressed",
   "skipped_already_sent",
 ] as const;
-
-interface Filters {
-  runId?: string;
-  states?: string[];
-  districts?: string[];
-  industries?: string[];
-}
 
 type PageResult = PromiseLike<{ data: unknown[] | null; error: unknown }>;
 
@@ -88,26 +83,6 @@ async function readAll<T>(
 }
 
 /** The lead rows a selection matches. Read through the service role only. */
-async function readLeads(admin: Admin, filters: Filters): Promise<DiscoveryLeadRow[]> {
-  return readAll<DiscoveryLeadRow>(
-    (from, to) => {
-      let query = admin
-        .from("re_discovery_leads")
-        .select("place_id, phone, name, city, district, state, industry")
-        .neq("phone", "");
-
-      if (filters.runId) query = query.eq("run_id", filters.runId);
-      if (filters.states?.length) query = query.in("state", filters.states);
-      if (filters.districts?.length) query = query.in("district", filters.districts);
-      if (filters.industries?.length) query = query.in("industry", filters.industries);
-
-      return query.order("id", { ascending: true }).range(from, to);
-    },
-    MAX_LEADS,
-    "truncate",
-  );
-}
-
 async function readLists(admin: Admin) {
   const [sent, suppressed] = await Promise.all([
     readAll<{ phone: string }>(
@@ -160,18 +135,77 @@ function parsePhones(raw: unknown): { phones: string[]; rejected: string[] } {
     .filter(Boolean);
 
   for (const piece of pieces) {
-    // An email must not become a phone number out of whatever digits it holds.
-    if (piece.includes("@")) {
-      rejected.push(piece);
-      continue;
-    }
-    const phone = normalisePhone(piece);
-    const valid = /^91\d{10}$/.test(phone) || /^(1800|1860|1600)\d{6,8}$/.test(phone);
-    if (valid) phones.push(phone);
+    const phone = sendablePhone(piece);
+    if (phone) phones.push(phone);
     else rejected.push(piece);
   }
 
   return { phones, rejected };
+}
+
+/**
+ * The one place that decides whether a string is a number we will message.
+ *
+ * Shared by the pasted-numbers box and the CSV upload so the two cannot drift:
+ * a rule that lives in two places is a rule that will one day accept a number
+ * here and refuse it there, and the founder would have no way to tell which
+ * was right.
+ *
+ * Returns the normalised number, or "" if it is not sendable.
+ */
+function sendablePhone(piece: string): string {
+  // An email must not become a phone number out of whatever digits it holds.
+  if (piece.includes("@")) return "";
+  const phone = normalisePhone(piece);
+  const valid = /^91\d{10}$/.test(phone) || /^(1800|1860|1600)\d{6,8}$/.test(phone);
+  return valid ? phone : "";
+}
+
+/** How many CSV rows one upload may carry. */
+const MAX_CSV_ROWS = 20_000;
+
+/**
+ * Turns the rows the upload screen sends into the shape selectEligible wants.
+ *
+ * The geography columns stay empty: a CSV carries a phone and maybe a name,
+ * and every one of those columns on re_outreach_recipients already defaults to
+ * ''. Nothing downstream needs them - they were only ever snapshotted from
+ * lead discovery so a purge could not break a running campaign - and
+ * selectEligible de-duplicates on the normalised phone, not on place_id.
+ */
+function csvRowsToLeads(raw: unknown): {
+  leads: DiscoveryLeadRow[];
+  rejected: string[];
+} {
+  const leads: DiscoveryLeadRow[] = [];
+  const rejected: string[] = [];
+  if (!Array.isArray(raw)) return { leads, rejected };
+
+  for (const row of raw.slice(0, MAX_CSV_ROWS)) {
+    const rawPhone = String((row as Record<string, unknown>)?.phone ?? "").trim();
+    if (!rawPhone) continue;
+
+    const phone = sendablePhone(rawPhone);
+    if (!phone) {
+      // Kept as the founder's file had it, so he can find the row and fix it.
+      rejected.push(rawPhone);
+      continue;
+    }
+
+    leads.push({
+      place_id: "",
+      phone,
+      name: String((row as Record<string, unknown>)?.name ?? "")
+        .trim()
+        .slice(0, 120),
+      city: "",
+      district: "",
+      state: "",
+      industry: "",
+    });
+  }
+
+  return { leads, rejected };
 }
 
 export async function GET() {
@@ -248,14 +282,10 @@ export async function POST(req: NextRequest) {
       parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
 
     switch (body.action) {
-      case "preview": {
-        const leads = await readLeads(admin, body.filters ?? {});
-        const { sentPhones, suppressedValues } = await readLists(admin);
-        const { funnel } = selectEligible(leads, sentPhones, suppressedValues);
-        return NextResponse.json({ funnel });
-      }
-
       case "create": {
+        // Between two and four wordings, still. Fifty byte-identical messages
+        // a day is the pattern spam detection is built to notice, and this is
+        // the cheapest protection the tool has after the cap itself.
         if (!Array.isArray(body.variants)) {
           return NextResponse.json(
             { error: "Write between two and four wordings" },
@@ -272,17 +302,53 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        // The column has CHECK (daily_cap between 1 and 500). Checked here so a
-        // bad value is a readable 400, not a raw Postgres error behind a 500.
+        // The column's CHECK still allows up to 500; the application does not.
+        // Checked here so a bad value is a readable 400, not a Postgres error
+        // behind a 500.
         const dailyCap = Number(body.dailyCap ?? DEFAULT_DAILY_CAP);
-        if (!Number.isInteger(dailyCap) || dailyCap < 1 || dailyCap > 500) {
+        if (!Number.isInteger(dailyCap) || dailyCap < 1 || dailyCap > MAX_DAILY_CAP) {
           return NextResponse.json(
-            { error: "Daily limit must be a whole number from 1 to 500" },
+            { error: `Daily limit must be a whole number from 1 to ${MAX_DAILY_CAP}` },
             { status: 400 },
           );
         }
 
-        const leads = await readLeads(admin, body.filters ?? {});
+        // One of the offered spacings, not a free number. A free field invites
+        // "30 seconds", and the gap is the strongest control there is after
+        // volume.
+        const gapMinutes = Number(body.gapMinutes);
+        if (!(GAP_CHOICES_MIN as readonly number[]).includes(gapMinutes)) {
+          return NextResponse.json(
+            {
+              error: `Choose a gap of ${GAP_CHOICES_MIN.join(", ")} minutes`,
+            },
+            { status: 400 },
+          );
+        }
+        const { gapMinSec, gapMaxSec } = gapFromMinutes(gapMinutes);
+
+        if (!Array.isArray(body.rows) || body.rows.length === 0) {
+          return NextResponse.json(
+            { error: "Upload a CSV file and choose the column with the phone numbers" },
+            { status: 400 },
+          );
+        }
+        if (body.rows.length > MAX_CSV_ROWS) {
+          return NextResponse.json(
+            {
+              error: `That file has ${body.rows.length} rows. The most this will take at once is ${MAX_CSV_ROWS}.`,
+            },
+            { status: 400 },
+          );
+        }
+
+        const { leads, rejected } = csvRowsToLeads(body.rows);
+
+        // Suppression and never-message-twice are re-applied here exactly as
+        // they were for lead-discovery campaigns. A CSV is a list of strangers
+        // the founder typed or exported; it says nothing about who has already
+        // been messaged or who replied STOP, and those two promises are not
+        // his to break by uploading a file.
         const { sentPhones, suppressedValues } = await readLists(admin);
         const { recipients, funnel } = selectEligible(
           leads,
@@ -292,7 +358,13 @@ export async function POST(req: NextRequest) {
 
         if (!recipients.length) {
           return NextResponse.json(
-            { error: "Nothing left to send to in that selection" },
+            {
+              error:
+                "Nothing in that file can be messaged. Either the numbers are not valid, or everyone in it has already been messaged or opted out.",
+              funnel,
+              rejected: rejected.slice(0, 50),
+              rejectedCount: rejected.length,
+            },
             { status: 400 },
           );
         }
@@ -304,6 +376,8 @@ export async function POST(req: NextRequest) {
             variants,
             attachment_path: body.attachmentPath ?? null,
             daily_cap: dailyCap,
+            gap_min_sec: gapMinSec,
+            gap_max_sec: gapMaxSec,
             status: "draft",
             owner_id: ctx.userId,
           })
@@ -314,7 +388,7 @@ export async function POST(req: NextRequest) {
         try {
           // Chunked because 20,000 rows in one insert exceeds what PostgREST
           // will accept, and a single unique violation rejects the whole
-          // statement — the bug that cost 49 good rows in the leads importer.
+          // statement - the bug that cost 49 good rows in the leads importer.
           for (let i = 0; i < recipients.length; i += 500) {
             const chunk = recipients.slice(i, i + 500).map((r) => ({
               campaign_id: campaign.id,
@@ -347,7 +421,12 @@ export async function POST(req: NextRequest) {
           throw insertFailure;
         }
 
-        return NextResponse.json({ campaignId: campaign.id, funnel });
+        return NextResponse.json({
+          campaignId: campaign.id,
+          funnel,
+          rejected: rejected.slice(0, 50),
+          rejectedCount: rejected.length,
+        });
       }
 
       case "state": {

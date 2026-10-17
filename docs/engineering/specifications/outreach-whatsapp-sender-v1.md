@@ -76,6 +76,59 @@ entirely.** That is not a bug to fix; the two are mutually exclusive. It is note
 here so that a future "let's finish the Cloud API setup" ticket does not silently
 destroy this one.
 
+## D10 — The list arrives as a CSV, not as a Lead Discovery selection
+
+**Added after the first real run, 2026-10-17.** This supersedes the parts of
+this spec that describe building a campaign by picking a discovery run, states,
+districts and industries, and previewing a funnel before creating.
+
+The founder used the original screen end to end, sent real messages, received
+them, and then said the screen was too confusing. His words: *"I want a simple
+thing upload CSV file and send message As simple As that no more campaign
+creation, state, city, industry selection Nothing."*
+
+So the screen is now: upload a CSV, choose the column holding the phone
+numbers, optionally choose a name column, write the wordings, choose the gap,
+send. There is no campaign-creation step he has to think about — the campaign
+row is still created, because every guarantee in this document is built on it,
+but it is created and started by the one button and he never names or
+configures it.
+
+**Lead Discovery is not cut off from this**, it is one step further away: its
+results are exported to CSV and uploaded like any other list. One path into the
+sender instead of two, which also means one path to keep correct.
+
+What deliberately did NOT get simplified away, each because removing it would
+cost something that is not ceremony:
+
+| Kept | Why |
+| --- | --- |
+| Two to four wordings | Fifty byte-identical messages a day is the pattern detection looks for. The cheapest protection the tool has after the cap. |
+| The suppression list | It is how a STOP reply is honoured, and D9 says that is done by hand. A CSV says nothing about who opted out. |
+| Never-message-twice | Same. Uploading a file is not permission to message someone a second time. |
+| A test send | The first real send should not be the first send. |
+| The sending window | Still enforced at 10:00–18:30 IST on weekdays, but shown as text with no control. Business hours look human. |
+
+Both lists are re-applied to every uploaded file by `selectEligible`, unchanged
+— a CSV row goes down exactly the same funnel a discovery lead did. The
+geography columns on `re_outreach_recipients` are simply left at their `''`
+defaults, and de-duplication was always on the normalised phone rather than on
+`place_id`, so nothing downstream needed changing.
+
+### The two numbers he chose
+
+- **Daily cap 50, not 80.** `DEFAULT_DAILY_CAP` and a new `MAX_DAILY_CAP` are
+  both 50, so neither the screen nor an API call can raise it. The column's own
+  `check (daily_cap between 1 and 500)` is deliberately left alone: the
+  database keeps room for a decision he has not made, the application refuses
+  it today.
+- **A chosen gap of 1, 2, 5, 10 or 15 minutes**, from a fixed list rather than
+  a free field — a free field invites "30 seconds", and the gap is the
+  strongest control there is after volume. His choice becomes the *middle* of a
+  ±20% band (`gapFromMinutes`), because a message every 300.0 seconds forever
+  is the most machine-like pattern available. Every option is slower than the
+  old 45–120s default.
+
 ## Architecture
 
 Nothing is hosted. Three parts, and the division between them is the whole design.

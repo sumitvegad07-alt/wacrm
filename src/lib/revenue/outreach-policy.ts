@@ -22,9 +22,58 @@
  */
 export const OUTREACH_TIMEZONE = "Asia/Kolkata";
 
-export const DEFAULT_DAILY_CAP = 80;
+/**
+ * 50, not 80. The founder's own call after the first real run, and the right
+ * instinct: the whole risk of this tool lands on one business number, and the
+ * cost of going slower is a few more days, while the cost of going too fast is
+ * the number.
+ *
+ * MAX is the same value, so nothing in the UI or an API call can raise it. The
+ * column's own CHECK still allows up to 500, which is deliberate: the database
+ * keeps room for a decision the founder has not made yet, while the
+ * application refuses anything above this.
+ */
+export const DEFAULT_DAILY_CAP = 50;
+export const MAX_DAILY_CAP = 50;
+
 export const DEFAULT_GAP_MIN_SEC = 45;
 export const DEFAULT_GAP_MAX_SEC = 120;
+
+/**
+ * The spacings the founder may choose, in minutes.
+ *
+ * Deliberately a short list rather than a free number. A free field invites
+ * "30 seconds", and the gap is the strongest anti-ban control there is after
+ * volume. Every option here is slower than the old 45-120s default.
+ */
+export const GAP_CHOICES_MIN = [1, 2, 5, 10, 15] as const;
+
+/** Either side of the chosen gap, as a fraction, so sends are not metronomic. */
+const GAP_JITTER = 0.2;
+
+/**
+ * Turns the founder's chosen spacing into the min/max the campaign stores.
+ *
+ * He picks one number; the sender still needs a range. A fixed gap means a
+ * message every 300.0 seconds, forever, which is the most machine-like
+ * pattern available and exactly what spam detection is built to notice. So
+ * his choice becomes the MIDDLE of a +/-20% band: pick 5 minutes and messages
+ * land 4 to 6 minutes apart, averaging the 5 he asked for.
+ *
+ * Clamped at 5s on the low side because the column is
+ * `check (gap_min_sec >= 5)`; no choice here comes near it, but the clamp
+ * means a future smaller option cannot produce a row Postgres rejects.
+ */
+export function gapFromMinutes(minutes: number): {
+  gapMinSec: number;
+  gapMaxSec: number;
+} {
+  const target = Math.round(minutes * 60);
+  return {
+    gapMinSec: Math.max(5, Math.round(target * (1 - GAP_JITTER))),
+    gapMaxSec: Math.max(5, Math.round(target * (1 + GAP_JITTER))),
+  };
+}
 
 /** How much further a number may send each day of its warm-up. */
 export const WARMUP_STEP = 20;
