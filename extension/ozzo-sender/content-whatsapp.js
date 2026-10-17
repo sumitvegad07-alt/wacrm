@@ -52,29 +52,43 @@ function waitForShim() {
   });
 }
 
-// WA-JS is injected at most ONCE per page and this promise is never cleared,
-// even on failure: running that bundle against WhatsApp's internals a second
-// time is not something to retry blind.
+// Each of these is injected at most ONCE per page while it is working, and a
+// retry is allowed only where a retry is actually safe.
 //
-// The shim handshake IS retried, because a 15s timeout can fire while the file
-// is merely slow to load — a sleeping laptop or a frozen tab is enough — and
-// without a retry that tab would be dead until the founder reloaded it. The
-// retry is safe only because page-shim.js installs itself once and
-// re-announces ready if it is already there. Were that guard removed, the
-// retry would append a second listener, both would answer one send request,
-// and every prospect from then on would get two messages. Do not remove one of
-// these two guards without the other.
+// A load that REJECTED put nothing in the page, so retrying it is safe and
+// necessary — one failed fetch of the bundle would otherwise brick that tab
+// for the life of the page, with every tick replaying the same error and only
+// a tab reload to recover. What must never be repeated is a load that
+// SUCCEEDED: re-running WA-JS against WhatsApp's internals, or appending a
+// second shim, is not a retry, it is a duplicate.
+//
+// The shim handshake is retried too, because its 15s timeout can fire while
+// the file is merely slow — a sleeping laptop or a frozen tab is enough — so
+// the shim may be alive even though the handshake rejected. That retry is safe
+// ONLY because page-shim.js installs itself once and re-announces ready if it
+// is already there. Without that guard the retry would append a second
+// listener, both would answer one send request, and every prospect from then
+// on would get two messages. Do not remove either guard without the other.
 let bundleLoaded = null;
 let shimLoaded = null;
 
 function ensureReady() {
-  if (!bundleLoaded) bundleLoaded = injectByUrl(BUNDLE_URL, "WA-JS");
+  if (!bundleLoaded) {
+    bundleLoaded = injectByUrl(BUNDLE_URL, "WA-JS").catch((error) => {
+      bundleLoaded = null;
+      throw error;
+    });
+  }
   if (!shimLoaded) {
     shimLoaded = (async () => {
       await bundleLoaded;
       // Listener first: the shim announces itself as it runs, and a handshake
       // registered after the injection could miss it.
       const started = waitForShim();
+      // If the injection itself fails, nothing will ever resolve `started`;
+      // swallow its later rejection so it is not an unhandled one in the page
+      // console, and let the injection error be the one that propagates.
+      started.catch(() => {});
       await injectByUrl(SHIM_URL, "The page shim");
       await started;
     })().catch((error) => {

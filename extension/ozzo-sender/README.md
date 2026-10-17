@@ -62,6 +62,12 @@ loaded unpacked. So a run that has to skip a long stretch of recipients idles
 roughly 30 seconds per skip and looks slower than it is. Nothing is sent early
 because of this; waiting longer is always safe.
 
+**Start can take a few minutes to show anything.** If a message is already
+being sent when you press Start, the extension waits for that one to finish
+rather than sending two at once. Expect up to about four or five minutes of
+nothing before the next message goes out. Pressing Start again does not speed
+it up.
+
 **One campaign at a time, and one browser at a time.** The portal refuses to
 start a second campaign while one is running. Do not run this extension in two
 Chrome profiles against the same portal: the server guards against sending to

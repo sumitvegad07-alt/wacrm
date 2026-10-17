@@ -60,20 +60,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unknown recipient" }, { status: 404 });
   }
 
-  // The sender stopped before the message went out. Nothing was attempted, so
-  // put the recipient back and leave the campaign alone — Stop is a local
-  // decision in the extension and says nothing about whether the campaign
-  // should still be running.
-  //
-  // Without this the row sat in_flight until the 15-minute sweep, and /next
-  // then marked it "Possible duplicate: a send was issued but never
-  // confirmed" — burning a prospect who was never messaged, and feeding the
-  // three-strike pause with a failure that never happened.
-  if (outcome === "abandoned") {
-    await releaseClaim(admin, recipientId, agent.id);
-    return NextResponse.json({ ok: true });
-  }
-
   if (outcome === "logged_out") {
     // Put the recipient back — it was never attempted. releaseClaim only acts
     // on a row this agent still holds in flight, so a retried or late
@@ -123,6 +109,28 @@ export async function POST(req: NextRequest) {
       { error: "That recipient is claimed by another sender" },
       { status: 409 },
     );
+  }
+
+  // The sender stopped before the message went out. Nothing was attempted, so
+  // put the recipient back and leave the campaign alone - Stop is a local
+  // decision in the extension and says nothing about whether the campaign
+  // should still be running.
+  //
+  // Without this the row sat in_flight until the 15-minute sweep, and /next
+  // then marked it "Possible duplicate: a send was issued but never
+  // confirmed" - burning a prospect who was never messaged, and feeding the
+  // three-strike pause with a failure that never happened.
+  //
+  // Placed AFTER both guards above, not before them. releaseClaim is itself
+  // scoped to status='in_flight' AND claimed_by, so an early branch was safe
+  // today - but it made a replay, a late report for a message that did go out,
+  // and another sender's row all return {ok:true} indistinguishably, and it
+  // left two bypassed 409s waiting to become real holes the moment anyone
+  // loosened releaseClaim. A row the extension got from /next is always
+  // stamped and always claimed by it, so nothing legitimate is turned away.
+  if (outcome === "abandoned") {
+    await releaseClaim(admin, recipientId, agent.id);
+    return NextResponse.json({ ok: true });
   }
 
   const now = new Date();
