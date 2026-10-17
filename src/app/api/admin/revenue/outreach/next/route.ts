@@ -67,10 +67,28 @@ export async function POST(req: NextRequest) {
     raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const senderPhone = normalisePhone(String(body.senderPhone ?? ""));
   if (!senderPhone) {
-    return NextResponse.json(
-      { kind: "paused", reason: "The extension did not say which number it is logged in as" },
-      { status: 200 },
-    );
+    // The extension reports an empty number only once it has confirmed
+    // WhatsApp Web is really logged out, not merely still loading. Writing the
+    // reason here is the only way the founder learns why nothing is sending —
+    // otherwise the page shows a running campaign and a silent extension.
+    //
+    // No `.eq("id", ...)` because no campaign has been looked up yet. Matching
+    // on `status = running` scopes it to whatever is actually sending; with no
+    // number nothing can send, so pausing every running campaign is correct
+    // even in the unexpected case of more than one.
+    await admin
+      .from("re_outreach_campaigns")
+      .update({
+        status: "paused",
+        paused_reason: "WhatsApp Web is not logged in",
+      })
+      .eq("status", "running")
+      .throwOnError();
+
+    return NextResponse.json({
+      kind: "paused",
+      reason: "WhatsApp Web is not logged in",
+    });
   }
 
   // A test send is the founder checking what a prospect will get, BEFORE he
@@ -124,7 +142,13 @@ export async function POST(req: NextRequest) {
   // Every status write below is conditional on the campaign still being
   // `running`, so a campaign the founder stopped a moment ago is not flipped
   // to paused or done by a request that read it before he did.
-  if (row.sender_phone && row.sender_phone !== senderPhone) {
+  //
+  // Skipped for a test-only campaign (a draft or paused one serving a test
+  // row): a test is deliberately sent from whatever number is currently
+  // connected, to a number the founder typed in, so there is nothing to
+  // protect. Keeping the check there would also wedge the queue, because the
+  // test row outranks every other campaign and could never be served.
+  if (!testOnly && row.sender_phone && row.sender_phone !== senderPhone) {
     await admin
       .from("re_outreach_campaigns")
       .update({
@@ -181,7 +205,12 @@ export async function POST(req: NextRequest) {
     gapMinSec: row.gap_min_sec,
     gapMaxSec: row.gap_max_sec,
     queuedRemaining: counters.queuedRemaining,
-    consecutiveFailures: counters.consecutiveFailures,
+    // The failure streak is about sends to prospects. A test goes to a number
+    // the founder typed in himself, and a campaign paused for failures is
+    // precisely where he would want to check the message before restarting.
+    // Leaving the streak in place here would also wedge the queue: the test
+    // row can never be served, and it outranks every other campaign.
+    consecutiveFailures: testOnly ? 0 : counters.consecutiveFailures,
     bypassCapAndWindow: testOnly || queuedTests > 0,
   });
 
