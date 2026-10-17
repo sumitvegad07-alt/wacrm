@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>OZZO Sender</title>
+    <style>
+      body { font: 14px system-ui; max-width: 36rem; margin: 2rem auto; padding: 0 1rem; }
+      label { display: block; margin: 1rem 0 0.25rem; font-weight: 600; }
+      input { width: 100%; padding: 0.5rem; }
+      button { margin-top: 1rem; padding: 0.5rem 1rem; }
+      p { color: #555; }
+    </style>
+  </head>
+  <body>
+    <h1>OZZO Sender</h1>
+    <p>
+      Paste the agent token from
+      <strong>/admin/revenue/outreach</strong>. Keep WhatsApp Web open in
+      another tab while a campaign is running.
+    </p>
+    <label for="token">Agent token</label>
+    <input id="token" type="password" autocomplete="off" />
+    <label for="baseUrl">Portal URL</label>
+    <input id="baseUrl" type="text" placeholder="https://app.ozzo.co.in" />
+    <button id="save">Save</button>
+    <button id="start">Start sending</button>
+    <button id="stop">Stop</button>
+    <p id="status"></p>
+    <script src="options.js"></script>
+  </body>
+</html>
