@@ -21,7 +21,9 @@
 - **402 and 422 responses are uncharged.** Record them as `uncharged` and move on; never abort the run.
 - **429 falls through, never retries.** Record as `rate_limited`.
 - **Only `output.verified: true` means a mailbox was checked.** `catch_all` is not `valid` and never counts as deliverable.
-- **Mobiles are stored digits-only as `91XXXXXXXXXX`** to match `normalizePhone()` and to stop Excel reading a leading `+` as a formula.
+- **Mobiles are stored digits-only as `91XXXXXXXXXX`**, the same shape `normalisePhone()` produces for the harvest, and with no leading `+` which Excel would read as a formula.
+- **NEVER change `normalisePhone` in `src/lib/revenue/discovery-query.ts`.** It wrote every stored `re_discovery_leads.phone`, and the WhatsApp outreach sender's suppression and already-sent matching run it over both sides of a comparison. Altering its behaviour or signature makes that dedupe stop matching, and the failure mode is someone who opted out being messaged again with nothing in any log. Enrichment therefore gets its own stricter `normaliseMobile` (Task 4) rather than touching it. A pinned regression test asserts `+91 98765 43210` and `098765 43210` both reach `919876543210`; if it goes red, revert rather than update it.
+- Note there are two similarly-named functions and they are not interchangeable: `normalisePhone` (`discovery-query.ts`, adds `91`, drops trunk zeros, passes 1800/1860/1600 through untouched) and `normalizePhone` (`src/lib/whatsapp/phone-utils.ts`, strips non-digits and nothing else).
 - **New tables are RLS on, zero policies, service-role only**, like `re_discovery_*`.
 - **Supabase MCP cannot reach production.** Migrations are handed to the founder to run; verification reads go through PostgREST with the service key.
 - Route lives behind `requireFounder()`. Worker routes set `export const maxDuration = 300`.
@@ -430,8 +432,8 @@ create table if not exists public.re_lead_contacts (
   email           text        not null default '',
   -- catch_all is NOT valid: the domain accepts everything, so nothing was learnt.
   email_status    text        not null default '',
-  -- Digits only, 91XXXXXXXXXX, matching normalizePhone(). A leading + would be
-  -- read as a formula by Excel.
+  -- Digits only, 91XXXXXXXXXX, the same shape normalisePhone() gives the harvest.
+  -- A leading + would be read as a formula by Excel.
   mobile          text        not null default '',
   mobile_status   text        not null default '',
   opted_out       boolean     not null default false,
@@ -564,6 +566,8 @@ revoke all on function public.re_enrich_redeem_token(uuid, uuid) from anon, auth
 - [ ] **Step 2: Hand the SQL to the founder to run**
 
 Supabase MCP can no longer reach the Mumbai project, so this is not applied from here. Give the founder the file path and ask him to run it in the Supabase SQL editor.
+
+**Tell him there are two unapplied migrations and that the order does not matter.** The WhatsApp outreach work has `20261017100000_revenue_outreach.sql`, which sorts first by timestamp and only creates new tables — it adds nothing to `re_discovery_leads`. This one, `20261017120000_revenue_enrichment.sql`, is the only one touching that table. They are independent, so either order is safe; say so explicitly rather than leaving him to work it out.
 
 - [ ] **Step 3: Verify every object landed, from outside**
 
@@ -1485,9 +1489,17 @@ function settle(contact: FoundContact, costMicro: number): WaterfallResult {
 /**
  * Reduces a provider's phone format to `91XXXXXXXXXX`, digits only.
  *
- * Matches the harvest's own storage so WhatsApp links work, and avoids a leading
- * `+` which Excel reads as a formula. Anything that is not a ten-digit Indian
- * mobile comes back empty rather than wrong.
+ * Deliberately a SEPARATE function from `normalisePhone` in discovery-query.ts,
+ * and deliberately stricter. That one must keep its exact behaviour: it wrote
+ * every stored harvest phone, and the WhatsApp sender's suppression matching runs
+ * it over both sides of a comparison, so a change there silently re-messages
+ * people who opted out.
+ *
+ * Stricter because this field means "a mobile we can WhatsApp". `normalisePhone`
+ * accepts landlines and passes 1800/1860/1600 toll-free numbers through; here
+ * anything that is not a ten-digit Indian mobile starting 6-9 comes back empty
+ * rather than wrong. Empty is a miss, which is honest; a landline in a column
+ * labelled "mobile" is not.
  */
 export function normaliseMobile(raw: string): string {
   const digits = (raw ?? "").replace(/\D/g, "");
@@ -2891,10 +2903,19 @@ git commit -m "feat(enrich): show the per-company attempt history and its cost"
 - Consumes: `CSV_HEADERS`, `toCsv`, `csvCell`, `type DiscoveryRow` from `./discovery-query`.
 - Produces: `DiscoveryRow` gains `contactName`, `contactTitle`, `email`, `emailStatus`, `mobile`, `mobileStatus`; `CSV_HEADERS` gains the six matching headers.
 
+> **This is the one task that opens `discovery-query.ts`, which also holds
+> `normalisePhone`. Append to `CSV_HEADERS` and `DiscoveryRow` and change nothing
+> else in the file.** Do not "tidy up" the two normalisers into one: the WhatsApp
+> outreach sender depends on `normalisePhone`'s exact current behaviour for its
+> opt-out suppression, and `normaliseMobile` from Task 4 is intentionally a
+> different, stricter function. The outreach session confirmed it never modifies
+> this file and only imports `normalisePhone` from it, at three call sites.
+
 - [ ] **Step 1: Read the current CSV shape before touching it**
 
 ```bash
 grep -n "CSV_HEADERS" -A 25 src/lib/revenue/discovery-query.ts
+grep -n "normalisePhone" -A 20 src/lib/revenue/discovery-query.ts
 ```
 
 - [ ] **Step 2: Write the failing test**

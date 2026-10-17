@@ -276,9 +276,18 @@ cost_micro      bigint  -- what this contact cost to produce
 created_at      timestamptz
 ```
 
-Mobile is stored digits-only as `91XXXXXXXXXX`, as the harvest does, so it matches
-`normalizePhone()`, works for WhatsApp, and Excel does not read a leading `+` as a
-formula.
+Mobile is stored digits-only as `91XXXXXXXXXX` — the same shape `normalisePhone()`
+in `discovery-query.ts` gives the harvest, so WhatsApp links work and Excel does
+not read a leading `+` as a formula.
+
+Enrichment uses its own stricter `normaliseMobile`, and **`normalisePhone` itself
+must not be changed.** It wrote every stored `re_discovery_leads.phone`, and the
+WhatsApp outreach sender runs it over both sides of its opt-out suppression
+check; altering it makes that matching fail silently, and the failure is messaging
+someone who asked not to be. The new function is stricter because this column
+means "a mobile we can WhatsApp": `normalisePhone` accepts landlines and passes
+toll-free 1800/1860/1600 numbers through, whereas anything that is not a
+ten-digit Indian mobile is stored here as empty rather than wrong.
 
 ### `re_enrich_attempts`
 
