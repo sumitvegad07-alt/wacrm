@@ -42,18 +42,39 @@ function sleep(seconds) {
   chrome.alarms.create(ALARM, { delayInMinutes: Math.max(seconds, 1) / 60 });
 }
 
+const LOGGED_OUT_GRACE = 3; // ~3 minutes at the 60s sleep below
+
+async function onLoggedOut() {
+  // The count lives in storage, not in a variable: Chrome evicts an idle
+  // service worker between alarms, so a variable would reset to zero every tick
+  // and the threshold would never be reached.
+  const { loggedOutTicks = 0 } = await chrome.storage.local.get("loggedOutTicks");
+  const ticks = loggedOutTicks + 1;
+  await chrome.storage.local.set({ loggedOutTicks: ticks });
+
+  // Only once we are confident it is a real logout, not WhatsApp Web still
+  // loading. Sending an empty senderPhone is what tells the server to pause
+  // the campaign and show the founder why nothing is going out. The equality
+  // (not >=) reports once per logout episode.
+  if (ticks === LOGGED_OUT_GRACE) {
+    await post("next", { senderPhone: "" }).catch(() => {});
+  }
+  sleep(60);
+}
+
 async function tick() {
   const tab = await whatsappTab();
   if (!tab) {
-    sleep(60);
+    await onLoggedOut();
     return;
   }
 
   const me = await ask(tab, "whoami");
   if (!me || !me.phone) {
-    sleep(60);
+    await onLoggedOut();
     return;
   }
+  await chrome.storage.local.set({ loggedOutTicks: 0 });
 
   const decision = await post("next", { senderPhone: me.phone });
 
@@ -100,7 +121,16 @@ async function tick() {
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === ALARM) tick().catch((error) => console.error("[OZZO]", error));
+  if (alarm.name !== ALARM) return;
+  tick().catch((error) => {
+    console.error("[OZZO]", error);
+    // 401/403 means the token is gone — retrying cannot help, so stop and let
+    // the founder mint a new one. Everything else (a dropped connection, a
+    // 5xx, a sleeping laptop) is transient, and stopping on it would end the
+    // campaign silently, which is how a run dies without anyone noticing.
+    if (error && (error.status === 401 || error.status === 403)) return;
+    sleep(60);
+  });
 });
 
 chrome.runtime.onMessage.addListener((request, _sender, respond) => {
