@@ -73,19 +73,49 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { data: campaign } = await admin
+  // A test send is the founder checking what a prospect will get, BEFORE he
+  // commits to a thousand of them. If only running campaigns were served, the
+  // only way to test would be to start the real campaign — so a queued test
+  // row is served from a draft or paused campaign too.
+  //
+  // Only campaigns that can still send are considered: a test row left on a
+  // stopped or finished campaign must not be served, nor hold up a later one.
+  const { data: live } = await admin
     .from("re_outreach_campaigns")
-    .select(CAMPAIGN_COLUMNS)
-    .eq("status", "running")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .select("id")
+    .in("status", ["running", "draft", "paused"])
     .throwOnError();
+  const liveIds = (live ?? []).map((c) => c.id as string);
+
+  let pendingTestCampaignId: string | null = null;
+  if (liveIds.length > 0) {
+    const { data: pendingTest } = await admin
+      .from("re_outreach_recipients")
+      .select("campaign_id")
+      .eq("is_test", true)
+      .eq("status", "queued")
+      .in("campaign_id", liveIds)
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+      .throwOnError();
+    pendingTestCampaignId = (pendingTest?.campaign_id as string | undefined) ?? null;
+  }
+
+  let campaignQuery = admin.from("re_outreach_campaigns").select(CAMPAIGN_COLUMNS);
+  campaignQuery = pendingTestCampaignId
+    ? campaignQuery.eq("id", pendingTestCampaignId)
+    : campaignQuery.eq("status", "running").order("created_at", { ascending: false }).limit(1);
+  const { data: campaign } = await campaignQuery.maybeSingle().throwOnError();
 
   if (!campaign) {
     return NextResponse.json({ kind: "done", reason: "No campaign is running" });
   }
   const row = campaign as unknown as CampaignRow;
+
+  // True when we are here only because a test row is waiting on a draft or
+  // paused campaign. Such a campaign may send that test and nothing else.
+  const testOnly = row.status !== "running";
 
   // A number change is not something to carry on through: the warm-up history
   // belongs to the old number and the founder may have switched Chrome
@@ -116,14 +146,18 @@ export async function POST(req: NextRequest) {
 
   // Asked before the claim because decide() runs before it. A queued test row
   // is always claimed first (`order by is_test desc`), so if one exists the
-  // next row out is that test.
-  const { count: queuedTests } = await admin
-    .from("re_outreach_recipients")
-    .select("id", { count: "exact", head: true })
-    .eq("campaign_id", row.id)
-    .eq("is_test", true)
-    .eq("status", "queued")
-    .throwOnError();
+  // next row out is that test. In test-only mode one is known to be waiting.
+  let queuedTests = 0;
+  if (!testOnly) {
+    const { count } = await admin
+      .from("re_outreach_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", row.id)
+      .eq("is_test", true)
+      .eq("status", "queued")
+      .throwOnError();
+    queuedTests = count ?? 0;
+  }
 
   // The agent remembers the number it last sent from. A different number under
   // the same token has never sent as far as WhatsApp is concerned, so it is
@@ -148,7 +182,7 @@ export async function POST(req: NextRequest) {
     gapMaxSec: row.gap_max_sec,
     queuedRemaining: counters.queuedRemaining,
     consecutiveFailures: counters.consecutiveFailures,
-    bypassCapAndWindow: (queuedTests ?? 0) > 0,
+    bypassCapAndWindow: testOnly || queuedTests > 0,
   });
 
   if (decision.kind === "paused") {
@@ -207,6 +241,19 @@ export async function POST(req: NextRequest) {
       kind: "wait",
       waitSeconds: 1,
       reason: "Skipped a possible duplicate",
+    });
+  }
+
+  // skip locked can hand us a real recipient if another request took the test
+  // row first. This sits AFTER the duplicate check on purpose: releasing wipes
+  // the stamp that check reads, so a real row that may already have been sent
+  // must be judged by it first. A draft or paused campaign must never send to a prospect.
+  if (testOnly && !recipient.is_test) {
+    await releaseClaim(admin, recipient.id, agent.id);
+    return NextResponse.json({
+      kind: "wait",
+      waitSeconds: 5,
+      reason: "Waiting for the test message",
     });
   }
 

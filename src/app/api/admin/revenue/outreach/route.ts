@@ -489,7 +489,11 @@ export async function POST(req: NextRequest) {
             { status: 400 },
           );
         }
-        await admin
+        // `ignoreDuplicates` means a number already on this campaign inserts
+        // nothing. Selecting back returns only the rows actually inserted, so
+        // the founder is told which numbers did NOT get a test queued instead
+        // of being told they all did.
+        const { data: inserted } = await admin
           .from("re_outreach_recipients")
           .upsert(
             phones.map((phone) => ({
@@ -500,8 +504,17 @@ export async function POST(req: NextRequest) {
             })),
             { onConflict: "campaign_id,phone", ignoreDuplicates: true },
           )
+          .select("phone")
           .throwOnError();
-        return NextResponse.json({ queued: phones.length, rejected });
+
+        const insertedPhones = new Set((inserted ?? []).map((r) => r.phone as string));
+        const alreadyQueued = phones.filter((p) => !insertedPhones.has(p));
+
+        return NextResponse.json({
+          queued: insertedPhones.size,
+          rejected,
+          alreadyQueued,
+        });
       }
 
       default:

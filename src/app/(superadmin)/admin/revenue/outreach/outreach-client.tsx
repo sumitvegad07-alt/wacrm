@@ -169,10 +169,16 @@ export default function OutreachClient() {
     return districts.filter((d) => allowed.has(d));
   }, [districts, districtOptions]);
 
-  const load = useCallback(async () => {
+  /**
+   * `isStale` lets a caller drop an answer that arrives after it stopped caring,
+   * the way discover-client's `live` flag does: a slow poll that lands after
+   * Pause must not paint "running" over the state the founder just set.
+   */
+  const load = useCallback(async (isStale?: () => boolean) => {
     try {
       const res = await fetch(API);
       const payload = await res.json().catch(() => null);
+      if (isStale?.()) return;
       if (!res.ok || !payload) {
         setLoadError(payload?.error ?? "Could not load the outreach page");
         return;
@@ -183,6 +189,7 @@ export default function OutreachClient() {
       setLoadError(null);
       setNow(Date.now());
     } catch {
+      if (isStale?.()) return;
       setLoadError("Could not reach the server");
     } finally {
       setLoaded(true);
@@ -206,8 +213,23 @@ export default function OutreachClient() {
   // does something, and he reloads after each action himself.
   useEffect(() => {
     if (!anyRunning) return;
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
+
+    let live = true;
+    let inFlight = false;
+    const timer = setInterval(() => {
+      // Skip the tick if the last request has not come back, so a slow server
+      // is not buried under overlapping polls.
+      if (inFlight) return;
+      inFlight = true;
+      void load(() => !live).finally(() => {
+        inFlight = false;
+      });
+    }, POLL_MS);
+
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
   }, [anyRunning, load]);
 
   /** One request, one outcome. Never throws, so callers only handle results. */
@@ -299,6 +321,16 @@ export default function OutreachClient() {
     ) {
       return;
     }
+    // Start is the action that begins messaging the whole list from the
+    // business number, so it asks like Stop does.
+    if (
+      status === "running" &&
+      !window.confirm(
+        "Start sending from this campaign? Messages go out to real prospects.",
+      )
+    ) {
+      return;
+    }
     setBusy(status);
     say("state", null);
     const { ok, data } = await call({ action: "state", campaignId, status });
@@ -327,9 +359,15 @@ export default function OutreachClient() {
       });
       return;
     }
+    const already: string[] = data.alreadyQueued ?? [];
+    const queued: number = data.queued ?? 0;
+    const alreadyText = already.length
+      ? ` ${already.length} already queued on this campaign — each number can be tested once per campaign (${already.join(", ")}).`
+      : "";
     say("test", {
-      tone: "ok",
-      text: `${data.queued} test number${data.queued === 1 ? "" : "s"} queued on "${current.name}".`,
+      // Nothing queued is not a success, even though the server answered 200.
+      tone: queued > 0 ? "ok" : "error",
+      text: `${queued} test number${queued === 1 ? "" : "s"} queued on "${current.name}".${alreadyText}`,
       rejected: data.rejected,
     });
     // Only what was refused stays in the box, so he can fix it and press again.
@@ -455,9 +493,13 @@ export default function OutreachClient() {
         {!loaded ? (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : agents.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No extension is set up yet. Make a token below and paste it into the extension.
-          </p>
+          // A failed load also leaves this empty; saying "none set up" under the
+          // error banner would be wrong.
+          loadError ? null : (
+            <p className="text-sm text-muted-foreground">
+              No extension is set up yet. Make a token below and paste it into the extension.
+            </p>
+          )
         ) : (
           <ul className="divide-y divide-border">
             {agents.map((agent) => (
@@ -561,9 +603,16 @@ export default function OutreachClient() {
         {!loaded ? (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : !current ? (
-          <p className="text-sm text-muted-foreground">
-            No campaign yet. Build one below, then come back here to start it.
-          </p>
+          loadError ? null : campaigns.length > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No campaign is running or waiting. Latest: {campaigns[0].name} (
+              {campaigns[0].status}).
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No campaign yet. Build one below, then come back here to start it.
+            </p>
+          )
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-3">
@@ -848,7 +897,8 @@ export default function OutreachClient() {
         {current ? (
           <p className="text-xs text-muted-foreground">
             Goes with the campaign &ldquo;{current.name}&rdquo; ({current.status}), so it uses that
-            campaign&apos;s wordings.
+            campaign&apos;s wordings. It is sent even before you press Start, and only the test
+            numbers are messaged. The extension must be running with WhatsApp Web open.
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">Create a campaign first.</p>
