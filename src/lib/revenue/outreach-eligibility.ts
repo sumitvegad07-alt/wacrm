@@ -33,7 +33,10 @@ export interface DiscoveryLeadRow {
 }
 
 export interface EligibleRecipient extends DiscoveryLeadRow {
-  /** Normalised: 91XXXXXXXXXX. */
+  /**
+   * Run through normalisePhone: usually 91XXXXXXXXXX, but 1800/1860/1600
+   * toll-free numbers pass through unprefixed.
+   */
   phone: string;
 }
 

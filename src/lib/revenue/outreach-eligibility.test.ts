@@ -56,6 +56,29 @@ describe("selectEligible", () => {
     expect(funnel.suppressed).toBe(1);
   });
 
+  it("matches the suppression list through normalisation too", () => {
+    // The stored list is normalised, but the founder pastes opt-outs in by
+    // hand. If this stops matching, someone who asked to be left alone gets
+    // messaged again.
+    const { recipients, funnel } = selectEligible(
+      [lead({ phone: "9876543210" })],
+      [],
+      ["+91 98765 43210"],
+    );
+    expect(funnel.suppressed).toBe(1);
+    expect(recipients).toHaveLength(0);
+  });
+
+  it("matches a suppression pasted in national trunk-zero form", () => {
+    const { recipients, funnel } = selectEligible(
+      [lead({ phone: "9876543210" })],
+      [],
+      ["098765 43210"],
+    );
+    expect(funnel.suppressed).toBe(1);
+    expect(recipients).toHaveLength(0);
+  });
+
   it("counts suppression before already-sent so the funnel adds up", () => {
     const { funnel } = selectEligible([lead()], ["919876543210"], ["919876543210"]);
     expect(funnel.suppressed).toBe(1);
