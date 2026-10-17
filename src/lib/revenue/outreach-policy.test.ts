@@ -408,3 +408,32 @@ describe("decide", () => {
     expect(decide({ ...base, consecutiveFailures: 3, bypassCapAndWindow: true }).kind).toBe("paused");
   });
 });
+
+describe("the time format the database actually returns", () => {
+  // window_start and window_end are Postgres `time` columns, and PostgREST
+  // renders them as "HH:MM:SS". Every other test in this file uses the
+  // two-part form, so a parseHhMm that validated /^\d{2}:\d{2}$/ would pass
+  // all of them and return NaN in production — which makes isInSendWindow
+  // false for ever and stalls every campaign out of its window.
+  it("parses the three-part form PostgREST sends", () => {
+    expect(parseHhMm("10:00:00")).toBe(600);
+    expect(parseHhMm("18:30:00")).toBe(1110);
+  });
+
+  it("treats the three-part and two-part forms as the same time", () => {
+    expect(parseHhMm("18:30:00")).toBe(parseHhMm("18:30"));
+  });
+
+  it("judges the window correctly with seconds present", () => {
+    const window: SendWindow = {
+      windowStart: "10:00:00",
+      windowEnd: "18:30:00",
+      weekdaysOnly: true,
+    };
+    // 2026-10-19 is a Monday. 11:00 IST is inside, 19:00 IST is outside.
+    const inside = zonedClock(ist("2026-10-19", "11:00"), OUTREACH_TIMEZONE);
+    const outside = zonedClock(ist("2026-10-19", "19:00"), OUTREACH_TIMEZONE);
+    expect(isInSendWindow(inside, window)).toBe(true);
+    expect(isInSendWindow(outside, window)).toBe(false);
+  });
+});

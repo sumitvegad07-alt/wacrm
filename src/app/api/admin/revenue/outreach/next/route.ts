@@ -19,11 +19,13 @@ import { serviceClient } from "@/lib/auth/superadmin";
 import { normalisePhone } from "@/lib/revenue/discovery-query";
 import { AGENT_TOKEN_HEADER } from "@/lib/revenue/outreach-agents";
 import {
+  MAX_POLL_WAIT_SEC,
   OUTREACH_TIMEZONE,
   decide,
   pickVariant,
   renderMessage,
 } from "@/lib/revenue/outreach-policy";
+import { suppressionSpellings } from "@/lib/revenue/outreach-eligibility";
 import {
   CAMPAIGN_COLUMNS,
   authenticateAgent,
@@ -34,23 +36,6 @@ import {
 } from "@/lib/revenue/outreach-store";
 
 export const dynamic = "force-dynamic";
-
-/**
- * The spellings a suppression row for this number might have been stored in.
- * The founder's Suppress action writes the normalised form, but the list is
- * shared with other channels, and the eligibility pass at campaign creation
- * normalises what it reads. An exact match on the normalised form alone would
- * miss a row stored as "+91…" or as a bare ten digits.
- */
-function suppressionSpellings(phone: string): string[] {
-  const spellings = new Set([phone, `+${phone}`]);
-  if (phone.startsWith("91") && phone.length === 12) {
-    const national = phone.slice(2);
-    spellings.add(national);
-    spellings.add(`0${national}`);
-  }
-  return [...spellings];
-}
 
 export async function POST(req: NextRequest) {
   const admin = serviceClient();
@@ -190,7 +175,9 @@ export async function POST(req: NextRequest) {
   const numberIsNew =
     agent.sender_phone !== null && agent.sender_phone !== senderPhone;
 
-  const decision = decide({
+  // Kept so it can be re-run after the claim with the bypass withdrawn, once
+  // we know whether the row we actually got is the test row.
+  const decideInput = {
     now: new Date(),
     timezone: OUTREACH_TIMEZONE,
     window: {
@@ -212,7 +199,9 @@ export async function POST(req: NextRequest) {
     // row can never be served, and it outranks every other campaign.
     consecutiveFailures: testOnly ? 0 : counters.consecutiveFailures,
     bypassCapAndWindow: testOnly || queuedTests > 0,
-  });
+  };
+
+  const decision = decide(decideInput);
 
   if (decision.kind === "paused") {
     await admin
@@ -286,6 +275,28 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // The same hole, one step further out: on a RUNNING campaign a queued test
+  // row also waives the window and the daily cap (`queuedTests > 0` above),
+  // and that waiver was granted before the claim. `for update skip locked`
+  // means a second concurrent /next skips the test row this one is holding and
+  // takes the first real prospect instead — so a cold message could go to a
+  // harvested number at 22:00, over the cap, on a day the founder excluded.
+  // Two extension installs, or Start pressed while an alarm fires, is enough.
+  //
+  // Withdraw the bypass and ask again now that the row is known. Anything
+  // other than `send` puts the row back and becomes the answer.
+  if (!testOnly && queuedTests > 0 && !recipient.is_test) {
+    const strict = decide({ ...decideInput, bypassCapAndWindow: false });
+    if (strict.kind !== "send") {
+      await releaseClaim(admin, recipient.id, agent.id);
+      return NextResponse.json(
+        strict.kind === "wait"
+          ? strict
+          : { kind: "wait", waitSeconds: MAX_POLL_WAIT_SEC, reason: strict.reason },
+      );
+    }
+  }
+
   // From here on the recipient is claimed. Anything that throws must put it
   // back, or it sits in_flight until the stale window passes — and counts as a
   // message in flight for the gap in the meantime.
@@ -354,7 +365,15 @@ export async function POST(req: NextRequest) {
 
     // `is null` so two agents racing on a fresh campaign cannot overwrite each
     // other's number.
-    if (!row.sender_phone) {
+    //
+    // NOT for a test row. A test is deliberately sent from whatever number is
+    // connected — the spec recommends trying a spare SIM first — so stamping
+    // the campaign with it brands the campaign for good: nothing in this
+    // codebase ever writes this column back to null, and the mismatch check
+    // above then pauses the campaign on every poll once the founder starts it
+    // from his real number. The recommended way to use the tool was the way
+    // that bricked it.
+    if (!row.sender_phone && !recipient.is_test) {
       await admin
         .from("re_outreach_campaigns")
         .update({ sender_phone: senderPhone })
@@ -373,6 +392,13 @@ export async function POST(req: NextRequest) {
       .from("re_outreach_recipients")
       .update({ variant_index: variantIndex, rendered_text: text })
       .eq("id", recipient.id)
+      // Scoped to this agent's live claim like every other write in this file.
+      // This is the stamp the duplicate guard reads, so it is the last one that
+      // should go out unguarded: if the 15-minute stale window elapsed during
+      // this request and another agent re-claimed the row, this would overwrite
+      // that agent's text.
+      .eq("status", "in_flight")
+      .eq("claimed_by", agent.id)
       .throwOnError();
 
     return NextResponse.json({

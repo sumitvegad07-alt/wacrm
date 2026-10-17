@@ -385,6 +385,29 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        // One runner at a time. /next serves only the most recently created
+        // running campaign, so starting a second one silently starves the
+        // first: it keeps showing "running", sends nothing, and never reaches
+        // done, because that write is scoped to the campaign /next picked.
+        if (next === "running") {
+          const { data: alreadyRunning } = await admin
+            .from("re_outreach_campaigns")
+            .select("id, name")
+            .eq("status", "running")
+            .neq("id", campaignId)
+            .limit(1)
+            .maybeSingle()
+            .throwOnError();
+          if (alreadyRunning) {
+            return NextResponse.json(
+              {
+                error: `"${alreadyRunning.name}" is already running. Pause it before starting another campaign.`,
+              },
+              { status: 409 },
+            );
+          }
+        }
+
         const now = new Date().toISOString();
         // Matching on the status just read means two clicks racing each other
         // cannot both pass the check above.

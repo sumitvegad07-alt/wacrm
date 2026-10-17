@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { selectEligible, type DiscoveryLeadRow } from "./outreach-eligibility";
+import {
+  selectEligible,
+  suppressionSpellings,
+  type DiscoveryLeadRow,
+} from "./outreach-eligibility";
 
 function lead(over: Partial<DiscoveryLeadRow> = {}): DiscoveryLeadRow {
   return {
@@ -117,5 +121,34 @@ describe("selectEligible", () => {
       industry: "seeds",
       place_id: "p1",
     });
+  });
+});
+
+describe("suppressionSpellings", () => {
+  // This set is the runtime opt-out guarantee. Each spelling below is one a
+  // suppression row can genuinely be stored in, so dropping any of them would
+  // mean messaging someone who asked not to be.
+  it("covers every spelling an Indian mobile can be stored in", () => {
+    expect(suppressionSpellings("919876543210").sort()).toEqual(
+      ["+919876543210", "09876543210", "919876543210", "9876543210"].sort(),
+    );
+  });
+
+  it("does not invent a national form for a non-Indian number", () => {
+    // Slicing the first two digits off a 12-digit non-91 number would produce
+    // a string that matches somebody else's phone.
+    expect(suppressionSpellings("447700900123")).toEqual([
+      "447700900123",
+      "+447700900123",
+    ]);
+  });
+
+  it("leaves a number that is not 12 digits alone apart from the plus form", () => {
+    expect(suppressionSpellings("91987654321")).toEqual(["91987654321", "+91987654321"]);
+  });
+
+  it("returns no duplicates", () => {
+    const spellings = suppressionSpellings("919876543210");
+    expect(new Set(spellings).size).toBe(spellings.length);
   });
 });

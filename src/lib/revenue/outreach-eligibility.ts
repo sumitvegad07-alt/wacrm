@@ -100,3 +100,29 @@ export function selectEligible(
   funnel.toSend = recipients.length;
   return { recipients, funnel };
 }
+
+/**
+ * The spellings a suppression row for this number might have been stored in.
+ *
+ * The founder's Suppress action writes the normalised form, but the list is
+ * shared with other channels, and the eligibility pass at campaign creation
+ * normalises what it reads. An exact match on the normalised form alone would
+ * miss a row stored as "+91…" or as a bare ten digits.
+ *
+ * This lives here, and is exported, because it is the runtime half of the
+ * opt-out guarantee: /next re-checks suppression just before handing a send
+ * out, so this is what spares someone who replied STOP after the campaign was
+ * built. As an unexported local in a route file it had no test, and dropping a
+ * spelling from the set would have messaged an opted-out person silently.
+ *
+ * Takes an already-normalised phone (digits only, country code included).
+ */
+export function suppressionSpellings(phone: string): string[] {
+  const spellings = new Set([phone, `+${phone}`]);
+  if (phone.startsWith("91") && phone.length === 12) {
+    const national = phone.slice(2);
+    spellings.add(national);
+    spellings.add(`0${national}`);
+  }
+  return [...spellings];
+}

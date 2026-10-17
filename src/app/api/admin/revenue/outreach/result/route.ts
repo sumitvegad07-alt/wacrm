@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   const { data: recipient } = await admin
     .from("re_outreach_recipients")
-    .select("id, campaign_id, phone, place_id, is_test, status, rendered_text")
+    .select("id, campaign_id, phone, place_id, is_test, status, rendered_text, claimed_by")
     .eq("id", recipientId)
     .maybeSingle()
     .throwOnError();
@@ -85,6 +85,20 @@ export async function POST(req: NextRequest) {
   if (recipient.rendered_text == null) {
     return NextResponse.json(
       { error: "No send was issued for that recipient" },
+      { status: 409 },
+    );
+  }
+
+  // Only the agent holding the claim may report on it. Without this, a second
+  // install can report `sent` for a row the first agent is mid-send on: the row
+  // flips to sent, the permanent sent_phones row is written, and the real
+  // agent's later `failed` is then dropped by the status guard below — so a
+  // failure is recorded as a delivered message and that prospect is excluded
+  // from every future campaign. A row already `sent` is let through, because
+  // the retry path below is allowed to complete a partially written record.
+  if (recipient.status !== "sent" && recipient.claimed_by !== agent.id) {
+    return NextResponse.json(
+      { error: "That recipient is claimed by another sender" },
       { status: 409 },
     );
   }
