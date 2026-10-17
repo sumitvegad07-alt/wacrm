@@ -12,108 +12,108 @@
 // or the template.
 
 const BUNDLE_URL = chrome.runtime.getURL("vendor/wppconnect-wa.js");
+const SHIM_URL = chrome.runtime.getURL("page-shim.js");
 
 // MAIN world: WA-JS has to reach WhatsApp's own modules, which an isolated
 // content-script world cannot see.
-function injectBundle() {
+//
+// Both of these are loaded by src from web_accessible_resources, never as
+// inline text. web.whatsapp.com enforces a nonce-based CSP with no
+// 'unsafe-inline', so an inline script is silently refused — see the comment
+// at the top of page-shim.js.
+function injectByUrl(url, what) {
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = BUNDLE_URL;
+    script.src = url;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("WA-JS failed to load"));
+    script.onerror = () => reject(new Error(`${what} failed to load`));
     (document.head || document.documentElement).appendChild(script);
   });
 }
 
 // The page and this script cannot share objects, so everything goes through
-// window.postMessage with a page-side shim injected as source text.
-const PAGE_SHIM = `
-(() => {
-  const ready = () => window.WPP && window.WPP.isReady;
-
-  window.addEventListener("message", async (event) => {
-    const msg = event.data;
-    if (!msg || msg.__ozzo !== "request") return;
-
-    const reply = (payload) =>
-      window.postMessage({ __ozzo: "response", id: msg.id, ...payload }, "*");
-
-    try {
-      if (!ready()) return reply({ outcome: "logged_out" });
-
-      if (msg.op === "whoami") {
-        const me = window.WPP.whatsapp.UserPrefs.getMaybeMeUser();
-        return reply({ phone: me ? me.user : "" });
-      }
-
-      if (msg.op === "send") {
-        const exists = await window.WPP.contact.queryWidExists(msg.phone);
-        if (!exists || !exists.wid) return reply({ outcome: "skipped_not_on_whatsapp" });
-
-        if (await window.WPP.blocklist.isBlocked(exists.wid)) {
-          return reply({ outcome: "skipped_blocked" });
-        }
-
-        if (msg.attachmentUrl) {
-          const blob = await fetch(msg.attachmentUrl).then((r) => r.blob());
-          await window.WPP.chat.sendFileMessage(exists.wid, blob, {
-            type: "document",
-            caption: msg.text,
-            createChat: true,
-          });
-        } else {
-          await window.WPP.chat.sendTextMessage(exists.wid, msg.text, {
-            createChat: true,
-          });
-        }
-        return reply({ outcome: "sent" });
-      }
-
-      reply({ outcome: "failed", error: "Unknown op" });
-    } catch (error) {
-      reply({ outcome: "failed", error: String(error && error.message || error) });
-    }
+// window.postMessage. The shim posts `shim-ready` once its listener is live;
+// without that handshake a shim that never ran would be indistinguishable
+// from a logged-out WhatsApp, which is the wrong thing to tell the founder.
+function waitForShim() {
+  return new Promise((resolve, reject) => {
+    const onReady = (event) => {
+      if (event.source !== window) return;
+      if (!event.data || event.data.__ozzo !== "shim-ready") return;
+      window.removeEventListener("message", onReady);
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      window.removeEventListener("message", onReady);
+      reject(new Error("The page shim did not start (blocked by WhatsApp Web's CSP?)"));
+    }, 15_000);
+    window.addEventListener("message", onReady);
   });
-})();
-`;
+}
 
-function injectShim() {
-  const script = document.createElement("script");
-  script.textContent = PAGE_SHIM;
-  (document.head || document.documentElement).appendChild(script);
-  script.remove();
+let ready = null;
+function ensureReady() {
+  // Cached so only the first message pays for the injection, but NOT cached on
+  // failure: a rejected promise is cleared so the next tick retries instead of
+  // replaying the same error for ever.
+  if (!ready) {
+    ready = (async () => {
+      await injectByUrl(BUNDLE_URL, "WA-JS");
+      const started = waitForShim();
+      await injectByUrl(SHIM_URL, "The page shim");
+      await started;
+    })().catch((error) => {
+      ready = null;
+      throw error;
+    });
+  }
+  return ready;
 }
 
 let nextId = 1;
 function askPage(op, payload) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const id = nextId++;
     const onMessage = (event) => {
+      // Same-origin only: a page script must not be able to forge a response
+      // and resolve a send that never happened.
+      if (event.source !== window) return;
       const msg = event.data;
       if (!msg || msg.__ozzo !== "response" || msg.id !== id) return;
       window.removeEventListener("message", onMessage);
+      clearTimeout(timer);
       resolve(msg);
     };
     window.addEventListener("message", onMessage);
     window.postMessage({ __ozzo: "request", id, op, ...payload }, "*");
-    // A send that never answers must not hang the loop for ever.
-    setTimeout(() => {
+
+    // A send that never answers must REJECT, not resolve as failed.
+    //
+    // WPP.chat.sendTextMessage is still running in the page when this fires,
+    // and it may yet succeed — a socket reconnect can push one send past a
+    // minute. Reporting "failed" for a message that then goes out is the worst
+    // outcome available: /result only records the number in
+    // re_outreach_sent_phones on `sent`, so the prospect would be messaged
+    // again by the next campaign, and the false failure would also feed the
+    // three-strike dead-man switch.
+    //
+    // Rejecting means the loop posts no result at all. The row stays in_flight,
+    // the stale sweep requeues it, and /next's existing guard
+    // (attempts > 1 && rendered_text != null) marks it "Possible duplicate: a
+    // send was issued but never confirmed. Not resent." That is the honest
+    // answer, and it is already built.
+    const timer = setTimeout(() => {
       window.removeEventListener("message", onMessage);
-      resolve({ outcome: "failed", error: "WhatsApp Web did not answer" });
+      reject(new Error(`WhatsApp Web did not answer "${op}" within 60s`));
     }, 60_000);
   });
 }
 
 chrome.runtime.onMessage.addListener((request, _sender, respond) => {
-  askPage(request.op, request).then(respond);
-  return true; // keep the channel open for the async reply
+  ensureReady()
+    .then(() => askPage(request.op, request))
+    .then(respond)
+    .catch((error) => respond({ error: String((error && error.message) || error) }));
+  return true;
 });
-
-(async () => {
-  try {
-    await injectBundle();
-    injectShim();
-  } catch (error) {
-    console.error("[OZZO Sender]", error);
-  }
-})();

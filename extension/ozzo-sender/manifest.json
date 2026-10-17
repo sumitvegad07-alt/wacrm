@@ -20,7 +20,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["vendor/wppconnect-wa.js"],
+      "resources": ["vendor/wppconnect-wa.js", "page-shim.js"],
       "matches": ["https://web.whatsapp.com/*"]
     }
   ]

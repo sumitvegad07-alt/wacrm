@@ -44,7 +44,29 @@ into the message box.
 
 WhatsApp Web must stay open in a tab for the whole campaign. If the tab is
 closed or signed out, the extension finds nothing to send through and checks
-again every minute.
+again every minute. After about three minutes of that it tells the portal, which
+pauses the campaign and shows "WhatsApp Web is not logged in" — so sign back in
+and resume the campaign in the portal. The extension keeps polling every ten
+minutes while a campaign is paused or finished, so resuming in the portal is
+enough and you do not have to come back here and press Start again.
+
+Stop takes effect on the first press, including on a send that is already in
+flight.
+
+## Two things to know about the timing
+
+**Chrome will not fire an alarm sooner than 30 seconds.** The server sometimes
+answers "ask again in 1 second" — after a skipped recipient, say. Chrome rounds
+that up, and only tolerates shorter delays at all because this extension is
+loaded unpacked. So a run that has to skip a long stretch of recipients idles
+roughly 30 seconds per skip and looks slower than it is. Nothing is sent early
+because of this; waiting longer is always safe.
+
+**One campaign at a time, and one browser at a time.** The portal refuses to
+start a second campaign while one is running. Do not run this extension in two
+Chrome profiles against the same portal: the server guards against sending to
+the same person twice, but two senders will not space their messages the way one
+does, and the spacing is the part that keeps the number safe.
 
 ## WA-JS is vendored and pinned
 
