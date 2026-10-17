@@ -52,23 +52,37 @@ function waitForShim() {
   });
 }
 
-let ready = null;
+// WA-JS is injected at most ONCE per page and this promise is never cleared,
+// even on failure: running that bundle against WhatsApp's internals a second
+// time is not something to retry blind.
+//
+// The shim handshake IS retried, because a 15s timeout can fire while the file
+// is merely slow to load — a sleeping laptop or a frozen tab is enough — and
+// without a retry that tab would be dead until the founder reloaded it. The
+// retry is safe only because page-shim.js installs itself once and
+// re-announces ready if it is already there. Were that guard removed, the
+// retry would append a second listener, both would answer one send request,
+// and every prospect from then on would get two messages. Do not remove one of
+// these two guards without the other.
+let bundleLoaded = null;
+let shimLoaded = null;
+
 function ensureReady() {
-  // Cached so only the first message pays for the injection, but NOT cached on
-  // failure: a rejected promise is cleared so the next tick retries instead of
-  // replaying the same error for ever.
-  if (!ready) {
-    ready = (async () => {
-      await injectByUrl(BUNDLE_URL, "WA-JS");
+  if (!bundleLoaded) bundleLoaded = injectByUrl(BUNDLE_URL, "WA-JS");
+  if (!shimLoaded) {
+    shimLoaded = (async () => {
+      await bundleLoaded;
+      // Listener first: the shim announces itself as it runs, and a handshake
+      // registered after the injection could miss it.
       const started = waitForShim();
       await injectByUrl(SHIM_URL, "The page shim");
       await started;
     })().catch((error) => {
-      ready = null;
+      shimLoaded = null;
       throw error;
     });
   }
-  return ready;
+  return shimLoaded;
 }
 
 let nextId = 1;
@@ -76,8 +90,8 @@ function askPage(op, payload) {
   return new Promise((resolve, reject) => {
     const id = nextId++;
     const onMessage = (event) => {
-      // Same-origin only: a page script must not be able to forge a response
-      // and resolve a send that never happened.
+      // Ignores other windows and frames only. A script in this same page can
+      // still forge a response; this is not a security boundary.
       if (event.source !== window) return;
       const msg = event.data;
       if (!msg || msg.__ozzo !== "response" || msg.id !== id) return;
@@ -114,6 +128,13 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   ensureReady()
     .then(() => askPage(request.op, request))
     .then(respond)
-    .catch((error) => respond({ error: String((error && error.message) || error) }));
+    // __transportError, never "error": the shim's own failure result carries
+    // BOTH outcome and error, so a bare "error" key could not be told apart
+    // from a genuine {outcome:"failed", error} reply. That ambiguity made the
+    // loop throw away every real WhatsApp send failure instead of reporting
+    // it, which also starved the three-strike dead-man switch.
+    .catch((error) =>
+      respond({ __transportError: String((error && error.message) || error) }),
+    );
   return true;
 });

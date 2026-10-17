@@ -17,8 +17,13 @@ const IDLE_POLL_SEC = 600;
 // A tick may not overlap another tick. Two in flight both read the counters
 // before either claims, so both are told to send and two messages go out with
 // no gap — defeating the randomised gap, which is the main anti-ban control.
-// The lease is long enough to cover a 60s page call plus two HTTP round trips.
-const LEASE_MS = 90_000;
+//
+// It has to outlast the slowest possible tick, which is not just one 60s page
+// call: askPage's 60s applies to whoami too, the shim handshake can burn 15s
+// per tab, and there are two HTTP round trips on top. Four minutes covers two
+// unresponsive tabs plus a slow send. Too long is safe (the loop waits);
+// too short re-opens the overlap.
+const LEASE_MS = 240_000;
 
 async function config() {
   const { token, baseUrl } = await chrome.storage.local.get(["token", "baseUrl"]);
@@ -35,10 +40,18 @@ async function whatsappTab() {
 
 async function ask(tab, op, payload = {}) {
   const reply = await chrome.tabs.sendMessage(tab.id, { op, ...payload });
-  // The content script answers {error} when the page never responded — a shim
+  // Only a TRANSPORT failure throws: the page never answered at all — a shim
   // blocked by CSP, a bundle that failed to load, or a send still running past
-  // 60s. That is not a result we may report; it has to surface as a throw.
-  if (reply && reply.error) throw new Error(reply.error);
+  // 60s. There is no result to report in that case, and reporting a guess
+  // would be worse than reporting nothing.
+  //
+  // It must not be confused with {outcome:"failed", error}, which is WhatsApp
+  // telling us a real send genuinely failed. That has to reach /result: it is
+  // what shows the founder the actual error, and what feeds the three-strike
+  // pause that stops a restricted session being pushed towards a ban. Testing
+  // a bare `error` key swallowed all of those, because the shim's failure
+  // reply carries both fields.
+  if (reply && reply.__transportError) throw new Error(reply.__transportError);
   return reply;
 }
 
@@ -110,10 +123,22 @@ async function onLoggedOut() {
 async function tick() {
   // One tick at a time. Start and a firing alarm both land here, and an alarm
   // chain can still be live when the founder presses Start again.
+  //
+  // The lease carries an owner so that only the tick still holding it can
+  // release it: a tick that overran its lease must not clear the lease of the
+  // tick that replaced it, or the exclusion stays broken instead of healing.
   const now = Date.now();
+  const mine = `${now}-${Math.random().toString(36).slice(2)}`;
   const { leaseUntil = 0 } = await chrome.storage.local.get("leaseUntil");
-  if (leaseUntil > now) return;
-  await chrome.storage.local.set({ leaseUntil: now + LEASE_MS });
+  if (leaseUntil > now) {
+    // Ask again rather than returning: this alarm is consumed, and the only
+    // other thing that arms one is the tick holding the lease. If that tick
+    // dies with the worker, a bare return would end the run in silence with
+    // the portal still showing a running campaign.
+    await sleep(30);
+    return;
+  }
+  await chrome.storage.local.set({ leaseUntil: now + LEASE_MS, leaseOwner: mine });
 
   try {
     const tabs = await whatsappTab();
@@ -171,7 +196,23 @@ async function tick() {
 
     // Last check before the one irreversible act in this file. Stop must mean
     // stop even if it was pressed while this tick was waiting on the server.
-    if (!(await isRunning())) return;
+    //
+    // The row is already claimed and stamped at this point, so it cannot just
+    // be dropped: it would sit in flight until the sweep and then be recorded
+    // as a possible duplicate, burning a prospect who was never messaged. Hand
+    // it back instead.
+    if (!(await isRunning())) {
+      await post("result", {
+        recipientId: decision.recipientId,
+        outcome: "abandoned",
+        senderPhone: me.phone,
+      }).catch((error) => {
+        // Nothing left to do about it here — the sweep and the duplicate guard
+        // are the backstop. Record it so the founder is not guessing.
+        console.warn("[OZZO] could not hand back", decision.recipientId, error);
+      });
+      return;
+    }
 
     const result = await ask(tab, "send", {
       phone: decision.phone,
@@ -203,7 +244,10 @@ async function tick() {
     // Ask again straight away — the server decides the gap, not this file.
     await sleep(1);
   } finally {
-    await chrome.storage.local.set({ leaseUntil: 0 });
+    const { leaseOwner } = await chrome.storage.local.get("leaseOwner");
+    if (leaseOwner === mine) {
+      await chrome.storage.local.set({ leaseUntil: 0, leaseOwner: null });
+    }
   }
 }
 
@@ -227,9 +271,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request.op === "start") {
     (async () => {
+      // NOT leaseUntil. Start is what the founder presses when nothing seems
+      // to be happening, and a tick waiting on a slow send is exactly when it
+      // seems that way. Clearing the lease here handed that live tick's
+      // exclusion away, so the armed alarm ran a second tick alongside it and
+      // two prospects were messaged seconds apart. The lease expires on its
+      // own; leave it alone.
       await chrome.storage.local.set({
         running: true,
-        leaseUntil: 0,
         lastError: "",
         loggedOutTicks: 0,
         loggedOutReported: false,

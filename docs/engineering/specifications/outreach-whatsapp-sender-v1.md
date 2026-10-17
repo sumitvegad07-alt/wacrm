@@ -369,7 +369,7 @@ authenticate by agent token (D5) and are rate-limited via the existing
 | `POST /api/admin/revenue/outreach/agents` | Founder | Mint / revoke an extension token |
 | `POST /api/admin/revenue/outreach/test-send` | Founder | Queue up to 3 hand-typed numbers for the next `/next` call |
 | `POST /api/admin/revenue/outreach/next` | **Agent** | `{ recipient, wid, text, attachment_url? }` or `{ wait_seconds, reason }` |
-| `POST /api/admin/revenue/outreach/result` | **Agent** | `sent` / `failed` / `skipped_*` / `logged_out`; writes `re_outreach_sent_phones` on success |
+| `POST /api/admin/revenue/outreach/result` | **Agent** | `sent` / `failed` / `skipped_*` / `logged_out` / `abandoned`; writes `re_outreach_sent_phones` on success. `abandoned` is the sender handing a claimed recipient back untried, so Stop does not leave a row to be recorded later as a possible duplicate |
 
 `/next` is where §"Keeping the number alive" is actually enforced: suppression,
 already-sent, cap, window, warm-up, long break and gap are all evaluated there,

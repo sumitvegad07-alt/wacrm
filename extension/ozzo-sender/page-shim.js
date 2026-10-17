@@ -20,12 +20,31 @@
 // injecting the WA-JS bundle by src has always worked. This file is injected
 // the same way. Do not inline it again.
 (() => {
+  // Install once per page, whatever happens.
+  //
+  // The content script retries injection when the ready handshake times out,
+  // and that timeout can fire while this file's own load is merely slow — a
+  // sleeping laptop or a frozen tab is enough. The shim then runs anyway, and
+  // the retry appends a SECOND copy. Two listeners both answer one send
+  // request, so WhatsApp sends the same message twice while only one reply is
+  // read: the prospect gets two messages and the portal records one. After the
+  // first occurrence that is the steady state for the rest of the page's life.
+  //
+  // Re-announcing ready is what lets the retrying content script carry on with
+  // the listener that is already here.
+  if (window.__ozzoShimInstalled) {
+    window.postMessage({ __ozzo: "shim-ready" }, "*");
+    return;
+  }
+  window.__ozzoShimInstalled = true;
+
   const ready = () => window.WPP && window.WPP.isReady;
 
   window.addEventListener("message", async (event) => {
-    // Only this page may drive the shim. Without this check any script running
-    // on web.whatsapp.com could post a request and have a message sent, or
-    // forge a response and resolve a pending send early.
+    // Ignore other windows and frames. This does NOT make the channel
+    // trustworthy: any script in this same page, WhatsApp's own code included,
+    // can still post a request or forge a response. Worth having, but it is
+    // not a security boundary.
     if (event.source !== window) return;
 
     const msg = event.data;

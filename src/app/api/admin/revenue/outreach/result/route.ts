@@ -25,6 +25,7 @@ const OUTCOMES = new Set([
   "skipped_not_on_whatsapp",
   "skipped_blocked",
   "logged_out",
+  "abandoned",
 ]);
 
 export async function POST(req: NextRequest) {
@@ -59,6 +60,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unknown recipient" }, { status: 404 });
   }
 
+  // The sender stopped before the message went out. Nothing was attempted, so
+  // put the recipient back and leave the campaign alone — Stop is a local
+  // decision in the extension and says nothing about whether the campaign
+  // should still be running.
+  //
+  // Without this the row sat in_flight until the 15-minute sweep, and /next
+  // then marked it "Possible duplicate: a send was issued but never
+  // confirmed" — burning a prospect who was never messaged, and feeding the
+  // three-strike pause with a failure that never happened.
+  if (outcome === "abandoned") {
+    await releaseClaim(admin, recipientId, agent.id);
+    return NextResponse.json({ ok: true });
+  }
+
   if (outcome === "logged_out") {
     // Put the recipient back — it was never attempted. releaseClaim only acts
     // on a row this agent still holds in flight, so a retried or late
@@ -89,13 +104,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Only the agent holding the claim may report on it. Without this, a second
-  // install can report `sent` for a row the first agent is mid-send on: the row
-  // flips to sent, the permanent sent_phones row is written, and the real
-  // agent's later `failed` is then dropped by the status guard below — so a
-  // failure is recorded as a delivered message and that prospect is excluded
-  // from every future campaign. A row already `sent` is let through, because
-  // the retry path below is allowed to complete a partially written record.
+  // Only the agent holding the claim may report on it. Without this, a sender
+  // using a DIFFERENT token can report `sent` for a row the real sender is
+  // mid-send on: the row flips to sent, the permanent sent_phones row is
+  // written, and the real sender's later `failed` is dropped by the status
+  // guard below — so a failure is recorded as a delivered message and that
+  // prospect is excluded from every future campaign.
+  //
+  // It separates tokens, not browsers. The same token in two Chrome profiles
+  // produces claimed_by === agent.id on both and passes this check; what keeps
+  // that case safe is the claim itself plus the duplicate guard in /next, and
+  // the reason the README says not to do it is the spacing, not this.
+  //
+  // A row already `sent` is let through, because the retry path below is
+  // allowed to complete a partially written record.
   if (recipient.status !== "sent" && recipient.claimed_by !== agent.id) {
     return NextResponse.json(
       { error: "That recipient is claimed by another sender" },
