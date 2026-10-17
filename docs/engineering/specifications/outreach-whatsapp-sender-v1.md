@@ -194,7 +194,16 @@ the campaign is created. `place_id` is carried too, for joining back to
 - **`re_suppressions`** — do-not-contact. **Built with the name, columns and
   channel/reason vocabulary that Revenue Engine R1 §6.13 already specifies**, so
   that when the rest of R1 lands there is one do-not-contact list rather than two
-  that disagree. Checked before every send, by `normalizePhone()` value.
+  that disagree. Checked before every send.
+
+**Both lists match on `normalisePhone()` from `discovery-query.ts`** — the
+India-aware one that adds `91`, strips the trunk `0` and leaves 1800/1860/1600
+toll-free numbers alone. Not `normalizePhone()` from `whatsapp/phone-utils.ts`,
+which only strips non-digits. The distinction is not cosmetic: that function is
+what wrote every `re_discovery_leads.phone` value, so matching on the other one
+would compare `9180…` against `080…`, find nothing, and re-message people who
+had already been messaged or had asked not to be. Same function in, same string
+out, or the dedupe is decorative.
 
 ### D8 — The cap and the ramp belong to the number, not the campaign
 
@@ -427,13 +436,23 @@ Everything that can be wrong quietly is covered. Pure functions in
 - variant rotation is even across a 1,000-row campaign;
 - a `sender_phone` change resets the ramp to day 1 (D8).
 
-Two things cannot be proved by a pure function and get their own tests against a
-real database, because both are the kind of bug that only shows up as a prospect
-being messaged twice:
+There is no database test harness in this repo — vitest runs `environment: node`
+and there is no `supabase/config.toml`, so no local stack. Rather than invent
+one, eligibility is written as a **pure function over three fetched arrays**
+(`selectEligible(leads, sentPhones, suppressions)`), so the rule that actually
+matters is unit-tested like everything else:
 
-- a suppressed, already-sent or `in_flight` number is never handed out;
-- two concurrent `/next` calls get two different recipients, and an `in_flight`
-  row older than 15 minutes comes back as `queued`.
+- a suppressed or already-sent number is never returned, matched through
+  `normalisePhone()` on both sides;
+- a lead whose phone normalises to `''` is dropped rather than queued.
+
+One thing genuinely cannot be tested here and is verified by hand instead,
+because the alternative is pretending: **two concurrent `/next` calls must get
+two different recipients.** The guarantee comes from `for update skip locked`
+inside `re_outreach_claim_next`, and it is checked once, after the migration is
+applied, by firing two requests at the same campaign simultaneously and
+confirming two different recipient ids come back. Written down as a step in the
+plan so it is not quietly skipped.
 
 The extension itself is checked by hand, in this order, and **not** against the
 business number: a test SIM → three numbers the founder owns → 20 real prospects
