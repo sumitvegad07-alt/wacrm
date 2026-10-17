@@ -192,7 +192,15 @@ export async function claimNext(
   });
 
   if (error) throw error;
-  return (data as RecipientRow | null) ?? null;
+
+  // PostgREST renders a composite-returning function's empty result as an
+  // all-null OBJECT, not as null — verified against production. So `data` is
+  // truthy even when nothing was claimed, and `?? null` cannot see it. The
+  // caller decides "did I claim anything" from this return value and sends a
+  // WhatsApp message if it is non-null, so getting this wrong means sending
+  // to a null phone number. Test the primary key, not the object.
+  const row = data as RecipientRow | null;
+  return row && row.id != null ? row : null;
 }
 
 /** Put a claimed row back when the send never happened. */
