@@ -218,6 +218,10 @@ begin
          )
   returning * into v_row;
 
+  if not found then
+    return null;
+  end if;
+
   return v_row;
 end;
 $$;
@@ -226,4 +230,4 @@ comment on function public.re_outreach_claim_next(uuid, uuid, timestamptz) is
   'Claims one queued recipient for an agent, test rows first, releasing stale in_flight claims as it goes. Null when nothing is queued.';
 
 revoke all on function public.re_outreach_claim_next(uuid, uuid, timestamptz)
-  from anon, authenticated;
+  from public, anon, authenticated;
