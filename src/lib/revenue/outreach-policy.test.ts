@@ -215,13 +215,23 @@ describe("renderMessage", () => {
     }
   });
 
-  it("drops the whole {{name}} group rather than sending {Shah Industries}", () => {
-    // The inner token is substituted first, leaving `{Shah Industries}`, which
-    // the brace pass then removes. The name is lost but the message stays
-    // clean: failing safe, not failing visibly to the prospect.
-    const out = renderMessage("Hi {{name}}, hello", { name: "Shah Industries" });
-    expect(out).not.toContain("Shah Industries");
-    expect(out).toContain("Hi, hello");
+  it("absorbs the {{name}} and { name } slips instead of eating the value", () => {
+    const out = renderMessage("Hi {{name}} in { city }", {
+      name: "Shah Industries",
+      city: "Hubballi",
+      industry: "seeds",
+    });
+    expect(out).toContain("Hi Shah Industries in Hubballi");
+    expect(out).not.toContain("{");
+    expect(out).not.toContain("}");
+  });
+
+  it("removes a malformed token without leaking its name", () => {
+    const out = renderMessage("Hi {first name} about {city-name}", { name: "A" });
+    expect(out).not.toContain("{");
+    expect(out).not.toContain("}");
+    expect(out).not.toContain("first name");
+    expect(out).not.toContain("city-name");
   });
 
   it("appends the opt-out line exactly once", () => {

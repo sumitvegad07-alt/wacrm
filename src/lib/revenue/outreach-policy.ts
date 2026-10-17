@@ -202,7 +202,17 @@ export function renderMessage(
   variant: string,
   fields: Record<string, string>,
 ): string {
-  const filled = variant.replace(/\{(\w+)\}/g, (_match, key: string) => {
+  // Two authoring slips are common enough to be worth absorbing rather than
+  // deleting: `{{name}}` (Handlebars habit) and `{ name }` (stray spaces).
+  // Both are normalised to `{name}` so the substitution pass below sees them.
+  // Anything still malformed after this — `{first name}`, `{city-name}` — is
+  // genuinely unresolvable and the debrace pass removes it, because leaking
+  // the literal words "first name" to a prospect is worse than leaking nothing.
+  const normalised = variant
+    .replace(/\{\{\s*(\w+)\s*\}\}/g, "{$1}")
+    .replace(/\{\s*(\w+)\s*\}/g, "{$1}");
+
+  const filled = normalised.replace(/\{(\w+)\}/g, (_match, key: string) => {
     const value = (fields[key] ?? "").trim();
     if (value) return value;
     // A defined-but-blank field falls back; an undefined one disappears.
