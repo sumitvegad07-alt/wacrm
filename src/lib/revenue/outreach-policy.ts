@@ -244,6 +244,14 @@ export interface DecideInput {
   gapMaxSec: number;
   queuedRemaining: number;
   consecutiveFailures: number;
+  /**
+   * A test send is the founder messaging his own number to see what a prospect
+   * would get. The cap and the window protect the business number's standing
+   * with WhatsApp over weeks; neither is meaningful for three messages to
+   * himself, and enforcing them means he cannot check a campaign in the evening
+   * before starting it. The gap and the dead-man switch still apply.
+   */
+  bypassCapAndWindow?: boolean;
 }
 
 export type Decision =
@@ -278,24 +286,26 @@ export function decide(input: DecideInput): Decision {
 
   const clock = zonedClock(input.now, input.timezone);
 
-  if (!isInSendWindow(clock, input.window)) {
-    return {
-      kind: "wait",
-      waitSeconds: MAX_POLL_WAIT_SEC,
-      reason: "Outside the send window",
-    };
-  }
+  if (!input.bypassCapAndWindow) {
+    if (!isInSendWindow(clock, input.window)) {
+      return {
+        kind: "wait",
+        waitSeconds: MAX_POLL_WAIT_SEC,
+        reason: "Outside the send window",
+      };
+    }
 
-  const cap = warmUpCap(
-    daysSending(input.firstSentOn, clock.ymd),
-    input.dailyCap,
-  );
-  if (!(input.sentToday < cap)) {
-    return {
-      kind: "wait",
-      waitSeconds: MAX_POLL_WAIT_SEC,
-      reason: `Reached today's cap of ${cap}`,
-    };
+    const cap = warmUpCap(
+      daysSending(input.firstSentOn, clock.ymd),
+      input.dailyCap,
+    );
+    if (!(input.sentToday < cap)) {
+      return {
+        kind: "wait",
+        waitSeconds: MAX_POLL_WAIT_SEC,
+        reason: `Reached today's cap of ${cap}`,
+      };
+    }
   }
 
   const longBreak = isLongBreakDue(input.sentToday);

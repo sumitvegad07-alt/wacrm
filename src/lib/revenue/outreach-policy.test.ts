@@ -384,4 +384,27 @@ describe("decide", () => {
       expect(d.reason).toContain("break");
     }
   });
+
+  it("lets a test send through outside the window", () => {
+    const d = decide({ ...base, now: ist("2026-10-19", "21:00"), bypassCapAndWindow: true });
+    expect(d).toEqual({ kind: "send" });
+  });
+
+  it("lets a test send through once the cap is reached", () => {
+    expect(decide({ ...base, sentToday: 80, bypassCapAndWindow: true }).kind).toBe("send");
+  });
+
+  it("still applies the gap to a test send", () => {
+    const d = decide({
+      ...base,
+      sentToday: 1,
+      lastSentAt: new Date(base.now.getTime() - 10_000),
+      bypassCapAndWindow: true,
+    });
+    expect(d.kind).toBe("wait");
+  });
+
+  it("still pauses a test send after three failures", () => {
+    expect(decide({ ...base, consecutiveFailures: 3, bypassCapAndWindow: true }).kind).toBe("paused");
+  });
 });

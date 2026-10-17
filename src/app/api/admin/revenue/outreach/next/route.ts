@@ -114,6 +114,24 @@ export async function POST(req: NextRequest) {
     row.failure_streak_reset_at,
   );
 
+  // Asked before the claim because decide() runs before it. A queued test row
+  // is always claimed first (`order by is_test desc`), so if one exists the
+  // next row out is that test.
+  const { count: queuedTests } = await admin
+    .from("re_outreach_recipients")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", row.id)
+    .eq("is_test", true)
+    .eq("status", "queued")
+    .throwOnError();
+
+  // The agent remembers the number it last sent from. A different number under
+  // the same token has never sent as far as WhatsApp is concerned, so it is
+  // judged against day one of the ramp, not the old number's history.
+  // /result restarts the stored ramp date once it actually sends.
+  const numberIsNew =
+    agent.sender_phone !== null && agent.sender_phone !== senderPhone;
+
   const decision = decide({
     now: new Date(),
     timezone: OUTREACH_TIMEZONE,
@@ -124,12 +142,13 @@ export async function POST(req: NextRequest) {
     },
     dailyCap: row.daily_cap,
     sentToday: counters.sentToday,
-    firstSentOn: agent.sender_first_sent_on,
+    firstSentOn: numberIsNew ? null : agent.sender_first_sent_on,
     lastSentAt: counters.lastSentAt,
     gapMinSec: row.gap_min_sec,
     gapMaxSec: row.gap_max_sec,
     queuedRemaining: counters.queuedRemaining,
     consecutiveFailures: counters.consecutiveFailures,
+    bypassCapAndWindow: (queuedTests ?? 0) > 0,
   });
 
   if (decision.kind === "paused") {
@@ -161,6 +180,33 @@ export async function POST(req: NextRequest) {
       kind: "wait",
       waitSeconds: 60,
       reason: "Nothing free to claim",
+    });
+  }
+
+  // A row that was claimed before AND already had a message rendered for it
+  // was handed to an extension once. If we are seeing it again, /result never
+  // came back within the stale window — so the message may well have gone out
+  // and we cannot tell. Resending risks messaging the prospect twice, which is
+  // the one failure this design exists to prevent; not sending costs one lead.
+  //
+  // Deliberately outside the try below: its catch releases the claim, and a
+  // release clears the stamp this check reads.
+  if (recipient.attempts > 1 && recipient.rendered_text != null) {
+    await admin
+      .from("re_outreach_recipients")
+      .update({
+        status: "failed",
+        error: "Possible duplicate: a send was issued but never confirmed. Not resent.",
+        claimed_by: null,
+      })
+      .eq("id", recipient.id)
+      .eq("status", "in_flight")
+      .eq("claimed_by", agent.id)
+      .throwOnError();
+    return NextResponse.json({
+      kind: "wait",
+      waitSeconds: 1,
+      reason: "Skipped a possible duplicate",
     });
   }
 
@@ -230,15 +276,6 @@ export async function POST(req: NextRequest) {
       attachmentUrl = signed.signedUrl;
     }
 
-    // If we cannot record what we are about to send, do not send it: an
-    // unrecorded send is one we cannot prove or deduplicate later. The throw
-    // lands in the catch below, which releases the claim.
-    await admin
-      .from("re_outreach_recipients")
-      .update({ variant_index: variantIndex, rendered_text: text })
-      .eq("id", recipient.id)
-      .throwOnError();
-
     // `is null` so two agents racing on a fresh campaign cannot overwrite each
     // other's number.
     if (!row.sender_phone) {
@@ -249,6 +286,18 @@ export async function POST(req: NextRequest) {
         .is("sender_phone", null)
         .throwOnError();
     }
+
+    // If we cannot record what we are about to send, do not send it: an
+    // unrecorded send is one we cannot prove or deduplicate later. The throw
+    // lands in the catch below, which releases the claim and clears the stamp.
+    //
+    // `rendered_text` means "a send was issued for this row", so this is the
+    // last write before the response and nothing after it may throw.
+    await admin
+      .from("re_outreach_recipients")
+      .update({ variant_index: variantIndex, rendered_text: text })
+      .eq("id", recipient.id)
+      .throwOnError();
 
     return NextResponse.json({
       kind: "send",

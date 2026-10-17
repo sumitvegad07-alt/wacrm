@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   const { data: recipient } = await admin
     .from("re_outreach_recipients")
-    .select("id, campaign_id, phone, place_id, is_test, status")
+    .select("id, campaign_id, phone, place_id, is_test, status, rendered_text")
     .eq("id", recipientId)
     .maybeSingle()
     .throwOnError();
@@ -74,6 +74,19 @@ export async function POST(req: NextRequest) {
       .eq("status", "running")
       .throwOnError();
     return NextResponse.json({ ok: true });
+  }
+
+  // /next stamps rendered_text as the last thing it does before handing a send
+  // out. A null means this row was never issued, so a result for it is a replay
+  // or a bug — and accepting it would write the permanent sent_phones row and
+  // lose the prospect for every future campaign. Applies to every outcome after
+  // logged_out, not just `sent`: a skip or failure recorded against a row that
+  // was never issued is just as wrong, and just as unrecoverable by the founder.
+  if (recipient.rendered_text == null) {
+    return NextResponse.json(
+      { error: "No send was issued for that recipient" },
+      { status: 409 },
+    );
   }
 
   const now = new Date();
@@ -110,16 +123,25 @@ export async function POST(req: NextRequest) {
       )
       .throwOnError();
 
-    // The ramp counts from this number's first ever send.
-    if (!agent.sender_first_sent_on) {
+    const reportedPhone = normalisePhone(String(body.senderPhone ?? ""));
+    const numberChanged =
+      reportedPhone !== "" &&
+      agent.sender_phone !== null &&
+      agent.sender_phone !== reportedPhone;
+
+    // The ramp counts from this number's first ever send. A different number
+    // under the same token is a different number as far as WhatsApp is
+    // concerned, so its warm-up starts again from day one. Without this, moving
+    // from a trial SIM to the business number would hand the business number
+    // the full daily cap on its first day.
+    if (!agent.sender_first_sent_on || numberChanged) {
       await admin
         .from("re_outreach_agents")
         .update({
           sender_first_sent_on: zonedClock(now, OUTREACH_TIMEZONE).ymd,
-          sender_phone: normalisePhone(String(body.senderPhone ?? "")) || undefined,
+          sender_phone: reportedPhone || agent.sender_phone,
         })
         .eq("id", agent.id)
-        .is("sender_first_sent_on", null)
         .throwOnError();
     }
   }

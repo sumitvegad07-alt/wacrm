@@ -54,6 +54,10 @@ export interface RecipientRow {
   industry: string;
   is_test: boolean;
   place_id: string;
+  /** Incremented by every claim, so more than 1 means the row was claimed before. */
+  attempts: number;
+  /** Non-null means a send was issued for this row. See /next. */
+  rendered_text: string | null;
 }
 
 export interface AgentRow {
@@ -261,7 +265,17 @@ export async function releaseClaim(
 ): Promise<void> {
   await admin
     .from("re_outreach_recipients")
-    .update({ status: "queued", claimed_by: null, claimed_at: null })
+    .update({
+      status: "queued",
+      claimed_by: null,
+      claimed_at: null,
+      // `rendered_text` means "a send was issued for this row", and /next
+      // refuses to re-send a row that carries it. A release means no send
+      // happened, so the stamp goes too — otherwise the next claim would take
+      // an honest release for a possible duplicate.
+      variant_index: null,
+      rendered_text: null,
+    })
     .eq("id", recipientId)
     .eq("status", "in_flight")
     .eq("claimed_by", agentId)
