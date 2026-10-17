@@ -244,3 +244,74 @@ export function applyExtraColumnFilters<T, R>(
   }
   return next;
 }
+
+/**
+ * One person's claim on a customer, in the three ways the column resolves it.
+ *
+ * The caller works these out from the reference data the screen already holds —
+ * the staff list, the area assignments and the territory tree — because only
+ * there is the territory tree walked.
+ */
+export interface AssignmentScope {
+  /** Ids that may appear in the customer's own `employee_id`. */
+  employeeIds: string[];
+  /** Territories whose area assignment resolves to this person. */
+  areaTerritoryIds: string[];
+  /** Ids that may appear in `user_id`, for the creator fallback. */
+  creatorIds: string[];
+}
+
+/**
+ * Filter Customers by who the Assigned Employee column actually shows.
+ *
+ * That column is a three-way fallback — the customer's own `employee_id`, else
+ * whoever covers its territory, else whoever created it — which is why it
+ * carried no filter: no single column comparison says it. It does come out as
+ * a set of branches, and the precedence matters, so each later branch excludes
+ * the earlier one:
+ *
+ *   employee_id is one of theirs
+ *   OR (nobody named directly AND the territory is one they cover)
+ *   OR (nobody named directly AND nobody covers the territory AND they created it)
+ *
+ * `coveredTerritoryIds` is every territory that resolves to somebody, which is
+ * what makes the last branch mean "nobody covers this" rather than "they do
+ * not cover this". A customer with no territory is covered by nobody, so it
+ * gets its own branch.
+ *
+ * Assumes the territory master is small enough to list — it is a geography
+ * table of tens to hundreds of rows, not a transaction table.
+ */
+export function applyAssignedEmployeeFilter<T>(
+  query: T,
+  scopes: readonly AssignmentScope[],
+  coveredTerritoryIds: readonly string[],
+): T {
+  const covered = safeIds(coveredTerritoryIds);
+  const notCovered = covered.length ? `territory_id.not.in.(${covered.join(",")})` : null;
+
+  const branches: string[] = [];
+  for (const scope of scopes) {
+    const employees = safeIds(scope.employeeIds);
+    const areas = safeIds(scope.areaTerritoryIds);
+    const creators = safeIds(scope.creatorIds);
+
+    if (employees.length) branches.push(`employee_id.in.(${employees.join(",")})`);
+    if (areas.length) {
+      branches.push(`and(employee_id.is.null,territory_id.in.(${areas.join(",")}))`);
+    }
+    if (creators.length) {
+      const who = `user_id.in.(${creators.join(",")})`;
+      if (notCovered) {
+        branches.push(`and(employee_id.is.null,${notCovered},${who})`);
+        // `not.in` is never true for NULL, so an untagged customer needs saying.
+        branches.push(`and(employee_id.is.null,territory_id.is.null,${who})`);
+      } else {
+        branches.push(`and(employee_id.is.null,${who})`);
+      }
+    }
+  }
+
+  if (!branches.length) return query;
+  return (query as Builder).or(branches.join(",")) as T;
+}

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomField } from "@/types";
 import {
   applyArrayOverlapFilter,
+  applyAssignedEmployeeFilter,
   applyExtraColumnFilters,
   applyRangeFilter,
   applyCustomFieldFilters,
@@ -326,5 +327,87 @@ describe("applyExtraColumnFilters", () => {
       ["derived", "Derived", "text", () => "x"],
     ] as const);
     expect(q.calls).toEqual([]);
+  });
+});
+
+// ============================================================
+// Assigned Employee on Customers.
+//
+// The column is a three-way fallback: the customer's own employee_id, else
+// whoever covers its territory (walking up to the first assigned ancestor),
+// else whoever created it. That is why it had no filter — one column
+// comparison cannot express it. It can be expressed as a set of branches,
+// once the territory tree has been resolved in the browser, which that screen
+// already does to render the column at all.
+// ============================================================
+const P1 = "33333333-3333-4333-8333-333333333333";
+const A1 = "44444444-4444-4444-8444-444444444444";
+const T1 = "55555555-5555-4555-8555-555555555555";
+const T2 = "66666666-6666-4666-8666-666666666666";
+
+describe("applyAssignedEmployeeFilter", () => {
+  const scope = { employeeIds: [P1], areaTerritoryIds: [T1], creatorIds: [A1] };
+
+  it("matches the direct assignment, the area, and the creator fallback", () => {
+    const q = fakeQuery();
+    applyAssignedEmployeeFilter(q, [scope], [T1, T2]);
+    expect(q.calls).toHaveLength(1);
+    const clause = q.calls[0];
+    expect(clause).toContain(`employee_id.in.(${P1})`);
+    // Area only counts where no one was named directly.
+    expect(clause).toContain(`and(employee_id.is.null,territory_id.in.(${T1}))`);
+    // The creator only counts where nobody covers the territory at all.
+    expect(clause).toContain(`territory_id.not.in.(${T1},${T2})`);
+    expect(clause).toContain(`user_id.in.(${A1})`);
+    // A customer with no territory is covered by nobody, so the creator wins.
+    expect(clause).toContain("territory_id.is.null");
+  });
+
+  it("leaves out a branch it has no ids for", () => {
+    const q = fakeQuery();
+    applyAssignedEmployeeFilter(q, [{ employeeIds: [P1], areaTerritoryIds: [], creatorIds: [] }], []);
+    const clause = q.calls[0];
+    expect(clause).toBe(`or(employee_id.in.(${P1}))`);
+  });
+
+  it("drops the covered guard when nothing is covered", () => {
+    const q = fakeQuery();
+    applyAssignedEmployeeFilter(q, [{ employeeIds: [], areaTerritoryIds: [], creatorIds: [A1] }], []);
+    expect(q.calls[0]).toBe(`or(and(employee_id.is.null,user_id.in.(${A1})))`);
+  });
+
+  it("adds nothing when no one is selected", () => {
+    const q = fakeQuery();
+    applyAssignedEmployeeFilter(q, [], [T1]);
+    expect(q.calls).toEqual([]);
+  });
+
+  it("adds nothing when the selection resolves to no branches at all", () => {
+    const q = fakeQuery();
+    applyAssignedEmployeeFilter(q, [{ employeeIds: [], areaTerritoryIds: [], creatorIds: [] }], []);
+    expect(q.calls).toEqual([]);
+  });
+
+  it("refuses ids that are not uuids, rather than pasting them into the expression", () => {
+    const q = fakeQuery();
+    applyAssignedEmployeeFilter(
+      q,
+      [{ employeeIds: ["a,b", P1], areaTerritoryIds: ["x)y"], creatorIds: [] }],
+      ["z(z"],
+    );
+    expect(q.calls[0]).toBe(`or(employee_id.in.(${P1}))`);
+  });
+
+  it("ORs the branches of several people together", () => {
+    const q = fakeQuery();
+    applyAssignedEmployeeFilter(
+      q,
+      [
+        { employeeIds: [P1], areaTerritoryIds: [], creatorIds: [] },
+        { employeeIds: [A1], areaTerritoryIds: [], creatorIds: [] },
+      ],
+      [],
+    );
+    expect(q.calls[0]).toBe(`or(employee_id.in.(${P1}),employee_id.in.(${A1}))`);
   });
 });

@@ -258,3 +258,51 @@ test("a money column filters by a from/to range", async ({ page }) => {
 
   await expect.poll(total, { timeout: 20_000 }).toBeLessThan(before);
 });
+
+test("Assigned Employee on Customers filters, and agrees with the column", async ({ page }) => {
+  // The column is a three-way fallback — the customer's own employee, else
+  // whoever covers its territory, else whoever created it — so it had no
+  // filter at all. The filter has to answer the same question the column
+  // shows, not an easier one.
+  await page.goto("/contacts");
+
+  const filterRow = page.locator("table thead tr").nth(1);
+  await expect(filterRow).toBeVisible({ timeout: 30_000 });
+
+  async function total(): Promise<number> {
+    const text = await page.getByText(/\d+\s*-\s*\d+\s+of\s+\d+/).first().innerText();
+    return Number(/of\s+(\d+)/.exec(text)![1]);
+  }
+  await expect.poll(total, { timeout: 30_000 }).toBeGreaterThan(0);
+  const before = await total();
+
+  // Pick whoever the first row says is assigned, then filter by that person.
+  const headings = await page.locator("table thead tr").first().locator("th").allInnerTexts();
+  const col = headings.findIndex((h) => h.trim() === "Assigned Employee");
+  expect(col, "Assigned Employee column must be on screen").toBeGreaterThan(-1);
+  const whoever = (
+    await page.locator("table tbody tr").first().locator("td").nth(col).innerText()
+  ).trim();
+  test.skip(whoever === "Unassigned" || whoever === "", "no assigned customer to check against");
+
+  await filterRow.getByRole("button", { name: "Filter by Assigned Employee" }).click();
+  await page.getByRole("checkbox").first().waitFor({ timeout: 15_000 });
+  await page.getByText(whoever, { exact: true }).last().click();
+  await page.keyboard.press("Escape");
+
+  // It filtered…
+  await expect.poll(total, { timeout: 20_000 }).toBeLessThanOrEqual(before);
+  const after = await total();
+  expect(after).toBeGreaterThan(0);
+
+  // …and every row it kept really is assigned to that person, which is the
+  // whole point: the filter must agree with what the column renders.
+  const shown = await page.locator("table tbody tr").evaluateAll(
+    (rows, index) =>
+      rows.map((r) => (r.querySelectorAll("td")[index]?.textContent ?? "").trim()),
+    col,
+  );
+  for (const cell of shown) {
+    expect(cell, `row shows "${cell}" but was filtered to "${whoever}"`).toContain(whoever);
+  }
+});

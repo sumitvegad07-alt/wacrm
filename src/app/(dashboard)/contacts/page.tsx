@@ -39,7 +39,7 @@ import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
 import { fetchAllPages } from '@/lib/table/export-all-pages';
 import type { ServerTableQuery } from '@/lib/table/server-query';
-import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters, applyRangeFilter } from '@/lib/table/apply-filters';
+import { applyCustomFieldFilters, customFieldFilterKey, applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilters, applyRangeFilter, applyAssignedEmployeeFilter, type AssignmentScope } from '@/lib/table/apply-filters';
 import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { Badge } from '@/components/ui/badge';
@@ -125,8 +125,22 @@ export default function ContactsPage() {
   const [refData, setRefData] = useState<{
     nameOf: (id: string | null | undefined) => string | null;
     areaEmployeesFor: (territoryId: string | null | undefined) => string[];
+    /**
+     * What one chosen person's claim on a customer looks like, for the
+     * Assigned Employee filter. Resolved here because only here is the
+     * territory tree walked.
+     */
+    assignmentScopeFor: (profileId: string) => AssignmentScope;
+    /** Every territory that resolves to somebody at all. */
+    coveredTerritoryIds: string[];
     tagsMap: Record<string, Tag>;
-  }>({ nameOf: () => null, areaEmployeesFor: () => [], tagsMap: {} });
+  }>({
+    nameOf: () => null,
+    areaEmployeesFor: () => [],
+    assignmentScopeFor: () => ({ employeeIds: [], areaTerritoryIds: [], creatorIds: [] }),
+    coveredTerritoryIds: [],
+    tagsMap: {},
+  });
 
   useEffect(() => {
     let alive = true;
@@ -182,7 +196,54 @@ export default function ContactsPage() {
         tagsMap[t.id] = t;
       });
 
-      setRefData({ nameOf, areaEmployeesFor, tagsMap });
+      /**
+       * The same walk the column does, but by id rather than by name, and
+       * evaluated over every territory once so the filter can ask the
+       * database a plain question.
+       */
+      const areaIdsByTerritory: Record<string, string[]> = {};
+      (areaData || []).forEach((a: { employee_id: string; territory_id: string }) => {
+        if (a.territory_id) (areaIdsByTerritory[a.territory_id] ||= []).push(a.employee_id);
+      });
+      const areaEmployeeIdsFor = (territoryId: string | null): string[] => {
+        let cur = territoryId;
+        let guard = 0;
+        while (cur && guard < 8) {
+          if (areaIdsByTerritory[cur]?.length) return areaIdsByTerritory[cur];
+          cur = territoryParent[cur] ?? null;
+          guard += 1;
+        }
+        return [];
+      };
+
+      const resolvedByTerritory = new Map<string, string[]>();
+      (allTerritories || []).forEach((t: { id: string }) => {
+        const owners = areaEmployeeIdsFor(t.id);
+        if (owners.length) resolvedByTerritory.set(t.id, owners);
+      });
+      const coveredTerritoryIds = [...resolvedByTerritory.keys()];
+
+      const assignmentScopeFor = (profileId: string): AssignmentScope => {
+        // An employee id is stored as a profiles.id in some places and an auth
+        // id in others, so a claim is made under either — the same reason
+        // `nameOf` matches on both.
+        const person = (profilesData || []).find(
+          (x: { id: string; user_id: string }) => x.id === profileId || x.user_id === profileId,
+        ) as { id: string; user_id: string } | undefined;
+        const ids = [person?.id, person?.user_id].filter(Boolean) as string[];
+        const areaTerritoryIds = [...resolvedByTerritory.entries()]
+          .filter(([, owners]) => owners.some((o) => ids.includes(o)))
+          .map(([territoryId]) => territoryId);
+        return { employeeIds: ids, areaTerritoryIds, creatorIds: ids };
+      };
+
+      setRefData({
+        nameOf,
+        areaEmployeesFor,
+        assignmentScopeFor,
+        coveredTerritoryIds,
+        tagsMap,
+      });
     })();
     return () => {
       alive = false;
@@ -231,6 +292,17 @@ export default function ContactsPage() {
         q = applyTextFilter(q, col, filters[col]);
       }
       q = applyInFilter(q, 'hierarchy_level', filters.hierarchy_level);
+
+      // Assigned Employee. The column is a three-way fallback, so the filter
+      // asks the same question in branches rather than comparing one column.
+      const chosen = filters.assigned_employee;
+      if (Array.isArray(chosen) && chosen.length) {
+        q = applyAssignedEmployeeFilter(
+          q,
+          (chosen as string[]).map((id) => refData.assignmentScopeFor(id)),
+          refData.coveredTerritoryIds,
+        );
+      }
       q = applyRangeFilter(q, 'credit_limit', filters.credit_limit);
       q = applyRangeFilter(q, 'credit_days', filters.credit_days);
       q = applyRangeFilter(q, 'opening_balance', filters.opening_balance);
@@ -251,7 +323,9 @@ export default function ContactsPage() {
         ServerTableQuery<Record<string, unknown>>
       >;
     },
-    [customFields],
+    // `refData` matters: the Assigned Employee filter resolves through it, and
+    // a stale copy would quietly add no condition at all.
+    [customFields, refData],
   );
 
   /** Stable dep: only changes when an ACTIVE cf_* filter's type could change the query. */
@@ -484,8 +558,8 @@ export default function ContactsPage() {
     {
       id: "assigned_employee",
       label: "Assigned Employee",
-      // No filter yet — see Phase 2. A control that does nothing is worse
-      // than none now that the filter row is always visible.
+      type: "select",
+      valueSource: { kind: "people", idSpace: "profile" },
       // Visible by default; admins can hide it via Manage Columns.
       visibleByDefault: true,
       render: (contact) => {
