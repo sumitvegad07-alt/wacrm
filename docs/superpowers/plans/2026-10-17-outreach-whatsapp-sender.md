@@ -1375,7 +1375,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
   - `authenticateAgent(admin: Admin, token: string | null): Promise<{ id: string; sender_phone: string | null; sender_first_sent_on: string | null } | null>`
   - `readCounters(admin: Admin, campaignId: string, senderPhone: string, failureStreakResetAt: string): Promise<{ sentToday: number; lastSentAt: Date | null; queuedRemaining: number; consecutiveFailures: number }>`
   - `claimNext(admin: Admin, campaignId: string, agentId: string): Promise<RecipientRow | null>`
-  - `releaseClaim(admin: Admin, recipientId: number): Promise<void>`
+  - `releaseClaim(admin: Admin, recipientId: number, agentId: string): Promise<void>`
 
 - [ ] **Step 1: Write the implementation**
 
@@ -2144,7 +2144,7 @@ export async function POST(req: NextRequest) {
   // If we cannot record what we are about to send, do not send it: an
   // unrecorded send is one we cannot prove or deduplicate later.
   if (stampError) {
-    await releaseClaim(admin, recipient.id);
+    await releaseClaim(admin, recipient.id, agent.id);
     throw stampError;
   }
 
