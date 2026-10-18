@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Upload, Boxes, Users, Package, UserPlus, ShoppingCart, Banknote, CheckSquare, MapPin, Wrench } from "lucide-react";
+import { Upload, Boxes, Users, Package, UserPlus, ShoppingCart, Banknote, CheckSquare, MapPin, Wrench, ListChecks } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getImportDescriptor } from "@/lib/import/registry";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
+import { gatePasses, IMPORT_GATES } from "@/lib/plans/surface-gates";
+import type { ProductLine } from "@/lib/plans/catalog";
 
 // The full planned import catalogue. Availability is derived live from the
 // registry, so a module lights up here the moment its descriptor ships — this
@@ -14,25 +16,27 @@ import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 // never sees Orders / Outstanding / Opening Stock, etc. `configModule` further
 // hides opt-in modules that are toggled off. Entries with neither are base
 // features shown on every plan.
-type ProductLine = "crm" | "wfa" | "sfa" | "fsm";
+// The full planned import catalogue, in display order. Its gating lives in
+// IMPORT_GATES (@/lib/plans/surface-gates) so this list and the wizard page at
+// /import/<key> cannot disagree about what a plan may import. A key absent from
+// IMPORT_GATES is a base import available on every plan.
 const MODULES: {
   key: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  line?: ProductLine;
-  configModule?: string;
 }[] = [
   { key: "product_units", label: "Product Units", icon: Boxes },
   { key: "contacts", label: "Customers", icon: Users },
   { key: "products", label: "Products", icon: Package },
   { key: "product_categories", label: "Product Categories", icon: Boxes },
-  { key: "leads", label: "Leads", icon: UserPlus, line: "crm" },
-  { key: "orders", label: "Orders", icon: ShoppingCart, line: "sfa" },
-  { key: "outstanding", label: "Outstanding", icon: Banknote, line: "sfa" },
+  { key: "leads", label: "Leads", icon: UserPlus },
+  { key: "orders", label: "Orders", icon: ShoppingCart },
+  { key: "outstanding", label: "Outstanding", icon: Banknote },
   { key: "tasks", label: "Tasks", icon: CheckSquare },
-  { key: "territories", label: "Territories", icon: MapPin, line: "wfa", configModule: "territory" },
-  { key: "stock", label: "Opening Stock", icon: Boxes, line: "sfa", configModule: "stock" },
-  { key: "customer_assets", label: "Service Assets", icon: Wrench, line: "fsm" },
+  { key: "territories", label: "Territories", icon: MapPin },
+  { key: "stock", label: "Opening Stock", icon: Boxes },
+  { key: "price_lists", label: "Price Lists", icon: ListChecks },
+  { key: "customer_assets", label: "Service Assets", icon: Wrench },
 ];
 
 export default function ImportHubPage() {
@@ -47,9 +51,8 @@ export default function ImportHubPage() {
     sfa: hasSFA,
     fsm: hasFSM,
   };
-  const lineEnabled = (line?: ProductLine) => !line || owns[line];
-  const visibleModules = MODULES.filter(
-    (m) => lineEnabled(m.line) && (!m.configModule || isModuleEnabled(m.configModule as never)),
+  const visibleModules = MODULES.filter((m) =>
+    gatePasses(IMPORT_GATES[m.key], { owns, isModuleEnabled }),
   );
 
   return (

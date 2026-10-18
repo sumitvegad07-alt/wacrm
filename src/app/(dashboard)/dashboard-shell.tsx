@@ -19,6 +19,8 @@ import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcut
 import { TableFilterNavReset } from "@/components/layout/table-filter-nav-reset";
 import { BackToGettingStarted } from "@/components/getting-started/BackToGettingStarted";
 import { TourRunner } from "@/components/tour/TourRunner";
+import { isRouteRestricted } from "@/lib/plans/surface-gates";
+import type { ProductLine } from "@/lib/plans/catalog";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -59,7 +61,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, router]);
 
-  // Route protection: restrict direct navigation to disabled module routes
+  // Route protection: restrict direct navigation to off-plan / disabled routes.
+  //
+  // The rules live in @/lib/plans/surface-gates, shared with the sidebar and the
+  // command palette. They used to be a hand-written list here, which is how
+  // /inbox, /flows, /price-lists, /stock and four of the per-module reports ended
+  // up hidden in the menu but served in full to any plan that typed the URL.
   useEffect(() => {
     // Wait for the account's real module settings. Modules that ship OFF by default
     // would otherwise look disabled for the moment before they load, redirecting the
@@ -67,41 +74,23 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     // unreachable by direct URL, bookmark or refresh while the sidebar link worked.
     if (loading || !user || !pathname || !moduleSettingsLoaded) return;
 
-    // User Attendance and Leaves live under /location-tracking but are base
-    // features on every plan — never block them on the WFA line.
-    const isBaseLocationPage =
-      pathname.startsWith("/location-tracking/attendance") ||
-      pathname.startsWith("/location-tracking/leaves");
+    // Keyed by ProductLine: a new line is a compile error here until it is given
+    // an entitlement, so an unrecognised line can never fall through to another.
+    const owns: Record<ProductLine, boolean> = {
+      crm: hasCRM,
+      wfa: hasWFA,
+      sfa: hasSFA,
+      fsm: hasFSM,
+    };
 
-    const isRestricted =
-      // Module-toggle gated (the plan clamps these off when out of plan)
+    // WhatsApp's three sub-features ride extra flags on top of the CRM line.
+    const featureRestricted =
       (pathname.startsWith("/automations") && !hasAutomations) ||
+      (pathname.startsWith("/flows") && !hasAutomations) ||
       (pathname.startsWith("/broadcasts") && !hasBroadcasts) ||
-      (pathname.startsWith("/whatsapp") && (!hasWhatsApp || !isModuleEnabled("whatsapp"))) ||
-      (pathname.startsWith("/quotations") && !isModuleEnabled("quotation")) ||
-      (pathname.startsWith("/expenses") && !isModuleEnabled("expense")) ||
-      (pathname.startsWith("/payments") && !isModuleEnabled("payment")) ||
-      (pathname.startsWith("/dispatch") && !isModuleEnabled("dispatch")) ||
-      (pathname.startsWith("/routes") && !isModuleEnabled("route")) ||
-      (pathname.startsWith("/schemes") && !isModuleEnabled("scheme")) ||
-      // Product-line gated (Leads/Deals → CRM, Orders → SFA, tracking → WFA).
-      // These have no module toggle, so the plan line is the ceiling.
-      (pathname.startsWith("/leads") && !hasCRM) ||
-      (pathname.startsWith("/pipelines") && !hasCRM) ||
-      (pathname.startsWith("/deals") && !hasCRM) ||
-      (pathname.startsWith("/orders") && !hasSFA) ||
-      (pathname.startsWith("/pending-dispatch") && !hasSFA) ||
-      (pathname.startsWith("/service") && !hasFSM) ||
-      (pathname.startsWith("/location-tracking") && !hasWFA && !isBaseLocationPage) ||
-      (pathname.startsWith("/reports/leads") && !hasCRM) ||
-      (pathname.startsWith("/reports/deals") && !hasCRM) ||
-      (pathname.startsWith("/reports/orders") && !hasSFA) ||
-      (pathname.startsWith("/reports/sales") && !hasSFA) ||
-      (pathname.startsWith("/reports/ageing") && !hasSFA) ||
-      (pathname.startsWith("/reports/visits") && !hasWFA) ||
-      (pathname.startsWith("/reports/dsr") && !hasWFA);
+      ((pathname.startsWith("/whatsapp") || pathname.startsWith("/inbox")) && !hasWhatsApp);
 
-    if (isRestricted) {
+    if (featureRestricted || isRouteRestricted(pathname, { owns, isModuleEnabled })) {
       router.replace("/dashboard");
     }
   }, [

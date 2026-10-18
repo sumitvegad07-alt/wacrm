@@ -62,7 +62,12 @@ export const SFA_OWN_FEATURES = [
   "Live Outstanding Management",
   "Route Management (RTM)",
   "Multi-unit Ordering system",
-  "Quotation Management",
+  // "Quotation Management" was transcribed from the sheet's SFA column, but
+  // `quotation` is a CRM-line module in plans/catalog.ts, so an SFA tenant's
+  // Quotation module is clamped off and the screen refuses to open. Rather than
+  // print a promise the product breaks, the line is dropped from what SFA is
+  // sold (founder's call, 2026-10-18). Put it back here only together with a
+  // MODULE_LINE change that actually gives SFA the module.
   "Multiple Customizable Templates",
   "GST & HSN Code Management",
   "Customer Credit Management",

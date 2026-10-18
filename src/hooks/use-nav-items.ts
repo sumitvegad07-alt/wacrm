@@ -59,6 +59,8 @@ export function useVisibleNavItems(): FlatNavItem[] {
       permission?: string;
       module?: string;
       line?: ProductLine;
+      anyLine?: readonly ProductLine[];
+      allLines?: readonly ProductLine[];
       configModule?: keyof ModuleSettings;
     }): boolean => {
       if (item.permission && !hasPermission(item.permission)) return false;
@@ -73,6 +75,8 @@ export function useVisibleNavItems(): FlatNavItem[] {
         if (!alwaysOn) return false;
       }
       if (item.line && !lineEnabled(item.line)) return false;
+      if (item.anyLine && !item.anyLine.some(lineEnabled)) return false;
+      if (item.allLines && !item.allLines.every(lineEnabled)) return false;
       if (item.configModule && !isModuleEnabled(item.configModule)) return false;
       return true;
     };
@@ -97,6 +101,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
       }
       // group
       if (node.line && !lineEnabled(node.line)) continue;
+      if (node.anyLine && !node.anyLine.some(lineEnabled)) continue;
       if (node.configModule && !isModuleEnabled(node.configModule)) continue;
       for (const item of node.items) {
         if (canView(item)) {

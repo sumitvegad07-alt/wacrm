@@ -112,6 +112,7 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 import type { ProductLine } from "@/lib/plans/catalog";
+import { CATALOG_LINES } from "@/lib/plans/surface-gates";
 import { BrandWordmark } from "@/components/shared/brand";
 import {
   Avatar,
@@ -156,6 +157,12 @@ interface NavItem {
    * gated by an admin module toggle — Leads, Deals, Orders and per-line reports.
    */
   line?: ProductLine;
+  /** Shown if the plan includes ANY of these lines. The product catalogue is sold
+   *  with CRM and with SFA, but not with WFA. */
+  anyLine?: readonly ProductLine[];
+  /** Shown only if the plan includes EVERY line listed (e.g. Lead Visits need
+   *  leads from CRM and visits from WFA). */
+  allLines?: readonly ProductLine[];
 }
 
 export type MenuNode =
@@ -169,6 +176,7 @@ export type MenuNode =
       items: NavItem[];
       configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment" | "scheme" | "stock";
       line?: ProductLine;
+      anyLine?: readonly ProductLine[];
     }
   | {
       type: "spacer";
@@ -264,7 +272,9 @@ export function getMenuStructure(
         { href: "/location-tracking/visits", label: "Customer Visits", icon: Building2, module: "location_tracking" },
         { href: "/location-tracking/attendance", label: "User Attendance", icon: UsersRound, module: "location_tracking", permission: "view_attendance" },
         { href: "/location-tracking/leaves", label: "Leaves", icon: CalendarOff, module: "location_tracking" },
-        { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking" },
+        // Route Monitor lists route executions, and Route Management is an SFA
+        // module — it has no place on a WFA-only plan or when `route` is off.
+        { href: "/location-tracking/executions", label: "Route Monitor", icon: Activity, module: "location_tracking", configModule: "route" as const, line: "sfa" as const },
       ],
     },
 
@@ -277,25 +287,30 @@ export function getMenuStructure(
       type: "group",
       label: "Catalog",
       icon: LayoutGrid,
+      // The catalogue is sold in the CRM column ("Unlimited Products", which
+      // Quotations need) and the SFA column, but NOT in WFA: a WFA-only tenant
+      // has neither quotations nor orders to spend a product catalogue on.
+      // Founder's Pricing, Packages & Plans sheet, 2026-09-26.
+      anyLine: CATALOG_LINES,
       items: [
-        { href: "/products", label: "Product", icon: Package, module: "products" },
-        { href: "/catalog/categories", label: "Category", icon: Layers, module: "products" },
-        { href: "/catalog/units", label: "Unit", icon: Ruler, module: "products" },
+        { href: "/products", label: "Product", icon: Package, module: "products", anyLine: CATALOG_LINES },
+        { href: "/catalog/categories", label: "Category", icon: Layers, module: "products", anyLine: CATALOG_LINES },
+        { href: "/catalog/units", label: "Unit", icon: Ruler, module: "products", anyLine: CATALOG_LINES },
         { href: "/price-lists", label: "Price List", icon: ListChecks, module: "products", line: "sfa" },
         // Scheme is an opt-in module (Catalogue Settings toggle).
         { href: "/schemes", label: "Scheme", icon: Percent, module: "orders", configModule: "scheme" as const, line: "sfa" },
-        { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: SlidersHorizontal, permission: "edit_tax_slabs" },
+        { href: "/settings?tab=pricing", label: "Catalogue Settings", icon: SlidersHorizontal, permission: "edit_tax_slabs", anyLine: CATALOG_LINES },
       ],
     },
 
     // ── Sales: Quotation, Stock, Order, Dispatch, Pending Dispatch, Payment ──
-    { type: "link", href: "/quotations", label: "Quotation", icon: FileText, module: "orders", configModule: "quotation" as const },
+    { type: "link", href: "/quotations", label: "Quotation", icon: FileText, module: "orders", configModule: "quotation" as const, line: "crm" as const },
     // Opt-in module (Stock): hidden until enabled in Catalogue Settings.
     { type: "link", href: "/stock", label: "Stock", icon: Boxes, module: "products", configModule: "stock" as const, line: "sfa" },
     { type: "link", href: "/orders", label: "Order", icon: ShoppingCart, module: "orders", line: "sfa" },
-    { type: "link", href: "/dispatches", label: "Dispatch", icon: Truck, module: "orders", configModule: "dispatch" as const },
-    { type: "link", href: "/pending-dispatch", label: "Pending Dispatch", icon: PackageCheck, module: "orders", configModule: "pending_dispatch" as const },
-    { type: "link", href: "/payments", label: "Payment", icon: Banknote, module: "payments", configModule: "payment" as const },
+    { type: "link", href: "/dispatches", label: "Dispatch", icon: Truck, module: "orders", configModule: "dispatch" as const, line: "sfa" as const },
+    { type: "link", href: "/pending-dispatch", label: "Pending Dispatch", icon: PackageCheck, module: "orders", configModule: "pending_dispatch" as const, line: "sfa" as const },
+    { type: "link", href: "/payments", label: "Payment", icon: Banknote, module: "payments", configModule: "payment" as const, line: "sfa" as const },
 
     // ── Service (FSM line): customer assets today, jobs later ──
     // Gated by `line` + `permission` only. NOT `module` (it would check a `view_service` right
@@ -320,7 +335,7 @@ export function getMenuStructure(
     { type: "spacer" },
 
     // ── Field cluster: Expense, Report, Import, Employees (one tight group of rows) ──
-    { type: "link", href: "/expenses", label: "Expense", icon: Coins, module: "expenses", configModule: "expense" as const },
+    { type: "link", href: "/expenses", label: "Expense", icon: Coins, module: "expenses", configModule: "expense" as const, line: "wfa" as const },
 
     // ── Report (collapsed) ──
     {
@@ -375,17 +390,22 @@ export function getMenuStructure(
       label: "Import",
       icon: Upload,
       items: [
+        // Each wizard carries the line that owns the data it writes, so a
+        // CRM-only plan is no longer offered Opening Stock or Outstanding.
+        // Mirrors IMPORT_GATES in @/lib/plans/surface-gates, which also guards
+        // the wizard pages themselves.
         { href: "/import", label: "All imports", icon: Upload, permission: "import_data" },
         { href: "/import/contacts", label: "Customers", icon: Users, permission: "import_data" },
-        { href: "/import/products", label: "Products", icon: Package, permission: "import_data" },
-        { href: "/import/product_categories", label: "Product Categories", icon: Boxes, permission: "import_data" },
-        { href: "/import/product_units", label: "Product Units", icon: Boxes, permission: "import_data" },
-        { href: "/import/leads", label: "Leads", icon: UserPlus, permission: "import_data" },
-        { href: "/import/territories", label: "Territories", icon: MapPin, permission: "import_data" },
+        { href: "/import/products", label: "Products", icon: Package, permission: "import_data", anyLine: CATALOG_LINES },
+        { href: "/import/product_categories", label: "Product Categories", icon: Boxes, permission: "import_data", anyLine: CATALOG_LINES },
+        { href: "/import/product_units", label: "Product Units", icon: Boxes, permission: "import_data", anyLine: CATALOG_LINES },
+        { href: "/import/leads", label: "Leads", icon: UserPlus, permission: "import_data", line: "crm" as const },
+        { href: "/import/territories", label: "Territories", icon: MapPin, permission: "import_data", line: "wfa" as const, configModule: "territory" as const },
         { href: "/import/tasks", label: "Tasks", icon: CheckSquare, permission: "import_data" },
-        { href: "/import/outstanding", label: "Outstanding", icon: Banknote, permission: "import_data" },
-        { href: "/import/stock", label: "Opening Stock", icon: Boxes, permission: "import_data" },
-        { href: "/import/orders", label: "Orders", icon: ShoppingCart, permission: "import_data", soon: true },
+        { href: "/import/outstanding", label: "Outstanding", icon: Banknote, permission: "import_data", line: "sfa" as const },
+        { href: "/import/stock", label: "Opening Stock", icon: Boxes, permission: "import_data", line: "sfa" as const, configModule: "stock" as const },
+        { href: "/import/price_lists", label: "Price Lists", icon: ListChecks, permission: "import_data", line: "sfa" as const },
+        { href: "/import/orders", label: "Orders", icon: ShoppingCart, permission: "import_data", soon: true, line: "sfa" as const },
       ],
     },
 
@@ -408,18 +428,23 @@ export function getMenuStructure(
       label: "Custom Fields",
       icon: SlidersHorizontal,
       items: [
+        // A field builder for a module the plan does not include is dead
+        // configuration, so each entry carries its module's line. Mirrors
+        // CUSTOM_FIELD_GATES in @/lib/plans/surface-gates, which guards
+        // /custom-fields/<module> itself. User, Customer and Task are base.
         { href: "/custom-fields/user", label: "User", icon: User, permission: "edit_custom_fields" },
         { href: "/custom-fields/contact", label: "Customer", icon: Users, permission: "edit_custom_fields" },
-        { href: "/custom-fields/product", label: "Product", icon: Package, permission: "edit_custom_fields" },
-        { href: "/custom-fields/quotation", label: "Sale Quotation", icon: FileText, permission: "edit_custom_fields" },
-        { href: "/custom-fields/lead", label: "Lead", icon: UserPlus, permission: "edit_custom_fields" },
-        { href: "/custom-fields/deal", label: "Deal", icon: GitBranch, permission: "edit_custom_fields" },
+        { href: "/custom-fields/product", label: "Product", icon: Package, permission: "edit_custom_fields", anyLine: CATALOG_LINES },
+        { href: "/custom-fields/quotation", label: "Sale Quotation", icon: FileText, permission: "edit_custom_fields", line: "crm" as const, configModule: "quotation" as const },
+        { href: "/custom-fields/lead", label: "Lead", icon: UserPlus, permission: "edit_custom_fields", line: "crm" as const },
+        { href: "/custom-fields/deal", label: "Deal", icon: GitBranch, permission: "edit_custom_fields", line: "crm" as const },
         { href: "/custom-fields/task", label: "Task", icon: CheckSquare, permission: "edit_custom_fields" },
-        { href: "/custom-fields/customer_visit", label: "Customer Visit", icon: Building2, permission: "edit_custom_fields" },
-        { href: "/custom-fields/lead_visit", label: "Lead Visit", icon: MapPin, permission: "edit_custom_fields" },
-        { href: "/custom-fields/order", label: "Order", icon: ShoppingCart, permission: "edit_custom_fields" },
-        { href: "/custom-fields/dispatch", label: "Dispatch", icon: Truck, permission: "edit_custom_fields" },
-        { href: "/custom-fields/expense", label: "Expense", icon: Coins, permission: "edit_custom_fields" },
+        { href: "/custom-fields/customer_visit", label: "Customer Visit", icon: Building2, permission: "edit_custom_fields", line: "wfa" as const },
+        // A lead visit needs leads (CRM) and visits (WFA) - neither line alone can produce one.
+        { href: "/custom-fields/lead_visit", label: "Lead Visit", icon: MapPin, permission: "edit_custom_fields", allLines: ["crm", "wfa"] as const },
+        { href: "/custom-fields/order", label: "Order", icon: ShoppingCart, permission: "edit_custom_fields", line: "sfa" as const },
+        { href: "/custom-fields/dispatch", label: "Dispatch", icon: Truck, permission: "edit_custom_fields", line: "sfa" as const, configModule: "dispatch" as const },
+        { href: "/custom-fields/expense", label: "Expense", icon: Coins, permission: "edit_custom_fields", line: "wfa" as const, configModule: "expense" as const },
       ],
     },
 
@@ -580,6 +605,8 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
     }
     // Product-line entitlement (Leads/Deals → CRM, Orders → SFA, per-line reports).
     if (item.line && !lineEnabled(item.line)) return false;
+    if (item.anyLine && !item.anyLine.some(lineEnabled)) return false;
+    if (item.allLines && !item.allLines.every(lineEnabled)) return false;
     // Admin-configurable module toggle check
     if (item.configModule && !isModuleEnabled(item.configModule)) return false;
     return true;
@@ -593,6 +620,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
       }
       // For group nodes, check the group-level line + configModule first
       if (node.line && !lineEnabled(node.line)) return null;
+      if (node.anyLine && !node.anyLine.some(lineEnabled)) return null;
       if (node.configModule && !isModuleEnabled(node.configModule)) return null;
       const items = node.items.filter(canViewItem);
       return items.length > 0 ? { ...node, items } : null;

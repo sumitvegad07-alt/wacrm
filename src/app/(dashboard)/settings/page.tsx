@@ -31,13 +31,18 @@ import {
   SECTION_META,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
-import { Zap, ArrowLeft } from 'lucide-react';
+import { Lock, ArrowLeft } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { gatePasses } from '@/lib/plans/surface-gates';
+import type { ProductLine } from '@/lib/plans/catalog';
 
 function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { hasWhatsApp } = useAuth();
+  const {
+    hasCRM, hasWFA, hasSFA, hasFSM,
+    isModuleEnabled, moduleSettingsLoaded, hasPermission,
+  } = useAuth();
 
   const rawTab = searchParams.get('tab') || searchParams.get('section');
   const [activeTab, setActiveTab] = useState<SettingsSection>(() => {
@@ -63,23 +68,7 @@ function SettingsContent() {
     appearance: <AppearancePanel />,
     notifications: <NotificationPreferencesPanel />,
     ai: <AISettingsPanel />,
-    whatsapp: hasWhatsApp ? (
-      <WhatsAppConfig />
-    ) : (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-8 py-16 text-center">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10">
-          <Zap className="h-8 w-8 text-blue-500" />
-        </div>
-        <h2 className="mb-2 text-xl font-semibold text-foreground">
-          WhatsApp API not included
-        </h2>
-        <p className="mb-6 max-w-sm text-sm text-muted-foreground">
-          Your current plan is <strong>Basic</strong>. Upgrade to{' '}
-          <strong>Pro</strong> or <strong>Enterprise</strong> to unlock WhatsApp
-          integration and shared team inbox.
-        </p>
-      </div>
-    ),
+    whatsapp: <WhatsAppConfig />,
     templates: <TemplateManager />,
     document_templates: <DocumentTemplatesPanel />,
     fields: <FieldsAndTagsPanel />,
@@ -105,6 +94,24 @@ function SettingsContent() {
     module_settings: <ModuleSettingsPanel />,
   };
 
+  // Every panel used to render for anyone who could reach /settings: no plan
+  // check and no permission check, with the section chosen by a deep-linkable
+  // `?tab=` value. SECTION_META now carries both gates (see settings-sections.ts)
+  // and this is where they are enforced.
+  //
+  // `moduleSettingsLoaded` has to be true first: payment, route, scheme, stock
+  // and reporting_hierarchy all ship OFF, so judging on the defaults would
+  // refuse a panel the account is entitled to on every cold load and refresh.
+  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM };
+  const meta = SECTION_META[section];
+  const blocked: 'plan' | 'permission' | null = !meta
+    ? null
+    : moduleSettingsLoaded && !gatePasses(meta.gate, { owns, isModuleEnabled })
+      ? 'plan'
+      : meta.permission && !hasPermission(meta.permission)
+        ? 'permission'
+        : null;
+
   return (
     <div className="w-full space-y-6">
       {/* Header — displays title for whichever setting is open */}
@@ -121,8 +128,26 @@ function SettingsContent() {
 
       {/* Main Panel Content — cleanly displays the active openable settings panel */}
       <div className="mt-4 min-w-0">
-        {panel[section]}
+        {blocked ? <SectionBlocked reason={blocked} /> : panel[section]}
       </div>
+    </div>
+  );
+}
+
+function SectionBlocked({ reason }: { reason: 'plan' | 'permission' }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-8 py-16 text-center">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+        <Lock className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h2 className="mb-2 text-xl font-semibold text-foreground">
+        {reason === 'plan' ? 'Not included in your plan' : 'You don\u2019t have access'}
+      </h2>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        {reason === 'plan'
+          ? 'These settings belong to a module your subscription doesn\u2019t cover.'
+          : 'Ask an admin to grant you this right in Team \u2192 Employee Roles.'}
+      </p>
     </div>
   );
 }

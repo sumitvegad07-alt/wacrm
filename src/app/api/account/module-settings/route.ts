@@ -26,6 +26,9 @@ import { clampModuleSettings } from "@/lib/plans/catalog";
 // The canonical set of configurable module keys.
 // Adding a new key here is the only code change needed to support
 // a new toggleable module.
+// Must stay in step with MODULE_KEYS in @/lib/plans/catalog: clampModuleSettings
+// iterates MODULE_KEYS, so a key that is in the catalog but missing here comes
+// back from GET as a permanent false and is silently dropped by PATCH.
 const CONFIGURABLE_MODULES = [
   "whatsapp",
   "quotation",
@@ -38,6 +41,7 @@ const CONFIGURABLE_MODULES = [
   "payment",
   "scheme",
   "stock",
+  "service",
 ] as const;
 
 type ModuleKey = (typeof CONFIGURABLE_MODULES)[number];
@@ -60,6 +64,8 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   scheme: false,
   // Stock Management ships OFF (opt-in from Catalogue Settings).
   stock: false,
+  // Service (FSM) ships OFF — the FSM line is still being built out.
+  service: false,
 };
 
 function normalizeSettings(raw: unknown): ModuleSettings {

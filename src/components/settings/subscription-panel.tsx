@@ -5,9 +5,13 @@ import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { SettingsPanelHead } from './settings-panel-head';
+import { isNewPlan, PLAN_LABEL } from '@/lib/plans/catalog';
 
 interface SubscriptionData {
   customerId: string;
+  /** Human plan label, e.g. "CRM + SFA". Legacy values (Enterprise, Pro, Basic)
+   *  are shown as stored — they are real contracts, just not line plans. */
+  planLabel: string;
   startDate: string;
   expiryDate: string;
   userLimit: number;
@@ -25,7 +29,7 @@ export function SubscriptionPanel() {
       if (!accountId) return;
       try {
         const [acctRes, profilesRes] = await Promise.all([
-          supabase.from('accounts').select('created_at, customer_id, subscription_expires_at, user_count').eq('id', accountId).single(),
+          supabase.from('accounts').select('created_at, customer_id, subscription_expires_at, user_count, subscription_plan').eq('id', accountId).single(),
           supabase.from('profiles').select('id', { count: 'exact' }).eq('account_id', accountId),
         ]);
 
@@ -38,8 +42,13 @@ export function SubscriptionPanel() {
           expiryDate.setFullYear(expiryDate.getFullYear() + 1);
         }
 
+        const rawPlan = acctRes.data?.subscription_plan ?? null;
+
         setData({
           customerId: acctRes.data?.customer_id || '-',
+          // The page never named the plan, so a customer could not tell from
+          // the product which one they were on.
+          planLabel: isNewPlan(rawPlan) ? PLAN_LABEL[rawPlan] : (rawPlan || '-'),
           startDate: createdAt.toLocaleDateString('en-GB').replace(/\//g, '-'),
           expiryDate: expiryDate.toLocaleDateString('en-GB').replace(/\//g, '-'),
           userLimit: acctRes.data?.user_count || 1,
@@ -69,11 +78,19 @@ export function SubscriptionPanel() {
       <SettingsPanelHead title="Subscription" />
       
       <div className="mt-6 space-y-6 w-full">
-        <div className="bg-muted/30 border border-border p-6 rounded-md text-center">
-          <p className="text-sm font-semibold uppercase text-muted-foreground tracking-wide">
-            Your Unique Customer ID Is
-          </p>
-          <p className="text-2xl font-bold text-success mt-1">{data.customerId}</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="bg-muted/30 border border-border p-6 rounded-md text-center">
+            <p className="text-sm font-semibold uppercase text-muted-foreground tracking-wide">
+              Your Unique Customer ID Is
+            </p>
+            <p className="text-2xl font-bold text-success mt-1">{data.customerId}</p>
+          </div>
+          <div className="bg-muted/30 border border-border p-6 rounded-md text-center">
+            <p className="text-sm font-semibold uppercase text-muted-foreground tracking-wide">
+              Your Plan
+            </p>
+            <p className="text-2xl font-bold text-primary mt-1">{data.planLabel}</p>
+          </div>
         </div>
 
         <div>

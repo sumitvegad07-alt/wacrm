@@ -215,10 +215,6 @@ export const stockDescriptor: ImportDescriptor = {
   ],
 };
 
-// NOTE: priceListsDescriptor is intentionally NOT registered — there is no Price
-// List module in the product yet (the price_lists table is a dormant backing table
-// with no create/manage UI), so offering its import would be orphaned. Re-add it
-// here once a real Price List module ships.
 export const WAVE1_DESCRIPTORS: ImportDescriptor[] = [
   productCategoriesDescriptor,
   productsDescriptor,
@@ -228,4 +224,8 @@ export const WAVE1_DESCRIPTORS: ImportDescriptor[] = [
   tasksDescriptor,
   outstandingDescriptor,
   stockDescriptor,
+  // priceListsDescriptor was held back while price_lists was a dormant backing
+  // table. The Price List module shipped (/price-lists, SFA line), so the
+  // descriptor is live; IMPORT_GATES gates the wizard to the SFA line.
+  priceListsDescriptor,
 ];

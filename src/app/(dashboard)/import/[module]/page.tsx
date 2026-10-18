@@ -7,6 +7,8 @@ import { ArrowLeft, Upload, History, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getImportDescriptor } from "@/lib/import/registry";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
+import { gatePasses, IMPORT_GATES } from "@/lib/plans/surface-gates";
+import type { ProductLine } from "@/lib/plans/catalog";
 import { Button } from "@/components/ui/button";
 import { ImportWizard } from "@/components/import/import-wizard";
 import { ImportHistoryDialog } from "@/components/import/import-history-dialog";
@@ -28,13 +30,23 @@ const PLANNED_LABELS: Record<string, string> = {
 export default function ModuleImportPage() {
   const params = useParams<{ module: string }>();
   const moduleKey = params?.module ?? "";
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled, moduleSettingsLoaded } = useAuth();
   const descriptor = getImportDescriptor(moduleKey);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const canImport = hasPermission(PERMISSIONS.IMPORT.DATA);
   const label = descriptor?.label ?? PLANNED_LABELS[moduleKey] ?? "This module";
+
+  // Plan ceiling. The /import hub filtered its tiles by line; this page did
+  // not, so /import/stock, /import/outstanding and /import/territories ran a
+  // real import on a plan that owns none of them. Owner and admin get no
+  // bypass. `moduleSettingsLoaded` matters because stock and territory also
+  // ride a module toggle that ships off, and acting on the defaults would
+  // refuse an import the account is entitled to on every cold load.
+  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM };
+  const offPlan =
+    moduleSettingsLoaded && !gatePasses(IMPORT_GATES[moduleKey], { owns, isModuleEnabled });
 
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
@@ -44,7 +56,16 @@ export default function ModuleImportPage() {
 
       <h1 className="text-xl font-semibold">Import {label}</h1>
 
-      {!canImport ? (
+      {offPlan ? (
+        <div className="mt-6 rounded-xl border border-dashed border-border bg-card p-8 text-center">
+          <Clock className="mx-auto mb-3 size-8 text-muted-foreground" />
+          <p className="font-medium">{label} import is not included in your plan</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            This import belongs to a module your subscription doesn&apos;t cover. See
+            all the imports available to you under <span className="font-medium text-foreground">All imports</span>.
+          </p>
+        </div>
+      ) : !canImport ? (
         <div className="mt-6 rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           You don&apos;t have permission to import. Ask an admin to grant you the
           <span className="font-medium text-foreground"> Import Data </span> permission in Team &rarr; Employee Roles.

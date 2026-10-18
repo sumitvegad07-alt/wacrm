@@ -74,6 +74,10 @@ interface AccountSummary {
   settings: Record<string, unknown> | null;
 }
 
+/** Mirrors MODULE_KEYS in @/lib/plans/catalog and the CONFIGURABLE_MODULES list
+ *  in /api/account/module-settings. All three have to carry the same keys: the
+ *  API clamps over MODULE_KEYS, so a key missing from one of the others is a
+ *  module that can never read as enabled. */
 export interface ModuleSettings {
   whatsapp: boolean;
   quotation: boolean;
@@ -86,6 +90,7 @@ export interface ModuleSettings {
   payment: boolean;
   scheme: boolean;
   stock: boolean;
+  service: boolean;
 }
 
 const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
@@ -105,6 +110,8 @@ const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   scheme: false,
   // Stock Management ships OFF: enabled per-account from Catalogue Settings.
   stock: false,
+  // Service (FSM) ships OFF - the FSM line is still being built out.
+  service: false,
 };
 
 function normalizeModuleSettings(raw: unknown): ModuleSettings {
@@ -128,6 +135,8 @@ function normalizeModuleSettings(raw: unknown): ModuleSettings {
     scheme: typeof src.scheme === 'boolean' ? src.scheme : false,
     // Stock Management defaults OFF when absent.
     stock: typeof src.stock === 'boolean' ? src.stock : false,
+    // Service (FSM) defaults OFF when absent.
+    service: typeof src.service === 'boolean' ? src.service : false,
   };
 }
 

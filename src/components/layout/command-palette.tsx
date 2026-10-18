@@ -7,6 +7,9 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useVisibleNavItems } from "@/hooks/use-nav-items";
 import { SECTION_META } from "@/components/settings/settings-sections";
 import { PERMISSION_INDEX } from "@/lib/auth/permission-groups";
+import { useAuth } from "@/hooks/use-auth";
+import { gatePasses } from "@/lib/plans/surface-gates";
+import type { ProductLine } from "@/lib/plans/catalog";
 import { cn } from "@/lib/utils";
 
 interface PaletteEntry {
@@ -41,6 +44,11 @@ export function CommandPalette({
 function PaletteBody({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
   const navItems = useVisibleNavItems();
+  const { hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled, hasPermission } = useAuth();
+  const owns = useMemo<Record<ProductLine, boolean>>(
+    () => ({ crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM }),
+    [hasCRM, hasWFA, hasSFA, hasFSM],
+  );
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,13 +64,20 @@ function PaletteBody({ onOpenChange }: { onOpenChange: (open: boolean) => void }
       icon: n.icon,
     }));
 
-    const settings: PaletteEntry[] = Object.values(SECTION_META).map((s) => ({
-      id: `settings:${s.id}`,
-      label: s.label,
-      sublabel: "Settings",
-      href: `/settings?tab=${s.id}`,
-      icon: s.icon ?? SettingsIcon,
-    }));
+    // Only the settings panels this account and this user can actually open.
+    // The palette used to index every section in SECTION_META, so "Payments",
+    // "Territory", "Leads Settings" and "Route Settings" were searchable and
+    // one keystroke away on a plan that includes none of them.
+    const settings: PaletteEntry[] = Object.values(SECTION_META)
+      .filter((s) => gatePasses(s.gate, { owns, isModuleEnabled }))
+      .filter((s) => !s.permission || hasPermission(s.permission))
+      .map((s) => ({
+        id: `settings:${s.id}`,
+        label: s.label,
+        sublabel: "Settings",
+        href: `/settings?tab=${s.id}`,
+        icon: s.icon ?? SettingsIcon,
+      }));
 
     const rights: PaletteEntry[] = PERMISSION_INDEX.map((p, i) => ({
       id: `right:${i}`,
@@ -73,7 +88,7 @@ function PaletteBody({ onOpenChange }: { onOpenChange: (open: boolean) => void }
     }));
 
     return [...screens, ...settings, ...rights];
-  }, [navItems]);
+  }, [navItems, owns, isModuleEnabled, hasPermission]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
