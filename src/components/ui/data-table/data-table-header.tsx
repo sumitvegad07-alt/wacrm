@@ -3,6 +3,7 @@
 import { Search } from "lucide-react";
 import { ColumnDef } from "./data-table-types";
 import { TableHead } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 interface DataTableHeaderProps<T> {
   column: ColumnDef<T>;
@@ -25,7 +26,7 @@ export function DataTableHeader<T>({ column, filterValue }: DataTableHeaderProps
   const isActive = Boolean(column.type) && isSet(filterValue);
 
   return (
-    <TableHead className="whitespace-nowrap px-3 font-semibold text-foreground">
+    <TableHead className={cn("whitespace-nowrap px-3 font-semibold text-foreground", column.cellClassName)}>
       <span className="flex items-center gap-1.5 py-2">
         {isActive && (
           <Search className="size-3.5 shrink-0 text-primary" aria-label="Filtered" />

@@ -67,6 +67,15 @@ export interface ColumnDef<T> {
    * Server-paged screens push their filters into the query instead.
    */
   filterValue?: (row: T) => unknown;
+  /**
+   * Extra classes for this column's heading, filter cell and body cells.
+   *
+   * For layout only — pinning a column with `sticky left-0`, or tightening one that holds a
+   * single character. The month grid on User Attendance needs both: 31 day columns that must
+   * stay narrow enough to scroll on a phone, and a name column that has to stay on screen while
+   * they do. Anything about the VALUE belongs in `render`, not here.
+   */
+  cellClassName?: string;
   render?: (row: T) => ReactNode;
 }
 

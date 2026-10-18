@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { ColumnDef } from "./data-table-types";
 import { DataTableHeader } from "./data-table-header";
 import { DataTableFilterRow } from "./data-table-filter-row";
@@ -345,7 +346,7 @@ export function DataTable<T>({
                     </TableCell>
                   )}
                   {visibleColumns.map(col => (
-                    <TableCell key={col.id} className="py-1.5">
+                    <TableCell key={col.id} className={cn("py-1.5", col.cellClassName)}>
                       {col.render ? col.render(row) : (row as any)[col.id] || "-"}
                     </TableCell>
                   ))}

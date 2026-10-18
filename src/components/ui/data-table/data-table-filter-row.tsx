@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TableHead, TableRow } from '@/components/ui/table';
 import { useColumnFilterOptions } from '@/hooks/use-column-filter-options';
+import { cn } from '@/lib/utils';
 import { ColumnDef, ColumnOption, FilterState } from './data-table-types';
 
 /**
@@ -562,7 +563,10 @@ export function DataTableFilterRow<T>({
         <TableHead key={`lead-${i}`} className="p-1" />
       ))}
       {columns.map((column) => (
-        <TableHead key={column.id} className="p-1 align-middle font-normal">
+        <TableHead
+          key={column.id}
+          className={cn('p-1 align-middle font-normal', column.cellClassName)}
+        >
           {column.type === 'text' && (
             <TextFilterCell
               column={column as ColumnDef<unknown>}

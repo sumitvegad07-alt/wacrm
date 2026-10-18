@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Camera, MapPin, Calendar as CalendarIcon, Search } from "lucide-react";
+import { Camera, MapPin, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -31,12 +31,60 @@ import {
   type AttendanceTone,
 } from "@/lib/location/attendance-status";
 import { monthWorkingDays, toDateKey } from "@/lib/location/working-days";
+import {
+  buildAttendanceMatrix,
+  buildDayRollup,
+  buildMonthlyGrid,
+  dayHeading,
+  DAY_TYPE_OPTIONS,
+  formatDateKey,
+  formatMonthKey,
+  MONTHLY_LEGEND,
+  type DayRollupRow,
+  type MonthlyCell,
+  type MonthlyRow,
+  type RollupInput,
+  type RollupSession,
+} from "@/lib/location/attendance-rollup";
 import { ScreenAccessDenied } from "@/components/location-tracking/screen-access-denied";
 import { listApprovedLeaveDays, resolveEmployeeCalendars } from "@/lib/leave/api";
+import { matchesColumnFilters } from "@/lib/table/match-filters";
+import { cn } from "@/lib/utils";
+
+/** The account's own zone when nothing is configured. Every tenant so far is Indian. */
+const FALLBACK_TIMEZONE = "Asia/Kolkata";
+
+const TABS = ["Punch in", "Users", "Days", "Monthly"] as const;
+type TabName = (typeof TABS)[number];
+
+/**
+ * One saved-column key per tab, so each tab keeps its own filters, column layout and saved
+ * views. They cannot be shared: the four tabs do not have a single column in common.
+ */
+const TABLE_KEYS: Record<TabName, string> = {
+  "Punch in": "wacrm_attendance_punch_columns",
+  Users: "wacrm_attendance_users_columns",
+  Days: "wacrm_attendance_days_columns",
+  Monthly: "wacrm_attendance_monthly_columns",
+};
+
+/** Cell colours for the month grid, using the same tokens the status badges use. */
+const CELL_TONE: Record<AttendanceTone, string> = {
+  success: "bg-success/15 text-success",
+  warning: "bg-warning/15 text-warning",
+  destructive: "bg-destructive/10 text-destructive",
+  info: "bg-info/15 text-info",
+  neutral: "bg-muted text-muted-foreground",
+};
+
+/** A Monthly row flattened so Export CSV, which reads `row[column.id]`, can see the day cells. */
+type MonthlyTableRow = MonthlyRow & { cellByKey: Map<string, MonthlyCell> } & Record<string, unknown>;
+
+const dayColumnId = (dateKey: string) => `d${dateKey.slice(8, 10)}`;
 
 export default function UserAttendancePage() {
   const { accountId, hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState("Punch in");
+  const [activeTab, setActiveTab] = useState<TabName>("Punch in");
   const [globalSearch, setGlobalSearch] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
@@ -45,12 +93,16 @@ export default function UserAttendancePage() {
   // One hook per tab, keyed by the tab's own table. Each tab therefore keeps its
   // own remembered filters instead of sharing — and switching tabs no longer has
   // to blank the filters by hand to avoid applying one tab's columns to the other.
-  const tableView = useTableView(
-    activeTab === "Users" ? "wacrm_attendance_users_columns" : "wacrm_attendance_punch_columns",
-    {},
-  );
+  const tableView = useTableView(TABLE_KEYS[activeTab], {});
   const { filterState } = tableView;
   const [shift, setShift] = useState(DEFAULT_TRACKING);
+  /**
+   * Everything the Days and Monthly tabs need, exactly as it came back from the database.
+   *
+   * They are two more ways of slicing the month this page has already loaded — not another data
+   * layer — so nothing extra is fetched for them. Switching to either tab runs no query at all.
+   */
+  const [rollupSource, setRollupSource] = useState<RollupInput | null>(null);
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
   
   const supabase = createClient();
@@ -85,6 +137,11 @@ export default function UserAttendancePage() {
       .maybeSingle();
     const shiftSettings = normalizeTrackingSettings((acct as any)?.settings?.tracking_settings);
     setShift(shiftSettings);
+    // The account's own zone. Every day in the rollups is bucketed in it, so an Indian tenant's
+    // evening punch-in stays on the day it happened instead of sliding onto the next one.
+    const rawTimezone = (acct as any)?.settings?.timezone;
+    const timezone =
+      typeof rawTimezone === "string" && rawTimezone ? rawTimezone : FALLBACK_TIMEZONE;
 
     const startOfMonth = new Date(selectedDate);
     startOfMonth.setDate(1);
@@ -300,6 +357,28 @@ export default function UserAttendancePage() {
     });
     setUsersSummaryData(summaryFormatted);
 
+    // The Days and Monthly tabs work off exactly this — the month's sessions, everyone's own
+    // calendar and the approved leave that is already in hand. Handing them the raw rows rather
+    // than a second summary is what keeps all four tabs unable to disagree with each other.
+    setRollupSource({
+      employees: profiles.map(p => {
+        const calendar = calendarFor(p.id);
+        return {
+          profileId: p.id,
+          userId: p.user_id,
+          name: p.full_name || "Unknown",
+          workingDays: calendar.workingDays,
+          holidays: calendar.holidays,
+        };
+      }),
+      sessions: (monthSessions ?? []) as RollupSession[],
+      leave: approvedLeave,
+      settings: shiftSettings,
+      timezone,
+      fromKey: monthFrom,
+      toKey: monthTo,
+    });
+
     setIsLoading(false);
   };
 
@@ -475,6 +554,14 @@ export default function UserAttendancePage() {
       render: (row) => <span className="text-right block">{row.holidays}</span>
     },
     {
+      id: "holidayLabel",
+      label: "Holiday Name",
+      type: "text",
+      render: (row) => (
+        <span className="whitespace-nowrap text-muted-foreground">{row.holidayLabel || "-"}</span>
+      ),
+    },
+    {
       id: "presencePct",
       label: "Presence (%)",
       type: "text",
@@ -511,6 +598,274 @@ export default function UserAttendancePage() {
       )
     }
   ];
+
+  /**
+   * Everyone's every day in the month, classified once.
+   *
+   * The name search narrows the SET OF PEOPLE first, so the Days tab really does report "across
+   * the filtered set of users" rather than filtering rows after the sums are already made.
+   */
+  const attendanceMatrix = useMemo(() => {
+    if (!rollupSource) return null;
+    const term = globalSearch.trim().toLowerCase();
+    const employees = term
+      ? rollupSource.employees.filter(e => e.name.toLowerCase().includes(term))
+      : rollupSource.employees;
+    return buildAttendanceMatrix({ ...rollupSource, employees });
+  }, [rollupSource, globalSearch]);
+
+  const daysData = useMemo(
+    () => (attendanceMatrix ? buildDayRollup(attendanceMatrix) : []),
+    [attendanceMatrix],
+  );
+
+  /**
+   * The month grid, flattened.
+   *
+   * Export CSV reads `row[column.id]`, so each day's letter is copied onto the row under its own
+   * column id. The cells themselves stay on the row too, keyed by date, because the grid needs
+   * the colour and the full wording that a single letter cannot carry.
+   */
+  const monthlyData: MonthlyTableRow[] = useMemo(() => {
+    if (!attendanceMatrix) return [];
+    return buildMonthlyGrid(attendanceMatrix).map(row => {
+      const flat = {
+        ...row,
+        cellByKey: new Map(row.cells.map(c => [c.dateKey, c])),
+      } as MonthlyTableRow;
+      row.cells.forEach(c => {
+        // A day that has not happened yet exports as blank rather than as a dot, which would
+        // read as data in a spreadsheet.
+        flat[dayColumnId(c.dateKey)] = c.status === "future" ? "" : c.code;
+      });
+      return flat;
+    });
+  }, [attendanceMatrix]);
+
+  /** A count that has not been earned yet reads as "-", never as a zero. */
+  const countCell = (value: number, row: DayRollupRow, className?: string) =>
+    row.isFuture ? (
+      <span className="block text-right text-muted-foreground">&mdash;</span>
+    ) : (
+      <span className={cn("block text-right", className)}>{value}</span>
+    );
+
+  const daysColumns: ColumnDef<DayRollupRow>[] = [
+    {
+      // The id is the row's own field, because Export CSV and the filter matcher both read
+      // `row[column.id]` — an id that names no field is a column that exports blank and filters
+      // to nothing.
+      id: "dateKey",
+      label: "Date",
+      type: "date",
+      render: (row) => (
+        <span className={cn("font-medium whitespace-nowrap", row.isFuture && "text-muted-foreground")}>
+          {formatDateKey(row.dateKey)}
+        </span>
+      ),
+    },
+    {
+      id: "weekdayLabel",
+      label: "Day",
+      type: "select",
+      options: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(
+        d => ({ label: d, value: d }),
+      ),
+      render: (row) => <span className="whitespace-nowrap">{row.weekdayLabel}</span>,
+    },
+    {
+      id: "dayTypeLabel",
+      label: "Day Type",
+      type: "select",
+      options: DAY_TYPE_OPTIONS,
+      render: (row) => (
+        <div className="flex flex-wrap items-center gap-1">
+          <Badge variant={row.dayType === "working" ? "neutral" : "info"}>{row.dayTypeLabel}</Badge>
+          {row.holidayNames.map(name => (
+            <Badge key={name} variant="neutral">{name}</Badge>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: "expected",
+      label: "Expected",
+      type: "range",
+      render: (row) => countCell(row.expected, row),
+    },
+    {
+      id: "present",
+      label: "Present",
+      type: "range",
+      render: (row) => countCell(row.present, row, "font-medium text-success"),
+    },
+    {
+      id: "absent",
+      label: "Absent",
+      type: "range",
+      render: (row) =>
+        countCell(row.absent, row, row.absent > 0 ? "font-medium text-destructive" : undefined),
+    },
+    {
+      id: "onLeave",
+      label: "On Leave",
+      type: "range",
+      render: (row) => countCell(row.onLeave, row),
+    },
+    {
+      id: "lateStart",
+      label: "Late Start",
+      type: "range",
+      render: (row) => countCell(row.lateStart, row),
+    },
+    {
+      id: "earlyLeaving",
+      label: "Early Leaving",
+      type: "range",
+      render: (row) => countCell(row.earlyLeaving, row),
+    },
+    {
+      id: "shortPresent",
+      label: "Short Present",
+      type: "range",
+      render: (row) => countCell(row.shortPresent, row),
+    },
+    {
+      id: "missingPunchOut",
+      label: "No Punch Out",
+      type: "range",
+      render: (row) =>
+        countCell(
+          row.missingPunchOut,
+          row,
+          row.missingPunchOut > 0 ? "font-semibold text-destructive" : undefined,
+        ),
+    },
+    {
+      id: "weeklyOff",
+      label: "Weekly Off",
+      type: "range",
+      render: (row) => countCell(row.weeklyOff, row),
+    },
+    {
+      id: "holiday",
+      label: "Holiday",
+      type: "range",
+      render: (row) => countCell(row.holiday, row),
+    },
+    {
+      id: "presencePct",
+      label: "Presence (%)",
+      type: "range",
+      render: (row) =>
+        row.isFuture ? (
+          <span className="block text-right text-muted-foreground">&mdash;</span>
+        ) : (
+          <span className="block text-right font-medium">{row.presencePct}%</span>
+        ),
+    },
+  ];
+
+  /**
+   * Name, then one column per day of the month, then the row's totals.
+   *
+   * Built from the month actually loaded, so February gets 28 columns and never 31 empty ones.
+   * The name column is pinned with `sticky left-0`: on a phone the day columns scroll sideways,
+   * and a grid whose rows you can no longer attribute to anybody is not worth scrolling.
+   */
+  const monthlyColumns: ColumnDef<MonthlyTableRow>[] = useMemo(() => {
+    const cols: ColumnDef<MonthlyTableRow>[] = [
+      {
+        id: "name",
+        label: "Name",
+        type: "text",
+        cellClassName: "sticky left-0 z-20 bg-card",
+        render: (row) => <span className="font-medium whitespace-nowrap">{row.name}</span>,
+      },
+    ];
+
+    for (const dateKey of attendanceMatrix?.dayKeys ?? []) {
+      const heading = dayHeading(dateKey);
+      cols.push({
+        id: dayColumnId(dateKey),
+        // The weekday goes in the heading too: the date alone would leave the reader counting
+        // columns to find Sunday, which is the one they are looking for.
+        label: `${heading.dayOfMonth} ${heading.weekdayShort.slice(0, 2)}`,
+        cellClassName: "px-0.5 text-center",
+        render: (row) => {
+          const cell = row.cellByKey.get(dateKey);
+          if (!cell) return null;
+          const flagged = cell.flags.length > 0;
+          return (
+            <span
+              title={`${formatDateKey(dateKey)} — ${cell.label}`}
+              aria-label={`${formatDateKey(dateKey)}: ${cell.label}`}
+              className={cn(
+                "mx-auto flex size-6 items-center justify-center rounded text-[11px] font-semibold",
+                CELL_TONE[cell.tone],
+                // A dot as loud as a verdict would make the rest of the month unreadable, so a
+                // day that has not happened yet gets no fill at all.
+                cell.status === "future" && "bg-transparent text-muted-foreground/50",
+                // Something went wrong inside an otherwise fine day — a late start, a missing
+                // punch-out. Ringed rather than recoloured, so the verdict's colour survives.
+                flagged && "ring-1 ring-inset ring-foreground/30",
+              )}
+            >
+              {cell.code}
+            </span>
+          );
+        },
+      });
+    }
+
+    cols.push(
+      {
+        id: "workingDays",
+        label: "Working Days",
+        type: "range",
+        render: (row) => <span className="block text-right">{row.workingDays}</span>,
+      },
+      {
+        id: "present",
+        label: "Present",
+        type: "range",
+        render: (row) => (
+          <span className="block text-right font-medium text-success">{row.present}</span>
+        ),
+      },
+      {
+        id: "absent",
+        label: "Absent",
+        type: "range",
+        render: (row) => (
+          <span className={cn("block text-right", row.absent > 0 && "font-medium text-destructive")}>
+            {row.absent}
+          </span>
+        ),
+      },
+      {
+        id: "leave",
+        label: "Leave",
+        type: "range",
+        render: (row) => <span className="block text-right">{row.leave}</span>,
+      },
+    );
+    return cols;
+  }, [attendanceMatrix]);
+
+  // Both new tabs filter through the shared, column-driven matcher rather than a hand-written
+  // chain of `if (colId === ...)`. A column that carries a filter type is therefore filtered,
+  // full stop — which is what stops a visible control from quietly doing nothing.
+  const filteredDaysData = useMemo(
+    () => daysData.filter(row => matchesColumnFilters(row, filterState, daysColumns)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [daysData, filterState],
+  );
+
+  const filteredMonthlyData = useMemo(
+    () => monthlyData.filter(row => matchesColumnFilters(row, filterState, monthlyColumns)),
+    [monthlyData, filterState, monthlyColumns],
+  );
 
   const filteredPunchData = useMemo(() => {
     return attendanceData.filter(row => {
@@ -550,9 +905,21 @@ export default function UserAttendancePage() {
     });
   }, [globalSearch, usersSummaryData, filterState]);
 
-  const handleTabChange = (tab: string) => {
+  const handleTabChange = (tab: TabName) => {
     setActiveTab(tab);
   };
+
+  /** How many rows the tab on screen is showing, in its own units. */
+  const tabTotal =
+    activeTab === "Punch in"
+      ? `${filteredPunchData.length} records`
+      : activeTab === "Users"
+        ? `${filteredUsersData.length} users`
+        : activeTab === "Days"
+          ? `${filteredDaysData.length} days`
+          : `${filteredMonthlyData.length} users`;
+
+  const peopleCounted = attendanceMatrix?.employees.length ?? 0;
 
   // Direct-URL guard — the sidebar hides this without view_attendance. Owner/admin pass.
   if (!hasPermission("view_attendance")) {
@@ -586,7 +953,7 @@ export default function UserAttendancePage() {
 
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col">
         <div className="border-b border-border flex flex-wrap gap-2 px-4 sm:px-6 shrink-0">
-          {["Punch in", "Users", "Days", "Monthly"].map((tab) => (
+          {TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => handleTabChange(tab)}
@@ -600,22 +967,31 @@ export default function UserAttendancePage() {
         </div>
 
         <div className="p-0 flex flex-col min-h-0">
-          {(activeTab === "Punch in" || activeTab === "Users") && (
-            <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-b border-border gap-4 shrink-0">
-              <div className="relative w-full sm:max-w-xs">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search by name..." 
-                  className="pl-8 bg-background" 
-                  value={globalSearch}
-                  onChange={(e) => setGlobalSearch(e.target.value)}
-                />
-              </div>
-              <span className="text-sm text-muted-foreground font-medium whitespace-nowrap">
-                Total: {activeTab === "Punch in" ? filteredPunchData.length : filteredUsersData.length}
-              </span>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border-b border-border gap-3 shrink-0">
+            <div className="relative w-full sm:max-w-xs">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name..."
+                className="pl-8 bg-background"
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+              />
             </div>
-          )}
+            <div className="flex flex-col items-start sm:items-end gap-0.5">
+              <span className="text-sm text-muted-foreground font-medium whitespace-nowrap">
+                Total: {tabTotal}
+              </span>
+              {/* The Days tab counts PEOPLE into each row, so a name search changes the numbers
+                  rather than the number of rows. Say so, or the totals look wrong. */}
+              {(activeTab === "Days" || activeTab === "Monthly") && rollupSource && (
+                <span className="text-xs text-muted-foreground">
+                  {formatMonthKey(rollupSource.fromKey)} &middot; {peopleCounted}{" "}
+                  {peopleCounted === 1 ? "person" : "people"} &middot; days counted in{" "}
+                  {rollupSource.timezone}
+                </span>
+              )}
+            </div>
+          </div>
 
           {activeTab === "Punch in" && (
             <DataTable
@@ -637,14 +1013,52 @@ export default function UserAttendancePage() {
             />
           )}
 
-          {(activeTab === "Days" || activeTab === "Monthly") && (
-            <div className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[400px]">
-              <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <h3 className="text-lg font-medium text-foreground mb-1">Coming Soon</h3>
-              <p className="max-w-md mx-auto text-sm">
-                The {activeTab} view is currently under construction. Check back soon for detailed chronological attendance reporting.
-              </p>
-            </div>
+          {activeTab === "Days" && (
+            <DataTable
+              columns={daysColumns}
+              data={filteredDaysData}
+              tableView={tableView}
+              isLoading={isLoading}
+              rowKey={(row) => row.dateKey}
+              emptyMessage="No days in this month yet."
+            />
+          )}
+
+          {activeTab === "Monthly" && (
+            <>
+              {/* The grid shows one letter per day, so the key for those letters has to be on
+                  the same screen. Wraps on a phone instead of scrolling away. */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 border-b border-border text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">What the letters mean</span>
+                {MONTHLY_LEGEND.map((item) => (
+                  <span key={item.code} className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "flex size-5 items-center justify-center rounded text-[11px] font-semibold",
+                        CELL_TONE[item.tone],
+                      )}
+                    >
+                      {item.code}
+                    </span>
+                    {item.label}
+                  </span>
+                ))}
+                <span className="flex items-center gap-1.5">
+                  <span className="flex size-5 items-center justify-center rounded text-[11px] font-semibold ring-1 ring-inset ring-foreground/30">
+                    P
+                  </span>
+                  A ring means something to look at &mdash; late start, early leaving, no punch out
+                </span>
+              </div>
+              <DataTable
+                columns={monthlyColumns}
+                data={filteredMonthlyData}
+                tableView={tableView}
+                isLoading={isLoading}
+                rowKey={(row) => row.profileId}
+                emptyMessage="Nobody to show for this month."
+              />
+            </>
           )}
         </div>
       </div>
