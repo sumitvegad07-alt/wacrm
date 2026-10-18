@@ -103,6 +103,31 @@ describe("describeColumns", () => {
     expect(describeColumns(blank, true)[1].label).toBe("Column 2");
   });
 
+  it("shortens a long sample instead of letting the dropdown clip it", () => {
+    // The dropdown is only as wide as the field it opens under, so a real
+    // address column was being cut off mid-word at whatever point the box
+    // ended, which reads as a rendering fault rather than a sample.
+    const long = parseCsv(
+      "address,phone\n" +
+        '"Old Town, Gooty Rd, Aamlapur, Ram Nagar, Anantapur, Andhra Pradesh 515005",9876543210',
+    );
+    const sample = describeColumns(long, true)[0].sample;
+    expect(sample.length).toBeLessThanOrEqual(28);
+    expect(sample.endsWith("\u2026")).toBe(true);
+    expect(sample.startsWith("Old Town")).toBe(true);
+  });
+
+  it("leaves a sample that already fits alone", () => {
+    const table = parseCsv("phone\n9876543210");
+    expect(describeColumns(table, true)[0].sample).toBe("9876543210");
+    expect(describeColumns(table, true)[0].sample).not.toContain("\u2026");
+  });
+
+  it("flattens a newline inside a quoted cell so one row cannot break the list", () => {
+    const multiline = parseCsv('address,phone\n"12 Main St\nPune",9876543210');
+    expect(describeColumns(multiline, true)[0].sample).toBe("12 Main St Pune");
+  });
+
   it("skips empty cells when looking for a sample", () => {
     const sparse = parseCsv("name,phone\nRaj,\nMeena,9123456789");
     expect(describeColumns(sparse, true)[1].sample).toBe("9123456789");

@@ -22,6 +22,19 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   describeColumns,
   extractRecipients,
@@ -31,6 +44,15 @@ import {
 
 const GAP_CHOICES = [1, 2, 5, 10, 15] as const;
 const MAX_DAILY_CAP = 50;
+
+/**
+ * The value behind "Don't use a name".
+ *
+ * An empty string is how the Select says "nothing picked yet", so choosing not
+ * to map a name needs a value of its own - otherwise the option cannot be
+ * selected and the placeholder never goes away.
+ */
+const NO_NAME_COLUMN = "none";
 
 /** Mirrors the API's own ceiling so the founder hears about it before uploading. */
 const MAX_CSV_ROWS = 20_000;
@@ -349,8 +371,10 @@ export default function OutreachClient() {
             </div>
             <div className="flex gap-2">
               {live.status === "running" ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   disabled={busy}
                   onClick={() =>
                     act(
@@ -358,13 +382,14 @@ export default function OutreachClient() {
                       "Paused.",
                     )
                   }
-                  className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
                 >
                   Pause
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   disabled={busy}
                   onClick={() =>
                     act(
@@ -372,13 +397,14 @@ export default function OutreachClient() {
                       "Running again.",
                     )
                   }
-                  className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
                 >
                   Resume
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
+                variant="destructive"
+                size="sm"
                 disabled={busy}
                 onClick={() => {
                   if (!window.confirm("Stop this campaign for good? It cannot be resumed."))
@@ -388,10 +414,9 @@ export default function OutreachClient() {
                     "Stopped.",
                   );
                 }}
-                className="rounded-md border border-destructive/40 px-3 py-1.5 text-sm disabled:opacity-50"
               >
                 Stop
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -427,23 +452,22 @@ export default function OutreachClient() {
           ) : null}
 
           <div className="mt-4 border-t pt-3">
-            <label className="block text-sm font-medium" htmlFor="test">
-              Send a test to your own number
-            </label>
+            <Label htmlFor="test">Send a test to your own number</Label>
             <p className="text-xs text-muted-foreground">
               Up to three numbers. Test messages jump the queue and ignore the daily
               limit, so you can check the wording before the rest go out.
             </p>
             <div className="mt-2 flex gap-2">
-              <input
+              <Input
                 id="test"
                 value={testNumbers}
                 onChange={(e) => setTestNumbers(e.target.value)}
                 placeholder="9876543210"
-                className="flex-1 rounded-md border px-3 py-1.5 text-sm"
+                className="flex-1"
               />
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 disabled={busy || !testNumbers.trim()}
                 onClick={async () => {
                   await act(
@@ -456,10 +480,9 @@ export default function OutreachClient() {
                   );
                   setTestNumbers("");
                 }}
-                className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
               >
                 Send test
-              </button>
+              </Button>
             </div>
           </div>
         </section>
@@ -475,16 +498,33 @@ export default function OutreachClient() {
               A CSV file with the phone numbers in one of the columns. Indian mobile
               numbers, with or without +91.
             </p>
+            {/*
+              The input itself is hidden and driven by the button. A bare
+              <input type="file"> renders as the browser's own "Choose file / No
+              file chosen" text, which in the dark theme was grey on near-black
+              and did not read as something you could click at all.
+            */}
             <input
               ref={fileInput}
               type="file"
               accept=".csv,text/csv,text/plain"
+              className="sr-only"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) void onFile(file);
               }}
-              className="mt-3 block w-full text-sm"
             />
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              className="mt-3 flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/30 px-4 py-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/60"
+            >
+              <Upload className="size-6 text-muted-foreground" aria-hidden />
+              <span className="text-sm font-medium">Choose a CSV file</span>
+              <span className="text-xs text-muted-foreground">
+                Or export one from Lead Discovery and upload it here
+              </span>
+            </button>
           </>
         ) : (
           <div className="mt-3 space-y-3">
@@ -496,67 +536,73 @@ export default function OutreachClient() {
                   {table.header.length} columns
                 </span>
               </p>
-              <button
-                type="button"
-                onClick={resetUpload}
-                className="rounded-md border px-2 py-1 text-xs"
-              >
+              <Button type="button" variant="outline" size="sm" onClick={resetUpload}>
                 Choose a different file
-              </button>
+              </Button>
             </div>
 
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="hasHeader"
                 checked={firstRowIsHeader}
-                onChange={(e) => setFirstRowIsHeader(e.target.checked)}
+                onCheckedChange={(checked) => setFirstRowIsHeader(checked === true)}
               />
-              The first row is a header, not a contact
-            </label>
+              <Label htmlFor="hasHeader" className="text-sm font-normal">
+                The first row is a header, not a contact
+              </Label>
+            </div>
 
+            {/*
+              The project's Select, not a native <select>. The native one paints
+              its options with the OS list colours, which in the dark theme came
+              out as near-invisible grey on grey - and the option text is the
+              whole point here, because the sample value next to each column name
+              is how you tell you picked the right column.
+            */}
             <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium" htmlFor="phoneCol">
-                  Which column has the phone numbers?
-                </label>
-                <select
-                  id="phoneCol"
-                  value={phoneColumn ?? ""}
-                  onChange={(e) =>
-                    setPhoneColumn(e.target.value === "" ? null : Number(e.target.value))
-                  }
-                  className="mt-1 w-full rounded-md border px-3 py-1.5 text-sm"
+              <div className="space-y-1.5">
+                <Label htmlFor="phoneCol">Which column has the phone numbers?</Label>
+                <Select
+                  value={phoneColumn === null ? "" : String(phoneColumn)}
+                  onValueChange={(v) => setPhoneColumn(v === "" ? null : Number(v))}
                 >
-                  <option value="">Choose a column&hellip;</option>
-                  {columns.map((c) => (
-                    <option key={c.index} value={c.index}>
-                      {c.label}
-                      {c.sample ? ` — e.g. ${c.sample}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="phoneCol" className="w-full">
+                    <SelectValue placeholder="Choose a column…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {columns.map((c) => (
+                      <SelectItem key={c.index} value={String(c.index)}>
+                        {c.label}
+                        {c.sample ? ` — e.g. ${c.sample}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium" htmlFor="nameCol">
+              <div className="space-y-1.5">
+                <Label htmlFor="nameCol">
                   Name column <span className="font-normal">(optional)</span>
-                </label>
-                <select
-                  id="nameCol"
-                  value={nameColumn ?? ""}
-                  onChange={(e) =>
-                    setNameColumn(e.target.value === "" ? null : Number(e.target.value))
+                </Label>
+                <Select
+                  value={nameColumn === null ? NO_NAME_COLUMN : String(nameColumn)}
+                  onValueChange={(v) =>
+                    setNameColumn(v === NO_NAME_COLUMN || v === "" ? null : Number(v))
                   }
-                  className="mt-1 w-full rounded-md border px-3 py-1.5 text-sm"
                 >
-                  <option value="">Don&apos;t use a name</option>
-                  {columns.map((c) => (
-                    <option key={c.index} value={c.index}>
-                      {c.label}
-                      {c.sample ? ` — e.g. ${c.sample}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="nameCol" className="w-full">
+                    <SelectValue placeholder="Don't use a name" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_NAME_COLUMN}>Don&apos;t use a name</SelectItem>
+                    {columns.map((c) => (
+                      <SelectItem key={c.index} value={String(c.index)}>
+                        {c.label}
+                        {c.sample ? ` — e.g. ${c.sample}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -599,8 +645,8 @@ export default function OutreachClient() {
       <section className="rounded-lg border p-4">
         <h2 className="font-medium">2. Your message</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Write the same message two different ways, so all {MAX_DAILY_CAP} a day
-          aren&apos;t identical &mdash; that is the main thing that gets a number banned.
+          Write the same message two different ways, so all {MAX_DAILY_CAP}{" "}
+          a day aren&apos;t identical &mdash; that is the main thing that gets a number banned.
           Write <code className="rounded bg-muted px-1">{"{name}"}</code> where the
           person&apos;s name should go. An opt-out line is added automatically.
         </p>
@@ -608,18 +654,18 @@ export default function OutreachClient() {
         <div className="mt-3 space-y-3">
           {variants.map((value, i) => (
             <div key={i}>
-              <label className="block text-sm font-medium" htmlFor={`variant-${i}`}>
+              <Label htmlFor={`variant-${i}`}>
                 Wording {i + 1}
                 {i < 2 ? "" : " (optional)"}
-              </label>
-              <textarea
+              </Label>
+              <Textarea
                 id={`variant-${i}`}
                 rows={3}
                 value={value}
                 onChange={(e) =>
                   setVariants((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))
                 }
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                className="mt-1"
                 placeholder={
                   i === 0
                     ? "Hi {name}, I run OZZO — field-sales software for teams like yours. Worth a quick look?"
@@ -629,13 +675,14 @@ export default function OutreachClient() {
             </div>
           ))}
           {variants.length < 4 ? (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => setVariants((prev) => [...prev, ""])}
-              className="rounded-md border px-3 py-1.5 text-sm"
             >
               Add another wording
-            </button>
+            </Button>
           ) : null}
         </div>
       </section>
@@ -645,21 +692,22 @@ export default function OutreachClient() {
         <h2 className="font-medium">3. How fast</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium" htmlFor="gap">
-              Gap between messages
-            </label>
-            <select
-              id="gap"
-              value={gapMinutes}
-              onChange={(e) => setGapMinutes(Number(e.target.value))}
-              className="mt-1 w-full rounded-md border px-3 py-1.5 text-sm"
+            <Label htmlFor="gap">Gap between messages</Label>
+            <Select
+              value={String(gapMinutes)}
+              onValueChange={(v) => setGapMinutes(Number(v))}
             >
-              {GAP_CHOICES.map((m) => (
-                <option key={m} value={m}>
-                  {m} minute{m === 1 ? "" : "s"}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="gap" className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GAP_CHOICES.map((m) => (
+                  <SelectItem key={m} value={String(m)}>
+                    {m} minute{m === 1 ? "" : "s"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="mt-1 text-xs text-muted-foreground">
               Varied by about a fifth either way, so the timing doesn&apos;t look
               automated.
@@ -667,17 +715,15 @@ export default function OutreachClient() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium" htmlFor="cap">
-              Most per day
-            </label>
-            <input
+            <Label htmlFor="cap">Most per day</Label>
+            <Input
               id="cap"
               type="number"
               min={1}
               max={MAX_DAILY_CAP}
               value={dailyCap}
               onChange={(e) => setDailyCap(e.target.value)}
-              className="mt-1 w-full rounded-md border px-3 py-1.5 text-sm"
+              className="mt-1"
             />
             <p className="mt-1 text-xs text-muted-foreground">
               {MAX_DAILY_CAP} is the limit. A new number starts at 20 on day one and 40
@@ -696,14 +742,13 @@ export default function OutreachClient() {
           </p>
         ) : (
           <>
-            <button
+            <Button
               type="button"
               disabled={!canSend}
               onClick={() => void startSending()}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
               {busy ? "Starting…" : `Start sending to ${chosen.length.toLocaleString()}`}
-            </button>
+            </Button>
             {!chosen.length ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 Upload a file and choose the phone column first.
@@ -731,13 +776,15 @@ export default function OutreachClient() {
               Copy this now &mdash; it is not shown again.
             </p>
             <code className="mt-1 block break-all font-mono text-xs">{newToken}</code>
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
               onClick={() => setNewToken("")}
-              className="mt-2 rounded-md border px-2 py-1 text-xs"
             >
               Done
-            </button>
+            </Button>
           </div>
         ) : null}
 
@@ -753,24 +800,26 @@ export default function OutreachClient() {
                     ? ` · last seen ${new Date(a.last_seen_at).toLocaleString()}`
                     : ""}
                 </span>
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   disabled={busy}
                   onClick={() => {
                     if (!window.confirm(`Revoke "${a.label}"? The extension stops.`))
                       return;
                     void act({ action: "revokeAgent", agentId: a.id }, "Revoked.");
                   }}
-                  className="rounded-md border px-2 py-0.5 text-xs disabled:opacity-50"
                 >
                   Revoke
-                </button>
+                </Button>
               </li>
             ))}
         </ul>
 
-        <button
+        <Button
           type="button"
+          variant="outline"
           disabled={busy}
           onClick={async () => {
             setBusy(true);
@@ -789,10 +838,10 @@ export default function OutreachClient() {
               setBusy(false);
             }
           }}
-          className="mt-3 rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+          className="mt-3"
         >
           Create a token
-        </button>
+        </Button>
       </section>
 
       {/* ---------------- suppression ---------------- */}
@@ -802,15 +851,17 @@ export default function OutreachClient() {
           When someone replies STOP, paste their number here. They are skipped by every
           campaign from then on, including lists you upload later. One per line.
         </p>
-        <textarea
+        <Textarea
           rows={3}
           value={suppressText}
           onChange={(e) => setSuppressText(e.target.value)}
           placeholder={"9876543210\n+91 91234 56789"}
-          className="mt-2 w-full rounded-md border px-3 py-2 text-sm"
+          className="mt-2"
         />
-        <button
+        <Button
           type="button"
+          variant="outline"
+          className="mt-2"
           disabled={busy || !suppressText.trim()}
           onClick={async () => {
             await act(
@@ -819,10 +870,9 @@ export default function OutreachClient() {
             );
             setSuppressText("");
           }}
-          className="mt-2 rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
         >
           Add
-        </button>
+        </Button>
       </section>
     </div>
   );

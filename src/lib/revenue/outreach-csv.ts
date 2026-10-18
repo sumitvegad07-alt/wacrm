@@ -35,7 +35,10 @@ export interface CsvTable {
  * make that column impossible to recognise.
  */
 export function parseCsv(text: string): CsvTable {
-  const input = text.replace(/^﻿/, "");
+  // Written as an escape on purpose: a literal U+FEFF here is invisible in an
+  // editor and one stray reformat would delete it, taking BOM stripping with it
+  // and leaving no visible diff behind.
+  const input = text.replace(/^\uFEFF/, "");
 
   const rows: string[][] = [];
   let row: string[] = [];
@@ -117,6 +120,17 @@ export function parseCsv(text: string): CsvTable {
 }
 
 /**
+ * The longest sample value shown in the column dropdown.
+ *
+ * The dropdown is the width of the field it opens under, and an address column
+ * carries things like "Old Town, Gooty Rd, Aamlapur, Ram Nagar, Anantapur,
+ * Andhra Pradesh 515005". Left whole it is clipped mid-word at whatever point
+ * the box ends, which reads as a rendering fault. Cut deliberately, with an
+ * ellipsis, it reads as a sample.
+ */
+const SAMPLE_MAX = 28;
+
+/**
  * A label for each column, for the dropdown the founder picks from.
  *
  * Shows the header text when there is one and a sample value from the first
@@ -130,8 +144,12 @@ export function describeColumns(
   const dataRows = firstRowIsHeader ? table.rows : [table.header, ...table.rows];
 
   return table.header.map((headerCell, index) => {
-    const sample =
+    const found =
       dataRows.find((r) => (r[index] ?? "").trim() !== "")?.[index]?.trim() ?? "";
+    // Newlines are legal inside a quoted CSV field and would break the row.
+    const flat = found.replace(/\s+/g, " ");
+    const sample =
+      flat.length > SAMPLE_MAX ? `${flat.slice(0, SAMPLE_MAX - 1).trimEnd()}…` : flat;
     const named = firstRowIsHeader ? headerCell.trim() : "";
     return {
       index,
