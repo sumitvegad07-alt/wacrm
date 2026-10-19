@@ -13,6 +13,7 @@ import { normalisePhone } from "@/lib/revenue/discovery-query";
 import { mintToken } from "@/lib/revenue/outreach-agents";
 import { selectEligible, type DiscoveryLeadRow } from "@/lib/revenue/outreach-eligibility";
 import { CAMPAIGN_COLUMNS, type Admin } from "@/lib/revenue/outreach-store";
+import { orderAttachments } from "@/lib/revenue/outreach-attachments";
 import {
   DEFAULT_DAILY_CAP,
   GAP_CHOICES_MIN,
@@ -208,12 +209,39 @@ function csvRowsToLeads(raw: unknown): {
   return { leads, rejected };
 }
 
+/**
+ * The saved wordings, in the order the founder put them in.
+ *
+ * One library, read the same way by the page and by campaign creation, so what
+ * he sees on screen is exactly what a campaign will send. Nothing here filters
+ * or re-orders: a campaign that sent a different set from the one displayed
+ * would be the whole point of the library undone.
+ */
+async function readTemplates(admin: Admin): Promise<{ position: number; body: string }[]> {
+  const { data } = await admin
+    .from("re_outreach_templates")
+    .select("position, body")
+    .order("position", { ascending: true })
+    .throwOnError();
+  return (data ?? []) as { position: number; body: string }[];
+}
+
+/** The two standing files, slot order, junk rows dropped. */
+async function readAttachments(admin: Admin) {
+  const { data } = await admin
+    .from("re_outreach_attachments")
+    .select("slot, path, file_name, mime_type, kind, size_bytes, updated_at")
+    .order("slot", { ascending: true })
+    .throwOnError();
+  return data ?? [];
+}
+
 export async function GET() {
   try {
     await requireFounder();
     const admin = serviceClient();
 
-    const [campaigns, agents] = await Promise.all([
+    const [campaigns, agents, templates, attachments] = await Promise.all([
       admin
         .from("re_outreach_campaigns")
         .select(`${CAMPAIGN_COLUMNS}, created_at` as const)
@@ -225,6 +253,8 @@ export async function GET() {
         .select("id, label, sender_phone, sender_first_sent_on, last_seen_at, revoked_at")
         .order("created_at", { ascending: false })
         .throwOnError(),
+      readTemplates(admin),
+      readAttachments(admin),
     ]);
 
     const active = (campaigns.data ?? []).find(
@@ -265,6 +295,8 @@ export async function GET() {
     return NextResponse.json({
       campaigns: campaigns.data ?? [],
       agents: agents.data ?? [],
+      templates,
+      attachments,
       progress,
     });
   } catch (error) {
@@ -282,22 +314,75 @@ export async function POST(req: NextRequest) {
       parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
 
     switch (body.action) {
-      case "create": {
-        // Between two and four wordings, still. Fifty byte-identical messages
-        // a day is the pattern spam detection is built to notice, and this is
-        // the cheapest protection the tool has after the cap itself.
-        if (!Array.isArray(body.variants)) {
+      // ── Save the message library ──
+      //
+      // Replaces it wholesale rather than patching row by row: the page always
+      // sends the complete set it is showing, and a partial update would leave
+      // a wording the founder deleted still sitting in position 3, sending.
+      case "templates.save": {
+        if (!Array.isArray(body.templates)) {
           return NextResponse.json(
             { error: "Write between two and four wordings" },
             { status: 400 },
           );
         }
-        const variants: string[] = body.variants.filter(
-          (v: unknown): v is string => typeof v === "string" && v.trim() !== "",
-        );
-        if (variants.length < 2 || variants.length > 4) {
+        const bodies: string[] = body.templates
+          .filter((v: unknown): v is string => typeof v === "string")
+          .map((v: string) => v.trim())
+          .filter(Boolean)
+          .slice(0, 4);
+        if (bodies.length < 2) {
           return NextResponse.json(
             { error: "Write between two and four wordings" },
+            { status: 400 },
+          );
+        }
+
+        // Delete then insert, not an upsert: the count can go down, and the
+        // rows for positions that no longer exist have to go with it.
+        //
+        // A failure between the two leaves the library EMPTY, which stops
+        // campaigns starting until he saves again. That is the right way round
+        // — the alternative is a half-replaced library sending a wording he
+        // thought he had removed.
+        await admin
+          .from("re_outreach_templates")
+          .delete()
+          .gte("position", 1)
+          .throwOnError();
+        await admin
+          .from("re_outreach_templates")
+          .insert(
+            bodies.map((text, i) => ({
+              position: i + 1,
+              body: text.slice(0, 4000),
+              owner_id: ctx.userId,
+            })),
+          )
+          .throwOnError();
+
+        return NextResponse.json({ saved: bodies.length });
+      }
+
+      case "create": {
+        // WHERE THE WORDINGS COME FROM
+        //
+        // The saved library, read here rather than taken from the request.
+        // The founder's rule is that a campaign may only ever go out in one of
+        // his saved wordings; enforcing that in the page alone would leave the
+        // endpoint accepting anything, and the endpoint is what actually
+        // creates the campaign.
+        //
+        // Still two to four. Fifty byte-identical messages a day is the
+        // pattern spam detection is built to notice, and this is the cheapest
+        // protection the tool has after the cap itself.
+        const variants: string[] = (await readTemplates(admin)).map((t) => t.body);
+        if (variants.length < 2 || variants.length > 4) {
+          return NextResponse.json(
+            {
+              error:
+                "Save at least two wordings in your message library before starting a campaign",
+            },
             { status: 400 },
           );
         }
@@ -369,12 +454,23 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        // Snapshotted, not referenced. A campaign at 50 a day runs for weeks,
+        // and replacing the brochure in week two must not silently change what
+        // the remaining recipients receive.
+        const attachments = orderAttachments(await readAttachments(admin)).map((a) => ({
+          slot: a.slot,
+          path: a.path,
+          file_name: a.fileName,
+          mime_type: a.mimeType,
+          kind: a.kind,
+        }));
+
         const { data: campaign, error } = await admin
           .from("re_outreach_campaigns")
           .insert({
             name: String(body.name ?? "Untitled campaign").slice(0, 120),
             variants,
-            attachment_path: body.attachmentPath ?? null,
+            attachments,
             daily_cap: dailyCap,
             gap_min_sec: gapMinSec,
             gap_max_sec: gapMaxSec,
@@ -423,6 +519,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
           campaignId: campaign.id,
+          attachmentCount: attachments.length,
           funnel,
           rejected: rejected.slice(0, 50),
           rejectedCount: rejected.length,

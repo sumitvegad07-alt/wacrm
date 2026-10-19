@@ -26,6 +26,7 @@ import {
   renderMessage,
 } from "@/lib/revenue/outreach-policy";
 import { suppressionSpellings } from "@/lib/revenue/outreach-eligibility";
+import { orderAttachments } from "@/lib/revenue/outreach-attachments";
 import {
   CAMPAIGN_COLUMNS,
   authenticateAgent,
@@ -350,17 +351,35 @@ export async function POST(req: NextRequest) {
       industry: recipient.industry,
     });
 
-    // A campaign that promises an attachment must not go out without one, so a
-    // failure to sign the URL stops the send rather than dropping the file.
-    let attachmentUrl: string | null = null;
-    if (row.attachment_path) {
+    // A campaign that promises attachments must not go out without them, so a
+    // failure to sign stops the send rather than quietly dropping a file: half
+    // a pitch is worse than a retry, and a retry is what the throw produces.
+    //
+    // Ten minutes is far longer than a send takes, and the URL is handed to
+    // one extension over TLS. Signed per request rather than per campaign so a
+    // replaced file is picked up by the next message without a restart.
+    const attachments: {
+      url: string;
+      kind: string;
+      fileName: string;
+      mimeType: string;
+    }[] = [];
+    for (const ref of orderAttachments(row.attachments)) {
       const { data: signed, error: signError } = await admin.storage
         .from("outreach")
-        .createSignedUrl(row.attachment_path, 600);
+        .createSignedUrl(ref.path, 600);
       if (signError || !signed?.signedUrl) {
         throw signError ?? new Error("Could not sign the attachment URL");
       }
-      attachmentUrl = signed.signedUrl;
+      attachments.push({
+        url: signed.signedUrl,
+        kind: ref.kind,
+        fileName: ref.fileName,
+        // Sent so the extension can rebuild a proper File. A Blob straight
+        // from fetch() carries no name, and WhatsApp shows a document's
+        // filename to the recipient.
+        mimeType: ref.mimeType,
+      });
     }
 
     // `is null` so two agents racing on a fresh campaign cannot overwrite each
@@ -406,7 +425,9 @@ export async function POST(req: NextRequest) {
       recipientId: recipient.id,
       phone: recipient.phone,
       text,
-      attachmentUrl,
+      // Sent after the text, in this order. An extension too old to know the
+      // key ignores it and sends the text alone — degraded, never wrong.
+      attachments,
       isTest: recipient.is_test,
     });
   } catch (err) {

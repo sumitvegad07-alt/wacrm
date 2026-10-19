@@ -88,8 +88,8 @@ thing upload CSV file and send message As simple As that no more campaign
 creation, state, city, industry selection Nothing."*
 
 So the screen is now: upload a CSV, choose the column holding the phone
-numbers, optionally choose a name column, write the wordings, choose the gap,
-send. There is no campaign-creation step he has to think about — the campaign
+numbers, optionally choose a name column, choose the gap, send — the wordings
+and the files are already saved (D11). There is no campaign-creation step he has to think about — the campaign
 row is still created, because every guarantee in this document is built on it,
 but it is created and started by the one button and he never names or
 configures it.
@@ -114,6 +114,56 @@ Both lists are re-applied to every uploaded file by `selectEligible`, unchanged
 geography columns on `re_outreach_recipients` are simply left at their `''`
 defaults, and de-duplication was always on the normalised phone rather than on
 `place_id`, so nothing downstream needed changing.
+
+## D11 — The wordings and the files are a library, not part of a campaign
+
+Added 2026-10-19, after the founder had been using the sender for two days.
+
+His words: *"Currently i have set up four different wordings message for this
+campaign i want this to be prefix it may not be deleted once the campaign gets
+over i want to send these messages only out from four of this only with
+attachment."*
+
+Two separate problems, with the same cause.
+
+**`re_outreach_campaigns.variants` is a snapshot, and that was all there was.**
+The snapshot is right — editing a wording tomorrow must not change what is
+halfway through sending, which is D6's reasoning applied to the message — but
+it meant his four wordings only ever existed inside whichever campaign he last
+typed them into. A stopped campaign took them with it, and he retyped all four
+the next time.
+
+**And the one attachment was never reachable.** `attachment_path`, the private
+`outreach` bucket, the signed URL in `/next` and `sendFileMessage` in the shim
+were all built in V1, but no upload box was ever put on the page, so the column
+was null in every row that ever existed. Dropped rather than kept: a code path
+that has never once executed is not a feature, it is a claim.
+
+So:
+
+- **`re_outreach_templates`** is the library. Not referenced by any campaign and
+  not reachable by any cascade, so nothing a campaign does can delete it.
+- **`re_outreach_attachments`** holds two slots, slot order being send order.
+- **Creating a campaign copies both in**, server-side, from the library — not
+  from the request. The rule "only these wordings go out" enforced in the page
+  alone would leave the endpoint accepting anything, and the endpoint is what
+  creates the campaign. `POST /outreach { action: "create" }` no longer reads
+  `variants` at all.
+- The snapshot keeps doing its job: replacing the brochure in week two does not
+  change what the remaining recipients of a running campaign receive.
+
+**Three messages per recipient, not one with a caption.** WhatsApp allows a
+caption on one attachment, so two files would mean either a caption the second
+file cannot have or the text buried under a picture. The text goes first on its
+own, then slot 1, then slot 2, 1.5–3s apart inside the conversation. A file
+that fails fails the whole recipient: `/result` records a number in
+`re_outreach_sent_phones` only on `sent`, so a part-sent prospect stays
+reachable, and three in a row trip the dead-man switch — which is what should
+happen if attachments have started failing.
+
+The per-send timeout in `content-whatsapp.js` grows by 60s per file for this.
+It was a flat 60s, and a timeout there rejects, which strands the recipient as
+a possible duplicate — the one outcome worth spending a parameter to avoid.
 
 ### The two numbers he chose
 
@@ -201,7 +251,7 @@ What we use:
 | `WPP.contact.queryWidExists(phone)` | Is this number on WhatsApp at all |
 | `WPP.blocklist.isBlocked(wid)` | Has this person blocked us |
 | `WPP.chat.sendTextMessage(wid, text, { createChat: true })` | Send, without saving a contact |
-| `WPP.chat.sendFileMessage(wid, file, …)` | The one optional attachment |
+| `WPP.chat.sendFileMessage(wid, file, …)` | Each attachment, after the text (D11) |
 | `window.WPP.isReady` | Do not touch anything before this |
 
 **`queryExists` is deprecated and is deleted on 27/10/2026** — upstream says so in
@@ -343,8 +393,10 @@ only through the service role after `requireFounder()` passes, exactly like
 
 #### re_outreach_campaigns
 
-`id uuid pk` · `name text` · `variants text[]` (2–4, CHECK on length) ·
-`attachment_path text` (Supabase Storage key, nullable) ·
+`id uuid pk` · `name text` · `variants text[]` (2–4, CHECK on length,
+copied from `re_outreach_templates` at creation) ·
+`attachments jsonb default '[]'` (snapshot of `re_outreach_attachments`,
+slot order; replaced `attachment_path`, which nothing ever wrote — D11) ·
 `status text (draft|running|paused|done|stopped)` ·
 `daily_cap int default 80` · `gap_min_sec int default 45` ·
 `gap_max_sec int default 120` ·
@@ -367,6 +419,26 @@ only through the service role after `requireFounder()` passes, exactly like
 `rendered_text` and `variant_index` are written by `/next` at the moment the row
 is claimed, not at campaign creation — the variant has to be chosen after the
 suppression and already-sent checks have decided the row is really going out.
+
+#### re_outreach_templates (D11)
+
+`id uuid pk` · `position int unique (1–4)` · `body text` · `owner_id uuid` ·
+`created_at` / `updated_at`
+
+The saved wordings. No foreign key to anything, by design: a campaign cannot
+delete them.
+
+#### re_outreach_attachments (D11)
+
+`slot int pk (1–2)` · `path text` (key in the private `outreach` bucket) ·
+`file_name text` · `mime_type text` · `kind text (image|document)` ·
+`size_bytes bigint` · `owner_id uuid` · `updated_at`
+
+The slot is the primary key, so replacing a file is one upsert with nothing to
+renumber. `kind` is handed straight to WA-JS as `sendFileMessage`'s type:
+`image` shows as a photo in the chat, `document` as a file card. JPG, PNG, WebP
+and PDF only, 16 MB each — the rules live in `outreach-attachments.ts`, shared
+with the page so the file picker offers exactly what the route accepts.
 
 #### re_outreach_sent_phones
 
@@ -421,7 +493,9 @@ authenticate by agent token (D5) and are rate-limited via the existing
 | `POST /api/admin/revenue/outreach/suppress` | Founder | Paste numbers into `re_suppressions` (D9) |
 | `POST /api/admin/revenue/outreach/agents` | Founder | Mint / revoke an extension token |
 | `POST /api/admin/revenue/outreach/test-send` | Founder | Queue up to 3 hand-typed numbers for the next `/next` call |
-| `POST /api/admin/revenue/outreach/next` | **Agent** | `{ recipient, wid, text, attachment_url? }` or `{ wait_seconds, reason }` |
+| `POST /api/admin/revenue/outreach` `{action:"templates.save"}` | Founder | Replace the message library wholesale (D11) |
+| `POST /api/admin/revenue/outreach/upload` | Founder | Multipart; stores one slot's file. `DELETE ?slot=n` clears it (D11) |
+| `POST /api/admin/revenue/outreach/next` | **Agent** | `{ recipient, wid, text, attachments[] }` or `{ wait_seconds, reason }` |
 | `POST /api/admin/revenue/outreach/result` | **Agent** | `sent` / `failed` / `skipped_*` / `logged_out` / `abandoned`; writes `re_outreach_sent_phones` on success. `abandoned` is the sender handing a claimed recipient back untried, so Stop does not leave a row to be recorded later as a possible duplicate |
 
 `/next` is where §"Keeping the number alive" is actually enforced: suppression,

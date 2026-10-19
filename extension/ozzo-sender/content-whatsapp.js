@@ -100,7 +100,7 @@ function ensureReady() {
 }
 
 let nextId = 1;
-function askPage(op, payload) {
+function askPage(op, payload, timeoutMs) {
   return new Promise((resolve, reject) => {
     const id = nextId++;
     const onMessage = (event) => {
@@ -131,16 +131,30 @@ function askPage(op, payload) {
     // (attempts > 1 && rendered_text != null) marks it "Possible duplicate: a
     // send was issued but never confirmed. Not resent." That is the honest
     // answer, and it is already built.
+    const budget = timeoutMs || 60_000;
     const timer = setTimeout(() => {
       window.removeEventListener("message", onMessage);
-      reject(new Error(`WhatsApp Web did not answer "${op}" within 60s`));
-    }, 60_000);
+      reject(
+        new Error(
+          `WhatsApp Web did not answer "${op}" within ${Math.round(budget / 1000)}s`,
+        ),
+      );
+    }, budget);
   });
 }
 
 chrome.runtime.onMessage.addListener((request, _sender, respond) => {
+  // One send is now up to three messages: the text, then a file each. A 16 MB
+  // PDF has to be downloaded from Storage and handed to WhatsApp, and the
+  // deliberate pause between files is another second and a half. The old flat
+  // 60 seconds would time out mid-send on a slow line — and a timeout here
+  // REJECTS, which strands the recipient as a possible duplicate (see below).
+  // So the budget grows with what was actually asked for.
+  const fileCount = (request.attachments && request.attachments.length) || 0;
+  const budgetMs = 60_000 + fileCount * 60_000;
+
   ensureReady()
-    .then(() => askPage(request.op, request))
+    .then(() => askPage(request.op, request, budgetMs))
     .then(respond)
     // __transportError, never "error": the shim's own failure result carries
     // BOTH outcome and error, so a bare "error" key could not be told apart

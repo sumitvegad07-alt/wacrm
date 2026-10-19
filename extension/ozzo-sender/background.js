@@ -322,7 +322,9 @@ async function tick() {
     const result = await ask(tab, "send", {
       phone: decision.phone,
       text: decision.text,
-      attachmentUrl: decision.attachmentUrl,
+      // Sent after the text, in the order the server listed them. An empty
+      // list is normal: a campaign with no files attached.
+      attachments: decision.attachments || [],
     });
 
     try {

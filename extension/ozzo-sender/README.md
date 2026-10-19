@@ -20,7 +20,10 @@ window, the gap between messages, or the message template. All of that lives on
 the server. The extension:
 
 1. Asks the portal what to do next (`/api/admin/revenue/outreach/next`).
-2. Sends exactly that one message, or waits exactly as long as it was told.
+2. Sends exactly what it was handed, or waits exactly as long as it was told.
+   Since 1.1.0 that is the text first, then each attachment the server listed,
+   1.5-3s apart: the picture shows as a photo in the chat and the PDF as a
+   file. Which files, and whether there are any, is the server's decision.
 3. Reports what happened (`/api/admin/revenue/outreach/result`), including the
    number WhatsApp is logged in as, so the server can restart the warm-up ramp
    if the number changes.
@@ -31,6 +34,18 @@ and the campaign would stop with no error.
 
 Sending uses WA-JS, which calls WhatsApp's own send functions. It does not type
 into the message box.
+
+## After an update
+
+Chrome does not re-inject content scripts into tabs that are already open, and
+it will not pick up new extension files on its own. After pulling a new version:
+
+1. `chrome://extensions` -> Reload on OZZO Sender.
+2. Reload the web.whatsapp.com tab.
+
+Skip either step and the old code keeps running. For 1.1.0 that looks like
+messages going out with no attachments at all, which is a silent, plausible
+wrong answer - worth checking a test send after every update.
 
 ## Load it
 

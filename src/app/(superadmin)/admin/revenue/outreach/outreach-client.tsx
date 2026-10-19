@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Upload } from "lucide-react";
+import { Paperclip, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  ACCEPT_ATTRIBUTE,
+  ATTACHMENT_SLOTS,
+  MAX_ATTACHMENT_BYTES,
+} from "@/lib/revenue/outreach-attachments";
 import {
   describeColumns,
   extractRecipients,
@@ -88,13 +93,44 @@ interface Progress {
   }[];
 }
 
+interface TemplateRow {
+  position: number;
+  body: string;
+}
+
+interface AttachmentRow {
+  slot: number;
+  path: string;
+  file_name: string;
+  mime_type: string;
+  kind: string;
+  size_bytes: number;
+  updated_at: string;
+}
+
 interface Payload {
   campaigns: CampaignRow[];
   agents: AgentRow[];
+  /** The saved wordings. Not part of any campaign, so none can delete them. */
+  templates: TemplateRow[];
+  /** The two standing files, slot order. */
+  attachments: AttachmentRow[];
   progress: Progress | null;
 }
 
 const ENDPOINT = "/api/admin/revenue/outreach";
+const UPLOAD_ENDPOINT = "/api/admin/revenue/outreach/upload";
+
+/** What the two slots are for, in the order they are sent after the text. */
+const SLOT_LABELS: Record<number, string> = {
+  1: "Picture",
+  2: "PDF",
+};
+
+function fileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
 
 async function callApi<T>(body: Record<string, unknown>): Promise<T> {
   const response = await fetch(ENDPOINT, {
@@ -149,8 +185,17 @@ export default function OutreachClient() {
   const [nameColumn, setNameColumn] = useState<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // ---- the message ----
+  // ---- the message library ----
+  //
+  // `variants` is the DRAFT on screen; the saved library lives on the server.
+  // The two are shown side by side so an unsaved edit is visible as one, and a
+  // campaign always sends the saved set, never the draft.
   const [variants, setVariants] = useState(["", ""]);
+  const librarySeeded = useRef(false);
+
+  // ---- the attachments ----
+  const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const attachmentInputs = useRef<Record<number, HTMLInputElement | null>>({});
   const [gapMinutes, setGapMinutes] = useState<number>(5);
   const [dailyCap, setDailyCap] = useState(String(MAX_DAILY_CAP));
 
@@ -178,6 +223,16 @@ export default function OutreachClient() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Fill the boxes from the saved library the first time it arrives, and never
+  // again: the five-second poll below would otherwise wipe whatever he is
+  // halfway through typing.
+  useEffect(() => {
+    if (!data || librarySeeded.current) return;
+    librarySeeded.current = true;
+    const saved = data.templates.map((t) => t.body);
+    setVariants(saved.length >= 2 ? saved : [...saved, "", ""].slice(0, 2));
+  }, [data]);
 
   // Poll only while something is actually moving, so an idle tab is not
   // hitting the production database every five seconds for ever.
@@ -241,10 +296,32 @@ export default function OutreachClient() {
   }
 
   const filledVariants = variants.map((v) => v.trim()).filter(Boolean);
+
+  /** What a campaign started right now would actually send. */
+  const savedVariants = useMemo(
+    () => (data?.templates ?? []).map((t) => t.body),
+    [data],
+  );
+  const libraryUnsaved =
+    JSON.stringify(filledVariants) !== JSON.stringify(savedVariants);
+
+  const attachments = useMemo(
+    () => data?.attachments ?? [],
+    [data],
+  );
+  const attachmentBySlot = useMemo(() => {
+    const map: Record<number, AttachmentRow> = {};
+    for (const a of attachments) map[a.slot] = a;
+    return map;
+  }, [attachments]);
+
+  // The SAVED library, not the draft. Pressing send with unsaved edits would
+  // otherwise go out in the old wording while the new one sits on screen.
   const canSend =
     !busy &&
     chosen.length > 0 &&
-    filledVariants.length >= 2 &&
+    savedVariants.length >= 2 &&
+    !libraryUnsaved &&
     !live;
 
   async function startSending() {
@@ -254,10 +331,16 @@ export default function OutreachClient() {
       );
       return;
     }
+    const fileLine = attachments.length
+      ? `\n\nEach person gets the message, then ` +
+        attachments.map((a) => a.file_name).join(", then ") +
+        "."
+      : `\n\nNo files attached — the message goes out on its own.`;
     const ok = window.confirm(
       `Send to ${chosen.length.toLocaleString()} numbers from ${fileName}?\n\n` +
         `These are real WhatsApp messages from whichever number Chrome is signed in as. ` +
-        `Up to ${dailyCap} a day, about ${gapMinutes} minute${gapMinutes === 1 ? "" : "s"} apart, 10:00am to 6:30pm on weekdays.`,
+        `Up to ${dailyCap} a day, about ${gapMinutes} minute${gapMinutes === 1 ? "" : "s"} apart, 10:00am to 6:30pm on weekdays.` +
+        fileLine,
     );
     if (!ok) return;
 
@@ -267,6 +350,7 @@ export default function OutreachClient() {
     try {
       const created = await callApi<{
         campaignId: string;
+        attachmentCount: number;
         funnel: Record<string, number>;
         rejected: string[];
         rejectedCount: number;
@@ -274,7 +358,9 @@ export default function OutreachClient() {
         action: "create",
         name: fileName || "CSV upload",
         rows: chosen,
-        variants: filledVariants,
+        // No wordings and no files are sent from here: the server reads both
+        // from the saved library, so a campaign can only ever go out in a
+        // wording that was saved.
         dailyCap: Number(dailyCap),
         gapMinutes,
       });
@@ -306,6 +392,58 @@ export default function OutreachClient() {
     }
   }
 
+  /**
+   * Uploads one slot's file.
+   *
+   * Multipart, through the server, because the bucket is private and has no
+   * RLS policies: the service role behind requireFounder() is the only way in.
+   */
+  async function uploadAttachment(slot: number, file: File) {
+    setProblem("");
+    setNotice("");
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setProblem("That file is bigger than 16 MB, which is WhatsApp's limit.");
+      return;
+    }
+    setUploadingSlot(slot);
+    try {
+      const form = new FormData();
+      form.append("slot", String(slot));
+      form.append("file", file);
+      const response = await fetch(UPLOAD_ENDPOINT, { method: "POST", body: form });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error ?? "Upload failed");
+      setNotice(`${file.name} saved. Every new campaign will send it.`);
+      await load();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setUploadingSlot(null);
+      const input = attachmentInputs.current[slot];
+      // Cleared so choosing the same file again still fires onChange.
+      if (input) input.value = "";
+    }
+  }
+
+  async function removeAttachment(slot: number) {
+    setProblem("");
+    setNotice("");
+    setUploadingSlot(slot);
+    try {
+      const response = await fetch(`${UPLOAD_ENDPOINT}?slot=${slot}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error ?? "Could not remove it");
+      setNotice("Removed. New campaigns will not send it.");
+      await load();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setUploadingSlot(null);
+    }
+  }
+
   async function act(body: Record<string, unknown>, success: string) {
     setBusy(true);
     setProblem("");
@@ -330,7 +468,8 @@ export default function OutreachClient() {
       <header>
         <h1 className="text-2xl font-semibold">WhatsApp sender</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a CSV, pick the column with the phone numbers, write the message, send.
+          Upload a CSV, pick the column with the phone numbers, send. Your wordings and
+          your two files are saved here and are the only things that go out.
           Sends 10:00am&ndash;6:30pm, Monday to Friday, up to {MAX_DAILY_CAP} a day.
         </p>
       </header>
@@ -641,13 +780,24 @@ export default function OutreachClient() {
         )}
       </section>
 
-      {/* ---------------- step 2: the message ---------------- */}
+      {/* ---------------- step 2: the saved wordings ---------------- */}
       <section className="rounded-lg border p-4">
-        <h2 className="font-medium">2. Your message</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">2. Your saved wordings</h2>
+          {savedVariants.length ? (
+            <span className="text-xs text-muted-foreground">
+              {savedVariants.length} saved
+              {libraryUnsaved ? " · unsaved changes below" : ""}
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Write the same message two different ways, so all {MAX_DAILY_CAP}{" "}
-          a day aren&apos;t identical &mdash; that is the main thing that gets a number banned.
-          Write <code className="rounded bg-muted px-1">{"{name}"}</code> where the
+          These stay here for good. Finishing, stopping or deleting a campaign does
+          not touch them, and every campaign goes out in these wordings only &mdash;
+          nothing else can be sent. Write the same message two to four different ways,
+          so all {MAX_DAILY_CAP} a day aren&apos;t identical &mdash; that is the main
+          thing that gets a number banned. Write{" "}
+          <code className="rounded bg-muted px-1">{"{name}"}</code> where the
           person&apos;s name should go. An opt-out line is added automatically.
         </p>
 
@@ -674,22 +824,146 @@ export default function OutreachClient() {
               />
             </div>
           ))}
-          {variants.length < 4 ? (
+
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
-              variant="outline"
               size="sm"
-              onClick={() => setVariants((prev) => [...prev, ""])}
+              disabled={busy || filledVariants.length < 2 || !libraryUnsaved}
+              onClick={() =>
+                act(
+                  { action: "templates.save", templates: filledVariants },
+                  "Wordings saved. They stay here until you change them.",
+                )
+              }
             >
-              Add another wording
+              {libraryUnsaved ? "Save wordings" : "Saved"}
             </Button>
+            {variants.length < 4 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setVariants((prev) => [...prev, ""])}
+              >
+                Add another wording
+              </Button>
+            ) : null}
+            {libraryUnsaved ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  setVariants(
+                    savedVariants.length >= 2
+                      ? savedVariants
+                      : [...savedVariants, "", ""].slice(0, 2),
+                  )
+                }
+              >
+                Undo changes
+              </Button>
+            ) : null}
+          </div>
+          {libraryUnsaved ? (
+            <p className="text-xs text-amber-600 dark:text-amber-500">
+              Save these before you start a campaign. Until you do, the wordings above
+              are not the ones that would be sent.
+            </p>
           ) : null}
         </div>
       </section>
 
-      {/* ---------------- step 3: the speed ---------------- */}
+      {/* ---------------- step 3: the attachments ---------------- */}
       <section className="rounded-lg border p-4">
-        <h2 className="font-medium">3. How fast</h2>
+        <h2 className="font-medium">3. Files to send with it</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Up to two files, saved here for good like the wordings. Every campaign sends
+          them &mdash; the message first, then the picture, then the PDF. A picture
+          shows as a photo in the chat; a PDF shows as a file. JPG, PNG, WebP or PDF,
+          up to 16 MB each. Leave them empty to send the message on its own.
+        </p>
+
+        <div className="mt-3 space-y-3">
+          {ATTACHMENT_SLOTS.map((slot) => {
+            const current = attachmentBySlot[slot];
+            const working = uploadingSlot === slot;
+            return (
+              <div
+                key={slot}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {SLOT_LABELS[slot]}{" "}
+                    <span className="font-normal text-muted-foreground">
+                      (sent {slot === 1 ? "second" : "third"})
+                    </span>
+                  </p>
+                  {current ? (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      <Paperclip className="mr-1 inline h-3 w-3" />
+                      {current.file_name} · {fileSize(current.size_bytes)} ·{" "}
+                      {current.kind === "image" ? "photo" : "file"}
+                    </p>
+                  ) : (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Nothing attached
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={(el) => {
+                      attachmentInputs.current[slot] = el;
+                    }}
+                    id={`attachment-${slot}`}
+                    type="file"
+                    accept={ACCEPT_ATTRIBUTE}
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void uploadAttachment(slot, file);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy || working}
+                    onClick={() => attachmentInputs.current[slot]?.click()}
+                  >
+                    {working ? "Uploading…" : current ? "Replace" : "Choose file"}
+                  </Button>
+                  {current ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy || working}
+                      onClick={() => void removeAttachment(slot)}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {attachments.length > 0 && live ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            &ldquo;{live.name}&rdquo; is sending the files it was started with. Changing
+            them here only affects the next campaign.
+          </p>
+        ) : null}
+      </section>
+
+      {/* ---------------- step 4: the speed ---------------- */}
+      <section className="rounded-lg border p-4">
+        <h2 className="font-medium">4. How fast</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
             <Label htmlFor="gap">Gap between messages</Label>
@@ -753,9 +1027,13 @@ export default function OutreachClient() {
               <p className="mt-2 text-sm text-muted-foreground">
                 Upload a file and choose the phone column first.
               </p>
-            ) : filledVariants.length < 2 ? (
+            ) : savedVariants.length < 2 ? (
               <p className="mt-2 text-sm text-muted-foreground">
-                Write at least two wordings first.
+                Save at least two wordings first.
+              </p>
+            ) : libraryUnsaved ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Save your wordings first, or undo the changes.
               </p>
             ) : null}
           </>

@@ -29,7 +29,8 @@ export interface CampaignRow {
   id: string;
   name: string;
   variants: string[];
-  attachment_path: string | null;
+  /** Snapshot of the standing files, slot order. See outreach-attachments.ts. */
+  attachments: unknown;
   status: string;
   daily_cap: number;
   gap_min_sec: number;
@@ -43,7 +44,7 @@ export interface CampaignRow {
 }
 
 export const CAMPAIGN_COLUMNS =
-  "id, name, variants, attachment_path, status, daily_cap, gap_min_sec, gap_max_sec, window_start, window_end, weekdays_only, paused_reason, sender_phone, failure_streak_reset_at";
+  "id, name, variants, attachments, status, daily_cap, gap_min_sec, gap_max_sec, window_start, window_end, weekdays_only, paused_reason, sender_phone, failure_streak_reset_at";
 
 export interface RecipientRow {
   id: number;

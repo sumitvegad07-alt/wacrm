@@ -85,18 +85,53 @@
           return reply({ outcome: "skipped_blocked" });
         }
 
-        if (msg.attachmentUrl) {
-          const blob = await fetch(msg.attachmentUrl).then((r) => r.blob());
-          await window.WPP.chat.sendFileMessage(exists.wid, blob, {
-            type: "document",
-            caption: msg.text,
+        // The text first, on its own, then one message per file in the order
+        // the server listed them.
+        //
+        // WHY NOT ONE FILE CARRYING THE TEXT AS ITS CAPTION
+        //
+        // WhatsApp allows a caption on one attachment, so two files would mean
+        // either a caption the second file cannot have or the text buried
+        // under a picture. Three plain messages is what the founder chose.
+        //
+        // WHY A FAILURE HERE IS STILL A FAILURE
+        //
+        // If the text goes and a file does not, this throws and the recipient
+        // is recorded failed, even though one message arrived. That is the
+        // honest answer: /result records the number as messaged only on
+        // `sent`, so a part-sent prospect stays off re_outreach_sent_phones
+        // and can be reached again, and three in a row trip the dead-man
+        // switch — which is exactly what should happen if attachments have
+        // started failing.
+        await window.WPP.chat.sendTextMessage(exists.wid, msg.text, {
+          createChat: true,
+        });
+
+        for (const file of msg.attachments || []) {
+          // The signed URL lives ten minutes and is fetched from the page, so
+          // it is a plain cross-origin GET to Supabase Storage.
+          const blob = await fetch(file.url).then((r) => {
+            if (!r.ok) throw new Error(`Could not download ${file.fileName}`);
+            return r.blob();
+          });
+          // A Blob from fetch() has no name, and a document with no name
+          // reaches the recipient as "file". Rebuild it as a File so the name
+          // and the type are both explicit rather than inferred.
+          const asFile = new File([blob], file.fileName || "attachment", {
+            type: blob.type || file.mimeType || "application/octet-stream",
+          });
+          await window.WPP.chat.sendFileMessage(exists.wid, asFile, {
+            // "image" shows as a photo in the chat, "document" as a file card.
+            type: file.kind === "image" ? "image" : "document",
+            filename: file.fileName,
             createChat: true,
           });
-        } else {
-          await window.WPP.chat.sendTextMessage(exists.wid, msg.text, {
-            createChat: true,
-          });
+          // A human does not paste three things into a chat in the same
+          // instant. The gap between RECIPIENTS is the server's business; this
+          // one is inside a single conversation and belongs here.
+          await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
         }
+
         return reply({ outcome: "sent" });
       }
 
