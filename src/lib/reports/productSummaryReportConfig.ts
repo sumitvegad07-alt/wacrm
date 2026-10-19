@@ -102,6 +102,8 @@ export const productSummaryReportConfig: ReportDefinition = {
       label: 'Customer wise',
       dimension: 'customer',
       extraDimensions: ['product'],
+      // "Balaji Enterprise total" under that customer's products.
+      showSubtotals: true,
       defaultMeasures: ['product_quantity', 'net_amount'],
       hiddenMeasures: ['base_quantity', 'gross_amount', 'tax_amount', 'avg_rate', 'order_count'],
       // # of customer is 1 on every row of this tab (the grain already includes
@@ -114,9 +116,24 @@ export const productSummaryReportConfig: ReportDefinition = {
       label: 'Product wise',
       dimension: 'product',
       extraDimensions: ['customer'],
+      // The founder's own example: Toothbrush — Balaji 50, Kanta 20,
+      // Ramesh 190, then "Toothbrush total 260".
+      showSubtotals: true,
       defaultMeasures: ['product_quantity', 'net_amount'],
       hiddenMeasures: ['base_quantity', 'gross_amount', 'tax_amount', 'avg_rate', 'order_count'],
       // Same reasoning in reverse: # of product is 1 per row here.
+      availableMeasures: ['product_quantity', 'net_amount', 'base_quantity', 'gross_amount',
+                          'tax_amount', 'avg_rate', 'order_count', 'customer_count'],
+    },
+    {
+      // Product totals with no customer breakdown, for when the whole answer
+      // should fit on one page. No subtotals here: one row per product already
+      // IS the product's total, so a subtotal line would repeat every row.
+      key: 'product_total',
+      label: 'Product total',
+      dimension: 'product',
+      defaultMeasures: ['product_quantity', 'net_amount', 'customer_count'],
+      hiddenMeasures: ['base_quantity', 'gross_amount', 'tax_amount', 'avg_rate', 'order_count'],
       availableMeasures: ['product_quantity', 'net_amount', 'base_quantity', 'gross_amount',
                           'tax_amount', 'avg_rate', 'order_count', 'customer_count'],
     },

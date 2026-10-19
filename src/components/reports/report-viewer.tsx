@@ -429,8 +429,45 @@ export function ReportViewer({ config }: ReportViewerProps) {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  /**
+   * Print through /print/report rather than window.print().
+   *
+   * window.print() printed the screen — toolbar, scrollbars, whatever happened
+   * to be scrolled into view, and only the rows the current page had loaded.
+   * The print route re-runs the same report through the same RPC (so it is
+   * scoped to the signed-in user identically) and lays it out as a document:
+   * account name, report and tab, the period, which filters were applied, and
+   * the KPI figures.
+   *
+   * `module` is the report's own name because that is what the registry resolves
+   * for labels; `exec` carries the tab's moduleOverride when it has one, since
+   * Ageing's product tabs query a different base table and `ageing_product` has
+   * no ReportDefinition of its own to look up.
+   */
+  const openPrintView = (size: 'a4' | 'a5') => {
+    const tab = config.tabConfigs?.find(t => t.key === activeTab);
+    const params = new URLSearchParams({
+      module: config.moduleName,
+      dims: reportState.dimensions.join(','),
+      measures: reportState.measures.join(','),
+      period: periodLabel,
+      size,
+    });
+    if (tab?.label) params.set('tab', tab.label);
+    if (activeModule !== config.moduleName) params.set('exec', activeModule);
+    if (tab?.showSubtotals) params.set('subtotals', '1');
+    if (reportState.sortColumn) {
+      params.set('sort', reportState.sortColumn);
+      params.set('dir', reportState.sortDirection ?? 'asc');
+    }
+    if (Object.keys(reportState.filters ?? {}).length > 0) {
+      // Plain JSON, URL-encoded by URLSearchParams. The route still accepts the
+      // base64 form its doc comment describes, but base64 via btoa throws on any
+      // non-Latin1 character — and customer and product names here are routinely
+      // not Latin1.
+      params.set('filters', JSON.stringify(reportState.filters));
+    }
+    window.open(`/print/report?${params.toString()}`, '_blank', 'noopener');
   };
 
   const toggleMeasure = (mKey: string) => {
@@ -523,8 +560,27 @@ export function ReportViewer({ config }: ReportViewerProps) {
               <DropdownMenuItem onClick={() => handleExport('xlsx')}>
                 Download as Excel
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handlePrint}>
-                <Printer className="mr-2 h-4 w-4" /> Print
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Print is its own button. It used to be the third item inside the
+              Export menu, behind a Download icon, which is a reasonable place
+              for nobody to find it. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm">
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openPrintView('a4')}>
+                Print on A4
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openPrintView('a5')}>
+                Print on A5
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -758,6 +814,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
                   config={config} 
                   reportState={reportState} 
                   defaultCurrency={defaultCurrency}
+                  showSubtotals={config.tabConfigs?.find(t => t.key === activeTab)?.showSubtotals}
                   onSort={(column, direction) => {
                     setReportState(s => ({ ...s, sortColumn: column, sortDirection: direction }));
                     setPage(1);

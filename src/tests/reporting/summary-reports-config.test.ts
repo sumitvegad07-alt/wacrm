@@ -77,17 +77,40 @@ describe('Summary reports — shared contract', () => {
 });
 
 describe('Product Summary', () => {
-  it('shows a customer AND a product column on every tab', () => {
-    // The entire reason this module exists. A tab that lost one of the two
-    // would silently become a worse copy of the Order report.
+  it('shows a customer AND a product column on every breakdown tab', () => {
+    // The entire reason this module exists. A breakdown tab that lost one of
+    // the two would silently become a worse copy of the Order report.
+    // `product_total` is the deliberate exception — see its own test below.
     const customerish = ['customer'];
     const productish = ['product', 'product_category'];
 
+    productSummaryReportConfig.tabConfigs
+      ?.filter((tab) => tab.key !== 'product_total')
+      .forEach((tab) => {
+        const shown = [tab.dimension, ...(tab.extraDimensions ?? [])];
+        expect(shown.some((d) => customerish.includes(d)), `${tab.key} has no customer column`).toBe(true);
+        expect(shown.some((d) => productish.includes(d)), `${tab.key} has no product column`).toBe(true);
+      });
+  });
+
+  it('subtotals every breakdown tab, and only those', () => {
+    // A subtotal is only meaningful where the primary dimension repeats down
+    // the table. On Product total each row already IS the product's total, so
+    // a subtotal line would duplicate every row.
     productSummaryReportConfig.tabConfigs?.forEach((tab) => {
-      const shown = [tab.dimension, ...(tab.extraDimensions ?? [])];
-      expect(shown.some((d) => customerish.includes(d)), `${tab.key} has no customer column`).toBe(true);
-      expect(shown.some((d) => productish.includes(d)), `${tab.key} has no product column`).toBe(true);
+      const isBreakdown = (tab.extraDimensions ?? []).length > 0;
+      expect(Boolean(tab.showSubtotals), `${tab.key}`).toBe(isBreakdown);
     });
+  });
+
+  it('gives Product total one row per product and no customer column', () => {
+    const tab = productSummaryReportConfig.tabConfigs?.find((t) => t.key === 'product_total');
+    expect(tab).toBeDefined();
+    expect(tab!.dimension).toBe('product');
+    expect(tab!.extraDimensions ?? []).toHaveLength(0);
+    // # of customer is the useful column here precisely because the customer
+    // names are gone: it says how many bought it without listing them.
+    expect(tab!.defaultMeasures).toContain('customer_count');
   });
 
   it('defaults to Quantity and Amount — the two columns that were asked for', () => {

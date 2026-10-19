@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/table';
 import { type ReportConfig, type ReportDefinition } from '@/lib/reports/types';
 import { formatCurrency } from '@/lib/currency';
+import { groupRowsForSubtotals } from '@/lib/reports/subtotals';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 
 interface ReportTableProps {
@@ -18,6 +19,10 @@ interface ReportTableProps {
   reportState: ReportConfig;
   defaultCurrency: string;
   onSort: (column: string, direction: 'asc' | 'desc') => void;
+  /** The active tab's TabConfig.showSubtotals. Adds a subtotal row after each
+   *  value of the first dimension — see lib/reports/subtotals.ts for why this is
+   *  opt-in rather than automatic on any two-dimension table. */
+  showSubtotals?: boolean;
 }
 
 const CUSTOMER_LEVEL_MAP: Record<string, string> = {
@@ -27,7 +32,7 @@ const CUSTOMER_LEVEL_MAP: Record<string, string> = {
   '4': 'Direct',
 };
 
-export function ReportTable({ data, config, reportState, defaultCurrency, onSort }: ReportTableProps) {
+export function ReportTable({ data, config, reportState, defaultCurrency, onSort, showSubtotals }: ReportTableProps) {
   // Determine visible columns: selected dimensions + selected measures
   const visibleColumns = useMemo(() => {
     const dimCols = reportState.dimensions.map(dKey => {
@@ -62,7 +67,29 @@ export function ReportTable({ data, config, reportState, defaultCurrency, onSort
 
     return totals;
   }, [data, visibleColumns]);
-  
+
+  /** Rows split into subtotal groups, or null when the tab prints a flat table.
+   *  Needs two dimension columns: with one, the group column IS the only
+   *  dimension and every subtotal would repeat the row above it. */
+  const subtotalGroups = useMemo(() => {
+    if (!showSubtotals) return null;
+    const dimCols = visibleColumns.filter(c => c.type === 'dimension');
+    if (dimCols.length < 2) return null;
+    const groups = groupRowsForSubtotals(
+      data,
+      dimCols[0].key,
+      visibleColumns
+        .filter(c => c.type === 'measure')
+        .map(c => {
+          const m = c as { key: string; additive?: boolean; format?: string };
+          // Same two exclusions the grand-total footer applies: a percentage and
+          // anything flagged non-additive do not add up down a column.
+          return { key: m.key, additive: m.additive !== false && m.format !== 'percent' };
+        }),
+    );
+    return groups.length ? groups : null;
+  }, [showSubtotals, data, visibleColumns]);
+
   if (!data.length) {
     // Name the period in the empty state. Every report opens on "This Month",
     // and a module whose records all sit in an earlier month then renders a
@@ -135,6 +162,34 @@ export function ReportTable({ data, config, reportState, defaultCurrency, onSort
     return <span className="font-bold text-foreground">{totalVal.toLocaleString()}</span>;
   };
 
+  /** A group's subtotal line: "<group> total" under the first dimension, the
+   *  summed figure under each measure, and a dash where a measure does not sum
+   *  (Avg Rate) — the same rule the grand-total footer follows, so the two
+   *  rows never disagree about what is addable. */
+  const renderSubtotalCell = (
+    col: Record<string, unknown>,
+    index: number,
+    group: { groupKey: string; subtotals: Record<string, number> },
+  ) => {
+    if (col.type === 'dimension') {
+      if (index === 0) {
+        return (
+          <span className="font-bold text-foreground">
+            {group.groupKey} total
+          </span>
+        );
+      }
+      return null;
+    }
+
+    const value = group.subtotals[col.key as string];
+    if (value === undefined) return <span className="text-muted-foreground">—</span>;
+    if (col.format === 'currency') {
+      return <span className="font-semibold">{formatCurrency(value, defaultCurrency)}</span>;
+    }
+    return <span className="font-semibold">{value.toLocaleString()}</span>;
+  };
+
   const handleSortClick = (colKey: string) => {
     let newDirection: 'asc' | 'desc' = 'asc';
     if (reportState.sortColumn === colKey) {
@@ -168,18 +223,45 @@ export function ReportTable({ data, config, reportState, defaultCurrency, onSort
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row, i) => (
-              <TableRow key={i}>
-                {visibleColumns.map(col => (
-                  <TableCell 
-                    key={col.key}
-                    className={col.type === 'measure' ? 'text-right' : ''}
-                  >
-                    {renderCell(row, col)}
-                  </TableCell>
+            {subtotalGroups
+              ? subtotalGroups.map(group => (
+                  <React.Fragment key={`group-${group.groupKey}`}>
+                    {group.rows.map((row, i) => (
+                      <TableRow key={`${group.groupKey}-${i}`}>
+                        {visibleColumns.map(col => (
+                          <TableCell
+                            key={col.key}
+                            className={col.type === 'measure' ? 'text-right' : ''}
+                          >
+                            {renderCell(row, col)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/60 border-y border-border/80 hover:bg-muted/60">
+                      {visibleColumns.map((col, idx) => (
+                        <TableCell
+                          key={`subtotal-${group.groupKey}-${col.key}`}
+                          className={col.type === 'measure' ? 'text-right' : ''}
+                        >
+                          {renderSubtotalCell(col, idx, group)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </React.Fragment>
+                ))
+              : data.map((row, i) => (
+                  <TableRow key={i}>
+                    {visibleColumns.map(col => (
+                      <TableCell
+                        key={col.key}
+                        className={col.type === 'measure' ? 'text-right' : ''}
+                      >
+                        {renderCell(row, col)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
                 ))}
-              </TableRow>
-            ))}
           </TableBody>
           <TableFooter className="sticky bottom-0 bg-primary/10 dark:bg-primary/15 backdrop-blur-sm z-10 border-t-2 border-primary/30 font-bold">
             <TableRow>

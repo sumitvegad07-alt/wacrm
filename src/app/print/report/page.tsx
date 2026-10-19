@@ -1,11 +1,12 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { executeReport } from '@/app/actions/reports';
 import { getReportByModule } from '@/lib/reports/registry';
+import { groupRowsForSubtotals } from '@/lib/reports/subtotals';
 import type { ReportMeasure } from '@/lib/reports/types';
 
 /**
@@ -25,12 +26,34 @@ function ReportPrintInner() {
   const supabase = createClient();
 
   const moduleName = params.get('module') || '';
+  // The tab's moduleOverride, when it has one. Ageing's product tabs query
+  // `ageing_product`, which has no ReportDefinition of its own — labels come
+  // from the report's own module, rows from this one.
+  const execModule = params.get('exec') || moduleName;
   const dims = (params.get('dims') || '').split(',').filter(Boolean);
   const measures = (params.get('measures') || '').split(',').filter(Boolean);
   const periodLabel = params.get('period') || '';
   const tabLabel = params.get('tab') || '';
+  const sortColumn = params.get('sort') || undefined;
+  const sortDirection = params.get('dir') === 'desc' ? 'desc' : 'asc';
+  const withSubtotals = params.get('subtotals') === '1' && dims.length >= 2;
+  // A5 is half an A4 sheet, so the same table has to come down a size to keep
+  // its columns on the page.
+  const pageSize = params.get('size') === 'a5' ? 'A5' : 'A4';
+  const compact = pageSize === 'A5';
+
+  // Plain JSON now; base64 still accepted because that is what this route's own
+  // doc comment has always described. btoa throws on any non-Latin1 character,
+  // and customer and product names here are routinely not Latin1.
   let filters: Record<string, unknown> = {};
-  try { filters = params.get('filters') ? JSON.parse(atob(params.get('filters')!)) : {}; } catch { filters = {}; }
+  const rawFilters = params.get('filters');
+  if (rawFilters) {
+    try {
+      filters = JSON.parse(rawFilters);
+    } catch {
+      try { filters = JSON.parse(atob(rawFilters)); } catch { filters = {}; }
+    }
+  }
 
   const def = getReportByModule(moduleName);
 
@@ -51,7 +74,9 @@ function ReportPrintInner() {
             if (acct?.name) setAccountName(acct.name);
           }
         }
-        const data = await executeReport(moduleName, dims, measures, filters, undefined, 'asc', 5000, 0);
+        const data = await executeReport(
+          execModule, dims, measures, filters, sortColumn, sortDirection, 5000, 0,
+        );
         setRows((data as Row[]) || []);
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to run report');
@@ -95,26 +120,70 @@ function ReportPrintInner() {
     .filter((k) => k !== 'date_range')
     .map((k) => def.filters.find((f) => f.key === k)?.label ?? k);
 
+  /** Which measures add up down a column — the same two exclusions the on-screen
+   *  footer applies, so paper and screen never disagree about what is addable. */
+  const isAdditive = (k: string) => {
+    const m = measureDef(k);
+    return Boolean(m) && m!.type !== 'percent' && m!.additive !== false;
+  };
+  const sumOf = (k: string, over: Row[]) => over.reduce((s, r) => s + Number(r[k] ?? 0), 0);
+
+  // Subtotal groups, mirroring the table on screen. Grouped by value and ordered
+  // by first appearance, so the sort the user chose still drives the page.
+  const groups = withSubtotals
+    ? groupRowsForSubtotals(
+        rows as Record<string, unknown>[],
+        dims[0],
+        measures.map((k) => ({ key: k, additive: isAdditive(k) })),
+      )
+    : [];
+
+  const totalCells = (
+    label: string,
+    values: Record<string, number>,
+    className: string,
+  ) => (
+    <tr className={className}>
+      {dims.map((d, i) => <td key={d}>{i === 0 ? label : ''}</td>)}
+      {measures.map((m) => (
+        <td key={m} className="num">
+          {m in values ? fmt(m, values[m]) : '—'}
+        </td>
+      ))}
+    </tr>
+  );
+
   return (
     <div className="report-print">
       <style>{`
-        @page { margin: 16mm; }
-        .report-print { font-family: -apple-system, Roboto, Arial, sans-serif; color: #1f2937; padding: 20px; }
-        .head { border-bottom: 3px solid #6366F1; padding-bottom: 14px; margin-bottom: 18px; }
-        .acct { font-size: 22px; font-weight: 800; color: #111827; }
-        .rpt { font-size: 15px; color: #6366F1; font-weight: 700; margin-top: 2px; }
-        .meta { font-size: 11px; color: #6b7280; margin-top: 6px; }
-        .filters span { display:inline-block; background:#eef2ff; color:#4338ca; font-size:10px; padding:3px 8px; border-radius:10px; margin:8px 6px 0 0; }
-        .kpis { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0 20px; }
-        .kpi { border:1px solid #e5e7eb; border-radius:10px; padding:12px 16px; min-width:130px; }
-        .kpi-v { font-size:18px; font-weight:800; color:#111827; }
-        .kpi-l { font-size:10px; color:#6b7280; text-transform:uppercase; letter-spacing:.4px; margin-top:3px; }
-        table { width:100%; border-collapse:collapse; font-size:11px; }
-        th { text-align:left; background:#f9fafb; color:#374151; font-weight:800; padding:8px 10px; border-bottom:2px solid #e5e7eb; }
-        td { padding:7px 10px; border-bottom:1px solid #f1f1f4; }
+        /* The sheet. A5 is half an A4, so everything below steps down a size
+           rather than letting the table run off the edge. */
+        @page { size: ${pageSize}; margin: ${compact ? '10mm' : '16mm'}; }
+        .report-print { font-family: -apple-system, Roboto, Arial, sans-serif; color: #1f2937; padding: ${compact ? '10px' : '20px'}; }
+        .head { border-bottom: 3px solid #6366F1; padding-bottom: ${compact ? '9px' : '14px'}; margin-bottom: ${compact ? '12px' : '18px'}; }
+        .acct { font-size: ${compact ? '16px' : '22px'}; font-weight: 800; color: #111827; }
+        .rpt { font-size: ${compact ? '12px' : '15px'}; color: #6366F1; font-weight: 700; margin-top: 2px; }
+        .meta { font-size: ${compact ? '9px' : '11px'}; color: #6b7280; margin-top: 6px; }
+        .filters span { display:inline-block; background:#eef2ff; color:#4338ca; font-size:${compact ? '8px' : '10px'}; padding:3px 8px; border-radius:10px; margin:8px 6px 0 0; }
+        .kpis { display:flex; flex-wrap:wrap; gap:${compact ? '6px' : '10px'}; margin:${compact ? '10px 0 12px' : '16px 0 20px'}; }
+        .kpi { border:1px solid #e5e7eb; border-radius:10px; padding:${compact ? '7px 10px' : '12px 16px'}; min-width:${compact ? '88px' : '130px'}; }
+        .kpi-v { font-size:${compact ? '13px' : '18px'}; font-weight:800; color:#111827; }
+        .kpi-l { font-size:${compact ? '8px' : '10px'}; color:#6b7280; text-transform:uppercase; letter-spacing:.4px; margin-top:3px; }
+        table { width:100%; border-collapse:collapse; font-size:${compact ? '8.5px' : '11px'}; }
+        th { text-align:left; background:#f9fafb; color:#374151; font-weight:800; padding:${compact ? '5px 6px' : '8px 10px'}; border-bottom:2px solid #e5e7eb; }
+        td { padding:${compact ? '4px 6px' : '7px 10px'}; border-bottom:1px solid #f1f1f4; }
         th.num, td.num { text-align:right; }
-        tr:nth-child(even) td { background:#fcfcfd; }
-        .foot { margin-top:18px; font-size:10px; color:#9ca3af; }
+        tbody tr:nth-child(even) td { background:#fcfcfd; }
+        /* Subtotals and the grand total must win over the zebra striping above,
+           or a subtotal landing on an even row loses its shading. */
+        tr.subtotal td { background:#f3f4f6 !important; font-weight:700; border-top:1px solid #d1d5db; border-bottom:1px solid #d1d5db; }
+        tr.grand td { background:#eef2ff !important; font-weight:800; color:#111827; border-top:2px solid #6366F1; font-size:${compact ? '9px' : '11.5px'}; }
+        /* Repeat the column headings on every sheet, and never split a row or a
+           subtotal across a page break. */
+        thead { display: table-header-group; }
+        tfoot { display: table-row-group; }
+        tr { page-break-inside: avoid; }
+        .foot { margin-top:${compact ? '12px' : '18px'}; font-size:${compact ? '8px' : '10px'}; color:#9ca3af; }
         @media print { .noprint { display:none; } }
       `}</style>
 
@@ -141,13 +210,34 @@ function ReportPrintInner() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              {dims.map((d) => <td key={d}>{r[d] != null && r[d] !== '' ? String(r[d]) : '—'}</td>)}
-              {measures.map((m) => <td key={m} className="num">{fmt(m, r[m])}</td>)}
-            </tr>
-          ))}
+          {groups.length > 0
+            ? groups.map((g) => (
+                <React.Fragment key={g.groupKey}>
+                  {(g.rows as Row[]).map((r, i) => (
+                    <tr key={`${g.groupKey}-${i}`}>
+                      {dims.map((d) => <td key={d}>{r[d] != null && r[d] !== '' ? String(r[d]) : '—'}</td>)}
+                      {measures.map((m) => <td key={m} className="num">{fmt(m, r[m])}</td>)}
+                    </tr>
+                  ))}
+                  {totalCells(`${g.groupKey} total`, g.subtotals, 'subtotal')}
+                </React.Fragment>
+              ))
+            : rows.map((r, i) => (
+                <tr key={i}>
+                  {dims.map((d) => <td key={d}>{r[d] != null && r[d] !== '' ? String(r[d]) : '—'}</td>)}
+                  {measures.map((m) => <td key={m} className="num">{fmt(m, r[m])}</td>)}
+                </tr>
+              ))}
         </tbody>
+        <tfoot>
+          {totalCells(
+            'TOTAL',
+            Object.fromEntries(
+              measures.filter(isAdditive).map((m) => [m, sumOf(m, rows)]),
+            ),
+            'grand',
+          )}
+        </tfoot>
       </table>
       <div className="foot">{rows.length} row(s).</div>
     </div>

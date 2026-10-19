@@ -116,6 +116,16 @@ export interface TabConfig {
    *  from the report default (Ageing counts customers on one tab and products on
    *  another). Falls back to ReportDefinition.kpis. */
   kpis?: string[];
+  /** Add a subtotal row after each value of the tab's PRIMARY dimension — e.g.
+   *  Product Summary's "Toothbrush total 260" under that product's customers.
+   *
+   *  Opt-in, and deliberately not automatic on any two-dimension table: Customer
+   *  Outstanding's Order tab also shows several dimension columns, but its first
+   *  one is the order number, so every group would hold one row and every row
+   *  would be followed by a subtotal repeating it. Only switch this on where the
+   *  primary dimension genuinely repeats across rows. Ignored unless the tab
+   *  shows two or more dimension columns. See lib/reports/subtotals.ts. */
+  showSubtotals?: boolean;
 }
 
 export interface ReportDefinition {
