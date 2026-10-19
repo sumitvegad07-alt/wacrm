@@ -92,7 +92,7 @@ The tab config picks the correct twin, and `TabConfig.availableMeasures` keeps t
 
 Verified on prod: record-level and item-level quantity both total **85**. (Amounts differ only because 38 of 49 quotations have no line items at all — the item-level view can only account for quotations that have items.)
 
-**When adding a module, register twins for any measure that would fan out.** Do not rely on the user choosing correctly. The Order/Sales product tabs still have the un-twinned version of this bug.
+**When adding a module, register twins for any measure that would fan out.** Do not rely on the user choosing correctly. Order and Sales carried the un-twinned version of this bug for months; they were brought onto this pattern on 2026-10-19 (see §5m).
 
 ### Nullable-entity dimensions
 
@@ -417,9 +417,9 @@ customer × product gives 3,436.
 quantity and amount measures are order-level — `product_quantity` is
 `SUM(COALESCE(isum.product_quantity, 0))`, read off the pre-aggregated
 `order_items_summary` join. At order grain that is right and fan-out-proof; at
-line grain it repeats one order's whole quantity once per product row. That is
-the long-standing overstatement on the Order and Sales **Product** tabs, still
-unfixed there.
+line grain it repeats one order's whole quantity once per product row. That was
+the long-standing overstatement on the Order and Sales **Product** tabs, fixed
+the same day by §5m.
 
 So `product_summary` registers item-level twins under the **same keys**
 (`SUM(i.quantity)`, `SUM(i.total)`, …) and module-ordered resolution picks them,
@@ -483,6 +483,90 @@ Finally, the ordering key for any oldest-first allocation must be **total**.
 deterministically, so no payment is counted twice and none is skipped. Verified
 against an independent recomputation on every order of the pilot account, max
 difference 0.00.
+
+## 5m. Retro-fitting twins onto a live report (Order / Sales, 2026-10-19)
+
+§5d ends with "the Order/Sales product tabs still have the un-twinned version
+of this bug". This is that fix, and it is the first one that **restated figures
+already in use**, so the process matters as much as the SQL.
+
+### Measure it before you touch it
+
+The overstatement was quantified through the live `execute_report` RPC on prod,
+with the item-level versions registered temporarily on module `order` under
+`zz_probe_*` keys and deleted afterwards. Balaji Agencies (3,338 orders), Order
+report, Product tab — Category and Sub-Category are identical, and Sales behaves
+the same way:
+
+| Column | shown | correct | overstated |
+| --- | --- | --- | --- |
+| Quantity | 9,47,160 | 2,45,798 | +285.3% |
+| # of product | 42,815 | 30 | +142,617% |
+| Base Quantity | 9,47,160 | 2,45,798 | +285.3% |
+| Sub Amount | 4,90,11,148.98 | 1,27,19,646.96 | +285.3% |
+| Amount | 4,90,11,148.98 | 1,27,19,646.96 | +285.3% |
+
+About **3.9x** the truth, on both accounts that have orders. The correct column
+was then reconciled a second way, totalling `order_items` outside the engine
+(11,676 lines): `SUM(quantity)` 245,798.00, `SUM(sub_total)` 12,719,646.96,
+`COUNT(DISTINCT product_id)` 30 — exact match.
+
+**Rule: a fix that moves a number people quote is a decision, not a task.** The
+founder chose to keep the existing column names (so the report reads the same
+and the wrong arithmetic becomes unreachable) over adding differently-labelled
+columns (which would have relabelled the bug and left the wrong column
+selectable), and chose to fix all five columns rather than the two originally
+reported — fixing Quantity alone would have left a row whose quantity and
+amount disagree, which invites more trust than it deserves.
+
+### Two traps in measuring it
+
+**Never ask for both arithmetics in one query.** The first probe requested the
+order-level and item-level measures together, which drags in both
+`order_items_summary` and `order_items`; the `isum` value then repeats per line
+and the order-level figure looks inflated even on the Customer tab, where it is
+correct. Each measure set needs its own `execute_report` call. Once separated,
+all four order-grain tabs matched to the paisa on both accounts — which is the
+control that proves this fix cannot move them.
+
+**Not every difference is fan-out.** `# of product` also differs on the
+order-grain tabs (Customer tab: 11,167 vs 3,436), but that is a *definition*
+difference: order-level counts product LINES across the customer's orders,
+item-level counts how many DIFFERENT products that customer bought. Both are
+real answers. It was left alone. Check which you are looking at before
+"fixing" it.
+
+### What shipped
+
+`item_product_quantity`, `item_product_count`, `item_base_quantity`,
+`item_gross_amount` and `item_net_amount` registered on `order` — so `sales`
+inherits them by module-ordered resolution (§5b) and the two cannot drift — with
+the order-level rows untouched. `discount_amount` and `tax_amount` get no twin
+and are simply absent from the product tabs: they exist only at order level, so
+there is no correct column to offer. `order_count`, `customer_count` and
+`avg_price` need none — `COUNT(DISTINCT …)` is immune to the repeated rows and
+`avg_price` is already per line.
+
+The orphan `item_amount` = `SUM(i.sub_total)` was deleted. It was the
+hand-rolled measure §5 told users to pick themselves, never exposed by any
+config, and now a duplicate of `item_gross_amount`.
+
+### The saved-view hole, which also affected quotations
+
+`availableMeasures` filters Manage Column, and changing tabs resets the
+selection to that tab's defaults — but the saved default view was filtered only
+against `config.measures`, the whole report's list. A user whose saved view was
+the Product tab with `product_quantity` selected would have kept the wrong
+column straight through this fix. `report-viewer.tsx` now also drops any
+restored measure the restored tab does not allow, and falls back to **that
+tab's** defaults rather than the opening tab's. Quotations had carried the same
+hole since §5d shipped.
+
+**Deploy order matters.** The measure loop in `execute_report` does `CONTINUE`
+on an unknown key (§5i's silent failure in another costume), so shipping the
+config before the migration runs does not error — it quietly drops Quantity,
+Sub Amount and Amount from the three product tabs. Apply the registry migration
+first, or at least immediately.
 
 ## 6. Future Compatibility & Onboarding Modules
 To onboard a new module (e.g. `Visits`):

@@ -193,14 +193,33 @@ export function ReportViewer({ config }: ReportViewerProps) {
             const dimensions = (cfg.dimensions ?? s.dimensions).filter((d) =>
               config.dimensions.some((cd) => cd.key === d)
             );
-            const measures = (cfg.measures ?? s.measures).filter((m) =>
-              config.measures.some((cm) => cm.key === m)
+            // …and never let a saved layout reinstate a measure the tab it
+            // restores is not allowed to use. Switching tabs resets the
+            // selection to that tab's defaults, so this path was the only way an
+            // order-level quantity or amount could still land on a product tab
+            // and overstate it (see orderReportConfig.ts). Same guard protects
+            // the quotation twins.
+            const restoredTab = config.tabConfigs?.find(
+              (t) => t.dimension === (cfg.dimensions?.[0] ?? s.dimensions[0])
+            );
+            const allowed = restoredTab?.availableMeasures;
+            const measures = (cfg.measures ?? s.measures).filter(
+              (m) =>
+                config.measures.some((cm) => cm.key === m) &&
+                (!allowed || allowed.includes(m))
             );
             return {
               ...s,
               ...cfg,
               dimensions: dimensions.length ? dimensions : s.dimensions,
-              measures: measures.length ? measures : s.measures,
+              // If nothing survived, fall back to the RESTORED tab's defaults
+              // rather than `s.measures` — those belong to the tab the report
+              // opens on, which may be a different grain entirely.
+              measures: measures.length
+                ? measures
+                : restoredTab
+                  ? getDefaultMeasures(restoredTab.key)
+                  : s.measures,
             };
           });
 

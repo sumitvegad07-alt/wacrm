@@ -1,5 +1,54 @@
 import type { ReportDefinition } from './types';
 
+/**
+ * Order Report.
+ *
+ * Item-level tabs use DIFFERENT measure keys. Grouping by product, category or
+ * sub-category joins `order_items`, which repeats the order's own totals once per
+ * line — the fan-out in docs/report-engine.md §5. The quantity and amount
+ * measures `order` registers are order-level rollups (read off the pre-aggregated
+ * `isum` join, or straight off `base`), so on a product tab they reported roughly
+ * 3.9x the truth until 2026-10-19. The product tabs therefore use the `item_*`
+ * twins — same labels, per-line arithmetic — and `availableMeasures` keeps the
+ * wrong twin out of Manage Column on each tab.
+ *
+ * Never add an order-level quantity or amount to an item-level tab; the totals
+ * will lie. Measured before/after and the reconciliation against `order_items`
+ * are in migration 20261019150000_order_sales_item_level_measures.sql.
+ *
+ * `order_count`, `customer_count` and `avg_price` need no twin: COUNT(DISTINCT …)
+ * is immune to the repeated rows, and avg_price is already per line.
+ */
+
+/** Customer / User / Area / Period: the order IS the grain, so the order-level
+ *  rollups are correct here and must keep being used. */
+const ORDER_LEVEL_MEASURES = [
+  'order_count',
+  'customer_count',
+  'product_count',
+  'product_quantity',
+  'base_quantity',
+  'gross_amount',
+  'net_amount',
+  'discount_amount',
+  'tax_amount',
+  'avg_price',
+];
+
+/** Product / Category / Sub-Category: the order line is the grain. Note that
+ *  `discount_amount` and `tax_amount` are absent — they are order-level only, so
+ *  there is no correct column to offer on these tabs. */
+const ITEM_LEVEL_MEASURES = [
+  'order_count',
+  'customer_count',
+  'item_product_count',
+  'item_product_quantity',
+  'item_base_quantity',
+  'item_gross_amount',
+  'item_net_amount',
+  'avg_price',
+];
+
 export const orderReportConfig: ReportDefinition = {
   moduleName: 'order',
   label: 'Order Reports',
@@ -31,6 +80,14 @@ export const orderReportConfig: ReportDefinition = {
     { key: 'tax_amount', label: 'Tax Amount', type: 'currency' },
     { key: 'customer_count', label: '# of customer', type: 'number' },
     { key: 'avg_price', label: 'Avg Price', type: 'currency' },
+    // Item-level twins, for the tabs already joined to order_items. Same labels
+    // on purpose — the column reads the same to the user; `availableMeasures`
+    // decides which one a given tab may use.
+    { key: 'item_product_count', label: '# of product', type: 'number' },
+    { key: 'item_product_quantity', label: 'Quantity', type: 'number' },
+    { key: 'item_base_quantity', label: 'Base Quantity', type: 'number' },
+    { key: 'item_gross_amount', label: 'Sub Amount', type: 'currency' },
+    { key: 'item_net_amount', label: 'Amount', type: 'currency' },
   ],
   
   kpis: ['net_amount', 'gross_amount', 'order_count'],
@@ -63,6 +120,7 @@ export const orderReportConfig: ReportDefinition = {
       label: 'Customer',
       dimension: 'customer',
       defaultMeasures: ['order_count', 'product_quantity', 'product_count', 'gross_amount', 'net_amount'],
+      availableMeasures: ORDER_LEVEL_MEASURES,
       hiddenMeasures: ['country', 'state', 'city', 'area'], // Note: these are dimension fields shown as extra columns, not measures
     },
     {
@@ -70,37 +128,43 @@ export const orderReportConfig: ReportDefinition = {
       label: 'User',
       dimension: 'user',
       defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+      availableMeasures: ORDER_LEVEL_MEASURES,
     },
     {
       key: 'area',
       label: 'Area',
       dimension: 'area',
       defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+      availableMeasures: ORDER_LEVEL_MEASURES,
     },
     {
       key: 'time',
       label: 'Period',
       dimension: 'date',
       defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+      availableMeasures: ORDER_LEVEL_MEASURES,
     },
     {
       key: 'product',
       label: 'Product',
       dimension: 'product',
-      defaultMeasures: ['order_count', 'customer_count', 'product_quantity', 'gross_amount', 'net_amount', 'avg_price'],
+      defaultMeasures: ['order_count', 'customer_count', 'item_product_quantity', 'item_gross_amount', 'item_net_amount', 'avg_price'],
+      availableMeasures: ITEM_LEVEL_MEASURES,
     },
     {
       key: 'product_category',
       label: 'Product Category',
       dimension: 'product_category',
-      defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+      defaultMeasures: ['order_count', 'customer_count', 'item_product_count', 'item_product_quantity', 'item_gross_amount', 'item_net_amount'],
+      availableMeasures: ITEM_LEVEL_MEASURES,
       requiresProductSettings: 'category',
     },
     {
       key: 'product_subcategory',
       label: 'Product Sub-Category',
       dimension: 'product_subcategory',
-      defaultMeasures: ['order_count', 'customer_count', 'product_count', 'product_quantity', 'gross_amount', 'net_amount'],
+      defaultMeasures: ['order_count', 'customer_count', 'item_product_count', 'item_product_quantity', 'item_gross_amount', 'item_net_amount'],
+      availableMeasures: ITEM_LEVEL_MEASURES,
       requiresProductSettings: 'subcategory',
     },
   ]
