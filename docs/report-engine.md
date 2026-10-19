@@ -397,6 +397,93 @@ module reports. After building, run the DSR beside a direct query per source and
 compare column by column — every figure matched on the first pass except the
 payment bug above, which only reconciliation could have surfaced.
 
+## 5l. Summary Reports — a chosen grain, and a derived figure (2026-10-19)
+
+The `product_summary` and `order_outstanding` modules, added for the Summary
+Report section. Spec:
+`docs/superpowers/specs/2026-10-19-summary-reports-design.md`. Both alias to
+`order` (§5b) and register only what genuinely differs.
+
+### Two dimensions in one table, on purpose
+
+Everywhere else, `TabConfig.extraDimensions` is restricted to a dimension
+*functionally determined* by the primary one, because an independent one
+multiplies the rows. Product Summary exists precisely to multiply them: the
+founder wants a flat sheet reading "customer / product / quantity / amount",
+which no pivot tab can produce. Verified on prod: one dimension gives 138 rows,
+customer × product gives 3,436.
+
+**Changing the grain changes which measures are correct.** The `order` module's
+quantity and amount measures are order-level — `product_quantity` is
+`SUM(COALESCE(isum.product_quantity, 0))`, read off the pre-aggregated
+`order_items_summary` join. At order grain that is right and fan-out-proof; at
+line grain it repeats one order's whole quantity once per product row. That is
+the long-standing overstatement on the Order and Sales **Product** tabs, still
+unfixed there.
+
+So `product_summary` registers item-level twins under the **same keys**
+(`SUM(i.quantity)`, `SUM(i.total)`, …) and module-ordered resolution picks them,
+without touching `order`. Confirmed both ways on prod: the item-level figures
+reconcile to the paisa against `order_items`, and the inherited order-level one
+does overstate at this grain.
+
+**Rule: when a new module changes the grain, re-derive every inherited measure
+at that grain. Inheriting a measure is inheriting an assumption about the grain.**
+
+### A derived figure belongs in a view, not in a per-row expression
+
+Customer Outstanding needs a per-order balance, which the schema does not hold:
+`payments` has a `contact_id` and no `order_id`, so a payment settles a customer,
+not an invoice. The balance is derived by oldest-first allocation — opening
+balance first, then orders by `(date, created_at, id)`.
+
+The obvious shape was a scalar function per order row, mirroring
+`customer_outstanding()`. It was written, registered, and **cancelled on
+statement timeout (57014)** on a 3,338-order account: "sum every earlier order of
+this customer" is a correlated subquery, quadratic in a customer's order count,
+re-run for every row of the report.
+
+It ships as the view `order_outstanding_balances`, where the prior debt is a
+**window SUM** per customer: the account is computed in one pass and the report
+joins the answer. The registry entry is a join, not an expression:
+
+```sql
+('order_outstanding', 'outstanding', 'LEFT JOIN order_outstanding_balances oo ON oo.order_id = base.id')
+('order_outstanding', 'outstanding_amount', 'Outstanding', 'SUM(COALESCE(oo.outstanding, 0))', 'currency', '["outstanding"]')
+```
+
+**Rule: a measure whose value depends on OTHER rows of the base table cannot be
+a registered expression. Precompute it per key in a view and join it.** The
+engine builds one flat aggregate query, so a window function cannot appear in a
+measure — and the correlated form that can appear is the one that times out.
+
+Three consequences worth knowing:
+
+- **The view is owner-rights, deliberately.** Allocation needs the customer's
+  whole ledger, and `execute_report` is SECURITY INVOKER; under the caller's RLS
+  a rep seeing only their own orders would compute a smaller prior debt and read
+  a different balance than their manager for the same order. Tenant isolation
+  lives inside the view instead: the `rules` CTE is gated by
+  `is_account_member()` and every other CTE joins it. Supabase's advisor flags
+  it; the view comment says why. Same trade-off `customer_outstanding()` already
+  makes as SECURITY DEFINER.
+- **LEFT JOIN, so an uncounted order reads 0 rather than vanishing.** The view
+  holds rows only for orders the account counts as debt, so Cancelled and
+  Rejected orders show their Order Amount with Outstanding 0 and Received 0.
+  "Received + Outstanding = Order Amount" therefore holds over **counted orders
+  only**.
+- **`MAX()` measures are grain-bound.** `customer_balance` is
+  `MAX(c.outstanding_balance)` — one value per customer, valid only where the
+  grain IS the customer. `TabConfig.availableMeasures` keeps it off the Order
+  tab (where it would repeat across a customer's rows) and off the Area and User
+  tabs (where it would report the largest single debtor as the group's total).
+
+Finally, the ordering key for any oldest-first allocation must be **total**.
+`(date, created_at, id)` is: two orders written on the same date still queue
+deterministically, so no payment is counted twice and none is skipped. Verified
+against an independent recomputation on every order of the pilot account, max
+difference 0.00.
+
 ## 6. Future Compatibility & Onboarding Modules
 To onboard a new module (e.g. `Visits`):
 1. Create a migration that inserts the required dimensions, measures, filters, and joins into the registry tables with `module_name = 'visit'`.

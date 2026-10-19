@@ -125,6 +125,10 @@ const ROUTE_GATES: readonly (SurfaceGate & { prefix: string })[] = [
   { prefix: "/reports/visits", line: "wfa" },
   { prefix: "/reports/dsr", line: "wfa" },
   { prefix: "/reports/expenses", line: "wfa", configModule: "expense" },
+  // Summary Report section. Both reports read orders, so they follow the Order
+  // and Ageing reports onto the SFA line. One prefix covers the whole section —
+  // anything added under it inherits the gate rather than shipping ungated.
+  { prefix: "/reports/summary", line: "sfa" },
 ];
 
 // Longest prefix wins, so a specific page beats the section it sits in.

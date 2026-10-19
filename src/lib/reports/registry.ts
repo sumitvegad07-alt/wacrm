@@ -13,11 +13,14 @@ import { visitReportConfig } from './visitReportConfig';
 import { dsrReportConfig } from './dsrReportConfig';
 import { expenseReportConfig } from './expenseReportConfig';
 import { taskReportConfig } from './taskReportConfig';
+import { productSummaryReportConfig } from './productSummaryReportConfig';
+import { outstandingReportConfig } from './outstandingReportConfig';
 
 const ALL: ReportDefinition[] = [
   salesReportConfig, orderReportConfig, quotationReportConfig, paymentReportConfig,
   ageingReportConfig, leadReportConfig, dealReportConfig, visitReportConfig,
   dsrReportConfig, expenseReportConfig, taskReportConfig,
+  productSummaryReportConfig, outstandingReportConfig,
 ];
 
 const BY_MODULE = new Map(ALL.map((r) => [r.moduleName, r]));

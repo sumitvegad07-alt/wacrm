@@ -71,6 +71,18 @@ describe("route gates — the paths the old guard had no rule for", () => {
     expect(open("SFA", "/reports/stock", ["stock"])).toBe(true);
   });
 
+  it("gates the whole Summary Report section onto the SFA line, by prefix", () => {
+    for (const path of ["/reports/summary/products", "/reports/summary/outstanding"]) {
+      expect(blocked("CRM", path)).toBe(true);
+      expect(blocked("WFA", path)).toBe(true);
+      expect(open("SFA", path)).toBe(true);
+      expect(open("CRM_SFA", path)).toBe(true);
+    }
+    // The gate is on the section, not the two pages, so a report added later
+    // cannot ship ungated by someone forgetting to register it.
+    expect(blocked("CRM", "/reports/summary/anything-added-later")).toBe(true);
+  });
+
   it("holds Pending Dispatch to its module toggle, not just the SFA line", () => {
     expect(blocked("CRM", "/pending-dispatch")).toBe(true);
     expect(open("SFA", "/pending-dispatch")).toBe(true);

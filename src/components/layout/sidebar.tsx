@@ -379,6 +379,24 @@ export function getMenuStructure(
       ],
     },
 
+    // ── Summary Report (collapsed) ──
+    // Flat, operational lists rather than the pivot-style reports above: one row
+    // per real-world thing, columns a person reads straight off the screen. Kept
+    // as its own group because the "Report" group is already 12 rows, and the
+    // founder asked for a home this kind of report can keep growing in.
+    {
+      type: "group",
+      label: "Summary Report",
+      icon: ListChecks,
+      items: [
+        // Customer + product in one row, which no pivot tab above can produce.
+        { href: "/reports/summary/products", label: "Product Summary", icon: Package, module: "orders", line: "sfa" },
+        // Per-order balance, allocated oldest-first. Phone number included so
+        // the list is directly callable.
+        { href: "/reports/summary/outstanding", label: "Customer Outstanding", icon: Banknote, module: "orders", line: "sfa" },
+      ],
+    },
+
     // ── Import (collapsed) — Universal Import Framework hub ──
     // One central place for admins to bulk-import any master data. Each item
     // opens that module's import wizard via /import/<key>. Only `product_units`
