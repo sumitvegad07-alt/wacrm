@@ -27,6 +27,7 @@ import {
   Radar,
   Send,
   Receipt,
+  CalendarClock,
 } from "lucide-react";
 import { isFounderEmail } from "@/lib/auth/founder";
 
@@ -52,6 +53,7 @@ const NAV_ITEMS = [
 const FOUNDER_NAV_ITEMS = [
   { href: "/admin/calculator", label: "Price Calculator", icon: Calculator },
   { href: "/admin/invoices", label: "Invoices", icon: Receipt },
+  { href: "/admin/renewals", label: "Renewals", icon: CalendarClock },
   { href: "/admin/retention", label: "Data Retention", icon: Trash2 },
   { href: "/admin/proposals", label: "Sales Proposals", icon: FileText },
   { href: "/admin/forecast", label: "Business Forecast", icon: BarChart3 },
