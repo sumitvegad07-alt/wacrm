@@ -3803,3 +3803,61 @@ users. Registry sweep 39/39 clean. Unverified on screen.
   data (`route_execution_stops.status`); this account has **zero** route
   executions and the Route module ships off, so that is the upgrade path the day
   routes are enabled — not something to fake now.
+
+---
+
+## Platform Invoices (superadmin, founder-only — migration 20261020120000)
+
+OZZO's own subscription invoices, raised by the founder in the superadmin
+portal. **Platform data, not tenant data**, and the whole module is built on
+that distinction.
+
+- **Tables:** `platform_invoices` (denormalised columns for the list, filters
+  and the outstanding total, plus `data` JSONB holding the frozen document) and
+  `platform_invoice_settings` (exactly one row, `id boolean primary key` with a
+  CHECK, holding OZZO's firm name, address, state, GSTIN, PAN, bank details,
+  declaration, terms, signature and the per-series starting numbers).
+- **RLS is enabled with NO policies** and nothing is granted to `anon` or
+  `authenticated`. Everything goes through `/api/admin/invoices*` behind
+  `requireFounder()` + `serviceClient()`, exactly like `platform_proposals`.
+  Do not add a policy: it would expose OZZO's own pricing to every signed-in
+  tenant user. `/print/invoice/[id]` is gated on the **session** too — unlike
+  `/print/order` and `/print/quotation`, which rely on RLS.
+- **`src/lib/invoices/*` is pure** — no Supabase import anywhere in it — and
+  holds every money, tax, numbering and status rule, with 83 tests.
+- **The discount is applied once, in `invoiceTotals()`.** `quote()` from
+  `lib/plans/pricing.ts` is called with `discountPct: 0` and `gstRate: 0`, and
+  supplies only the per-user-per-month rate and the gross plan line. Change
+  that and a discount comes off twice while the extra charge lines escape it.
+- **CGST and SGST are each computed at half the rate**, never by halving one
+  rounded total: they are separate levies and must print as equal figures.
+  Consequence, and it is correct: an intra-state invoice can total ₹1 away from
+  an inter-state one at the same rate, and the printed rows always add up.
+- **The intra/inter-state rule is NOT reimplemented here.**
+  `determineGstType()` and `gstStateCodeFromGstin()` in `lib/gst/states.ts`
+  own it (TS mirror of the SQL in migration `20260911120000`).
+  `lib/invoices/tax.ts` only does the arithmetic and resolves place of supply.
+- **Numbering:** `OZZO/26-27/001` (GST) and `OZZO/26-27/B001` (non-GST), each
+  consecutive within its Indian financial year, each restarting 1 April. A
+  unique index on `(series, fy, seq)` is the real guard; a `23505` is retried
+  once. Invoice Settings can start a series higher for a year already begun
+  outside the app, and the series never goes backwards.
+- **An issued invoice is frozen and cancelled, never deleted.** Content edits
+  are refused on anything but a draft, and a trigger
+  (`block_issued_invoice_delete`) refuses the DELETE — a hole in the series is
+  what GST does not allow. A draft that changes series or financial year is
+  renumbered.
+- **A GST invoice cannot be issued with `gst_type = 'unknown'`**: it would
+  print no tax at all. The form warns in the same words the API refuses in.
+- **`gst_type` is null exactly when `gst_enabled` is false**, paired by a CHECK
+  constraint, so a non-GST invoice can never carry a stale `'interstate'`.
+- **The signature image goes to the `avatars` bucket** under the founder's own
+  user id, the proven path the company-logo upload uses. Not `document_assets`:
+  its insert policy requires the first folder to be an account id the uploader
+  belongs to, so a `platform/` prefix there is rejected.
+- **The WhatsApp button sends text, not a link.** The print page is behind
+  `requireFounder()`, so a link would not open for the customer; the founder
+  downloads the PDF and attaches it.
+
+Spec: `docs/superpowers/specs/2026-10-20-invoice-and-renewal-modules-design.md`.
+Plan: `docs/superpowers/plans/2026-10-20-platform-invoices.md`.
