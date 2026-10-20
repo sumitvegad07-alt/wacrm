@@ -3861,3 +3861,49 @@ that distinction.
 
 Spec: `docs/superpowers/specs/2026-10-20-invoice-and-renewal-modules-design.md`.
 Plan: `docs/superpowers/plans/2026-10-20-platform-invoices.md`.
+
+---
+
+## Renewal Register (superadmin, founder-only — migration 20261020130000)
+
+The founder's own record of who is on what and when it ends, with a screen he
+opens each morning. **Completely separate from the invoice module** — that is
+his instruction, not an oversight.
+
+- **Tables:** `platform_subscriptions` (the current period per customer) and
+  `platform_subscription_periods` (every period already served, written only by
+  the RPC and never edited).
+- **RLS is enabled with NO policies**, nothing granted to `anon` or
+  `authenticated`, and `execute` on the RPC is revoked from both. All access
+  through `/api/admin/renewals*` behind `requireFounder()` + `serviceClient()`.
+- **It derives nothing from `accounts`, and nothing from invoices.** The founder
+  types every row. Deliberate: the platform tracks no salesman, no subscription
+  start date and no renewal amount, and syncing from `accounts` would keep
+  resurrecting rows for test and dead tenants. `customer_id` is free text, not
+  a foreign key, so a prospect who is not yet a tenant can be tracked. `plan`
+  is free text with the catalogue offered as a datalist, so a legacy or custom
+  package is recordable. **Do not add a join to `platform_invoices`**: renewing
+  must not raise an invoice and paying an invoice must not move a date here.
+- **`renew_platform_subscription()` is the only writer of the history table.**
+  It archives the current period and advances the row in one transaction, with
+  the row locked `FOR UPDATE`. Doing those two writes from the API would leave a
+  renewal half-done if the second failed, or double-write history on a retry.
+  Omitted arguments `coalesce` to what the row already held, so a renewal that
+  only moves the dates cannot blank the plan or the amount.
+- **All day arithmetic lives in `src/lib/renewals/buckets.ts`** and is computed
+  in **IST on the server**; the resolved date is returned to the browser as
+  `today` and everything on screen counts from it. Date-only values are
+  compared at UTC noon, never parsed as local dates. **Never `toISOString()`
+  for a day boundary** — two tests pin the 23:40 / 00:10 IST boundary.
+- **The due tabs are cumulative**: "Next 7 days" includes today and anything
+  already overdue, because a renewal that lapsed on Monday must not drop out of
+  the week's list. A `lost` customer is in no due bucket and no tile, but stays
+  visible under **All**.
+- **A period ends the day before the next one starts** (`next-period.ts`).
+  Month arithmetic clamps rather than overflowing, so 31 Jan + 3 months is
+  30 April and the period ends 29 April — one day short, because February is.
+  The no-gap / no-overlap invariant is what the register depends on and is
+  asserted across five awkward starts.
+
+Spec: `docs/superpowers/specs/2026-10-20-invoice-and-renewal-modules-design.md`
+(Part 2). Plan: `docs/superpowers/plans/2026-10-20-platform-renewals.md`.
