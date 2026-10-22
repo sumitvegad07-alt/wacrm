@@ -259,7 +259,7 @@ export default function AnnouncementsPage() {
         emptyMessage="No announcements found"
         tableView={tableView}
         rowKey={(row) => row.id}
-        onRowClick={(row) => router.push(`/announcements/${row.id}`)}
+        rowHref={(row) => `/announcements/${row.id}`}
       />
 
       <ConfirmDialog

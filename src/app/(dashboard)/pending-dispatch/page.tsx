@@ -160,7 +160,7 @@ export default function PendingDispatchPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(o) => o.id}
-        onRowClick={(o) => router.push(`/orders/${o.id}`)}
+        rowHref={(o) => `/orders/${o.id}`}
         serverPagination={{ ...table.serverPagination, exportAll }}
       />
     </PageLayout>

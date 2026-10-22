@@ -509,7 +509,7 @@ export default function EmployeesPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(emp) => emp.id}
-        onRowClick={(emp) => router.push(`/team/employees/${emp.id}`)}
+        rowHref={(emp) => `/team/employees/${emp.id}`}
       />
 
       {/* Add Employee Modal */}

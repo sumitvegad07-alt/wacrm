@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,21 @@ interface DataTableProps<T> {
   emptyMessage?: React.ReactNode;
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  /**
+   * Where a row goes when it is clicked. Prefer this over doing the
+   * `router.push` yourself in `onRowClick`.
+   *
+   * Knowing the destination up front is what lets the table warm Next's router
+   * cache while the pointer rests on a row, and show the row as busy for the
+   * gap between the click and the new page. A row used to be a bare
+   * `<tr onClick>` that pushed on click: nothing was ever prefetched, so every
+   * row click paid a cold round trip (measured at ~900ms on a warm localhost
+   * production build, against 39ms once cached) with no spinner, no highlight
+   * and no cursor change for the whole of it. It read as a dead click, people
+   * clicked again, and the second click — now warm — opened the page, which is
+   * why it looked like "it only works the second time".
+   */
+  rowHref?: (row: T) => string | null | undefined;
   selection?: {
     selectedIds: Set<string>;
     onSelectAll: (checked: boolean) => void;
@@ -116,6 +132,7 @@ export function DataTable<T>({
   emptyMessage = "No data found.",
   rowKey,
   onRowClick,
+  rowHref,
   selection,
   actions,
   menuActions,
@@ -123,6 +140,12 @@ export function DataTable<T>({
   search,
   fill = false,
 }: DataTableProps<T>) {
+  const router = useRouter();
+  const [isNavigating, startNavigation] = useTransition();
+  const [pendingRowKey, setPendingRowKey] = useState<string | null>(null);
+  const prefetched = useRef<Set<string>>(new Set());
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [isManageColumnsOpen, setIsManageColumnsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -136,6 +159,16 @@ export function DataTable<T>({
 
   useEffect(() => {
     setIsMounted(true);
+  }, []);
+
+  // The busy row clears when React finishes the navigation — or when this page
+  // is left, so a row never stays highlighted behind a cancelled one.
+  useEffect(() => {
+    if (!isNavigating) setPendingRowKey(null);
+  }, [isNavigating]);
+
+  useEffect(() => () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
   }, []);
 
   useEffect(() => {
@@ -246,6 +279,51 @@ export function DataTable<T>({
    * `bg-muted/20` for the same reason, which also makes headings, filters and
    * data read as three distinct bands. `top-8` is the 32px heading row above.
    */
+  /**
+   * Warm the router cache while the pointer rests on a row.
+   *
+   * After a short dwell, not on the first pixel of contact: running down a
+   * hundred rows with the mouse on the way to the scrollbar should not fire a
+   * hundred requests. Each href is only ever prefetched once.
+   */
+  const prefetchRow = (row: T) => {
+    if (!rowHref) return;
+    const href = rowHref(row);
+    if (!href || prefetched.current.has(href)) return;
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => {
+      if (prefetched.current.has(href)) return;
+      prefetched.current.add(href);
+      try {
+        router.prefetch(href);
+      } catch {
+        // A prefetch is an optimisation; the click still works without it.
+      }
+    }, 120);
+  };
+
+  const cancelPrefetch = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+  };
+
+  /**
+   * Open a row. Inside `startNavigation` so React keeps the old page
+   * interactive and tells us it is busy, which is what paints the row as
+   * pending instead of leaving the screen looking inert.
+   */
+  const activateRow = (row: T) => {
+    const href = rowHref?.(row);
+    if (href) {
+      setPendingRowKey(rowKey(row));
+      startNavigation(() => router.push(href));
+      return;
+    }
+    onRowClick?.(row);
+  };
+
+  const rowIsInteractive = Boolean(onRowClick || rowHref);
+
   const headCellClass = fill ? "lg:sticky lg:top-0 lg:z-20 lg:bg-card" : undefined;
   const filterCellClass = fill ? "lg:sticky lg:top-8 lg:z-10 lg:bg-muted" : undefined;
 
@@ -407,8 +485,17 @@ export function DataTable<T>({
                 // `align-middle` either way.
                 <TableRow
                   key={rowKey(row)}
-                  className={`h-8 hover:bg-muted/50 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
-                  onClick={() => onRowClick?.(row)}
+                  aria-busy={pendingRowKey === rowKey(row) || undefined}
+                  className={cn(
+                    "h-8 transition-colors hover:bg-muted/50",
+                    rowIsInteractive && "cursor-pointer",
+                    // The click landed: say so immediately, and keep saying it
+                    // until the next page is on screen.
+                    pendingRowKey === rowKey(row) && "bg-primary/10 cursor-progress hover:bg-primary/10",
+                  )}
+                  onPointerEnter={() => prefetchRow(row)}
+                  onPointerLeave={cancelPrefetch}
+                  onClick={() => activateRow(row)}
                 >
                   {selection && (
                     <TableCell onClick={(e) => e.stopPropagation()}>

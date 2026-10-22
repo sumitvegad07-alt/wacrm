@@ -113,21 +113,19 @@ function SettingsContent() {
         : null;
 
   return (
-    <div className="w-full space-y-6">
-      {/* Header — displays title for whichever setting is open */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="h-8 w-8 text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">
-            {SECTION_META[section]?.label || 'Organization Settings'}
-          </h1>
-        </div>
+    <div className="w-full space-y-3">
+      {/* The one title for whichever section is open. A panel never repeats it
+          — it adds its description and its actions underneath. */}
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="size-7 text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h1 className="text-lg font-semibold tracking-tight text-foreground">
+          {SECTION_META[section]?.label || 'Organization Settings'}
+        </h1>
       </div>
 
-      {/* Main Panel Content — cleanly displays the active openable settings panel */}
-      <div className="mt-4 min-w-0">
+      <div className="min-w-0">
         {blocked ? <SectionBlocked reason={blocked} /> : panel[section]}
       </div>
     </div>

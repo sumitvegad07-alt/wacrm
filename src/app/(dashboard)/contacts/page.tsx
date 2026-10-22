@@ -907,7 +907,7 @@ export default function ContactsPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(contact) => contact.id}
-        onRowClick={(contact) => router.push(`/contacts/${contact.id}`)}
+        rowHref={(contact) => `/contacts/${contact.id}`}
         selection={{
           selectedIds: selectedContacts,
           onSelectAll: (checked) => setSelectedContacts(checked ? new Set(filteredContacts.map(c => c.id)) : new Set()),

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -25,7 +24,6 @@ import { LeaveFormDialog, type EmployeeOption } from "@/components/leaves/leave-
 const STATUS_TABS = ["All", "Pending", "Approved", "Rejected", "Cancelled"] as const;
 
 export default function LeavesPage() {
-  const router = useRouter();
   const supabase = createClient();
   const { accountId, profile, accountRole, hasPermission } = useAuth();
 
@@ -245,7 +243,7 @@ export default function LeavesPage() {
         rowKey={(l) => l.id}
         // The record opens as a PAGE, following the order and lead modules — that is where the
         // timeline and its tasks live. A dialog had nowhere to put them.
-        onRowClick={(l) => router.push(`/location-tracking/leaves/${l.id}`)}
+        rowHref={(l) => `/location-tracking/leaves/${l.id}`}
       />
 
       <LeaveFormDialog

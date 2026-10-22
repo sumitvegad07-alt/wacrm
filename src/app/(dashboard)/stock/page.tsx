@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
@@ -18,7 +17,6 @@ import { Boxes, Search, SlidersHorizontal, AlertTriangle, Upload, BarChart3 } fr
 
 export default function StockPage() {
   const supabase = createClient();
-  const router = useRouter();
   const { accountId, isModuleEnabled, moduleSettingsLoaded, hasPermission } = useAuth();
 
   const canView = hasPermission(PERMISSIONS.STOCK.VIEW) || hasPermission(PERMISSIONS.STOCK.MANAGE);
@@ -112,7 +110,7 @@ export default function StockPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(r) => r.productId}
-        onRowClick={(r) => router.push(`/stock/${r.productId}`)}
+        rowHref={(r) => `/stock/${r.productId}`}
         emptyMessage={rows.length === 0 ? 'No stock-tracked products yet. Turn on “Maintain stock” and set an opening figure on a product to start.' : 'No products match your filter.'}
         actions={
           <div className="flex flex-wrap items-center gap-2">

@@ -494,7 +494,7 @@ export default function QuotationsPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(quotation) => quotation.id}
-        onRowClick={(quotation) => router.push(`/quotations/${quotation.id}`)}
+        rowHref={(quotation) => `/quotations/${quotation.id}`}
         serverPagination={{ ...table.serverPagination, exportAll }}
         selection={{
           selectedIds: selectedIds,

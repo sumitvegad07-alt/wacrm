@@ -835,7 +835,7 @@ export default function PipelinesPage() {
               columns={visibleColumns}
               data={filteredDeals}
               tableView={tableView}
-              onRowClick={(deal) => router.push(`/deals/${deal.id}`)}
+              rowHref={(deal) => `/deals/${deal.id}`}
               rowKey={(deal) => deal.id}
               selection={{
                 selectedIds: selectedDealIds,

@@ -489,10 +489,6 @@ export default function ExpensesPage() {
     [expenses, selectedExpenseIds],
   );
 
-  const handleRowClick = (expense: Expense) => {
-    router.push(`/expenses/${expense.id}`);
-  };
-
   return (
     <PageLayout fill>
       <PageToolbar
@@ -571,7 +567,7 @@ export default function ExpensesPage() {
         isLoading={loading}
         serverPagination={{ ...table.serverPagination, exportAll }}
         rowKey={(expense) => expense.id}
-        onRowClick={handleRowClick}
+        rowHref={(expense) => `/expenses/${expense.id}`}
         selection={{
           selectedIds: selectedExpenseIds,
           onSelect: (id, selected) => {

@@ -6,6 +6,11 @@ import { allowedModules } from "@/lib/plans/catalog";
 import Link from "next/link";
 import { CheckCircle2, Layers, GripVertical, Trash2, Plus, Loader2, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  SettingsPanel,
+  SettingsCard,
+  SettingsRow,
+} from "@/components/settings/settings-layout";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -69,7 +74,7 @@ function KoopsRadioToggle({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-6 mt-2">
+    <div className="flex items-center gap-5">
       <label
         onClick={() => !disabled && onChange(false)}
         className={cn(
@@ -195,18 +200,50 @@ function FeatureRow({
   children?: ReactNode;
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 md:gap-8 md:items-start">
-      <div>
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-xs text-muted-foreground mt-1">{description}</p>
+    <SettingsRow
+      label={label}
+      description={description}
+      control={
         <KoopsRadioToggle enabled={enabled} onChange={onChange} disabled={disabled} />
-      </div>
+      }
+    >
       {enabled && children ? (
-        <div className="rounded-lg border border-border bg-background p-4">{children}</div>
-      ) : (
-        <div className="hidden md:block" />
-      )}
-    </div>
+        <div className="rounded-lg border border-border bg-muted/20 p-3">{children}</div>
+      ) : null}
+    </SettingsRow>
+  );
+}
+
+/**
+ * A plain on/off setting. The toggle lands in the same right-hand column as
+ * every other control on the panel, rather than under its own label where the
+ * length of the label decided where it sat.
+ */
+function ToggleRow({
+  label,
+  description,
+  enabled,
+  onChange,
+  disabled,
+  children,
+}: {
+  label: string;
+  description?: string;
+  enabled: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <SettingsRow
+      label={label}
+      description={description}
+      control={
+        <KoopsRadioToggle enabled={enabled} onChange={onChange} disabled={disabled} />
+      }
+    >
+      {children}
+    </SettingsRow>
   );
 }
 
@@ -536,32 +573,21 @@ export function ModuleSettingsPanel() {
   }
 
   return (
-    <div className="space-y-8 pb-12">
-      {/* Top Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4 border-b border-border pb-5">
-
-        {/* Action buttons at top right for immediate access */}
-        {canEditSettings && (
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Save Changes"}
-            </button>
-            <button
-              type="button"
-              onClick={handleDiscard}
-              disabled={saving}
-              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-            >
+    <SettingsPanel
+      description="Which modules your organization uses, and how the shared behaviour of orders, customers and the field app is configured."
+      actions={
+        canEditSettings ? (
+          <>
+            <Button variant="outline" size="sm" onClick={handleDiscard} disabled={saving}>
               Discard
-            </button>
-          </div>
-        )}
-      </div>
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+          </>
+        ) : undefined
+      }
+    >
 
       {/* Read-only notice for non-admins */}
       {!canEditSettings && (
@@ -586,49 +612,50 @@ export function ModuleSettingsPanel() {
       )}
 
       {/* ── SECTION 1: KOOPS UI MODULES / SYSTEM CONFIG ── */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-xs">
-        <div className="border-b border-border/80 pb-3 mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">
-              Modules / System config
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Turn the features included in your plan on or off for your organization.
-            </p>
-          </div>
+      <SettingsCard
+        title="Modules"
+        description="Turn the features included in your plan on or off for your organization."
+        action={
           <Input
             value={moduleFilter}
             onChange={(e) => setModuleFilter(e.target.value)}
             placeholder="Find a setting…"
-            className="h-8 w-full sm:max-w-56"
+            aria-label="Find a module"
+            className="h-7 w-full sm:w-56"
           />
-        </div>
+        }
+        bodyClassName="px-0 py-0"
+      >
 
-        {/* 4-column grid. Only modules the plan includes are shown — off-plan
-            modules are hidden rather than greyed out. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-6">
+        {/* Two columns of aligned rows. It was a four-column grid with each
+            toggle under its own label, so the labels wrapped to different
+            heights and no two toggles lined up. Only modules the plan includes
+            are shown — off-plan modules are hidden rather than greyed out. */}
+        <div className="grid grid-cols-1 gap-x-8 px-4 lg:grid-cols-2">
           {MODULE_TOGGLES.filter((m) => planModules.has(m.key as never))
             .filter((m) => m.label.toLowerCase().includes(moduleFilter.trim().toLowerCase()))
             .map((m) => (
-            <div key={m.key}>
-              <p className="text-xs font-medium text-foreground">{m.label}</p>
-              <KoopsRadioToggle
-                enabled={!!draft[m.key]}
-                onChange={(val) => handleModuleToggle(m.key, val)}
-                disabled={moduleLocked(m.key)}
+              <SettingsRow
+                key={m.key}
+                label={m.label}
+                control={
+                  <KoopsRadioToggle
+                    enabled={!!draft[m.key]}
+                    onChange={(val) => handleModuleToggle(m.key, val)}
+                    disabled={moduleLocked(m.key)}
+                  />
+                }
               />
-            </div>
-          ))}
+            ))}
         </div>
-      </div>
+      </SettingsCard>
 
       {/* ── SECTION 1B: EXTRA SETTINGS (HIERARCHY & ASSIGNMENT) ── */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-xs">
-        <div className="border-b border-border/80 pb-3 mb-6">
-          <h3 className="text-base font-semibold text-foreground">
-            Extra Settings
-          </h3>
-        </div>
+      <SettingsCard
+        title="Extra settings"
+        description="Behaviour that applies across modules."
+        bodyClassName="px-4 py-0"
+      >
 
         {loadingSettings ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -636,22 +663,15 @@ export function ModuleSettingsPanel() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Plain on/off switches (no extra options), grouped compactly. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-6">
-              <div>
-                <p className="text-xs font-medium text-foreground">Enable GST</p>
-                <KoopsRadioToggle enabled={gstEnabled} onChange={setGstEnabled} disabled={!canEditSettings} />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-foreground">Enable HSN Code</p>
-                <KoopsRadioToggle enabled={hsnEnabled} onChange={setHsnEnabled} disabled={!canEditSettings} />
-              </div>
+            <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
+              <ToggleRow label="Enable GST" enabled={gstEnabled} onChange={setGstEnabled} disabled={!canEditSettings} />
+              <ToggleRow label="Enable HSN Code" enabled={hsnEnabled} onChange={setHsnEnabled} disabled={!canEditSettings} />
             </div>
 
-            {/* Feature switches with extra options: the toggle sits on the left,
-                and its settings open on the right (into the otherwise-empty space)
-                only when the toggle is on. */}
-            <div className="space-y-6 border-t border-border/60 pt-6">
+            {/* Settings that reveal more configuration when they are switched
+                on. That configuration opens underneath the row rather than in a
+                second column, so the control column never moves. */}
+            <div>
               {hasSFA && (
                 <FeatureRow
                   label="Enable Multi Unit"
@@ -749,77 +769,60 @@ export function ModuleSettingsPanel() {
               >
                 <div className="space-y-5">
                   {/* ── Visits: the original fence, anchored on the customer ── */}
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Geo-Fencing for Visit</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Reps must be near the customer&apos;s saved location or they see “You are not in
-                      customer Range”. Tag your customers first.
-                    </p>
-                    <KoopsRadioToggle
-                      enabled={geoVisitEnabled}
-                      onChange={setGeoVisitEnabled}
-                      disabled={!canEditSettings}
-                    />
-
+                  <ToggleRow
+                    label="Geo-Fencing for Visit"
+                    description="Reps must be near the customer’s saved location or they see “You are not in customer Range”. Tag your customers first."
+                    enabled={geoVisitEnabled}
+                    onChange={setGeoVisitEnabled}
+                    disabled={!canEditSettings}
+                  >
                     {geoVisitEnabled && (
-                      <div className="mt-4 space-y-4 border-l-2 border-border pl-4">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">Fence check-in</p>
-                          <KoopsRadioToggle enabled={geoEnforceCheckIn} onChange={setGeoEnforceCheckIn} disabled={!canEditSettings} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">Fence check-out</p>
-                          <KoopsRadioToggle enabled={geoEnforceCheckOut} onChange={setGeoEnforceCheckOut} disabled={!canEditSettings} />
-                        </div>
+                      <div className="border-l-2 border-border pl-4">
+                        <ToggleRow label="Fence check-in" enabled={geoEnforceCheckIn} onChange={setGeoEnforceCheckIn} disabled={!canEditSettings} />
+                        <ToggleRow label="Fence check-out" enabled={geoEnforceCheckOut} onChange={setGeoEnforceCheckOut} disabled={!canEditSettings} />
                         {!geoEnforceCheckIn && !geoEnforceCheckOut && (
-                          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                          <div className="my-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
                             Visit fencing is on but neither check-in nor check-out is enforced — turn
                             on at least one, otherwise nothing is blocked.
                           </div>
                         )}
-                        <div>
-                          <p className="text-sm font-medium text-foreground">Allowed radius</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            The phone&apos;s GPS accuracy is added automatically (up to 100 m) so honest
-                            reps aren&apos;t wrongly blocked.
-                          </p>
-                          <select
-                            value={geoRadius}
-                            onChange={(e) => setGeoRadius(Number(e.target.value))}
-                            disabled={!canEditSettings}
-                            aria-label="Geo-fence radius"
-                            className="mt-2 h-9 w-full max-w-xs rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
-                          >
-                            {FENCE_RADII.map((r) => (
-                              <option key={r} value={r}>
-                                {r >= 1000 ? `${r / 1000} km (${r} m)` : `${r} m`}
-                                {r === 50 ? " — default" : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <SettingsRow
+                          label="Allowed radius"
+                          description="The phone’s GPS accuracy is added automatically (up to 100 m) so honest reps aren’t wrongly blocked."
+                          control={
+                            <select
+                              value={geoRadius}
+                              onChange={(e) => setGeoRadius(Number(e.target.value))}
+                              disabled={!canEditSettings}
+                              aria-label="Geo-fence radius"
+                              className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                            >
+                              {FENCE_RADII.map((r) => (
+                                <option key={r} value={r}>
+                                  {r >= 1000 ? `${r / 1000} km (${r} m)` : `${r} m`}
+                                  {r === 50 ? " — default" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          }
+                        />
                       </div>
                     )}
-                  </div>
+                  </ToggleRow>
 
                   {/* ── Attendance: anchored on Attendance Locations, not the customer.
                       Independent of the visit switch — a tenant may fence both. Punch
                       only exists on the WFA line, so a CRM-only plan never sees this. ── */}
                   {hasWFA && (
-                    <div className="border-t border-border pt-4">
-                      <p className="text-sm font-medium text-foreground">Geo-Fencing for Attendance</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Reps must be at a work location you pin to punch in or out. Each location
-                        decides for itself whether it fences punch-in, punch-out or both.
-                      </p>
-                      <KoopsRadioToggle
-                        enabled={geoAttendanceEnabled}
-                        onChange={setGeoAttendanceEnabled}
-                        disabled={!canEditSettings}
-                      />
-
+                    <ToggleRow
+                      label="Geo-Fencing for Attendance"
+                      description="Reps must be at a work location you pin to punch in or out. Each location decides for itself whether it fences punch-in, punch-out or both."
+                      enabled={geoAttendanceEnabled}
+                      onChange={setGeoAttendanceEnabled}
+                      disabled={!canEditSettings}
+                    >
                       {geoAttendanceEnabled && (
-                        <div className="mt-4 space-y-3 border-l-2 border-border pl-4">
+                        <div className="space-y-3 border-l-2 border-border pl-4">
                           <p className="text-xs text-muted-foreground">
                             Anyone with no location assigned keeps punching from anywhere, so turning
                             this on can never lock your team out of its own attendance.
@@ -837,7 +840,7 @@ export function ModuleSettingsPanel() {
                           </Link>
                         </div>
                       )}
-                    </div>
+                    </ToggleRow>
                   )}
                 </div>
               </FeatureRow>
@@ -845,38 +848,29 @@ export function ModuleSettingsPanel() {
 
             {/* ── Operational settings (kept as compact rows, with guidance) ── */}
             {/* Customer & Lead Assignment to Employee */}
-            <div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">
-                  Customer &amp; Lead Assignment to Employee
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Choose how you assign customers and leads to your employees.
-                </p>
-              </div>
-              <KoopsOptionToggle
-                options={[
-                  { label: "Assign Area Wise", value: "area" },
-                  { label: "Direct Assignment", value: "direct" },
-                ]}
-                value={assignmentMode}
-                onChange={setAssignmentMode}
-                disabled={!canEditSettings}
-              />
-            </div>
+            <SettingsRow
+              label="Customer & Lead Assignment to Employee"
+              description="Choose how you assign customers and leads to your employees."
+              control={
+                <KoopsOptionToggle
+                  options={[
+                    { label: "Assign Area Wise", value: "area" },
+                    { label: "Direct Assignment", value: "direct" },
+                  ]}
+                  value={assignmentMode}
+                  onChange={setAssignmentMode}
+                  disabled={!canEditSettings}
+                />
+              }
+            />
 
             {/* Sales Person Tracking — how often a location is recorded. Always on while
                 punched in; deliberately NOT limited to shift hours (see the note below). */}
-            <div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">Sales Person Tracking</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  The mobile app records a location at this interval the whole time a rep is
-                  punched in — at any hour, night shifts included.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 p-3">
-                <span className="text-sm text-muted-foreground">Record a location every</span>
+            <SettingsRow
+              label="Sales Person Tracking"
+              description="The mobile app records a location at this interval the whole time a rep is punched in — at any hour, night shifts included."
+              control={
+                <div className="flex w-full flex-wrap items-center justify-end gap-2">
                 <select
                   value={trackingInterval}
                   onChange={(e) => setTrackingInterval(Number(e.target.value))}
@@ -896,27 +890,23 @@ export function ModuleSettingsPanel() {
                     </option>
                   ))}
                 </select>
-                <p className="w-full text-xs text-muted-foreground">
-                  Default is {DEFAULT_TRACKING.interval_minutes} minutes. Tracking starts at
-                  punch-in and stops at punch-out.
-                </p>
-              </div>
-            </div>
+                </div>
+              }
+            >
+              <p className="text-xs text-muted-foreground">
+                Default is {DEFAULT_TRACKING.interval_minutes} minutes. Tracking starts at
+                punch-in and stops at punch-out.
+              </p>
+            </SettingsRow>
 
             {/* Shift Timings — attendance classification only. Kept visually separate from the
                 interval above because conflating the two is exactly what caused a rep who
                 punched in at 01:26 to be silently untracked against a 09:00–18:00 default. */}
-            <div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">Shift Timings</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Your company&apos;s working hours. Used only to classify attendance —
-                  Late Start, Early Leaving, Short Present, Present and Absent on the Attendance
-                  page. These times never stop location tracking: a rep who is punched in is on
-                  duty and is tracked whatever the hour.
-                </p>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 p-3">
+            <SettingsRow
+              label="Shift Timings"
+              description="Your company’s working hours. Used only to classify attendance — Late Start, Early Leaving, Short Present, Present and Absent on the Attendance page. These times never stop location tracking: a rep who is punched in is on duty and is tracked whatever the hour."
+            >
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 p-3">
                   <span className="text-sm text-muted-foreground">Shift runs</span>
                   <Input
                     type="time"
@@ -957,31 +947,30 @@ export function ModuleSettingsPanel() {
                     An end time earlier than the start means a night shift that runs past midnight.
                   </p>
               </div>
-            </div>
+            </SettingsRow>
 
             {/* Working days used to be configured here. They now live on HOLIDAY LISTS
                 (Settings → Leave Settings → Holiday Lists), because field staff and office staff
                 routinely need different weekly offs — one company-wide week could not express
                 that. This card points at the new home rather than leaving a stale duplicate that
                 would silently disagree with the lists. */}
-            <div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-foreground">Working Days & Holidays</p>
-                <p className="text-xs text-muted-foreground mt-1">
+            <SettingsRow
+              label="Working Days & Holidays"
+              description={
+                <>
                   Weekly offs and holidays are set per <strong>holiday list</strong> and assigned to
                   employees, so field staff and office staff can have different weeks. Configure
                   them in <strong>Settings → Leave Settings → Holiday Lists</strong>.
-                </p>
-              </div>
-            </div>
-
+                </>
+              }
+            />
           </div>
         )}
-      </div>
+      </SettingsCard>
 
       {/* Owner-only. Separate card because this is the one setting here about
           PEOPLE rather than about the business. */}
       <McpWorkforceAccessCard />
-    </div>
+    </SettingsPanel>
   );
 }

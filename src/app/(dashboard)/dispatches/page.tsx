@@ -196,7 +196,7 @@ export default function DispatchesPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(d) => d.id}
-        onRowClick={(d) => router.push(`/dispatches/${d.id}`)}
+        rowHref={(d) => `/dispatches/${d.id}`}
         serverPagination={{ ...table.serverPagination, exportAll }}
       />
     </PageLayout>

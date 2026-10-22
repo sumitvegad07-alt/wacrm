@@ -18,6 +18,11 @@ import { allowedModules } from "@/lib/plans/catalog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  SettingsPanel,
+  SettingsCard,
+  SettingsRow,
+} from "@/components/settings/settings-layout";
 import { Switch } from "@/components/ui/switch";
 
 /**
@@ -337,26 +342,27 @@ export function PricingSchemesSettings() {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <div className="flex items-center justify-end mb-4">
-        <Button onClick={saveAllSettings} disabled={!hasChanges || saving} className="shadow-sm">
+    <SettingsPanel
+      description="How your products are taxed and priced, and which of the catalogue modules your team can use."
+      className="animate-in fade-in-50 duration-200"
+      actions={
+        <Button size="sm" onClick={saveAllSettings} disabled={!hasChanges || saving}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Save Settings
+          Save settings
         </Button>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
-        <div className="space-y-8">
-          {/* ---------------- Tax slabs ---------------- */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Percent className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Tax slabs</h3>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Define the rates you charge. Each product picks one. An order line stores the
-              rate it was sold at, so changing a slab never rewrites past orders.
-            </p>
+      }
+    >
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+        <div className="space-y-4">
+          <SettingsCard
+            title={
+              <span className="flex items-center gap-2">
+                <Percent className="h-4 w-4 text-muted-foreground" /> Tax slabs
+              </span>
+            }
+            description="Define the rates you charge. Each product picks one. An order line stores the rate it was sold at, so changing a slab never rewrites past orders."
+            bodyClassName="space-y-3 px-4 py-3"
+          >
 
             {canEditSettings && (
               <form onSubmit={handleAddSlab} className="flex items-end gap-3 p-4 border border-border rounded-lg bg-muted/30">
@@ -413,18 +419,14 @@ export function PricingSchemesSettings() {
                 ))}
               </div>
             )}
-          </div>
+          </SettingsCard>
 
-          {/* ---------------- Tax mode ---------------- */}
-          <div className="space-y-3 pt-6 border-t border-border">
-            <div>
-              <h3 className="text-sm font-semibold">Product prices are</h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Whether the price you set on a product already includes tax, or tax is added on top at
-                order time. Each order records the mode it used, so changing this never alters past orders.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+          <SettingsCard
+            title="Product prices are"
+            description="Whether the price you set on a product already includes tax, or tax is added on top at order time. Each order records the mode it used, so changing this never alters past orders."
+            bodyClassName="px-4 py-3"
+          >
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
               {([
                 { value: "exclusive", label: "Exclusive of tax", help: "Price is pre-tax; tax is added on top." },
                 { value: "inclusive", label: "Inclusive of tax", help: "Price already contains the tax." },
@@ -443,180 +445,162 @@ export function PricingSchemesSettings() {
                 </button>
               ))}
             </div>
-          </div>
+          </SettingsCard>
         </div>
 
         {/* Salesman discounts, price floor, Scheme and Stock are SFA-line
             features — hidden entirely on CRM/WFA plans (per pricing & packaging).
             Tax slabs and price-entry mode above stay for every plan. */}
         {hasSFA && (
-        <div className="space-y-8">
-          {/* ---------------- Discounts ---------------- */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold">Salesman discounts</h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Off means the discount field never appears in either app.
-                </p>
-              </div>
-              <Switch
-                checked={discountMode !== "off"}
-                disabled={!canEditSettings || saving}
-                onCheckedChange={(on) => {
-                  const next: DiscountMode = on ? "item" : "off";
-                  setDiscountMode(next);
-                  setHasChanges(true);
-                }}
-              />
-            </div>
-
+        <div className="space-y-4">
+          <SettingsCard title="Selling rules" bodyClassName="px-4 py-0">
+            <SettingsRow
+              label="Salesman discounts"
+              description="Off means the discount field never appears in either app."
+              control={
+                <Switch
+                  checked={discountMode !== "off"}
+                  disabled={!canEditSettings || saving}
+                  onCheckedChange={(on) => {
+                    const next: DiscountMode = on ? "item" : "off";
+                    setDiscountMode(next);
+                    setHasChanges(true);
+                  }}
+                />
+              }
+            >
             {discountMode !== "off" && (
-              <div className="space-y-3 pl-6 border-l-2 border-primary/20">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Order-level discount</p>
-                    <p className="text-xs text-muted-foreground">
-                      Allow a flat or percentage discount across the whole order, in addition to line discounts.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={discountMode === "both"}
-                    disabled={!canEditSettings || saving}
-                    onCheckedChange={(on) => {
-                      const next: DiscountMode = on ? "both" : "item";
-                      setDiscountMode(next);
-                      setHasChanges(true);
-                    }}
-                  />
-                </div>
+              <div className="border-l-2 border-primary/20 pl-4">
+                <SettingsRow
+                  label="Order-level discount"
+                  description="Allow a flat or percentage discount across the whole order, in addition to line discounts."
+                  control={
+                    <Switch
+                      checked={discountMode === "both"}
+                      disabled={!canEditSettings || saving}
+                      onCheckedChange={(on) => {
+                        const next: DiscountMode = on ? "both" : "item";
+                        setDiscountMode(next);
+                        setHasChanges(true);
+                      }}
+                    />
+                  }
+                />
 
-                <p className="text-xs text-muted-foreground">
+                <p className="py-2 text-xs text-muted-foreground">
                   Who may actually discount is controlled per role by the{" "}
                   <span className="font-mono text-[11px] bg-muted px-1 py-0.5 rounded">apply_order_discount</span>{" "}
                   permission under Team → Roles. Without it the field stays hidden even when this is on.
                 </p>
               </div>
             )}
-          </div>
+            </SettingsRow>
 
-          {/* ---------------- Price floor ---------------- */}
-          <div className="space-y-3 pt-6 border-t border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-start gap-2">
-                <ShieldCheck className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <h3 className="text-sm font-semibold">Enforce price floor</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Blocks any order that would sell a product below its minimum price, however
-                    the discounts stack up. Set the minimum on each product.
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={enforceFloor}
-                disabled={!canEditSettings || saving}
-                onCheckedChange={(on) => { setEnforceFloor(on); setHasChanges(true); }}
-              />
-            </div>
-            {!enforceFloor && (
-              <p className="text-xs text-amber-600 dark:text-amber-500 pl-6">
-                With this off, stacked discounts can take a price below cost and the order will still save.
-              </p>
-            )}
-          </div>
-
-          {/* ---------------- Price Lists ---------------- */}
-          <div className="space-y-3 pt-6 border-t border-border">
-            <div className="flex items-start gap-2">
-              <ListChecks className="h-4 w-4 text-muted-foreground mt-0.5" />
-              <div>
-                <h3 className="text-sm font-semibold">Price Lists</h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Customer-specific pricing. A price list gives a blanket discount off every
-                  product plus optional per-product overrides, then is assigned to a customer on
-                  their own page. Its prices apply automatically on both web and mobile order entry.
+            <SettingsRow
+              label={
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-muted-foreground" /> Enforce price floor
+                </span>
+              }
+              description="Blocks any order that would sell a product below its minimum price, however the discounts stack up. Set the minimum on each product."
+              control={
+                <Switch
+                  checked={enforceFloor}
+                  disabled={!canEditSettings || saving}
+                  onCheckedChange={(on) => { setEnforceFloor(on); setHasChanges(true); }}
+                />
+              }
+            >
+              {!enforceFloor && (
+                <p className="text-xs text-amber-600 dark:text-amber-500">
+                  With this off, stacked discounts can take a price below cost and the order will still save.
                 </p>
-              </div>
-            </div>
-            <div className="pl-6 space-y-4">
+              )}
+            </SettingsRow>
+          </SettingsCard>
+
+          <SettingsCard
+            title={
+              <span className="flex items-center gap-2">
+                <ListChecks className="h-4 w-4 text-muted-foreground" /> Price Lists
+              </span>
+            }
+            description="Customer-specific pricing. A price list gives a blanket discount off every product plus optional per-product overrides, then is assigned to a customer on their own page. Its prices apply automatically on both web and mobile order entry."
+            action={
               <Link href="/price-lists" className={buttonVariants({ variant: "outline", size: "sm" })}>
                 <ListChecks className="h-4 w-4 mr-1" /> Manage price lists
               </Link>
-
-              <div className="flex items-center justify-between border-l-2 border-primary/20 pl-4">
-                <div className="pr-4">
-                  <p className="text-sm font-medium">Allow salesman discount on top of a price list</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    When off (recommended), a customer on a price list gets no further manual
-                    discount — the discount field is hidden on their orders even for reps who hold
-                    the discount right. Turn on to let reps discount on top of price-list pricing.
-                  </p>
-                </div>
+            }
+            bodyClassName="px-4 py-0"
+          >
+            <SettingsRow
+              label="Allow salesman discount on top of a price list"
+              description="When off (recommended), a customer on a price list gets no further manual discount — the discount field is hidden on their orders even for reps who hold the discount right. Turn on to let reps discount on top of price-list pricing."
+              control={
                 <Switch
                   checked={allowDiscOverPL}
                   disabled={!canEditSettings || saving}
                   onCheckedChange={(on) => { setAllowDiscOverPL(on); setHasChanges(true); }}
                 />
-              </div>
-            </div>
-          </div>
+              }
+            />
+          </SettingsCard>
 
-          {/* ---------------- Scheme Management ---------------- */}
-          <div className="space-y-3 pt-6 border-t border-border">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold">Scheme Management</h3>
-                <p className="text-xs text-muted-foreground mt-1">
+          <SettingsCard title="Modules" bodyClassName="px-4 py-0">
+            <SettingsRow
+              label="Scheme Management"
+              description={
+                <>
                   Quantity slabs, free goods and order-value discounts, suggested to the
                   salesman at order entry. Turn this on to show <strong>Scheme</strong> in the
                   main menu; off keeps it hidden for everyone.
+                </>
+              }
+              control={
+                <Switch
+                  checked={schemeEnabled}
+                  disabled={!canEditSettings || !planAllowsScheme || schemeSaving}
+                  onCheckedChange={toggleScheme}
+                />
+              }
+            >
+              {!planAllowsScheme && (
+                <p className="text-xs text-amber-600 dark:text-amber-500">
+                  Your current plan doesn&apos;t include Scheme Management. Contact us to upgrade.
                 </p>
-              </div>
-              <Switch
-                checked={schemeEnabled}
-                disabled={!canEditSettings || !planAllowsScheme || schemeSaving}
-                onCheckedChange={toggleScheme}
-              />
-            </div>
+              )}
 
-            {!planAllowsScheme && (
-              <p className="text-xs text-amber-600 dark:text-amber-500">
-                Your current plan doesn&apos;t include Scheme Management. Contact us to upgrade.
-              </p>
-            )}
-
-            {schemeEnabled && planAllowsScheme && (
-              <div className="pl-6 border-l-2 border-primary/20">
-                <Link href="/schemes" className={buttonVariants({ variant: "outline", size: "sm" })}>
-                  <Tag className="h-4 w-4 mr-1" /> Manage schemes
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* ---------------- Stock Management ---------------- */}
-          <div className="space-y-3 pt-6 border-t border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-start gap-2">
-                <Boxes className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <h3 className="text-sm font-semibold">Enable Stock Management</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Track closing stock per product, automatically — the way outstanding is
-                    calculated for customers. Turn this on to show <strong>Stock</strong> in the
-                    main menu, closing stock on the order form, and the Stock report; off keeps it
-                    hidden for everyone.
-                  </p>
+              {schemeEnabled && planAllowsScheme && (
+                <div className="border-l-2 border-primary/20 pl-4">
+                  <Link href="/schemes" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    <Tag className="h-4 w-4 mr-1" /> Manage schemes
+                  </Link>
                 </div>
-              </div>
-              <Switch
-                checked={stockEnabled}
-                disabled={!canEditSettings || !planAllowsStock || stockSaving}
-                onCheckedChange={toggleStock}
-              />
-            </div>
+              )}
+            </SettingsRow>
 
+            <SettingsRow
+              label={
+                <span className="flex items-center gap-2">
+                  <Boxes className="h-4 w-4 text-muted-foreground" /> Enable Stock Management
+                </span>
+              }
+              description={
+                <>
+                  Track closing stock per product, automatically — the way outstanding is
+                  calculated for customers. Turn this on to show <strong>Stock</strong> in the
+                  main menu, closing stock on the order form, and the Stock report; off keeps it
+                  hidden for everyone.
+                </>
+              }
+              control={
+                <Switch
+                  checked={stockEnabled}
+                  disabled={!canEditSettings || !planAllowsStock || stockSaving}
+                  onCheckedChange={toggleStock}
+                />
+              }
+            >
             {!planAllowsStock && (
               <p className="text-xs text-amber-600 dark:text-amber-500">
                 Your current plan doesn&apos;t include Stock Management. Contact us to upgrade.
@@ -624,10 +608,10 @@ export function PricingSchemesSettings() {
             )}
 
             {stockEnabled && planAllowsStock && (
-              <div className="space-y-4 pl-6 border-l-2 border-primary/20">
+              <div className="space-y-3 border-l-2 border-primary/20 pl-4">
                 {/* Stock-out event */}
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Reduce stock when</p>
+                  <p className="text-sm font-medium text-foreground">Reduce stock when</p>
                   <p className="text-xs text-muted-foreground">
                     Which event depletes a product&apos;s stock. Changing this affects future
                     documents only — stock already moved keeps its original basis.
@@ -654,30 +638,27 @@ export function PricingSchemesSettings() {
                   </div>
                 </div>
 
-                {/* Restrict on insufficient stock */}
-                <div className="flex items-center justify-between pt-2">
-                  <div>
-                    <p className="text-sm font-medium">Block orders that exceed stock</p>
-                    <p className="text-xs text-muted-foreground">
-                      When on, an order line whose quantity is more than the available closing
-                      stock cannot be saved. Off shows the stock but never blocks.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={restrictInsufficient}
-                    disabled={!canEditSettings || saving}
-                    onCheckedChange={(on) => { setRestrictInsufficient(on); setHasChanges(true); }}
-                  />
-                </div>
+                <SettingsRow
+                  label="Block orders that exceed stock"
+                  description="When on, an order line whose quantity is more than the available closing stock cannot be saved. Off shows the stock but never blocks."
+                  control={
+                    <Switch
+                      checked={restrictInsufficient}
+                      disabled={!canEditSettings || saving}
+                      onCheckedChange={(on) => { setRestrictInsufficient(on); setHasChanges(true); }}
+                    />
+                  }
+                />
 
-                <div>
+                <div className="pb-2">
                   <Link href="/stock" className={buttonVariants({ variant: "outline", size: "sm" })}>
                     <Boxes className="h-4 w-4 mr-1" /> Manage stock
                   </Link>
                 </div>
               </div>
             )}
-          </div>
+            </SettingsRow>
+          </SettingsCard>
 
           <OutstandingSettings
             orderStatuses={orderStatuses}
@@ -692,6 +673,6 @@ export function PricingSchemesSettings() {
         </div>
         )}
       </div>
-    </section>
+    </SettingsPanel>
   );
 }

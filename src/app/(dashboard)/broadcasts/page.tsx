@@ -291,7 +291,7 @@ export default function BroadcastsPage() {
           tableView={tableView}
           isLoading={loading}
           rowKey={(b) => b.id}
-          onRowClick={(b) => router.push(`/broadcasts/${b.id}`)}
+          rowHref={(b) => `/broadcasts/${b.id}`}
         />
       )}
     </PageLayout>

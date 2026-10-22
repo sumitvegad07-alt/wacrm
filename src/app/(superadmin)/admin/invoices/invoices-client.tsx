@@ -280,7 +280,7 @@ export default function InvoicesClient() {
           emptyMessage="No invoices yet. Raise the first one with New Invoice."
           tableView={tableView}
           rowKey={(row) => row.id}
-          onRowClick={(row) => router.push(`/admin/invoices/${row.id}`)}
+          rowHref={(row) => `/admin/invoices/${row.id}`}
       />
     </PageLayout>
   );

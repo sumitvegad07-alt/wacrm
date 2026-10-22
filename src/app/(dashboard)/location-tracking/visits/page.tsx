@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useDataScope } from "@/hooks/use-data-scope";
 import { Button } from "@/components/ui/button";
@@ -47,7 +46,6 @@ export default function CustomerVisitsPage() {
 
   const supabase = createClient();
   const scope = useDataScope();
-  const router = useRouter();
 
   /**
    * One page of visits, searched and filtered by the database.
@@ -387,7 +385,7 @@ export default function CustomerVisitsPage() {
         tableView={tableView}
         isLoading={isLoading}
         rowKey={(row) => row.id}
-        onRowClick={(row) => router.push(`/location-tracking/visits/${row.id}`)}
+        rowHref={(row) => `/location-tracking/visits/${row.id}`}
         serverPagination={{ ...table.serverPagination, exportAll }}
       />
 

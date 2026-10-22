@@ -360,7 +360,7 @@ export default function ProductsPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(product) => product.id}
-        onRowClick={(product) => router.push(`/products/${product.id}`)}
+        rowHref={(product) => `/products/${product.id}`}
         serverPagination={{ ...table.serverPagination, exportAll }}
         actions={
           canCreateProducts ? (

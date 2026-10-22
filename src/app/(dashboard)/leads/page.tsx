@@ -626,7 +626,7 @@ export default function LeadsPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(lead) => lead.id}
-        onRowClick={(lead) => router.push(`/leads/${lead.id}`)}
+        rowHref={(lead) => `/leads/${lead.id}`}
         selection={{
           selectedIds: selectedLeads,
           onSelectAll: handleSelectAll,

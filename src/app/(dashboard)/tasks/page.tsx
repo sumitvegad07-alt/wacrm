@@ -517,7 +517,7 @@ export default function TasksPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(task) => task.id}
-        onRowClick={(task) => router.push(`/tasks/${task.id}`)}
+        rowHref={(task) => `/tasks/${task.id}`}
         serverPagination={{ ...table.serverPagination, exportAll }}
         selection={{
           selectedIds: selectedTaskIds,

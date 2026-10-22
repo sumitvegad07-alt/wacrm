@@ -405,7 +405,7 @@ export default function PaymentsPage() {
         tableView={tableView}
         isLoading={loading}
         rowKey={(p) => p.id}
-        onRowClick={(p) => router.push(`/payments/${p.id}`)}
+        rowHref={(p) => `/payments/${p.id}`}
         serverPagination={{ ...table.serverPagination, exportAll }}
         selection={(canApprove || canReject) ? {
           selectedIds,
