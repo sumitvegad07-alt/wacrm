@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
+import { PageLayout, PageHeader } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
@@ -229,7 +229,7 @@ export default function AnnouncementsPage() {
   }, [announcements, globalSearch, filterState, columns]);
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title="Announcements"
         actions={
@@ -246,25 +246,21 @@ export default function AnnouncementsPage() {
         <p className="text-sm text-muted-foreground">Broadcast important news and updates to your mobile team.</p>
       </PageHeader>
 
-      <PageToolbar
+      <DataTable
+        fill
         search={{
           value: globalSearch,
           onChange: setGlobalSearch,
           placeholder: "Search announcements...",
         }}
-      />
-
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden mt-6">
-        <DataTable
-          columns={columns}
-          data={filteredData}
-          isLoading={loading}
-          emptyMessage="No announcements found"
+        columns={columns}
+        data={filteredData}
+        isLoading={loading}
+        emptyMessage="No announcements found"
         tableView={tableView}
-          rowKey={(row) => row.id}
-          onRowClick={(row) => router.push(`/announcements/${row.id}`)}
-        />
-      </div>
+        rowKey={(row) => row.id}
+        onRowClick={(row) => router.push(`/announcements/${row.id}`)}
+      />
 
       <ConfirmDialog
         open={deleteId !== null}

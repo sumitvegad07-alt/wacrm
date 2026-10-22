@@ -47,7 +47,7 @@ import { isDateInFilter } from "@/lib/date-filters";
 import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, ConfirmDialog } from '@/components/shared';
+import { PageLayout, PageHeader, BulkActionBar, ConfirmDialog } from '@/components/shared';
 import { MapPin } from 'lucide-react';
 import {
   PointMapDialog,
@@ -318,7 +318,6 @@ export default function ContactsPage() {
 
       q = applyExtraColumnFilters(q, filters, CONTACT_EXTRA_COLUMNS);
 
-
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
       >;
@@ -402,7 +401,6 @@ export default function ContactsPage() {
       truncated,
     };
   }, [supabase, buildQuery, table.search, filterState]);
-
 
   useEffect(() => {
     fetchData();
@@ -854,7 +852,7 @@ export default function ContactsPage() {
   );
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <BulkActionBar
         selectedCount={selectedContacts.size}
         onClear={() => setSelectedContacts(new Set())}
@@ -886,15 +884,13 @@ export default function ContactsPage() {
         ]}
       />
 
-      <PageToolbar
+      <DataTable
+        fill
         search={{
           value: table.search,
           onChange: table.setSearch,
           placeholder: "Search customers by company, person, phone or email...",
         }}
-      />
-
-      <DataTable
         columns={visibleColumns}
         data={filteredContacts}
         serverPagination={{ ...table.serverPagination, exportAll }}

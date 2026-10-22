@@ -15,7 +15,7 @@ import type { ServerTableQuery } from '@/lib/table/server-query';
 import { applyDateFilter, applyInFilter, applyTextFilter } from '@/lib/table/apply-filters';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from '@/lib/date-filters';
-import { PageLayout, PageHeader, PageToolbar, StatusBadge } from '@/components/shared';
+import { PageLayout, PageHeader, StatusBadge } from '@/components/shared';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 
 interface PendingRow {
@@ -116,7 +116,6 @@ export default function PendingDispatchPage() {
     return { rows: all.map((o) => toRow(o as Record<string, any>)), truncated };
   }, [supabase, buildQuery, table.search, filterState]);
 
-
   const columns: ColumnDef<PendingRow>[] = [
     { id: 'order_number', label: 'Order #', type: 'text', render: (o) => <span className="font-medium font-mono text-sm">{o.order_number}</span> },
     { id: 'customerName', label: 'Customer', type: 'text', render: (o) => <span className="font-medium">{o.customerName}</span> },
@@ -143,21 +142,19 @@ export default function PendingDispatchPage() {
   const filtered = rows;
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title="Pending Dispatch"
         subtitle="Approved orders still awaiting full dispatch. Difference = ordered − delivered."
       />
 
-      <PageToolbar
+      <DataTable
+        fill
         search={{
           value: table.search,
           onChange: table.setSearch,
           placeholder: "Search by order # or customer...",
         }}
-      />
-
-      <DataTable
         columns={columns}
         data={filtered}
         tableView={tableView}

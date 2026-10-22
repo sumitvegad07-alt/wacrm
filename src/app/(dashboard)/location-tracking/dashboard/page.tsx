@@ -556,7 +556,7 @@ export default function LocationDashboardPage() {
   }
 
   return (
-    <div className="border-border bg-background -m-4 flex h-[calc(100vh-2rem)] overflow-hidden rounded-xl border sm:-m-6">
+    <div className="border-border bg-background -m-4 flex h-[calc(100vh-2rem)] overflow-hidden rounded-xl border sm:-m-6 lg:-mx-4 lg:-my-2.5 lg:h-auto lg:min-h-0 lg:flex-1">
       {/* Left Sidebar (User List) */}
       <div className="border-border bg-card flex hidden w-64 shrink-0 flex-col border-r md:flex">
         <div className="border-border bg-muted/20 border-b p-3">

@@ -544,12 +544,15 @@ export function DataTableFilterRow<T>({
   filterState,
   onFilterChange,
   leadingColSpan,
+  cellClassName,
 }: {
   columns: ColumnDef<T>[];
   filterState: FilterState;
   onFilterChange: (id: string, value: unknown) => void;
   /** Selection checkbox + pinned Action column, so the row stays aligned. */
   leadingColSpan: number;
+  /** Extra classes per cell — the table passes the pinned-filter-row rules. */
+  cellClassName?: string;
 }) {
   // A table with nothing filterable gets no row at all, rather than an empty
   // band of grey above the data.
@@ -560,12 +563,12 @@ export function DataTableFilterRow<T>({
     // row of data, and never highlighted on hover like a data row.
     <TableRow className="bg-muted/20 hover:bg-muted/20">
       {Array.from({ length: leadingColSpan }, (_, i) => (
-        <TableHead key={`lead-${i}`} className="p-1" />
+        <TableHead key={`lead-${i}`} className={cn("px-1 py-0.5", cellClassName)} />
       ))}
       {columns.map((column) => (
         <TableHead
           key={column.id}
-          className={cn('p-1 align-middle font-normal', column.cellClassName)}
+          className={cn('px-1 py-0.5 align-middle font-normal', column.cellClassName, cellClassName)}
         >
           {column.type === 'text' && (
             <TextFilterCell

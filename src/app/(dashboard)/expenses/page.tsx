@@ -494,7 +494,7 @@ export default function ExpensesPage() {
   };
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageToolbar
         filters={
           <div className="flex items-center gap-1">
@@ -559,6 +559,7 @@ export default function ExpensesPage() {
       )}
 
       <DataTable
+        fill
         columns={visibleColumns}
         data={filteredExpenses}
         actions={

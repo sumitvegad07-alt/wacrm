@@ -18,7 +18,7 @@ import { isDateInFilter } from '@/lib/date-filters';
 import { formatCurrency } from '@/lib/currency';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
-import { PageLayout, PageHeader, PageToolbar } from '@/components/shared';
+import { PageLayout, PageHeader } from '@/components/shared';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 
@@ -98,7 +98,6 @@ export default function DispatchesPage() {
 
       q = applyExtraColumnFilters(q, filters, DISPATCH_EXTRA_COLUMNS);
 
-
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
       >;
@@ -150,7 +149,6 @@ export default function DispatchesPage() {
     return { rows: all.map((d) => toRow(d as Record<string, any>)), truncated };
   }, [supabase, buildQuery, table.search, filterState]);
 
-
   const columns: ColumnDef<DispatchRow>[] = [
     { id: 'dispatch_number', label: 'Dispatch #', type: 'text', render: (d) => <span className="font-medium font-mono text-sm">{d.dispatch_number}</span> },
     { id: 'order_number', label: 'Order #', type: 'text', render: (d) => <span className="font-mono text-sm">{d.order_number}</span> },
@@ -173,7 +171,7 @@ export default function DispatchesPage() {
   const filtered = rows;
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title="Dispatches"
         subtitle="Shipments recorded against your approved orders."
@@ -186,15 +184,13 @@ export default function DispatchesPage() {
         }
       />
 
-      <PageToolbar
+      <DataTable
+        fill
         search={{
           value: table.search,
           onChange: table.setSearch,
           placeholder: "Search by dispatch #, order #, or customer...",
         }}
-      />
-
-      <DataTable
         columns={visibleColumns}
         data={filtered}
         tableView={tableView}

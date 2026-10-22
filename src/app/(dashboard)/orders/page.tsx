@@ -25,7 +25,7 @@ import { applyExtraColumnFilters } from '@/lib/table/apply-filters';
 import { OrderForm } from '@/components/orders/order-form';
 import { getVisibleTableColumns } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from '@/components/shared';
+import { PageLayout, PageHeader, BulkActionBar, StatusBadge, ConfirmDialog } from '@/components/shared';
 import { ORDER_STATUSES } from '@/lib/orders/statuses';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 
@@ -199,7 +199,6 @@ export default function OrdersPage() {
       // The columns Manage Column offers for the rest of the stored fields.
 
       q = applyExtraColumnFilters(q, filters, ORDER_EXTRA_COLUMNS);
-
 
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -445,7 +444,7 @@ export default function OrdersPage() {
   }, [supabase, buildQuery, table.search, filterState]);
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title="Orders"
         subtitle="Orders placed by your field team. Update status and create dispatches here."
@@ -463,14 +462,6 @@ export default function OrdersPage() {
             )}
           </>
         }
-      />
-
-      <PageToolbar
-        search={{
-          value: table.search,
-          onChange: table.setSearch,
-          placeholder: "Search by order #, customer, or salesman...",
-        }}
       />
 
       <BulkActionBar
@@ -507,6 +498,12 @@ export default function OrdersPage() {
       />
 
       <DataTable
+        fill
+        search={{
+          value: table.search,
+          onChange: table.setSearch,
+          placeholder: "Search by order #, customer, or salesman...",
+        }}
         columns={visibleColumns}
         data={filtered}
         tableView={tableView}

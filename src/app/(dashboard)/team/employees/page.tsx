@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageLayout, PageHeader, PageToolbar, StatusBadge, ConfirmDialog } from "@/components/shared";
+import { PageLayout, PageHeader, StatusBadge, ConfirmDialog } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
@@ -485,7 +485,7 @@ export default function EmployeesPage() {
   }
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title="Employees"
         subtitle="Manage your team, credentials, and device access."
@@ -497,15 +497,13 @@ export default function EmployeesPage() {
         }
       />
 
-      <PageToolbar
+      <DataTable
+        fill
         search={{
           value: search,
           onChange: setSearch,
           placeholder: "Search employees...",
         }}
-      />
-
-      <DataTable
         columns={tableColumns}
         data={filtered}
         tableView={tableView}

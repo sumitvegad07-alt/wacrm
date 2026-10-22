@@ -102,7 +102,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
     "U";
 
   return (
-    <header className="safe-top sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:static lg:px-6">
+    <header className="safe-top sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:static lg:h-11 lg:gap-2 lg:px-4">
       <div className="flex min-w-0 items-center gap-2">
         {/* Hamburger — mobile only. 44×44 hit target per Apple HIG. */}
         <button
@@ -119,19 +119,19 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           data-shortcut="back"
           onClick={() => router.back()}
           aria-label="Go back"
-          className="flex h-11 w-11 md:h-8 md:w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex h-11 w-11 md:h-8 md:w-8 lg:h-7 lg:w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           title="Go back"
         >
           <ArrowLeft className="size-4" />
         </button>
-        <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
+        <h1 className="truncate text-base font-semibold text-foreground sm:text-lg lg:text-base">
           {title}
         </h1>
       </div>
 
       {showExpiryWarning && (
         <div className="hidden flex-1 items-center justify-center px-4 md:flex">
-          <div className="rounded-full border border-destructive/30 bg-destructive/15 px-4 py-1.5 text-xs font-semibold text-destructive dark:text-red-400">
+          <div className="rounded-full border border-destructive/30 bg-destructive/15 px-3 py-1 text-xs font-semibold text-destructive dark:text-red-400">
             Your subscription is expiring on {expiryDate?.toLocaleDateString('en-GB').replace(/\//g, '-')}. Reach us today !!!
           </div>
         </div>
@@ -144,7 +144,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           type="button"
           onClick={openPalette}
           aria-label="Search the app"
-          className="hidden h-8 w-48 items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted lg:flex xl:w-64"
+          className="hidden h-7 w-48 items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted lg:flex xl:w-64"
         >
           <Search className="size-3.5 shrink-0" />
           <span className="truncate">Search…</span>
@@ -168,10 +168,10 @@ export function Header({ onOpenSidebar }: HeaderProps) {
 
         <DropdownMenu>
         <DropdownMenuTrigger
-          className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-muted/70 focus:bg-muted/70 focus:outline-none data-popup-open:bg-muted/70 sm:gap-3 sm:pl-1 sm:pr-3"
+          className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-muted/70 focus:bg-muted/70 focus:outline-none data-popup-open:bg-muted/70 sm:gap-2 sm:pl-1 sm:pr-2.5"
           aria-label="Open account menu"
         >
-          <Avatar className="size-8">
+          <Avatar className="size-8 lg:size-7">
             {profile?.avatar_url ? (
               <AvatarImage
                 src={profile.avatar_url}

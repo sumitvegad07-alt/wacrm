@@ -258,7 +258,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <KeyboardShortcutsProvider>
-    <div className="app-shell flex flex-col bg-background lg:flex-row">
+    {/* `relative` so an absolutely-positioned descendant is contained by the
+        shell and clipped by its overflow — without it the `sr-only` label
+        inside a Switch anchors to the viewport at its scrolled-out position and
+        drags the document's scroll height past the screen, which is what gave
+        Settings a phantom 118px page scroll on top of its own one. */}
+    <div className="app-shell relative flex flex-col bg-background lg:flex-row">
       {/* Reports this tab's online/away presence once we know a user is
           signed in. Headless — renders nothing. */}
       <PresenceHeartbeat />
@@ -266,8 +271,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
-        {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
-        <main className="app-main safe-bottom flex-1 p-3 pb-6 sm:p-4 sm:pb-6">
+        {/* Page gutters live HERE and nowhere else on desktop: PageLayout used
+            to add its own px-4/sm:px-6 on top of this, so every data page was
+            indented twice (40px a side at lg). Written as separate axis
+            utilities rather than the `p-*` shorthand so a wider breakpoint can
+            actually override a narrower one. */}
+        <main className="app-main safe-bottom flex-1 px-3 py-3 pb-6 sm:px-4 sm:pb-6 lg:px-4 lg:py-2.5 lg:pb-2.5">
           {/* Only nudge in the final 15 days of the trial — not for the whole
               trial window. `trialDaysLeft === null` means no expiry date is set,
               so we still show the generic "trial is active" message then. */}

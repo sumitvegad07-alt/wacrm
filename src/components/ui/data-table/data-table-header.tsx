@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 
 interface DataTableHeaderProps<T> {
   column: ColumnDef<T>;
+  /** Extra classes for the cell — the table passes the pinned-heading rules. */
+  className?: string;
   /**
    * Only to show whether this column is filtered. Setting the filter belongs
    * to `DataTableFilterRow`, the permanent row under the headings; this is a
@@ -21,13 +23,13 @@ function isSet(value: unknown): boolean {
   return true;
 }
 
-export function DataTableHeader<T>({ column, filterValue }: DataTableHeaderProps<T>) {
+export function DataTableHeader<T>({ column, filterValue, className }: DataTableHeaderProps<T>) {
   // A column with no `type` cannot be filtered, so it never shows the marker.
   const isActive = Boolean(column.type) && isSet(filterValue);
 
   return (
-    <TableHead className={cn("whitespace-nowrap px-3 font-semibold text-foreground", column.cellClassName)}>
-      <span className="flex items-center gap-1.5 py-2">
+    <TableHead className={cn("whitespace-nowrap px-2 font-semibold text-foreground", column.cellClassName, className)}>
+      <span className="flex items-center gap-1.5">
         {isActive && (
           <Search className="size-3.5 shrink-0 text-primary" aria-label="Filtered" />
         )}

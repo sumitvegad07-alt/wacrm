@@ -408,8 +408,24 @@ html[data-theme="rose"] {
       overflow: hidden;
     }
 
+    /* The workspace is a flex column on desktop so a page can opt into
+     * taking all the height the header and toolbars leave over — see the
+     * `fill` prop on PageLayout / DataTable, which is what keeps a data
+     * grid's pagination bar on screen instead of below the fold.
+     *
+     * Children are shrink-0 by default. Without it every ordinary page
+     * would be squeezed to fit the viewport (flex items shrink before a
+     * scroll container scrolls) and its bottom would be clipped away. A
+     * filling page overrides this with `flex-1`, which is a utility and
+     * therefore wins over this base-layer rule. */
     .app-main {
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .app-main > * {
+      flex-shrink: 0;
     }
 
     @supports not (height: 100dvh) {

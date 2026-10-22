@@ -52,7 +52,7 @@ export function RowActions({
           title={editTitle}
           aria-label={editTitle}
           onClick={stop(onEdit)}
-          className="inline-flex h-11 w-11 md:h-7 md:w-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          className="inline-flex h-11 w-11 md:h-7 md:w-7 lg:h-6 lg:w-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         >
           <Pencil className="size-3.5" />
         </button>
@@ -63,7 +63,7 @@ export function RowActions({
           title={reactivateTitle}
           aria-label={reactivateTitle}
           onClick={stop(onReactivate)}
-          className="inline-flex h-11 w-11 md:h-7 md:w-7 items-center justify-center rounded-md border border-border bg-background text-emerald-600 transition-colors hover:bg-emerald-50 dark:hover:bg-emerald-950/40 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          className="inline-flex h-11 w-11 md:h-7 md:w-7 lg:h-6 lg:w-6 items-center justify-center rounded-md border border-border bg-background text-emerald-600 transition-colors hover:bg-emerald-50 dark:hover:bg-emerald-950/40 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         >
           <RotateCcw className="size-3.5" />
         </button>
@@ -74,7 +74,7 @@ export function RowActions({
             title={deleteTitle}
             aria-label={deleteTitle}
             onClick={stop(onDelete)}
-            className="inline-flex h-11 w-11 md:h-7 md:w-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 focus:outline-none focus:ring-1 focus:ring-destructive"
+            className="inline-flex h-11 w-11 md:h-7 md:w-7 lg:h-6 lg:w-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 focus:outline-none focus:ring-1 focus:ring-destructive"
           >
             <Trash2 className="size-3.5" />
           </button>

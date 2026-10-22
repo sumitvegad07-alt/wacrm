@@ -43,7 +43,7 @@ import { isDateInFilter } from "@/lib/date-filters";
 import { CustomField } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
+import { PageLayout, PageHeader, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
 
 interface Lead {
   id: string;
@@ -175,7 +175,6 @@ export default function LeadsPage() {
       // The columns Manage Column offers for the rest of the stored fields.
 
       q = applyExtraColumnFilters(q, filters, LEAD_EXTRA_COLUMNS);
-
 
       return q.order("created_at", { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -572,7 +571,7 @@ export default function LeadsPage() {
   };
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <BulkActionBar
         selectedCount={selectedLeads.size}
         onClear={() => setSelectedLeads(new Set())}
@@ -604,15 +603,13 @@ export default function LeadsPage() {
         ]}
       />
 
-      <PageToolbar
+      <DataTable
+        fill
         search={{
           value: table.search,
           onChange: table.setSearch,
           placeholder: "Search leads by name, WhatsApp or custom field...",
         }}
-      />
-
-      <DataTable
         columns={visibleColumns}
         data={filteredLeads}
         serverPagination={{ ...table.serverPagination, exportAll }}

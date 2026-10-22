@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, Download, ChevronLeft, ChevronRight, Menu } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { LayoutGrid, Download, ChevronLeft, ChevronRight, Menu, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +81,31 @@ interface DataTableProps<T> {
      */
     exportAll?: () => Promise<{ rows: unknown[]; truncated: boolean }>;
   };
+  /**
+   * The screen's free-text search, rendered as the first control in the
+   * table's own toolbar.
+   *
+   * It lives here rather than in a `<PageToolbar>` above the grid because a
+   * search box alone does not earn a band of its own: a separate strip cost
+   * ~50px of workspace and left a visible gap between the box and the rows it
+   * filters. A screen with filters or extra toolbar controls still uses
+   * PageToolbar for those.
+   */
+  search?: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+  };
+  /**
+   * Desktop only: take the height the page has left over and scroll the rows
+   * inside the grid, with the headings and the filter row pinned at the top
+   * and the pagination bar pinned at the bottom.
+   *
+   * Needs an ancestor that is itself height-constrained — on a module page
+   * that is `<PageLayout fill>`. Without one it is inert and the table grows
+   * with its rows exactly as before, so it is safe to pass anywhere.
+   */
+  fill?: boolean;
 }
 
 export function DataTable<T>({
@@ -94,6 +120,8 @@ export function DataTable<T>({
   actions,
   menuActions,
   serverPagination,
+  search,
+  fill = false,
 }: DataTableProps<T>) {
   const [isManageColumnsOpen, setIsManageColumnsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -209,14 +237,48 @@ export function DataTable<T>({
   // Total leading (non-data) columns: selection + pinned actions.
   const leadingColSpan = (selection ? 1 : 0) + (actionsColumn ? 1 : 0);
 
+  /**
+   * Pinned heading + filter rows, for `fill` mode only.
+   *
+   * They stick to the TABLE's own scrollport, so they need an opaque
+   * background of their own — a transparent cell would let the rows scroll
+   * through it. The filter band is `bg-muted` rather than the row's
+   * `bg-muted/20` for the same reason, which also makes headings, filters and
+   * data read as three distinct bands. `top-8` is the 32px heading row above.
+   */
+  const headCellClass = fill ? "lg:sticky lg:top-0 lg:z-20 lg:bg-card" : undefined;
+  const filterCellClass = fill ? "lg:sticky lg:top-8 lg:z-10 lg:bg-muted" : undefined;
+
   const allOnPageSelected = paginatedData.length > 0 && paginatedData.every(row => selection?.selectedIds.has(rowKey(row)));
   const someOnPageSelected = paginatedData.some(row => selection?.selectedIds.has(rowKey(row)));
 
   return (
-    <div className="space-y-0">
+    <div
+      data-slot="data-table"
+      className={cn(
+        "flex flex-col",
+        // `flex-1` claims the leftover height inside a `<PageLayout fill>`;
+        // `min-h-0` is what actually lets the rows scroll rather than pushing
+        // the pagination bar off the bottom of the screen.
+        fill && "lg:min-h-0 lg:flex-1",
+      )}
+    >
       {/* Top Table Toolbar (in that vertical line just before the starting of the table) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-t-xl border border-b-0 border-border bg-muted/20 text-xs min-h-[44px]">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-2.5 py-1.5 rounded-t-xl border border-b-0 border-border bg-muted/20 text-xs min-h-[44px] lg:min-h-0">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          {search && (
+            <div className="relative w-full sm:w-64 lg:w-72">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                value={search.value}
+                onChange={(e) => search.onChange(e.target.value)}
+                placeholder={search.placeholder ?? "Search..."}
+                aria-label={search.placeholder ?? "Search"}
+                className="h-11 md:h-8 lg:h-7 pl-8 text-xs"
+              />
+            </div>
+          )}
           <TableViewsBar view={tableView} />
           <span className="font-semibold text-foreground text-xs">
             Total: {totalRecords} records
@@ -250,12 +312,24 @@ export function DataTable<T>({
         </div>
       </div>
 
-      <div className="border border-border bg-card overflow-hidden">
-        <Table>
+      <div
+        className={cn(
+          "flex flex-col border border-border bg-card",
+          fill ? "lg:min-h-0 lg:flex-1" : "overflow-hidden",
+        )}
+      >
+        <Table
+          containerClassName={cn(fill && "lg:min-h-0 lg:flex-1 lg:overflow-auto")}
+          // With no rows the table is only as tall as its headings, leaving the
+          // "no data" line stranded at the top of a tall empty grid. Stretching
+          // it centres that message in the space instead. Only ever when the
+          // body is empty — on a table with rows it would stretch them.
+          className={cn(fill && !isLoading && paginatedData.length === 0 && "lg:h-full")}
+        >
           <TableHeader>
             <TableRow>
               {selection && (
-                <TableHead className="w-11 md:w-10">
+                <TableHead className={cn("w-11 md:w-10", headCellClass)}>
                   {/* The visible box stays 16px; the label around it is the
                       44px tap target on phones. Measured by the responsive
                       suite through `data-touch-target`. */}
@@ -279,7 +353,7 @@ export function DataTable<T>({
                 </TableHead>
               )}
               {actionsColumn && (
-                <TableHead className="w-24 whitespace-nowrap text-xs font-semibold text-muted-foreground">
+                <TableHead className={cn("w-24 whitespace-nowrap text-xs font-semibold text-muted-foreground", headCellClass)}>
                   {actionsColumn.label || "Action"}
                 </TableHead>
               )}
@@ -288,6 +362,7 @@ export function DataTable<T>({
                   key={col.id}
                   column={col}
                   filterValue={filterState[col.id]}
+                  className={headCellClass}
                 />
               ))}
             </TableRow>
@@ -299,6 +374,7 @@ export function DataTable<T>({
               filterState={filterState}
               onFilterChange={tableView.setFilter}
               leadingColSpan={leadingColSpan}
+              cellClassName={filterCellClass}
             />
           </TableHeader>
           <TableBody>
@@ -320,9 +396,14 @@ export function DataTable<T>({
               </TableRow>
             ) : (
               paginatedData.map((row) => (
+                // Cells are py-0.5, not py-1: a `size="sm"` Button rendered
+                // inside one is 28px tall and would otherwise set the row
+                // height to 37px on its own. 2px around it keeps the row at the
+                // 33px `h-8` asks for, and text-only cells stay centred by
+                // `align-middle` either way.
                 <TableRow
                   key={rowKey(row)}
-                  className={`h-9 hover:bg-muted/50 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
+                  className={`h-8 hover:bg-muted/50 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
                   onClick={() => onRowClick?.(row)}
                 >
                   {selection && (
@@ -341,12 +422,12 @@ export function DataTable<T>({
                     </TableCell>
                   )}
                   {actionsColumn && (
-                    <TableCell className="py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <TableCell className="py-0.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       {actionsColumn.render ? actionsColumn.render(row) : null}
                     </TableCell>
                   )}
                   {visibleColumns.map(col => (
-                    <TableCell key={col.id} className={cn("py-1.5", col.cellClassName)}>
+                    <TableCell key={col.id} className={cn("py-0.5", col.cellClassName)}>
                       {col.render ? col.render(row) : (row as any)[col.id] || "-"}
                     </TableCell>
                   ))}
@@ -358,7 +439,7 @@ export function DataTable<T>({
       </div>
 
       {/* Koops Demo Style Bottom Footer Bar (Total Count, Rows per page, MANAGE COLUMN, Pagination) */}
-      <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-2.5 rounded-b-xl border border-t-0 border-border bg-muted/20 text-xs text-muted-foreground min-h-[48px]">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-3 py-1.5 rounded-b-xl border border-t-0 border-border bg-muted/20 text-xs text-muted-foreground min-h-[48px] lg:min-h-0">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5 font-medium">
             <span>Show</span>

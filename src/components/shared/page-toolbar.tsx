@@ -66,14 +66,17 @@ export function PageToolbar({
     <div
       data-slot="page-toolbar"
       className={cn(
-        "flex flex-wrap items-center justify-between gap-3 py-2 px-3 rounded-t-lg border border-b-0 border-border bg-muted/30 text-xs min-h-[44px]",
+        // A self-contained strip, not a lid: the page stacks it above the
+        // grid with a gap, so the old rounded-t + border-b-0 drew a card that
+        // was visibly missing its bottom edge.
+        "flex shrink-0 flex-wrap items-center justify-between gap-2 py-1.5 px-2.5 rounded-lg border border-border bg-muted/30 text-xs min-h-[44px] lg:min-h-0",
         className
       )}
       {...props}
     >
       <div className="flex items-center gap-2 flex-wrap min-w-0">
         {search && (
-          <div className="relative w-full sm:w-72">
+          <div className="relative w-full sm:w-72 lg:w-80">
             <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
@@ -81,7 +84,7 @@ export function PageToolbar({
               onChange={(e) => search.onChange(e.target.value)}
               placeholder={search.placeholder ?? "Search..."}
               aria-label={search.placeholder ?? "Search"}
-              className="pl-8"
+              className="pl-8 lg:h-7"
             />
           </div>
         )}
@@ -96,7 +99,7 @@ export function PageToolbar({
             variant="outline"
             size="sm"
             onClick={onExportCsv}
-            className="h-11 md:h-8 gap-1.5 text-xs"
+            className="h-11 md:h-8 lg:h-7 gap-1.5 text-xs"
           >
             <DownloadIcon className="size-3" />
             <span className="hidden sm:inline">Export CSV</span>
@@ -109,7 +112,7 @@ export function PageToolbar({
             size="sm"
             onClick={onRefresh}
             disabled={refreshing}
-            className="h-11 w-11 md:h-8 md:w-8 p-0 shrink-0"
+            className="h-11 w-11 md:h-8 md:w-8 lg:h-7 lg:w-7 p-0 shrink-0"
             title="Refresh data"
           >
             <RefreshCwIcon

@@ -372,7 +372,7 @@ export default function RolesPage() {
   const filteredRoles = roles.filter((r) => matchesColumnFilters(r, filterState, roleColumns));
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col bg-background">
+    <div className="flex h-[calc(100vh-4rem)] flex-col bg-background lg:h-auto lg:min-h-0 lg:flex-1">
       {/* Top bar: horizontal role selector (replaces the old left column, so the
           rights screen below gets the full width). */}
       <div className="border-b bg-card px-4 py-2.5 flex items-center gap-3 flex-wrap shrink-0">

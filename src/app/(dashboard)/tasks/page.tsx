@@ -439,7 +439,7 @@ export default function TasksPage() {
   const filteredTasks = tasks;
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title="Tasks"
         subtitle="Manage your tasks and to-dos."
@@ -511,6 +511,7 @@ export default function TasksPage() {
       />
 
       <DataTable
+        fill
         columns={visibleColumns}
         data={filteredTasks}
         tableView={tableView}

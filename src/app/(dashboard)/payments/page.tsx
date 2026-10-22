@@ -22,7 +22,7 @@ import { formatCurrency } from '@/lib/currency';
 import { PaymentForm } from '@/components/payments/payment-form';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
+import { PageLayout, PageHeader, BulkActionBar, StatusBadge } from '@/components/shared';
 import { PAYMENT_STATUSES, PAYMENT_SOURCES, getSourceLabel } from '@/lib/payments/statuses';
 import { PaymentStatusBadge } from '@/components/payments/payment-status-badge';
 import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
@@ -71,7 +71,6 @@ export default function PaymentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner } = useAuth();
-
 
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const tableView = useTableView("wacrm_payments_table_columns", {});
@@ -133,7 +132,6 @@ export default function PaymentsPage() {
       // The columns Manage Column offers for the rest of the stored fields.
 
       q = applyExtraColumnFilters(q, filters, PAYMENT_EXTRA_COLUMNS);
-
 
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -359,7 +357,7 @@ export default function PaymentsPage() {
   const filtered = payments;
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title="Payments"
         subtitle="Manage and track incoming payments from customers."
@@ -372,14 +370,6 @@ export default function PaymentsPage() {
             )}
           </>
         }
-      />
-
-      <PageToolbar
-        search={{
-          value: table.search,
-          onChange: table.setSearch,
-          placeholder: "Search by payment #, customer, or reference...",
-        }}
       />
 
       <BulkActionBar
@@ -404,6 +394,12 @@ export default function PaymentsPage() {
       />
 
       <DataTable
+        fill
+        search={{
+          value: table.search,
+          onChange: table.setSearch,
+          placeholder: "Search by payment #, customer, or reference...",
+        }}
         columns={visibleColumns}
         data={filtered}
         tableView={tableView}

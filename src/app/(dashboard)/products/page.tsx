@@ -217,12 +217,14 @@ export default function ProductsPage() {
       label: "Product",
       type: "text",
       render: (product) => (
-        <div className="flex items-center gap-3">
+        /* The thumbnail shrinks to 28px on desktop so it no longer sets the
+           row height on its own — the name + description stack does. */
+        <div className="flex items-center gap-3 lg:gap-2">
           {product.image ? (
-            <img src={product.image} alt={product.name} className="w-10 h-10 rounded-md object-cover border border-border" />
+            <img src={product.image} alt={product.name} className="w-10 h-10 lg:w-7 lg:h-7 rounded-md object-cover border border-border" />
           ) : (
-            <div className="w-10 h-10 rounded-md bg-muted border border-border flex items-center justify-center">
-              <span className="text-xs text-muted-foreground">No img</span>
+            <div className="w-10 h-10 lg:w-7 lg:h-7 rounded-md bg-muted border border-border flex items-center justify-center">
+              <span className="text-xs text-muted-foreground lg:text-[9px]">No img</span>
             </div>
           )}
           <div>
@@ -325,7 +327,7 @@ export default function ProductsPage() {
   const filteredProducts = products;
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <BulkActionBar
         selectedCount={selectedProductIds.size}
         onClear={() => setSelectedProductIds(new Set())}
@@ -352,6 +354,7 @@ export default function ProductsPage() {
       />
 
       <DataTable
+        fill
         columns={visibleColumns}
         data={filteredProducts}
         tableView={tableView}

@@ -270,7 +270,7 @@ export default function CatalogCategoriesPage() {
   const parentOptions = categories.filter((c) => c.level === level - 1 && c.is_active !== false);
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader title="Categories" subtitle="Organise products into categories, with optional sub-levels." />
 
       {/* Level naming config */}
@@ -331,6 +331,7 @@ export default function CatalogCategoriesPage() {
         />
       )}
       <DataTable
+        fill
         columns={columns}
         data={filtered}
         tableView={tableView}

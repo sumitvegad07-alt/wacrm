@@ -222,7 +222,7 @@ export default function BroadcastsPage() {
   );
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       {/* Top indeterminate progress bar: only visible while a broadcast
           is mid-send. Pure CSS animation so no extra deps. */}
       {anySending && (
@@ -285,6 +285,7 @@ export default function BroadcastsPage() {
         </div>
       ) : (
         <DataTable
+          fill
           columns={columns}
           data={visibleBroadcasts}
           tableView={tableView}

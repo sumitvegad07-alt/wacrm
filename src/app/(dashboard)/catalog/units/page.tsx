@@ -219,7 +219,7 @@ export default function CatalogUnitsPage() {
   }, [units, filterState]);
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       {canEditSettings && (
         <BulkActionBar
           selectedCount={selectedIds.size}
@@ -238,6 +238,7 @@ export default function CatalogUnitsPage() {
         />
       )}
       <DataTable
+        fill
         columns={columns}
         data={filtered}
         tableView={tableView}

@@ -19,7 +19,7 @@ import { applyDateFilter, applyInFilter, applyTextFilter, applyExtraColumnFilter
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 import { isDateInFilter } from "@/lib/date-filters";
-import { PageLayout, PageHeader, PageToolbar } from "@/components/shared";
+import { PageLayout, PageHeader } from "@/components/shared";
 import {
   PointMapDialog,
   formatLatLng,
@@ -95,7 +95,6 @@ export default function CustomerVisitsPage() {
       // The columns Manage Column offers for the rest of the stored fields.
 
       q = applyExtraColumnFilters(q, filters, VISIT_EXTRA_COLUMNS);
-
 
       return q.order('check_in_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
@@ -192,7 +191,6 @@ export default function CustomerVisitsPage() {
     });
     return { rows: rows.map((v) => toRow(v as Record<string, any>)), truncated };
   }, [supabase, buildQuery, table.search, filterState, toRow]);
-
 
   const columns: ColumnDef<any>[] = [
     {
@@ -355,7 +353,7 @@ export default function CustomerVisitsPage() {
   const filteredVisits = visitsData;
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title="Customer Visits"
         subtitle="Track field visits, feedback, and check-in times."
@@ -377,15 +375,13 @@ export default function CustomerVisitsPage() {
         }
       />
 
-      <PageToolbar
+      <DataTable
+        fill
         search={{
           value: table.search,
           onChange: table.setSearch,
           placeholder: "Search by customer or employee...",
         }}
-      />
-
-      <DataTable
         columns={columns}
         data={filteredVisits}
         tableView={tableView}

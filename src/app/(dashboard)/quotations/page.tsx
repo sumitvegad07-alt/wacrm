@@ -47,7 +47,7 @@ import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { isDateInFilter } from "@/lib/date-filters";
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge } from '@/components/shared';
+import { PageLayout, PageHeader, BulkActionBar, StatusBadge } from '@/components/shared';
 import {
   inactiveSelection,
   reactivateDisabledReason,
@@ -88,7 +88,6 @@ export default function QuotationsPage() {
   const canEditSettings = useCan('edit-settings');
   const { account } = useAuth();
 
-  
   // DataTable state
   // Default filter shows Active quotations (Inactive/all via the Status column filter).
   const tableView = useTableView("wacrm_quotations_table_columns", { record_status: ['active'] });
@@ -160,7 +159,6 @@ export default function QuotationsPage() {
 
       q = applyExtraColumnFilters(q, filters, QUOTATION_EXTRA_COLUMNS);
 
-
       return q.order('created_at', { ascending: false }).range(from, to) as unknown as ReturnType<
         ServerTableQuery<Record<string, unknown>>
       >;
@@ -198,7 +196,6 @@ export default function QuotationsPage() {
     });
     return { rows: rows.map((q) => toRow(q as Record<string, any>)), truncated };
   }, [supabase, buildQuery, table.search, filterState]);
-
 
   useEffect(() => {
     fetchQuotations();
@@ -401,7 +398,7 @@ export default function QuotationsPage() {
   const filteredQuotations = quotations;
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title="Quotations"
         subtitle="Manage and track your quotations."
@@ -463,14 +460,6 @@ export default function QuotationsPage() {
         }
       />
 
-      <PageToolbar
-        search={{
-          value: table.search,
-          onChange: table.setSearch,
-          placeholder: "Search by number or contact...",
-        }}
-      />
-
       <BulkActionBar
         selectedCount={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
@@ -494,6 +483,12 @@ export default function QuotationsPage() {
       />
 
       <DataTable
+        fill
+        search={{
+          value: table.search,
+          onChange: table.setSearch,
+          placeholder: "Search by number or contact...",
+        }}
         columns={visibleColumns}
         data={filteredQuotations}
         tableView={tableView}

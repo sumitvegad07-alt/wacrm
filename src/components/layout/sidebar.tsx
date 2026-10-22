@@ -682,8 +682,8 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
         className={cn(
           "flex items-center rounded-lg transition-all duration-150 group relative",
           isTopLevel
-            ? "gap-3 px-3 py-1.5 min-h-11 md:min-h-0 text-sm font-medium"
-            : "gap-2 px-2 py-1.5 min-h-11 md:min-h-0 text-[13px] font-medium",
+            ? "gap-2.5 px-2.5 py-1.5 min-h-11 md:min-h-0 md:py-1 text-sm font-medium"
+            : "gap-2 px-2 py-1.5 min-h-11 md:min-h-0 md:py-1 text-[13px] font-medium",
           isActive
             ? isTopLevel
               ? "bg-primary text-primary-foreground font-semibold shadow-sm"
@@ -801,13 +801,13 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
-          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
+          "lg:static lg:z-0 lg:w-52 lg:translate-x-0 lg:transition-none",
         )}
         aria-label="Primary"
       >
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
-        <div className="flex h-14 shrink-0 items-center px-4">
+        <div className="flex h-14 shrink-0 items-center px-4 lg:h-11 lg:px-3">
           <Link href="/follow-ups" className="flex min-h-11 md:min-h-0 items-center" aria-label="OZZO home">
             <BrandWordmark />
           </Link>
@@ -821,13 +821,13 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 py-2">
+        <nav className="flex-1 overflow-y-auto px-2 py-1.5 lg:px-1.5">
           <div className="flex flex-col gap-0.5">
             {filteredMenu.map((node, idx) => {
               if (node.type === "spacer") {
                 // One line of space between clusters — a light "grouping" cue
                 // without any dropdown/collapsible wrapper.
-                return <div key={`spacer-${idx}`} className="h-3" />;
+                return <div key={`spacer-${idx}`} className="h-2" />;
               }
 
               if (node.type === "link") {
@@ -849,13 +849,13 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                     type="button"
                     onClick={() => toggleGroup(node.label)}
                     className={cn(
-                      "flex w-full items-center justify-between rounded-lg px-3 py-1.5 min-h-11 md:min-h-0 text-sm font-medium transition-colors group",
+                      "flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 min-h-11 md:min-h-0 md:py-1 text-sm font-medium transition-colors group",
                       isGroupActive
                         ? "text-foreground font-semibold bg-muted/50"
                         : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                     )}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <node.icon
                         className={cn(
                           "h-4 w-4 shrink-0 transition-colors",
@@ -875,7 +875,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
                   </button>
 
                   {isOpen && (
-                    <ul className="flex flex-col gap-0.5 ml-2 my-0.5 max-h-[340px] overflow-y-auto border-l border-border/60 pl-1.5 scrollbar-thin">
+                    <ul className="flex flex-col gap-0.5 ml-1.5 my-0.5 max-h-[340px] overflow-y-auto border-l border-border/60 pl-1.5 scrollbar-thin">
                       {node.items.map((item) => (
                         <li key={`${item.href}-${item.label}`}>
                           {renderNavLink(item, false)}
@@ -892,9 +892,9 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
         {/* User section. The footer identity shows the COMPANY name (the user's
             own name already lives in the top-right bar). Role chips
             (Owner/Admin/…) were removed here per founder request. */}
-        <div className="shrink-0 border-t border-border p-3">
+        <div className="shrink-0 border-t border-border p-2">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60 focus:bg-muted/60 focus:outline-none data-popup-open:bg-muted/60">
+            <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus:bg-muted/60 focus:outline-none data-popup-open:bg-muted/60">
               <Avatar className="size-8 shrink-0">
                 {profile?.avatar_url ? (
                   <AvatarImage

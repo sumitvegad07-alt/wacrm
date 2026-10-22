@@ -205,7 +205,7 @@ export default function LeavesPage() {
   }, [filterState]);
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageToolbar
         filters={
           <div className="flex items-center gap-1">
@@ -225,6 +225,7 @@ export default function LeavesPage() {
       />
 
       <DataTable
+        fill
         columns={columns}
         data={filtered}
         actions={
