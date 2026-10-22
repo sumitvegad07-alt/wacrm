@@ -8,6 +8,7 @@ import { Camera, MapPin, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { PageLayout } from "@/components/shared";
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
@@ -927,7 +928,7 @@ export default function UserAttendancePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageLayout fill>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">User Attendance</h1>
@@ -951,7 +952,7 @@ export default function UserAttendancePage() {
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col">
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col lg:min-h-0 lg:flex-1">
         <div className="border-b border-border flex flex-wrap gap-2 px-4 sm:px-6 shrink-0">
           {TABS.map((tab) => (
             <button
@@ -966,7 +967,7 @@ export default function UserAttendancePage() {
           ))}
         </div>
 
-        <div className="p-0 flex flex-col min-h-0">
+        <div className="p-0 flex flex-col min-h-0 lg:flex-1">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border-b border-border gap-3 shrink-0">
             <div className="relative w-full sm:max-w-xs">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -995,6 +996,7 @@ export default function UserAttendancePage() {
 
           {activeTab === "Punch in" && (
             <DataTable
+              fill
               columns={punchInColumns}
               data={filteredPunchData}
               tableView={tableView}
@@ -1005,6 +1007,7 @@ export default function UserAttendancePage() {
 
           {activeTab === "Users" && (
             <DataTable
+              fill
               columns={usersColumns}
               data={filteredUsersData}
               tableView={tableView}
@@ -1015,6 +1018,7 @@ export default function UserAttendancePage() {
 
           {activeTab === "Days" && (
             <DataTable
+              fill
               columns={daysColumns}
               data={filteredDaysData}
               tableView={tableView}
@@ -1051,6 +1055,7 @@ export default function UserAttendancePage() {
                 </span>
               </div>
               <DataTable
+                fill
                 columns={monthlyColumns}
                 data={filteredMonthlyData}
                 tableView={tableView}
@@ -1064,6 +1069,6 @@ export default function UserAttendancePage() {
       </div>
 
       <PointMapDialog point={mapPoint} onClose={() => setMapPoint(null)} />
-    </div>
+    </PageLayout>
   );
 }

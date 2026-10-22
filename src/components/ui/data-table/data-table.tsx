@@ -257,10 +257,14 @@ export function DataTable<T>({
       data-slot="data-table"
       className={cn(
         "flex flex-col",
-        // `flex-1` claims the leftover height inside a `<PageLayout fill>`;
-        // `min-h-0` is what actually lets the rows scroll rather than pushing
-        // the pagination bar off the bottom of the screen.
-        fill && "lg:min-h-0 lg:flex-1",
+        // `flex-1` claims the leftover height inside a `<PageLayout fill>`.
+        // The explicit `min-h` does two jobs: like `min-h-0` it switches off a
+        // flex item's automatic content-based minimum, which is what lets the
+        // rows scroll rather than pushing the pagination bar off the bottom —
+        // and it stops a page whose cards and charts eat the viewport from
+        // squeezing the grid down to a sliver. Past that floor the page
+        // scrolls instead.
+        fill && "lg:flex-1 lg:min-h-[280px]",
       )}
     >
       {/* Top Table Toolbar (in that vertical line just before the starting of the table) */}

@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { Plus, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PageLayout } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import type { ColumnDef } from "@/components/ui/data-table/data-table-types";
 import { useTableView } from "@/hooks/use-table-view";
@@ -232,7 +233,7 @@ export default function InvoicesClient() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageLayout fill>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Invoices</h1>
@@ -271,8 +272,8 @@ export default function InvoicesClient() {
         not counted.
       </p>
 
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <DataTable
+      <DataTable
+        fill
           columns={columns}
           data={filtered}
           isLoading={loading}
@@ -280,8 +281,7 @@ export default function InvoicesClient() {
           tableView={tableView}
           rowKey={(row) => row.id}
           onRowClick={(row) => router.push(`/admin/invoices/${row.id}`)}
-        />
-      </div>
-    </div>
+      />
+    </PageLayout>
   );
 }

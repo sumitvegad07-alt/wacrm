@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PageLayout } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import type { ColumnDef } from "@/components/ui/data-table/data-table-types";
 import { RowActions } from "@/components/ui/data-table/row-actions";
@@ -331,7 +332,7 @@ export default function RenewalsClient() {
   ];
 
   return (
-    <div className="space-y-6">
+    <PageLayout fill>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Renewals</h1>
@@ -393,24 +394,23 @@ export default function RenewalsClient() {
         ))}
       </div>
 
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <DataTable
-          columns={columns}
-          data={filtered}
-          isLoading={loading}
-          emptyMessage={
-            bucket === "today"
-              ? "Nobody is due today."
-              : bucket === "overdue"
-                ? "Nothing is overdue."
-                : bucket === "all"
-                  ? "No subscriptions yet. Add your first with Add Subscription."
-                  : "Nothing due in this window."
-          }
-          tableView={tableView}
-          rowKey={(row) => row.id}
-        />
-      </div>
+      <DataTable
+        fill
+        columns={columns}
+        data={filtered}
+        isLoading={loading}
+        emptyMessage={
+          bucket === "today"
+            ? "Nobody is due today."
+            : bucket === "overdue"
+              ? "Nothing is overdue."
+              : bucket === "all"
+                ? "No subscriptions yet. Add your first with Add Subscription."
+                : "Nothing due in this window."
+        }
+        tableView={tableView}
+        rowKey={(row) => row.id}
+      />
 
       <SubscriptionForm
         open={formOpen}
@@ -451,6 +451,6 @@ export default function RenewalsClient() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageLayout>
   );
 }

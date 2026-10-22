@@ -11,7 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Search, MapPin, AlertTriangle } from 'lucide-react';
+import { MapPin, AlertTriangle } from 'lucide-react';
+import { PageLayout } from '@/components/shared';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
 import {
@@ -400,7 +401,7 @@ export default function AllLocationsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageLayout fill>
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <h1 className="text-2xl font-bold tracking-tight">All Locations</h1>
         <div className="flex items-center gap-2">
@@ -419,19 +420,13 @@ export default function AllLocationsPage() {
         </div>
       </div>
 
-      <div className="bg-card border-border flex flex-col gap-4 rounded-xl border p-4 sm:flex-row">
-        <div className="relative w-full max-w-sm">
-          <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          <Input
-            placeholder="Search by user or coordinates..."
-            className="bg-background border-border pl-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
-
       <DataTable
+        fill
+        search={{
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: "Search by user or coordinates...",
+        }}
         columns={columns}
         data={filteredPings}
         tableView={tableView}
@@ -493,6 +488,6 @@ export default function AllLocationsPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </PageLayout>
   );
 }

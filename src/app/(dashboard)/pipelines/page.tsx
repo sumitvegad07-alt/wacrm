@@ -668,7 +668,7 @@ export default function PipelinesPage() {
   }
 
   return (
-    <PageLayout>
+    <PageLayout fill>
       <PageHeader
         title={
           <DropdownMenu>
@@ -777,7 +777,7 @@ export default function PipelinesPage() {
         <>
           <PipelineAnalytics stages={stages} deals={deals} />
           
-          <div className="mt-4 space-y-4">
+          <div className="mt-2 space-y-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
             {canCreateDeals && (
               <BulkActionBar
                 selectedCount={selectedDealIds.size}
@@ -831,6 +831,7 @@ export default function PipelinesPage() {
             )}
             
             <DataTable
+              fill
               columns={visibleColumns}
               data={filteredDeals}
               tableView={tableView}

@@ -5,10 +5,10 @@ import { matchesColumnFilters } from "@/lib/table/match-filters";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
+import { PageLayout } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { ColumnDef } from "@/components/ui/data-table/data-table-types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, WalletCards, Users } from "lucide-react";
@@ -163,7 +163,7 @@ export default function PaymentReportPage() {
   }
 
   return (
-    <div className="flex flex-col h-full space-y-4 p-8">
+    <PageLayout fill spacing="tight">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
@@ -171,8 +171,8 @@ export default function PaymentReportPage() {
         <h1 className="text-2xl font-bold tracking-tight">Payment Reports</h1>
       </div>
 
-      <Tabs defaultValue="collections" className="w-full space-y-4">
-        <TabsList>
+      <Tabs defaultValue="collections" className="w-full space-y-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+        <TabsList className="shrink-0">
           <TabsTrigger value="collections" className="gap-2">
             <WalletCards className="h-4 w-4" />
             Collections
@@ -184,29 +184,26 @@ export default function PaymentReportPage() {
         </TabsList>
 
         {/* Tab 1: Collections */}
-        <TabsContent value="collections" className="space-y-4">
+        <TabsContent value="collections" className="space-y-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
           <ReportViewer config={paymentReportConfig} />
         </TabsContent>
 
         {/* Tab 2: Customer Financials */}
-        <TabsContent value="financials">
-          <Card>
-            <CardContent className="p-4 space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium">Customer Credit & Overdue Summary</h3>
-              </div>
-              <DataTable
-                columns={financialColumns}
-                data={visibleFinancials}
-                tableView={tableView}
-                isLoading={isLoadingFinancials}
-                rowKey={(r) => r.id}
-              />
-            </CardContent>
-          </Card>
+        <TabsContent value="financials" className="space-y-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+          <h3 className="shrink-0 text-sm font-medium text-foreground">
+            Customer Credit &amp; Overdue Summary
+          </h3>
+          <DataTable
+            fill
+            columns={financialColumns}
+            data={visibleFinancials}
+            tableView={tableView}
+            isLoading={isLoadingFinancials}
+            rowKey={(r) => r.id}
+          />
         </TabsContent>
 
       </Tabs>
-    </div>
+    </PageLayout>
   );
 }

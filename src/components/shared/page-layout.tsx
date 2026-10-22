@@ -51,7 +51,12 @@ export function PageLayout({
         // `flex-1` beats the shrink-0 the workspace gives its children, so the
         // page claims the leftover height; `min-h-0` lets its grid shrink
         // inside it instead of overflowing the viewport.
-        fill && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden",
+        //
+        // `overflow-y-auto` rather than `hidden`: on a page that stacks cards
+        // or charts above its grid, a short viewport can leave less room than
+        // the grid's own floor asks for. Scrolling the page then is right —
+        // clipping the bottom off it is not.
+        fill && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto",
         spacingMap[spacing],
         className
       )}

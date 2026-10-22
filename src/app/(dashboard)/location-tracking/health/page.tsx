@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import { PageLayout } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -461,7 +462,7 @@ export default function TrackingHealthPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageLayout fill>
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
           <HeartPulse className="size-6 text-primary" /> Tracking Health
@@ -538,12 +539,13 @@ export default function TrackingHealthPage() {
       </div>
 
       <DataTable
+        fill
         columns={columns}
         data={filtered}
         tableView={tableView}
         isLoading={isLoading}
         rowKey={(row) => row.id}
       />
-    </div>
+    </PageLayout>
   );
 }

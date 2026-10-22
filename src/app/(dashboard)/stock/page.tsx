@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { fetchStockPositions, type StockPosition } from '@/lib/stock/financials';
+import { PageLayout } from '@/components/shared';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
@@ -91,7 +92,7 @@ export default function StockPage() {
   }
 
   return (
-    <div className="w-full p-4 sm:p-6 space-y-4">
+    <PageLayout fill>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold flex items-center gap-2"><Boxes className="h-5 w-5" /> Stock</h1>
@@ -105,6 +106,7 @@ export default function StockPage() {
       </div>
 
       <DataTable
+        fill
         columns={columns}
         data={filtered}
         tableView={tableView}
@@ -136,6 +138,6 @@ export default function StockPage() {
       {importOpen && (
         <StockImportDialog open={importOpen} onOpenChange={setImportOpen} onDone={load} />
       )}
-    </div>
+    </PageLayout>
   );
 }
