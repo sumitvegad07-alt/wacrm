@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, ArrowLeft, KeyRound, Keyboard, Search } from "lucide-react";
+import { LogOut, Menu, ArrowLeft, KeyRound, Keyboard, Search, PanelLeftOpen } from "lucide-react";
 import { useAppShortcuts } from "@/components/layout/keyboard-shortcuts-provider";
 import {
   Avatar,
@@ -79,9 +79,12 @@ interface HeaderProps {
   /** Wired to the shell's drawer state. Used only on mobile — the
    *  hamburger button is hidden on lg+. */
   onOpenSidebar?: () => void;
+  /** Desktop only: true while the main menu is put away. */
+  sidebarCollapsed?: boolean;
+  onExpandSidebar?: () => void;
 }
 
-export function Header({ onOpenSidebar }: HeaderProps) {
+export function Header({ onOpenSidebar, sidebarCollapsed = false, onExpandSidebar }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { profile, signOut, account } = useAuth();
@@ -113,6 +116,20 @@ export function Header({ onOpenSidebar }: HeaderProps) {
         >
           <Menu className="h-5 w-5" />
         </button>
+        {/* Desktop: the way back to a menu that has been put away. It only
+            exists while the menu is away, so the header gains nothing in the
+            normal case. */}
+        {sidebarCollapsed && (
+          <button
+            type="button"
+            onClick={onExpandSidebar}
+            aria-label="Show menu"
+            title="Show menu"
+            className="hidden h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex"
+          >
+            <PanelLeftOpen className="size-4" />
+          </button>
+        )}
         {/* Go back icon on every single page */}
         <button
           type="button"

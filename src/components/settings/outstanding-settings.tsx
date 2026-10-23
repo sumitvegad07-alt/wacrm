@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Wallet } from "lucide-react";
+import { SettingsCard } from '@/components/settings/settings-layout';
 import { cn } from "@/lib/utils";
 import {
   ORDER_STATUS_PRESETS,
@@ -125,23 +126,26 @@ export function OutstandingSettings({
   }
 
   return (
-    <div className="space-y-4 pt-6 border-t border-border">
-      <div className="flex items-start gap-2">
-        <Wallet className="h-4 w-4 text-muted-foreground mt-0.5" />
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Outstanding Calculation</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Decide the moment an order becomes money a customer owes you, and which payments
-            count as money received. Outstanding is{" "}
-            <strong>worked out live, not stored as a fixed figure</strong>, so changing this
-            restates every customer&apos;s balance straight away — including the credit-limit
-            check that blocks new orders.
-          </p>
-        </div>
-      </div>
+    <SettingsCard
+      title={
+        <span className="flex items-center gap-2">
+          <Wallet className="h-4 w-4 text-muted-foreground" /> Outstanding Calculation
+        </span>
+      }
+      description={
+        <>
+          Decide the moment an order becomes money a customer owes you, and which payments
+          count as money received. Outstanding is{" "}
+          <strong>worked out live, not stored as a fixed figure</strong>, so changing this
+          restates every customer&apos;s balance straight away — including the credit-limit
+          check that blocks new orders.
+        </>
+      }
+      bodyClassName="space-y-4 px-4 py-3"
+    >
 
       {/* Orders */}
-      <div className="space-y-2 pl-6 border-l-2 border-primary/20">
+      <div className="space-y-2">
         <p className="text-sm font-medium">An order counts as outstanding when</p>
         <div className="grid grid-cols-1 gap-2">
           {ORDER_RULE_CHOICES.map((choice) => (
@@ -200,7 +204,7 @@ export function OutstandingSettings({
       </div>
 
       {/* Payments */}
-      <div className="space-y-2 pl-6 border-l-2 border-primary/20">
+      <div className="space-y-2">
         <p className="text-sm font-medium">A payment reduces outstanding when</p>
         <div className="grid grid-cols-1 gap-2">
           {PAYMENT_RULE_CHOICES.map((choice) => (
@@ -262,6 +266,6 @@ export function OutstandingSettings({
           </div>
         )}
       </div>
-    </div>
+    </SettingsCard>
   );
 }

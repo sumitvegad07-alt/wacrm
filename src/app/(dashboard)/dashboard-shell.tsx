@@ -20,6 +20,7 @@ import { TableFilterNavReset } from "@/components/layout/table-filter-nav-reset"
 import { BackToGettingStarted } from "@/components/getting-started/BackToGettingStarted";
 import { TourRunner } from "@/components/tour/TourRunner";
 import { isRouteRestricted } from "@/lib/plans/surface-gates";
+import { useSidebarCollapse } from "@/lib/sidebar-collapse";
 import type { ProductLine } from "@/lib/plans/catalog";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
@@ -54,6 +55,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   // always visible and this stays at `false` (ignored by the component).
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+  // Desktop: whether the main menu is put away, remembered across visits.
+  const { collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed } =
+    useSidebarCollapse();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -268,9 +273,17 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           signed in. Headless — renders nothing. */}
       <PresenceHeartbeat />
       <TourRunner />
-      <Sidebar open={sidebarOpen} onClose={closeSidebar} />
+      <Sidebar
+        open={sidebarOpen}
+        onClose={closeSidebar}
+        onCollapse={() => setSidebarCollapsed(true)}
+      />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
+        <Header
+          onOpenSidebar={() => setSidebarOpen(true)}
+          sidebarCollapsed={sidebarCollapsed}
+          onExpandSidebar={() => setSidebarCollapsed(false)}
+        />
         {/* Page gutters live HERE and nowhere else on desktop: PageLayout used
             to add its own px-4/sm:px-6 on top of this, so every data page was
             indented twice (40px a side at lg). Written as separate axis

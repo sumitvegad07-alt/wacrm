@@ -72,6 +72,7 @@ import {
   TrendingUp,
   Rocket,
   Wrench,
+  PanelLeftClose,
 } from "lucide-react";
 
 function isNavItemActive(
@@ -532,9 +533,11 @@ interface SidebarProps {
   /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
   open?: boolean;
   onClose?: () => void;
+  /** Desktop only: put the whole menu away so the workspace is the screen. */
+  onCollapse?: () => void;
 }
 
-function SidebarInner({ open = false, onClose }: SidebarProps) {
+function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -797,7 +800,7 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
       <aside
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-60 flex-col border-r border-border bg-card",
+          "app-sidebar fixed inset-y-0 left-0 z-40 flex h-full w-60 flex-col border-r border-border bg-card",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
@@ -818,6 +821,17 @@ function SidebarInner({ open = false, onClose }: SidebarProps) {
             className="flex h-11 w-11 md:h-9 md:w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
           >
             <X className="h-5 w-5" />
+          </button>
+          {/* Desktop: put the menu away. The header grows a button to bring it
+              back, so this is never a one-way door. */}
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Hide menu"
+            title="Hide menu"
+            className="ml-auto hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex"
+          >
+            <PanelLeftClose className="size-4" />
           </button>
         </div>
 

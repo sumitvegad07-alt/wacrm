@@ -13,6 +13,7 @@ import {
 } from "@/lib/themes";
 import Script from "next/script";
 import { BROWSER_GATE_SCRIPT } from "@/lib/theme/browser-gate";
+import { SIDEBAR_BOOT_SCRIPT, DEFAULT_SIDEBAR } from "@/lib/sidebar-collapse";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -85,6 +86,7 @@ export default function RootLayout({
       lang="en"
       data-theme={DEFAULT_THEME}
       data-mode={DEFAULT_MODE}
+      data-sidebar={DEFAULT_SIDEBAR}
       className={`${inter.variable} h-full antialiased`}
       suppressHydrationWarning
     >
@@ -93,6 +95,9 @@ export default function RootLayout({
             to run the app gets a readable message, not a broken grey screen. */}
         <script id="browser-gate" dangerouslySetInnerHTML={{ __html: BROWSER_GATE_SCRIPT }} />
         <script id="theme-boot" dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        {/* Puts the menu at its remembered width before the first paint, so a
+            collapsed menu never flashes open on the way in. */}
+        <script id="sidebar-boot" dangerouslySetInnerHTML={{ __html: SIDEBAR_BOOT_SCRIPT }} />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">
         <ThemeProvider>

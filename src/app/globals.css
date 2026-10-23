@@ -428,6 +428,7 @@ html[data-theme="rose"] {
       flex-shrink: 0;
     }
 
+
     @supports not (height: 100dvh) {
       .app-shell {
         height: 100vh;
@@ -796,3 +797,25 @@ html[data-theme="rose"] {
   --color-zinc-800: oklch(27.4% 0.006 286.033);
 }
 /* <<< tailwind-palette-fallbacks <<< */
+
+/* ---- The main menu put away ----
+ *
+ * NOT in a @layer. The aside carries `lg:w-52`, and a Tailwind utility beats
+ * anything in @layer base however specific the selector is — the first cut of
+ * this lived in base and the menu simply never moved. Unlayered rules win over
+ * every layered one, which is exactly what is wanted here.
+ *
+ * The width is driven off the attribute rather than off React state so the
+ * boot script in <head> can set it before the first paint; otherwise a
+ * collapsed menu flashes open on every page load. The aside keeps its own
+ * transition, so using the toggle slides it.
+ */
+@media (min-width: 64rem) {
+  html[data-sidebar="collapsed"] .app-sidebar {
+    width: 0;
+    min-width: 0;
+    border-right-width: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+}
