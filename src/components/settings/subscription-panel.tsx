@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
-import { SettingsPanelHead } from './settings-panel-head';
+import { SettingsPanel } from '@/components/settings/settings-layout';
 import { isNewPlan, PLAN_LABEL } from '@/lib/plans/catalog';
 
 interface SubscriptionData {
@@ -74,8 +74,9 @@ export function SubscriptionPanel() {
   if (!data) return null;
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead title="Subscription" />
+    <SettingsPanel
+      className="animate-in fade-in-50 duration-200"
+    >
       
       <div className="mt-6 space-y-6 w-full">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -94,7 +95,7 @@ export function SubscriptionPanel() {
         </div>
 
         <div>
-          <h3 className="text-sm font-medium text-foreground border-b border-border pb-2 mb-4">
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-4">
             Subscription Duration
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
@@ -114,7 +115,7 @@ export function SubscriptionPanel() {
         </div>
 
         <div>
-          <h3 className="text-sm font-medium text-foreground border-b border-border pb-2 mb-4">
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-4">
             User Limit Detail
           </h3>
           <div className="bg-muted/30 border border-border p-6 rounded-md flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -134,6 +135,6 @@ export function SubscriptionPanel() {
           </div>
         </div>
       </div>
-    </section>
+    </SettingsPanel>
   );
 }

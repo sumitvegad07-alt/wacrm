@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { SettingsPanelHead } from "./settings-panel-head";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 interface HierarchyLevel {
   position: number;
@@ -106,18 +106,17 @@ export function OrdersSettings() {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Orders Settings"
-        description="Configure your distribution hierarchy for primary/secondary order classification. Order statuses are fixed (Pending → Approved → Part Dispatch → Dispatched → Closed)."
-      />
+    <SettingsPanel
+      description="Configure your distribution hierarchy for primary/secondary order classification. Order statuses are fixed (Pending → Approved → Part Dispatch → Dispatched → Closed)."
+      className="animate-in fade-in-50 duration-200"
+    >
 
       {loading ? (
         <div className="p-4 text-center text-muted-foreground text-sm flex items-center justify-center gap-2 mt-4">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading...
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
           <div className="space-y-6">
             <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-card">
               <div>
@@ -213,7 +212,7 @@ export function OrdersSettings() {
             )}
 
             <div className="p-5 border border-border rounded-lg bg-card space-y-4">
-              <h3 className="font-semibold text-sm text-foreground">Order Lifecycle &amp; Classification Guide</h3>
+              <h3 className="text-sm font-semibold text-foreground">Order Lifecycle &amp; Classification Guide</h3>
               <div className="space-y-3 text-xs text-muted-foreground">
                 <div className="p-3 rounded-md bg-muted/50 border border-border/50">
                   <p className="font-medium text-foreground mb-1">Fixed Status Machine</p>
@@ -228,6 +227,6 @@ export function OrdersSettings() {
           </div>
         </div>
       )}
-    </section>
+    </SettingsPanel>
   );
 }

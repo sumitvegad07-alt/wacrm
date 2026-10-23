@@ -16,7 +16,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { SettingsPanelHead } from "./settings-panel-head";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 /**
  * Deals settings — account-wide default currency.
@@ -68,12 +68,11 @@ export function DealsSettings() {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Default currency"
-        description="The currency used for new deals and for pipeline and dashboard totals."
-      />
-      <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+    <SettingsPanel
+      description="The currency used for new deals and for pipeline and dashboard totals."
+      className="animate-in fade-in-50 duration-200"
+    >
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
@@ -148,6 +147,6 @@ export function DealsSettings() {
           </CardContent>
         </Card>
       </div>
-    </section>
+    </SettingsPanel>
   );
 }

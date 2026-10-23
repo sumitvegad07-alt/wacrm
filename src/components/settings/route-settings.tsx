@@ -1,4 +1,5 @@
 "use client";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 // Route Settings — behavior configuration panel (Phase 2a).
 // Skip / reason / out-of-sequence / capacity / approval. Access control (who can do what)
@@ -181,14 +182,7 @@ export function RouteSettings() {
   const ro = !canEditSettings;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Route Settings</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Control how routes behave during execution and approval. These are behavior rules — who can
-          perform each action is set per role in Employee Roles.
-        </p>
-      </div>
+    <SettingsPanel description="Control how routes behave during execution and approval. These are behaviour rules — who can perform each action is set per role in Employee Roles.">
 
       {!moduleOn && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
@@ -345,6 +339,6 @@ export function RouteSettings() {
           </button>
         </div>
       )}
-    </div>
+    </SettingsPanel>
   );
 }

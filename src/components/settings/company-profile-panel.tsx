@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Upload, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { SettingsPanelHead } from './settings-panel-head';
+import { SettingsPanel } from '@/components/settings/settings-layout';
 import { TerritoryPicker } from '@/components/territories/territory-picker';
 import { getTerritoryRows, getAccountTerritorySettings } from '@/lib/territories/api';
 import type { Territory, TerritorySettings } from '@/lib/territories/types';
@@ -229,8 +229,9 @@ export function CompanyProfilePanel() {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead title="Company Profile" />
+    <SettingsPanel
+      className="animate-in fade-in-50 duration-200"
+    >
       <form onSubmit={handleSubmit} className="mt-6 space-y-8 pb-10">
         <div className="flex flex-wrap items-center gap-5">
           <Avatar className="h-16 w-16">
@@ -278,7 +279,7 @@ export function CompanyProfilePanel() {
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-medium text-muted-foreground border-b border-border pb-2">Profile Info</h3>
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Profile Info</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="space-y-2">
               <Label>Name</Label>
@@ -343,7 +344,7 @@ export function CompanyProfilePanel() {
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-medium text-muted-foreground border-b border-border pb-2">Address Info</h3>
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Address Info</h3>
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -414,6 +415,6 @@ export function CompanyProfilePanel() {
           </div>
         )}
       </form>
-    </section>
+    </SettingsPanel>
   );
 }

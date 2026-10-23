@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { SettingsPanelHead } from './settings-panel-head';
+import { SettingsPanel } from '@/components/settings/settings-layout';
 import {
   Accordion,
   AccordionItem,
@@ -362,15 +362,14 @@ export function WhatsAppConfig() {
 
   if (loading) {
     return (
-      <section className="animate-in fade-in-50 duration-200">
-        <SettingsPanelHead
-          title="WhatsApp connection"
-          description="Connect your Meta WhatsApp Business API. Credentials, webhook, and setup steps all live here."
-        />
+      <SettingsPanel
+        description="Connect your Meta WhatsApp Business API. Credentials, webhook, and setup steps all live here."
+        className="animate-in fade-in-50 duration-200"
+      >
         <div className="flex items-center justify-center py-12">
           <Loader2 className="size-6 animate-spin text-primary" />
         </div>
-      </section>
+      </SettingsPanel>
     );
   }
 
@@ -385,12 +384,11 @@ export function WhatsAppConfig() {
   const setupProgress = Math.round((setupTasks.filter(t => t.done).length / setupTasks.length) * 100);
 
   return (
-    <section className="animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="WhatsApp connection"
-        description="Connect your Meta WhatsApp Business API. Credentials, webhook, and setup steps all live here."
-      />
-      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+    <SettingsPanel
+      description="Connect your Meta WhatsApp Business API. Credentials, webhook, and setup steps all live here."
+      className="animate-in fade-in-50 duration-200"
+    >
+      <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
       {/* Main config form */}
       <div className="space-y-6">
         {/* Corrupted-token reset banner */}
@@ -857,6 +855,6 @@ export function WhatsAppConfig() {
         </Card>
       </div>
     </div>
-    </section>
+    </SettingsPanel>
   );
 }

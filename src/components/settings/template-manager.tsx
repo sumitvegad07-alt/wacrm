@@ -26,7 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { SettingsPanelHead } from './settings-panel-head';
+import { SettingsPanel } from '@/components/settings/settings-layout';
 import {
   Dialog,
   DialogContent,
@@ -466,30 +466,28 @@ export function TemplateManager() {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 space-y-6 duration-200">
-      <SettingsPanelHead
-        title="Message templates"
-        description={
-          'Create templates and submit them to Meta for approval. Use "Sync from Meta" to pull templates approved elsewhere.'
-        }
-        action={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={handleSyncFromMeta}
-              disabled={syncing}
-              title="Pull approved templates from your Meta WhatsApp Business Account"
-            >
-              <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Syncing…' : 'Sync from Meta'}
-            </Button>
-            <Button onClick={openCreate}>
-              <Plus className="size-4" />
-              New Template
-            </Button>
-          </div>
-        }
-      />
+    <SettingsPanel
+      description={'Create templates and submit them to Meta for approval. Use "Sync from Meta" to pull templates approved elsewhere.'}
+      className="animate-in fade-in-50 duration-200"
+      actions={
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSyncFromMeta}
+            disabled={syncing}
+            title="Pull approved templates from your Meta WhatsApp Business Account"
+          >
+            <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing…' : 'Sync from Meta'}
+          </Button>
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="size-4" />
+            New Template
+          </Button>
+        </>
+      }
+    >
 
       {templates.length === 0 ? (
         <Card>
@@ -1115,6 +1113,6 @@ export function TemplateManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </SettingsPanel>
   );
 }

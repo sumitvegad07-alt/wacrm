@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SettingsPanelHead } from "./settings-panel-head";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 interface LookupItem {
   id: string;
@@ -121,13 +121,12 @@ export function LeadsSettings() {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Leads Settings"
-        description="Manage the dropdown options available when creating or editing a lead."
-      />
+    <SettingsPanel
+      description="Manage the dropdown options available when creating or editing a lead."
+      className="animate-in fade-in-50 duration-200"
+    >
       
-      <div className="mt-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         <div className="xl:col-span-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3 max-w-md">
@@ -166,7 +165,7 @@ export function LeadsSettings() {
 
         <div className="xl:col-span-4 space-y-4">
           <div className="p-5 border border-border rounded-lg bg-card space-y-4">
-            <h3 className="font-semibold text-sm text-foreground">Lead Taxonomy &amp; CRM Integration</h3>
+            <h3 className="text-sm font-semibold text-foreground">Lead Taxonomy &amp; CRM Integration</h3>
             <div className="space-y-3 text-xs text-muted-foreground">
               <div className="p-3 rounded-md bg-muted/50 border border-border/50">
                 <p className="font-medium text-foreground mb-1">Status Lifecycle</p>
@@ -184,6 +183,6 @@ export function LeadsSettings() {
           </div>
         </div>
       </div>
-    </section>
+    </SettingsPanel>
   );
 }

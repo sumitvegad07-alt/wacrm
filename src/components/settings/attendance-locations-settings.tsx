@@ -1,4 +1,5 @@
 "use client";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 // Attendance Locations — the master behind geo-fenced punch in / punch out.
 //
@@ -110,10 +111,13 @@ export function AttendanceLocationsSettings() {
   };
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in-50 duration-200">
+    <SettingsPanel
+      description="The work locations a rep may punch in and out at, and the fence each one enforces."
+      className="animate-in fade-in-50 duration-200"
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="text-lg font-medium">Attendance Locations</h3>
+          <h3 className="text-sm font-semibold text-foreground">Attendance Locations</h3>
           <p className="max-w-2xl text-sm text-muted-foreground">
             Where your team is allowed to punch in and out. A user with no location assigned can
             punch from anywhere, so nobody is ever locked out of their own attendance.
@@ -243,6 +247,6 @@ export function AttendanceLocationsSettings() {
         loading={deleting}
         onConfirm={() => void doDelete()}
       />
-    </div>
+    </SettingsPanel>
   );
 }

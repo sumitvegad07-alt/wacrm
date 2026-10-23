@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { SettingsPanelHead } from "../settings-panel-head";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -180,16 +180,15 @@ export function DocumentTemplatesPanel() {
   };
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200 flex flex-col h-[calc(100vh-120px)]">
-      <SettingsPanelHead
-        title="Document Templates"
-        description="Configure PDF templates for transactions like Orders, Quotations, Dispatches and Payments."
-        action={
-          <Button onClick={() => router.push(`/settings/document-templates/new?module=${activeModule}`)}>
-            <Plus className="mr-2 size-4" /> New Template
-          </Button>
-        }
-      />
+    <SettingsPanel
+      description="Configure PDF templates for transactions like Orders, Quotations, Dispatches and Payments."
+      className="animate-in fade-in-50 duration-200 flex flex-col lg:min-h-0 lg:flex-1"
+      actions={
+        <Button size="sm" onClick={() => router.push(`/settings/document-templates/new?module=${activeModule}`)}>
+          <Plus className="mr-2 size-4" /> New Template
+        </Button>
+      }
+    >
 
       <div className="flex flex-1 overflow-hidden border rounded-xl bg-card">
         {/* Left Sidebar: Modules */}
@@ -390,6 +389,6 @@ export function DocumentTemplatesPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </SettingsPanel>
   );
 }

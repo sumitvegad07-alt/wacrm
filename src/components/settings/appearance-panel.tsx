@@ -5,7 +5,7 @@ import { Check, Moon, Palette, SunMoon, Sun } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import { MODES, THEMES, type Mode, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
-import { SettingsPanelHead } from "./settings-panel-head";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 /**
  * Appearance panel — light/dark mode + accent-color picker.
@@ -22,13 +22,12 @@ import { SettingsPanelHead } from "./settings-panel-head";
 export function AppearancePanel() {
   const { theme, setTheme, mode, setMode } = useTheme();
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Appearance"
-        description="Set the mode and accent colour used across the app. Saved to this device — try it, it changes live."
-      />
+    <SettingsPanel
+      description="Set the mode and accent colour used across the app. Saved to this device — try it, it changes live."
+      className="animate-in fade-in-50 duration-200"
+    >
 
-      <div className="mt-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         <div className="xl:col-span-4 space-y-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <SunMoon className="size-4 text-muted-foreground" />
@@ -72,7 +71,7 @@ export function AppearancePanel() {
           </div>
         </div>
       </div>
-    </section>
+    </SettingsPanel>
   );
 }
 

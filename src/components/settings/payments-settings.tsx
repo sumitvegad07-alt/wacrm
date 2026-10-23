@@ -11,8 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Trash2, Edit2, GripVertical, ShieldCheck, Wallet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { SettingsPanelHead } from "@/components/settings/settings-panel-head";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  SettingsPanel,
+  SettingsRow,
+} from '@/components/settings/settings-layout';
 import {
   DndContext,
   closestCenter,
@@ -332,18 +335,17 @@ export function PaymentSettings() {
   }
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Payments"
-        description="Configure payment methods and financial controls for order processing."
-      />
+    <SettingsPanel
+      description="Configure payment methods and financial controls for order processing."
+      className="animate-in fade-in-50 duration-200"
+    >
       
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         {/* LEFT COLUMN: PAYMENT TYPES */}
         <div className="xl:col-span-7 space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-medium">Payment Types</h3>
+              <h3 className="text-sm font-semibold text-foreground">Payment Types</h3>
               <p className="text-sm text-muted-foreground">
                 Manage available payment methods. Drag to reorder.
               </p>
@@ -439,34 +441,30 @@ export function PaymentSettings() {
             </CardHeader>
             <CardContent className="space-y-4">
               
-              <div className="flex items-center justify-between border-b pb-4">
-                <div className="space-y-0.5 pr-4">
-                  <h4 className="text-sm font-medium">Payment Approval Required</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Require manager approval for collected payments.
-                  </p>
-                </div>
-                <Switch 
+              <SettingsRow
+                label="Payment Approval Required"
+                description="Require manager approval for collected payments."
+                control={
+                  <Switch 
                   checked={paymentApprovalRequired} 
                   onCheckedChange={(val) => { setPaymentApprovalRequired(val); updateSetting('approval_required', val); }}
                   disabled={!canEditSettings}
-                />
-              </div>
+                  />
+                }
+              />
               
               <div className="space-y-3 border-b pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5 pr-4">
-                    <h4 className="text-sm font-medium">Enable Credit Limit</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Restrict orders for customers exceeding limit.
-                    </p>
-                  </div>
-                  <Switch 
+                <SettingsRow
+                  label="Enable Credit Limit"
+                  description="Restrict orders for customers exceeding limit."
+                  control={
+                    <Switch 
                     checked={enableCreditLimit} 
                     onCheckedChange={(val) => { setEnableCreditLimit(val); updateSetting('enable_credit_limit', val); }}
                     disabled={!canEditSettings}
-                  />
-                </div>
+                    />
+                  }
+                />
                 {enableCreditLimit && (
                   <div className="pl-2 pt-1">
                     <Label className="text-xs mb-1 block text-muted-foreground">Enforcement</Label>
@@ -486,19 +484,17 @@ export function PaymentSettings() {
               </div>
 
               <div className="space-y-3 border-b pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5 pr-4">
-                    <h4 className="text-sm font-medium">Enable Credit Days</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Track overdue payments based on credit days.
-                    </p>
-                  </div>
-                  <Switch 
+                <SettingsRow
+                  label="Enable Credit Days"
+                  description="Track overdue payments based on credit days."
+                  control={
+                    <Switch 
                     checked={enableCreditDays} 
                     onCheckedChange={(val) => { setEnableCreditDays(val); updateSetting('enable_credit_days', val); }}
                     disabled={!canEditSettings}
-                  />
-                </div>
+                    />
+                  }
+                />
                 {enableCreditDays && (
                   <div className="pl-2 pt-1">
                     <Label className="text-xs mb-1 block text-muted-foreground">Enforcement</Label>
@@ -517,55 +513,49 @@ export function PaymentSettings() {
                 )}
               </div>
               
-              <div className="flex items-center justify-between border-b pb-4">
-                <div className="space-y-0.5 pr-4">
-                  <h4 className="text-sm font-medium">Require Attachment</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Collectors must attach a receipt photo, and a payment cannot be
-                    approved until its proof has arrived.
-                  </p>
-                </div>
-                <Switch 
+              <SettingsRow
+                label="Require Attachment"
+                description="Collectors must attach a receipt photo, and a payment cannot be
+                    approved until its proof has arrived."
+                control={
+                  <Switch 
                   checked={requireAttachment} 
                   onCheckedChange={(val) => { setRequireAttachment(val); updateSetting('require_attachment', val); }}
                   disabled={!canEditSettings}
-                />
-              </div>
+                  />
+                }
+              />
 
-              <div className="flex items-center justify-between border-b pb-4">
-                <div className="space-y-0.5 pr-4">
-                  <h4 className="text-sm font-medium">Require Notes</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Mandate a note/description for all payments.
-                  </p>
-                </div>
-                <Switch 
+              <SettingsRow
+                label="Require Notes"
+                description="Mandate a note/description for all payments."
+                control={
+                  <Switch 
                   checked={requireNotes} 
                   onCheckedChange={(val) => { setRequireNotes(val); updateSetting('require_notes', val); }}
                   disabled={!canEditSettings}
-                />
-              </div>
+                  />
+                }
+              />
 
-              <div className="flex items-center justify-between pb-1">
-                <div className="space-y-0.5 pr-4">
-                  <h4 className="text-sm font-medium">Require Payment Reference</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Mandate a reference number for instruments that carry one — cheque,
-                    UPI, NEFT, RTGS and bank transfer. Cash is never asked for one.
-                  </p>
-                </div>
-                <Switch 
+              <SettingsRow
+                label="Require Payment Reference"
+                description="Mandate a reference number for instruments that carry one — cheque,
+                    UPI, NEFT, RTGS and bank transfer. Cash is never asked for one."
+                control={
+                  <Switch 
                   checked={requirePaymentReference} 
                   onCheckedChange={(val) => { setRequirePaymentReference(val); updateSetting('require_reference', val); }}
                   disabled={!canEditSettings}
-                />
-              </div>
+                  />
+                }
+              />
 
             </CardContent>
           </Card>
         </div>
       </div>
-    </div>
+    </SettingsPanel>
   );
 }
 

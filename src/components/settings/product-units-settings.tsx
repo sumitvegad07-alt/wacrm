@@ -74,7 +74,7 @@ export function ProductUnitsSettings() {
     <div className="space-y-6 pt-6 border-t border-border">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold flex items-center gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Scale className="h-4 w-4 text-muted-foreground" /> Product Units
           </h3>
           <p className="text-xs text-muted-foreground mt-1">

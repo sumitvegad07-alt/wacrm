@@ -72,7 +72,7 @@ import {
   PresenceDot,
 } from '@/components/presence/presence-dot';
 import { InviteMemberDialog } from './invite-member-dialog';
-import { SettingsPanelHead } from './settings-panel-head';
+import { SettingsPanel } from '@/components/settings/settings-layout';
 import { ROLE_META } from './role-meta';
 
 interface Member {
@@ -279,19 +279,18 @@ export function MembersTab() {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Team members"
-        description="People with access to this account. Roles control what each teammate can do."
-        action={
-          <RequireRole min="admin">
-            <Button onClick={() => setInviteOpen(true)}>
-              <Plus className="size-4" />
-              Invite member
-            </Button>
-          </RequireRole>
-        }
-      />
+    <SettingsPanel
+      description="People with access to this account. Roles control what each teammate can do."
+      className="animate-in fade-in-50 duration-200"
+      actions={
+        <RequireRole min="admin">
+          <Button size="sm" onClick={() => setInviteOpen(true)}>
+            <Plus className="size-4" />
+            Invite member
+          </Button>
+        </RequireRole>
+      }
+    >
 
       <div className="mt-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         {/* LEFT COLUMN: ROSTER & PRESENCE */}
@@ -577,6 +576,6 @@ export function MembersTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </SettingsPanel>
   );
 }

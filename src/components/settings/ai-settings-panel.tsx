@@ -1,4 +1,5 @@
 'use client';
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -96,13 +97,7 @@ export function AISettingsPanel() {
   }
 
   return (
-    <div className="w-full space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">AI Assistant Settings</h1>
-        <p className="text-muted-foreground mt-2">
-          Configure your AI Assistant and Knowledge Base. When active, the bot will auto-reply to users based on the documents you upload.
-        </p>
-      </div>
+    <SettingsPanel description="Configure your AI Assistant and Knowledge Base. When active, the bot will auto-reply to users based on the documents you upload.">
 
       <div className="grid gap-6 grid-cols-1 xl:grid-cols-12 items-start">
         {/* SETTINGS CARD */}
@@ -327,6 +322,6 @@ export function AISettingsPanel() {
           </Card>
         </div>
       </div>
-    </div>
+    </SettingsPanel>
   )
 }

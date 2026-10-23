@@ -1,4 +1,5 @@
 "use client";
+import { SettingsCard } from '@/components/settings/settings-layout';
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -143,18 +144,15 @@ export function DealPipelinesSettings() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-border pb-4">
-        <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <GitBranch className="h-5 w-5 text-primary" />
-            Deal Pipelines
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create and manage pipelines and their customizable stages for your deals.
-          </p>
-        </div>
-      </div>
+    <SettingsCard
+      title={
+        <span className="flex items-center gap-2">
+          <GitBranch className="h-4 w-4 text-primary" /> Deal Pipelines
+        </span>
+      }
+      description="Create and manage pipelines and their customizable stages for your deals."
+      bodyClassName="px-4 py-3"
+    >
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Pipeline List & Create Form */}
@@ -224,7 +222,7 @@ export function DealPipelinesSettings() {
             <div className="bg-card rounded-lg border border-border p-6 space-y-6 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                     <span>{selectedPipeline.name}</span>
                     <Badge variant="outline" className="text-xs">
                       {stages.length} Stages
@@ -278,6 +276,6 @@ export function DealPipelinesSettings() {
           )}
         </div>
       </div>
-    </div>
+    </SettingsCard>
   );
 }

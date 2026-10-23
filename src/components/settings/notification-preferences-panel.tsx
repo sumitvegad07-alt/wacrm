@@ -1,4 +1,5 @@
 "use client";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 // Per-user notification preferences (mute toggles).
 //
@@ -97,14 +98,10 @@ export function NotificationPreferencesPanel() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Notifications</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Choose which notifications you receive. Your administrator controls which types are
-          available to your role.
-        </p>
-      </div>
+    <SettingsPanel
+      description="Choose which notifications you receive. Your administrator controls which types are available to your role."
+      className="max-w-2xl"
+    >
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
@@ -133,6 +130,6 @@ export function NotificationPreferencesPanel() {
           })}
         </div>
       )}
-    </div>
+    </SettingsPanel>
   );
 }

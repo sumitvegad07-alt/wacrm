@@ -99,7 +99,7 @@ export function ProductCategoriesSettings({
   return (
     <div className="space-y-6 pt-6 border-t border-border">
       <div>
-        <h3 className="text-sm font-semibold flex items-center gap-2">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Layers className="h-4 w-4 text-muted-foreground" /> Product Categories
         </h3>
         <p className="text-xs text-muted-foreground mt-1">

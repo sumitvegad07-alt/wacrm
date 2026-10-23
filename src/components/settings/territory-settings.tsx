@@ -15,7 +15,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { SettingsPanelHead } from "./settings-panel-head";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 import { getAccountTerritorySettings, updateTerritorySettings } from "@/lib/territories/api";
 import { DEFAULT_TERRITORY_LEVELS } from "@/lib/territories/settings";
 import type { AssignmentMode, TerritoryLevel } from "@/lib/territories/types";
@@ -91,18 +91,17 @@ export function TerritorySettings({ onSaved }: { onSaved?: () => void } = {}) {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Territory Settings"
-        description="Configure your geographic hierarchy — enable/disable and rename up to 5 levels — and how field employees are assigned to areas. This drives customer geography, Employee Area Assignment, and (later) Route Management."
-      />
+    <SettingsPanel
+      description="Configure your geographic hierarchy — enable/disable and rename up to 5 levels — and how field employees are assigned to areas. This drives customer geography, Employee Area Assignment, and (later) Route Management."
+      className="animate-in fade-in-50 duration-200"
+    >
 
       {loading ? (
         <div className="p-4 text-center text-muted-foreground text-sm flex items-center justify-center gap-2 mt-4">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading...
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
           {/* Levels */}
           <div data-tour="territory-levels" className="space-y-3 p-4 border border-border rounded-lg bg-card">
             <div className="flex items-center gap-2">
@@ -214,6 +213,6 @@ export function TerritorySettings({ onSaved }: { onSaved?: () => void } = {}) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </SettingsPanel>
   );
 }

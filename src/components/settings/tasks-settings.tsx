@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, Plus, GripVertical } from "lucide-react";
 import { toast } from "sonner";
-import { SettingsPanelHead } from "./settings-panel-head";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 export function TasksSettings() {
   const supabase = createClient();
@@ -95,13 +95,12 @@ export function TasksSettings() {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Task Settings"
-        description="Configure the activity types available when creating tasks and notes."
-      />
+    <SettingsPanel
+      description="Configure the activity types available when creating tasks and notes."
+      className="animate-in fade-in-50 duration-200"
+    >
       
-      <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
         <div className="space-y-4">
           <div className="space-y-3">
             {taskTypes.map((type, i) => (
@@ -147,7 +146,7 @@ export function TasksSettings() {
         </div>
 
         <div className="p-5 border border-border rounded-lg bg-card space-y-4">
-          <h3 className="font-semibold text-sm text-foreground">Activity Tracking &amp; CRM Workflow</h3>
+          <h3 className="text-sm font-semibold text-foreground">Activity Tracking &amp; CRM Workflow</h3>
           <div className="space-y-3 text-xs text-muted-foreground">
             <div className="p-3 rounded-md bg-muted/50 border border-border/50">
               <p className="font-medium text-foreground mb-1">Standardizing Team Activities</p>
@@ -160,6 +159,6 @@ export function TasksSettings() {
           </div>
         </div>
       </div>
-    </section>
+    </SettingsPanel>
   );
 }

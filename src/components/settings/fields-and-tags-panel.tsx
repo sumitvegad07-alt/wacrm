@@ -1,6 +1,6 @@
 'use client';
 
-import { SettingsPanelHead } from './settings-panel-head';
+import { SettingsPanel } from '@/components/settings/settings-layout';
 import { TagManager } from './tag-manager';
 
 /**
@@ -9,14 +9,13 @@ import { TagManager } from './tag-manager';
  */
 export function FieldsAndTagsPanel() {
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="Contact tags"
-        description="Organize contacts with colour-coded tags for quick grouping. Custom fields and sections are now managed from the 'Custom Fields' menu in the sidebar."
-      />
-      <div className="mt-6 grid grid-cols-1 gap-6 items-start">
+    <SettingsPanel
+      description="Organize contacts with colour-coded tags for quick grouping. Custom fields and sections are now managed from the 'Custom Fields' menu in the sidebar."
+      className="animate-in fade-in-50 duration-200"
+    >
+      <div className="grid grid-cols-1 gap-6 items-start">
         <TagManager />
       </div>
-    </section>
+    </SettingsPanel>
   );
 }

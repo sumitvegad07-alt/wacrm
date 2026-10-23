@@ -40,7 +40,7 @@ import {
   SCOPE_DESCRIPTIONS,
   type ApiScope,
 } from '@/lib/api-keys/scopes';
-import { SettingsPanelHead } from './settings-panel-head';
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 interface ApiKey {
   id: string;
@@ -133,26 +133,25 @@ export function ApiKeysSettings() {
   }
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title="API Settings"
-        description={
-          <>
-            Keys authenticate the public REST API (
-            <code className="text-xs">/api/v1</code>) so you can build your own
-            automations. Send them as{' '}
-            <code className="text-xs">Authorization: Bearer &lt;key&gt;</code>.
-          </>
-        }
-        action={
-          <RequireRole min="admin">
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="size-4" />
-              New API key
-            </Button>
-          </RequireRole>
-        }
-      />
+    <SettingsPanel
+      description={
+        <>
+          Keys authenticate the public REST API (
+          <code className="text-xs">/api/v1</code>) so you can build your own
+          automations. Send them as{' '}
+          <code className="text-xs">Authorization: Bearer &lt;key&gt;</code>.
+        </>
+      }
+      className="animate-in fade-in-50 duration-200"
+      actions={
+        <RequireRole min="admin">
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" />
+            New API key
+          </Button>
+        </RequireRole>
+      }
+    >
 
       <div className="mt-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         <div className="xl:col-span-7 space-y-4">
@@ -272,7 +271,7 @@ export function ApiKeysSettings() {
             <CardContent className="p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <BookOpen className="size-4 text-primary" />
-                <h3 className="font-semibold text-sm text-foreground">Integration Guide</h3>
+                <h3 className="text-sm font-semibold text-foreground">Integration Guide</h3>
               </div>
               <div className="space-y-3 text-xs text-muted-foreground">
                 <div className="p-3 rounded-md bg-muted/50 border border-border/50">
@@ -310,7 +309,7 @@ export function ApiKeysSettings() {
         onOpenChange={setCreateOpen}
         onCreated={load}
       />
-    </section>
+    </SettingsPanel>
   );
 }
 

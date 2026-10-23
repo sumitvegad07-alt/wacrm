@@ -266,14 +266,14 @@ export function TerritoryManager() {
   }
 
   return (
-    <div className="w-full space-y-6 p-2 md:p-4">
+    <div className="w-full space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <MapIcon className="size-5" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <MapIcon className="size-4" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Territory Master</h1>
+            <h1 className="text-base font-semibold tracking-tight text-foreground">Territory Master</h1>
             <p className="text-sm text-muted-foreground">
               {totalCount} territor{totalCount === 1 ? "y" : "ies"} · single source of truth for customer geography
             </p>

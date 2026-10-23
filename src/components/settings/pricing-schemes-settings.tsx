@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Wand2, Boxes, ListChecks, Wallet } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Boxes, ListChecks } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   DEFAULT_OUTSTANDING_CONFIG,

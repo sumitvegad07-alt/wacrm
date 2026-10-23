@@ -346,7 +346,7 @@ export function HolidayListsManager() {
         {/* LEFT — the lists */}
         <div className="xl:col-span-3 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-medium">Holiday Lists</h3>
+            <h3 className="text-sm font-semibold text-foreground">Holiday Lists</h3>
             <Button size="sm" onClick={() => setListDialog({ mode: "create", name: "" })}>
               <Plus className="h-4 w-4 mr-1" /> Add
             </Button>
@@ -497,7 +497,7 @@ export function HolidayListsManager() {
 
               <div className="rounded-md border bg-card overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b">
-                  <h3 className="text-lg font-medium">
+                  <h3 className="text-sm font-semibold text-foreground">
                     {month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
                   </h3>
                   <div className="flex items-center gap-1">

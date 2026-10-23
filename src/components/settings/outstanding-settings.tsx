@@ -129,7 +129,7 @@ export function OutstandingSettings({
       <div className="flex items-start gap-2">
         <Wallet className="h-4 w-4 text-muted-foreground mt-0.5" />
         <div>
-          <h3 className="text-sm font-semibold">Outstanding Calculation</h3>
+          <h3 className="text-sm font-semibold text-foreground">Outstanding Calculation</h3>
           <p className="text-xs text-muted-foreground mt-1">
             Decide the moment an order becomes money a customer owes you, and which payments
             count as money received. Outstanding is{" "}

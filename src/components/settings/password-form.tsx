@@ -16,7 +16,7 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
-import { SettingsPanelHead } from './settings-panel-head';
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 const MIN_PASSWORD = 8;
 
@@ -82,8 +82,9 @@ export function PasswordForm() {
   };
 
   return (
-    <section className="w-full animate-in fade-in-50 duration-200">
-      <SettingsPanelHead title="Change Password" />
+    <SettingsPanel
+      className="animate-in fade-in-50 duration-200"
+    >
       <Card className="border-border shadow-sm mt-6 max-w-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
@@ -169,6 +170,6 @@ export function PasswordForm() {
         </form>
       </CardContent>
     </Card>
-    </section>
+    </SettingsPanel>
   );
 }

@@ -1,4 +1,7 @@
 "use client";
+import {
+  SettingsPanel,
+ SettingsRow } from '@/components/settings/settings-layout';
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -214,13 +217,16 @@ export function ExpenseTypesSettings() {
   }
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in-50 duration-200">
+    <SettingsPanel
+      description="The expense categories your team can claim against, and the rules each one follows."
+      className="animate-in fade-in-50 duration-200"
+    >
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         {/* LEFT COLUMN: EXPENSE POLICIES LIST */}
         <div className="xl:col-span-7 space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-medium">Expense Settings</h3>
+              <h3 className="text-sm font-semibold text-foreground">Expense Settings</h3>
               <p className="text-sm text-muted-foreground">
                 Configure the types of expenses and allowances your employees can claim.
               </p>
@@ -470,15 +476,13 @@ export function ExpenseTypesSettings() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between bg-muted/30 p-3.5 rounded-lg border">
-                <div className="space-y-0.5 pr-4">
-                  <h4 className="text-sm font-medium">Require Odometer Photo</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Force field staff to upload a vehicle odometer photo during Punch In/Out.
-                  </p>
-                </div>
-                <Switch checked={requireOdometer} onCheckedChange={handleToggleOdometer} disabled={savingOdometer} />
-              </div>
+              <SettingsRow
+                label="Require Odometer Photo"
+                description="Force field staff to upload a vehicle odometer photo during Punch In/Out."
+                control={
+                  <Switch checked={requireOdometer} onCheckedChange={handleToggleOdometer} disabled={savingOdometer} />
+                }
+              />
             </CardContent>
           </Card>
 
@@ -515,6 +519,6 @@ export function ExpenseTypesSettings() {
           </Card>
         </div>
       </div>
-    </div>
+    </SettingsPanel>
   );
 }

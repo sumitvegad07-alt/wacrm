@@ -1,4 +1,5 @@
 "use client";
+import { SettingsPanel } from '@/components/settings/settings-layout';
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -159,7 +160,10 @@ export function LeaveTypesSettings() {
   };
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in-50 duration-200">
+    <SettingsPanel
+      description="Leave types your team can apply for, and the holiday lists that set each team’s weekly offs."
+      className="animate-in fade-in-50 duration-200"
+    >
       {/* Inline tab switcher, matching the order detail page's pattern. */}
       <div className="flex items-center gap-1 border-b">
         {(
@@ -193,7 +197,7 @@ export function LeaveTypesSettings() {
           <div className="xl:col-span-7 space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-medium">Leave Types</h3>
+                <h3 className="text-sm font-semibold text-foreground">Leave Types</h3>
                 <p className="text-sm text-muted-foreground">
                   The kinds of leave your employees can apply for. New types are active immediately.
                 </p>
@@ -373,6 +377,6 @@ export function LeaveTypesSettings() {
           </div>
         </div>
       )}
-    </div>
+    </SettingsPanel>
   );
 }
