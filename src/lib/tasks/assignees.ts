@@ -5,6 +5,8 @@ export interface TaskAssignee {
   status: "Pending" | "Completed";
   completed_at: string | null;
   created_at: string;
+  /** Joined on the screens that select it, for showing names rather than ids. */
+  profile?: { full_name: string | null; email: string | null } | null;
 }
 
 /**

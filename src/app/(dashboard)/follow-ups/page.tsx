@@ -23,6 +23,7 @@ import type { Task } from "@/types";
 import { cn } from "@/lib/utils";
 import { isBefore, startOfToday } from "date-fns";
 import { DEFAULT_PERIOD, matchesPeriod, type TaskPeriod } from "@/lib/tasks/period-filter";
+import { assigneeLabel, myStatus, progressLabel } from "@/lib/tasks/assignees";
 import Link from "next/link";
 import { PageLayout, PageHeader } from "@/components/shared";
 
@@ -112,11 +113,27 @@ export default function FollowUpsPage() {
     setLoading(true);
     let query = supabase
       .from("tasks")
-      .select("*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), contact:contacts(id, name), deal:deals(id, title), lead:leads(id, name)")
+      .select("*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), assignees:task_assignees(id, task_id, profile_id, status, completed_at, created_at, profile:profiles(full_name, email)), contact:contacts(id, name), deal:deals(id, title), lead:leads(id, name)")
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false });
 
-    if (assignTo && assignTo !== "all") query = query.eq("assigned_user_id", assignTo);
+    // Any assignee, not just the first. Someone added second to a task would
+    // otherwise never see it on the screen named My Activity.
+    if (assignTo && assignTo !== "all") {
+      const { data: mine } = await supabase
+        .from("task_assignees")
+        .select("task_id")
+        .eq("profile_id", assignTo);
+      const ids = (mine ?? []).map((r) => r.task_id);
+      // No rows means no tasks — short-circuit rather than send `in ()`, which
+      // would come back unfiltered and show the whole account's work.
+      if (ids.length === 0) {
+        setTasks([]);
+        setLoading(false);
+        return;
+      }
+      query = query.in("id", ids);
+    }
     if (activityType && activityType !== "all") query = query.eq("activity_type", activityType);
     
     if (activityStatus === "Undone") {
@@ -160,26 +177,46 @@ export default function FollowUpsPage() {
     e.preventDefault();
     e.stopPropagation();
     
-    const newStatus = task.status === "Completed" ? "Pending" : "Completed";
+    const mine = myStatus(task.assignees ?? [], profile?.id);
+    const newStatus = (mine ?? task.status) === "Completed" ? "Pending" : "Completed";
     const timestamp = new Date().toISOString();
-    
-    const { error } = await supabase
-      .from("tasks")
-      .update({ status: newStatus, updated_at: timestamp })
-      .eq("id", task.id);
+
+    // When you are one of the assignees you complete YOUR row, and the rollup
+    // trigger decides whether that finishes the task. Writing tasks.status
+    // here as well would complete it for everyone else too.
+    //
+    // When the task is not assigned to you at all there is no row to tick, so
+    // the old behaviour stands and the task's own status is set.
+    const { error } = mine !== null && profile?.id
+      ? await supabase
+          .from("task_assignees")
+          .update({
+            status: newStatus,
+            completed_at: newStatus === "Completed" ? timestamp : null,
+          })
+          .eq("task_id", task.id)
+          .eq("profile_id", profile.id)
+      : await supabase
+          .from("tasks")
+          .update({ status: newStatus, updated_at: timestamp })
+          .eq("id", task.id);
 
     if (error) {
       toast.error("Failed to update task");
     } else {
-      // Remove from view if filtering by Undone/Done, otherwise update inline
-      if ((activityStatus === "Undone" && newStatus === "Completed") ||
-          (activityStatus === "Done" && newStatus === "Pending")) {
-        setTasks(tasks.filter(t => t.id !== task.id));
-      } else {
-        setTasks(tasks.map(t => t.id === task.id ? { ...t, status: newStatus, updated_at: timestamp } : t));
-      }
-      
-      toast.success(newStatus === "Completed" ? "Task completed" : "Task restored");
+      // Refetch rather than patch the row in place. With several people on a
+      // task, ticking your own box may or may not change the task's own
+      // status — that is the rollup trigger's call, not something the client
+      // can work out without duplicating it.
+      await fetchTasks();
+
+      toast.success(
+        newStatus === "Completed"
+          ? mine !== null
+            ? "Marked done for you"
+            : "Task completed"
+          : "Task restored",
+      );
       
       // Log to module activities
       const msg = `Task '${task.description || task.title || task.activity_type}' marked as ${newStatus.toLowerCase()}`;
@@ -224,7 +261,12 @@ export default function FollowUpsPage() {
   }
 
   const TaskItem = ({ task }: { task: FollowUpTask }) => {
-    const isCompleted = task.status === "Completed";
+    const rows = task.assignees ?? [];
+    const mine = myStatus(rows, profile?.id);
+    // The tick shows YOUR state when the task is yours, and the task's own
+    // rolled-up state when you are only looking at someone else's work.
+    const isCompleted = (mine ?? task.status) === "Completed";
+    const progress = progressLabel(rows);
     const isOverdue = task.due_date && isBefore(new Date(task.due_date), startOfToday()) && !isCompleted;
     const isNote = task.activity_type?.toLowerCase() === "note";
     
@@ -264,7 +306,15 @@ export default function FollowUpsPage() {
               {!isNote && (
                 <button
                   onClick={(e) => toggleTaskStatus(task, e)}
-                  title={isCompleted ? "Mark as pending" : "Mark as completed"}
+                  title={
+                    mine !== null
+                      ? isCompleted
+                        ? "Mark as pending for you"
+                        : "Mark as done for you"
+                      : isCompleted
+                        ? "Mark as pending"
+                        : "Mark as completed"
+                  }
                   className={cn(
                     "size-6 border-2 rounded flex items-center justify-center transition-colors",
                     isCompleted
@@ -295,7 +345,26 @@ export default function FollowUpsPage() {
             {task.assignee && (
               <>
                 {task.due_date && <span>•</span>}
-                <span>User: {task.assignee.full_name || task.assignee.email}</span>
+                <span>
+                  User:{" "}
+                  {/* "Priya +2" when a task is shared. Falls back to the single
+                      assignee relation for a task whose rows have not loaded. */}
+                  {rows.length > 0
+                    ? assigneeLabel(
+                        rows.map((r) => r.profile?.full_name || r.profile?.email || "Unknown"),
+                      )
+                    : task.assignee.full_name || task.assignee.email}
+                </span>
+              </>
+            )}
+
+            {/* Makes it obvious the task lives on after you tick your own box. */}
+            {progress && (
+              <>
+                <span>•</span>
+                <span className={cn("font-medium", mine === "Completed" && "text-green-600")}>
+                  {progress}
+                </span>
               </>
             )}
             
