@@ -7,12 +7,24 @@ import { createClient } from "@/lib/supabase/client";
 import type { Deal, CustomField, Task, Contact, Conversation, PipelineStage, Profile } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Calendar, CheckSquare, MessageSquare, Briefcase, FileText, Loader2, Pencil, Check, X, Users, ShoppingBag, ArrowRight, ExternalLink, CheckCircle2, XCircle } from "lucide-react";
+import { Calendar, CheckSquare, MessageSquare, Briefcase, FileText, Loader2, Pencil, Check, X, Users, ShoppingBag, ArrowRight, ExternalLink, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { DealForm } from "@/components/pipelines/deal-form";
 import { Timeline } from "@/components/shared/timeline";
+import {
+  DetailPageLayout,
+  DetailSection,
+  DetailGrid,
+  DetailItem,
+  StatusBadge,
+  ConfirmDialog,
+  LineItemsTable,
+  LineItemsHead,
+  LineItemsRow,
+  LineItemsCell,
+} from "@/components/shared";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
 import { isWonLostName } from "@/lib/pipelines/default-stages";
@@ -68,6 +80,7 @@ export default function DealDetailsPage() {
   // Won/Lost resolution dialog — shown when a deal is moved to the terminal
   // "Won/Lost" stage. The user picks Won (deal is won) or Lost (asks for a reason).
   const [resolveOpen, setResolveOpen] = useState(false);
+  const [convertConfirmOpen, setConvertConfirmOpen] = useState(false);
   const [marking, setMarking] = useState(false);
 
   const fetchAllData = useCallback(async () => {
@@ -224,10 +237,16 @@ export default function DealDetailsPage() {
 
   const handleConvertToQuotation = async () => {
     if (!deal) return;
-    if (!confirm("Are you sure you want to convert this deal into a quotation? All items and logs will be copied and the deal will be moved to Won.")) {
-      return;
-    }
+    // Was a native browser confirm(), which cannot be styled, cannot be
+    // dismissed with the app's own keyboard handling, and looks like a
+    // different product. 33 call sites across the app still do this; the
+    // shared ConfirmDialog has existed all along.
+    setConvertConfirmOpen(true);
+  };
 
+  const doConvertToQuotation = async () => {
+    if (!deal) return;
+    setConvertConfirmOpen(false);
     setConverting(true);
     try {
       const { data: newQuotationId, error } = await supabase.rpc("convert_deal_to_quotation", {
@@ -388,46 +407,34 @@ export default function DealDetailsPage() {
   const currentStage = (deal as any).stage || stages.find(s => s.id === deal.stage_id);
 
   return (
-    <div className="space-y-6 w-full max-w-none flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 bg-card border border-border p-4 rounded-lg shadow-sm">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => router.back()}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <ChevronLeft className="size-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-              {(deal as any).deal_number && <span className="text-muted-foreground font-mono text-lg">{(deal as any).deal_number}</span>}
-              {deal.title}
-              {deal.is_converted && (
-                <Badge className="bg-emerald-600 text-white border-transparent shadow-sm gap-1 font-semibold">
-                  <CheckCircle2 className="h-3 w-3" /> Converted to Quotation
-                </Badge>
-              )}
-              {!deal.is_converted && isWon && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm border-transparent">
-                  <Check className="h-3 w-3" />
-                  Won
-                </span>
-              )}
-              {isLost && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-red-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm border-transparent">
-                  <X className="h-3 w-3" />
-                  Lost
-                </span>
-              )}
-              {!deal.is_converted && !isWon && !isLost && currentStage && (
-                <Badge style={{ backgroundColor: currentStage.color }} className="text-white border-transparent shadow-sm font-semibold">
-                  {currentStage.name}
-                </Badge>
-              )}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-4">
+    <DetailPageLayout
+      title={deal.title}
+      onBack={() => router.back()}
+      // Four different status treatments used to sit in the h1: a Badge, two
+      // hand-rolled emerald/red <span> pills, and a stage Badge. The two pills
+      // are now StatusBadges; the stage keeps its own Badge because its colour
+      // is the tenant's own pipeline colour, not a semantic state.
+      badges={
+        <>
+          {deal.is_converted && (
+            <Badge className="bg-emerald-600 text-white border-transparent shadow-sm gap-1 font-semibold">
+              <CheckCircle2 className="h-3 w-3" /> Converted to Quotation
+            </Badge>
+          )}
+          {!deal.is_converted && isWon && <StatusBadge status="won" />}
+          {isLost && <StatusBadge status="lost" />}
+          {!deal.is_converted && !isWon && !isLost && currentStage && (
+            <Badge style={{ backgroundColor: currentStage.color }} className="text-white border-transparent shadow-sm font-semibold">
+              {currentStage.name}
+            </Badge>
+          )}
+        </>
+      }
+      meta={
+        <>
+          {(deal as any).deal_number && (
+            <span className="font-mono">{(deal as any).deal_number}</span>
+          )}
               <span className="font-semibold text-primary">{formatCurrency(deal.value, deal.currency)}</span>
               {deal.expected_close_date && (
                 <span className="flex items-center gap-1">
@@ -444,11 +451,10 @@ export default function DealDetailsPage() {
                   <Briefcase className="size-3.5" /> Lead: {lead.name}
                 </Link>
               )}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
+        </>
+      }
+      actions={
+        <>
           {deal.is_converted && (deal as any).converted_quotation_id ? (
             <Link href={`/quotations/${(deal as any).converted_quotation_id}/edit`}>
               <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
@@ -487,8 +493,9 @@ export default function DealDetailsPage() {
             <Pencil className="size-4" />
             Edit Deal
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {/* Owner / Collaborators band — assigned here, not at creation (parity with leads). */}
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3 sm:flex-row sm:items-start sm:gap-10">
@@ -613,12 +620,10 @@ export default function DealDetailsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Column: Details, Line Items, & Custom Fields */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-6">
-            <h3 className="text-lg font-semibold border-b border-border pb-3">Deal Details & Collaboration</h3>
+          <DetailSection title="Deal Details & Collaboration" className="space-y-6">
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Deal For</p>
+            <DetailGrid cols={3}>
+              <DetailItem label="Deal For">
                 {(deal as any).deal_for === "lead" ? (
                   <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">
                     Lead: {lead?.name || "Selected Lead"}
@@ -628,90 +633,86 @@ export default function DealDetailsPage() {
                     Customer: {(deal.contact as any)?.name || (deal.contact as any)?.phone || "Customer"}
                   </Badge>
                 )}
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Value</p>
-                <p className="font-medium text-primary">{formatCurrency(deal.value, deal.currency)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Deal Number</p>
-                <p className="font-mono font-medium">{(deal as any).deal_number || deal.id.slice(0, 8)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Current Stage</p>
-                <div className="flex items-center gap-2">
-                  {isLost ? (
-                    <Badge variant="destructive">Lost</Badge>
-                  ) : isWon ? (
-                    <Badge className="bg-emerald-600 text-white">{deal.is_converted ? "Won (Converted)" : "Won"}</Badge>
-                  ) : (
-                    <Badge variant="secondary" className="px-2.5 py-0.5 font-medium">
-                      {currentStage?.name || "—"}
-                    </Badge>
-                  )}
-                </div>
-              </div>
+              </DetailItem>
+              <DetailItem label="Value">
+                <span className="text-primary">{formatCurrency(deal.value, deal.currency)}</span>
+              </DetailItem>
+              <DetailItem label="Deal Number">
+                <span className="font-mono">{(deal as any).deal_number || deal.id.slice(0, 8)}</span>
+              </DetailItem>
+              <DetailItem label="Current Stage">
+                {isLost ? (
+                  <StatusBadge status="lost" />
+                ) : isWon ? (
+                  <StatusBadge status="won" label={deal.is_converted ? "Won (Converted)" : "Won"} />
+                ) : (
+                  <Badge variant="secondary" className="px-2.5 py-0.5 font-medium">
+                    {currentStage?.name || "—"}
+                  </Badge>
+                )}
+              </DetailItem>
               {deal.expected_close_date && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Expected Close</p>
-                  <p className="font-medium">{new Date(deal.expected_close_date).toLocaleDateString()}</p>
-                </div>
+                <DetailItem
+                  label="Expected Close"
+                  value={new Date(deal.expected_close_date).toLocaleDateString()}
+                />
               )}
-            </div>
-
+            </DetailGrid>
 
             {deal.notes && (
-              <div className="pt-4 border-t border-border/50">
-                <p className="text-sm text-muted-foreground mb-2">Deal Notes</p>
-                <p className="text-sm whitespace-pre-wrap bg-muted/30 p-3 rounded-md border border-border/50">{deal.notes}</p>
+              <div className="border-t border-border/50 pt-4">
+                <p className="mb-2 text-label text-muted-foreground">Deal Notes</p>
+                <p className="whitespace-pre-wrap rounded-md border border-border/50 bg-muted/30 p-3 text-body">{deal.notes}</p>
               </div>
             )}
-          </div>
+          </DetailSection>
 
           {/* Product Line Items Read-only Card */}
-          <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-4">
-            <h3 className="text-lg font-semibold border-b border-border pb-3 flex items-center gap-2">
-              <ShoppingBag className="h-5 w-5 text-primary" />
-              Product Line Items ({dealItems.length})
-            </h3>
+          <DetailSection
+            title={
+              <span className="flex items-center gap-2">
+                <ShoppingBag className="h-5 w-5 text-primary" />
+                Product Line Items ({dealItems.length})
+              </span>
+            }
+            className="space-y-4"
+          >
             
             {dealItems.length === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">No products added to this deal yet.</p>
             ) : (
               <div className="space-y-4">
-                <div className="border border-border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted text-muted-foreground border-b border-border">
-                      <tr>
-                        <th className="py-2.5 px-4 text-left font-medium">PRODUCT</th>
-                        <th className="py-2.5 px-4 text-left font-medium">UNIT</th>
-                        <th className="py-2.5 px-4 text-right font-medium">QTY</th>
-                        <th className="py-2.5 px-4 text-right font-medium">PRICE (₹)</th>
-                        <th className="py-2.5 px-4 text-right font-medium">TAX %</th>
-                        <th className="py-2.5 px-4 text-right font-medium">TOTAL (₹)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {dealItems.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-muted/20">
-                          <td className="py-2.5 px-4 font-medium">{item.product_name}</td>
-                          <td className="py-2.5 px-4 text-muted-foreground">{item.unit || "Nos"}</td>
-                          <td className="py-2.5 px-4 text-right">{item.quantity}</td>
-                          <td className="py-2.5 px-4 text-right">
-                            ₹{Number(item.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-2.5 px-4 text-right">{item.tax_rate}%</td>
-                          <td className="py-2.5 px-4 text-right font-semibold">
-                            ₹{Number(item.total).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <LineItemsTable
+                  minWidth="42rem"
+                  head={
+                    <tr>
+                      <LineItemsHead>Product</LineItemsHead>
+                      <LineItemsHead>Unit</LineItemsHead>
+                      <LineItemsHead className="text-right">Qty</LineItemsHead>
+                      <LineItemsHead className="text-right">Price (₹)</LineItemsHead>
+                      <LineItemsHead className="text-right">Tax %</LineItemsHead>
+                      <LineItemsHead className="text-right">Total (₹)</LineItemsHead>
+                    </tr>
+                  }
+                >
+                  {dealItems.map((item, idx) => (
+                    <LineItemsRow key={idx}>
+                      <LineItemsCell className="font-medium">{item.product_name}</LineItemsCell>
+                      <LineItemsCell className="text-muted-foreground">{item.unit || "Nos"}</LineItemsCell>
+                      <LineItemsCell className="text-right">{item.quantity}</LineItemsCell>
+                      <LineItemsCell className="text-right">
+                        ₹{Number(item.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </LineItemsCell>
+                      <LineItemsCell className="text-right">{item.tax_rate}%</LineItemsCell>
+                      <LineItemsCell className="text-right font-semibold">
+                        ₹{Number(item.total).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </LineItemsCell>
+                    </LineItemsRow>
+                  ))}
+                </LineItemsTable>
 
                 <div className="flex justify-end">
-                  <div className="text-right space-y-1 text-sm bg-muted/50 p-4 rounded-lg border border-border min-w-[240px]">
+                  <div className="min-w-[15rem] space-y-1 rounded-lg border border-border bg-muted/50 p-4 text-right text-body">
                     <div className="flex justify-between text-muted-foreground">
                       <span>Subtotal:</span>
                       <span>₹{dealItems.reduce((sum, item) => sum + (Number(item.sub_total) || 0), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
@@ -730,35 +731,38 @@ export default function DealDetailsPage() {
                 </div>
               </div>
             )}
-          </div>
+          </DetailSection>
 
           {(systemRows.length > 0 || extraFields.length > 0) && (
-            <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-4">
-              <h3 className="text-lg font-semibold border-b border-border pb-3">Custom Fields</h3>
-              <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+            <DetailSection title="Custom Fields" className="space-y-4">
+              <DetailGrid>
                 {systemRows.map(({ field, value }) => (
-                  <div key={field.id}>
-                    <p className="text-sm text-muted-foreground mb-1 capitalize">{field.field_name}</p>
-                    <p className="font-medium break-words">{value}</p>
-                  </div>
+                  <DetailItem
+                    key={field.id}
+                    label={field.field_name}
+                    className="[&>p:first-child]:capitalize"
+                    value={value}
+                  />
                 ))}
                 {extraFields.map((field) => {
                   const val = customValues[field.id];
                   return (
-                    <div key={field.id}>
-                      <p className="text-sm text-muted-foreground mb-1 capitalize">{field.field_name}</p>
+                    <DetailItem
+                      key={field.id}
+                      label={field.field_name}
+                      className="[&>p:first-child]:capitalize"
+                      value={field.field_type === 'attachment' ? undefined : val}
+                    >
                       {field.field_type === 'attachment' && val ? (
-                        <a href={val} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium flex items-center gap-1">
+                        <a href={val} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-medium text-primary hover:underline">
                           <FileText className="size-4" /> View Attachment
                         </a>
-                      ) : (
-                        <p className="font-medium break-words">{val || '-'}</p>
-                      )}
-                    </div>
+                      ) : undefined}
+                    </DetailItem>
                   );
                 })}
-              </div>
-            </div>
+              </DetailGrid>
+            </DetailSection>
           )}
         </div>
 
@@ -873,6 +877,17 @@ export default function DealDetailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      <ConfirmDialog
+        open={convertConfirmOpen}
+        onOpenChange={setConvertConfirmOpen}
+        title="Convert this deal to a quotation?"
+        description="All items and logs are copied to the new quotation, and this deal is moved to Won."
+        confirmLabel="Convert"
+        variant="warning"
+        loading={converting}
+        onConfirm={doConvertToQuotation}
+      />
+    </DetailPageLayout>
   );
 }

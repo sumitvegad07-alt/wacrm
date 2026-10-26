@@ -7,11 +7,18 @@ import { sanitizeRichText } from '@/lib/security/sanitize-html';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Copy, Check, X, FileText, Loader2, Send, FilePlus2, Pencil, ArrowUpRight } from 'lucide-react';
+import { Edit, Copy, Check, X, FileText, Loader2, Send, FilePlus2, Pencil, ArrowUpRight } from 'lucide-react';
 import { PrintSizeMenu } from '@/components/print/print-size-menu';
 import Link from 'next/link';
 import { QuotationTimeline } from '@/components/quotations/quotation-timeline';
 import { Timeline } from '@/components/shared/timeline';
+import {
+  DetailPageLayout,
+  DetailSection,
+  DetailGrid,
+  DetailItem,
+  ConfirmDialog,
+} from '@/components/shared';
 import { logQuotationActivity } from '@/lib/quotations';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { QuotationForm } from '@/components/quotations/quotation-form';
@@ -37,6 +44,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [quotation, setQuotation] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -144,8 +152,10 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this quotation?")) return;
+  const handleDelete = () => setDeleteOpen(true);
+
+  const doDelete = async () => {
+    setDeleteOpen(false);
     setActionLoading(true);
     const { error } = await supabase.from('quotations').delete().eq('id', quotation.id);
     if (!error) {
@@ -171,35 +181,26 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
   const replacedBy = quotation ? supersededBy(versions, quotation.id) : null;
 
   return (
-    <div className="space-y-6 pb-20 w-full max-w-none px-6 mt-6">
-      <header className="flex flex-col sm:flex-row shrink-0 items-start sm:items-center justify-between gap-4 bg-card p-6 rounded-lg border border-border shadow-sm">
-        <div className="flex items-center gap-4">
-          <Link href="/quotations">
-            <Button variant="outline" size="icon" className="border-border text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="size-4" />
-            </Button>
-          </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                {quotation.quotation_number}
-              </h1>
-              {quotation.version > 1 && (
-                <Badge variant="secondary" className="font-normal text-xs px-2 py-0.5">
-                  v{quotation.version}
-                </Badge>
-              )}
-              <Badge variant="outline" className={`font-medium px-2.5 py-0.5 ${STATUS_COLORS[quotation.status] || ''}`}>
-                {quotation.status}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">
-              Quotation for {quotation.contact?.name || 'Unknown'}
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2 flex-wrap">
+    // Was `px-6 mt-6` on top of the gutter the workspace <main> already
+    // applies, so a quotation sat 40px in from every other page.
+    <DetailPageLayout
+      title={quotation.quotation_number}
+      onBack={() => router.push('/quotations')}
+      badges={
+        <>
+          {quotation.version > 1 && (
+            <Badge variant="secondary" className="font-normal text-caption px-2 py-0.5">
+              v{quotation.version}
+            </Badge>
+          )}
+          <Badge variant="outline" className={`font-medium px-2.5 py-0.5 ${STATUS_COLORS[quotation.status] || ''}`}>
+            {quotation.status}
+          </Badge>
+        </>
+      }
+      meta={<span>Quotation for {quotation.contact?.name || 'Unknown'}</span>}
+      actions={
+        <>
           {/* Only from the newest version: branching off an older one would fork
               the chain, and the `QT-0034-2` numbering assumes a single line. */}
           {!replacedBy && (
@@ -242,8 +243,9 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
           </Button>
 
           <PrintSizeMenu href={`/print/quotation/${quotation.id}`} />
-        </div>
-      </header>
+        </>
+      }
+    >
 
       {replacedBy && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
@@ -263,37 +265,35 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-card border border-border rounded-lg p-6">
-            <h3 className="text-lg font-medium mb-6 flex items-center gap-2 border-b border-border pb-4">
-              <FileText className="size-5 text-muted-foreground" />
-              Quotation Details
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Date</p>
-                <p className="font-medium">{new Date(quotation.date).toLocaleDateString()}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Valid Until</p>
-                <p className="font-medium">{quotation.valid_until ? new Date(quotation.valid_until).toLocaleDateString() : '-'}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-sm font-medium text-muted-foreground mb-1">Quotation For</p>
+          <DetailSection
+            title={
+              <span className="flex items-center gap-2">
+                <FileText className="size-5 text-muted-foreground" />
+                Quotation Details
+              </span>
+            }
+          >
+            <DetailGrid cols={4}>
+              <DetailItem label="Date" value={new Date(quotation.date).toLocaleDateString()} />
+              <DetailItem
+                label="Valid Until"
+                value={quotation.valid_until ? new Date(quotation.valid_until).toLocaleDateString() : undefined}
+              />
+              <DetailItem span={2} label="Quotation For">
                 <div className="flex flex-col">
-                  <span className="font-medium">{quotation.contact?.name}</span>
+                  <span>{quotation.contact?.name}</span>
                   {quotation.contact?.company && (
-                    <span className="text-xs text-muted-foreground">{quotation.contact.company}</span>
+                    <span className="text-caption font-normal text-muted-foreground">{quotation.contact.company}</span>
                   )}
                   {quotation.contact?.email && (
-                    <span className="text-xs text-muted-foreground">{quotation.contact.email}</span>
+                    <span className="text-caption font-normal text-muted-foreground">{quotation.contact.email}</span>
                   )}
                 </div>
-              </div>
-            </div>
-          </div>
+              </DetailItem>
+            </DetailGrid>
+          </DetailSection>
 
-          <div className="bg-card border border-border rounded-lg p-6">
-            <h3 className="text-lg font-medium mb-4">Line Items</h3>
+          <DetailSection title="Line Items">
             <div className="border border-border rounded-md overflow-hidden">
               <Table>
                 <TableHeader className="bg-muted/50">
@@ -335,22 +335,21 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
                   <span>Total Tax</span>
                   <span>₹{Number(quotation.tax_total).toFixed(2)}</span>
                 </div>
-                <div className="pt-3 border-t border-border flex justify-between items-center font-bold text-lg text-primary">
+                <div className="flex items-center justify-between border-t border-border pt-3 font-bold text-page-title text-primary">
                   <span>Total Amount</span>
                   <span>₹{Number(quotation.total_amount).toFixed(2)}</span>
                 </div>
               </div>
             </div>
-          </div>
+          </DetailSection>
 
           {quotation.terms_conditions && (
-            <div className="bg-card border border-border rounded-lg p-6">
-              <h3 className="text-lg font-medium mb-4">Terms & Conditions</h3>
-              <div 
+            <DetailSection title="Terms &amp; Conditions">
+              <div
                 className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground" 
                 dangerouslySetInnerHTML={{ __html: sanitizeRichText(quotation.terms_conditions) }}
               />
-            </div>
+            </DetailSection>
           )}
         </div>
 
@@ -383,6 +382,17 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
           }}
         />
       )}
-    </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this quotation?"
+        description="This permanently deletes the quotation. It cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        loading={actionLoading}
+        onConfirm={doDelete}
+      />
+    </DetailPageLayout>
   );
 }

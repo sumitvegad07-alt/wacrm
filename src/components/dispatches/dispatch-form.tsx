@@ -9,7 +9,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Loader2, Truck } from 'lucide-react';
-import { FormPageShell } from '@/components/shared';
+import {
+  FormPageShell,
+  FormActions,
+  FormGrid,
+  FormField,
+  FORM_GRID_PAGE,
+  DetailSection,
+  LineItemsTable,
+  LineItemsHead,
+  LineItemsRow,
+  LineItemsCell,
+} from '@/components/shared';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { logModuleActivity } from '@/lib/activities';
@@ -297,41 +308,43 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
       <div className="space-y-6 w-full">
 
       {/* Basic Details */}
-      <div className="bg-card border border-border rounded-lg p-5">
-        <h3 className="text-lg font-semibold mb-4">Basic Details</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-1.5">
-            <Label>Customer *</Label>
+      <DetailSection bare className="rounded-lg border border-border bg-card p-4 sm:p-5">
+        <h3 className="mb-4 text-section font-semibold text-foreground">Basic Details</h3>
+        {/* The two `*` suffixes were typed into the label text. FormField's
+            `required` draws the one shared marker and adds the screen-reader
+            "(required)" these never had. The `h-10 bg-background` overrides
+            on the selects are gone — they are the shared control height now. */}
+        <FormGrid variant="dialog" className="md:grid-cols-3">
+          <FormField label="Customer" required>
             <SearchableSelect value={customerId} onChange={onCustomerChange} placeholder="Select customer..." searchPlaceholder="Search customers..."
-              options={customers.map((c) => ({ value: c.id, label: c.label }))} className="h-10 bg-background" disabled={isEdit} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Order *</Label>
+              options={customers.map((c) => ({ value: c.id, label: c.label }))} disabled={isEdit} />
+          </FormField>
+          <FormField label="Order" required>
             <SearchableSelect value={orderId} onChange={onOrderChange} placeholder="Select order..." searchPlaceholder="Search orders..."
-              options={ordersForCustomer.map((o) => ({ value: o.id, label: o.order_number }))} className="h-10 bg-background" disabled={isEdit} />
-          </div>
-          <div className="space-y-1.5"><Label>Dispatch Code</Label><Input value={dispatchCode} onChange={(e) => setDispatchCode(e.target.value)} placeholder="Dispatch Code" /></div>
-          <div className="space-y-1.5"><Label>Invoice No.</Label><Input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder="Invoice No." /></div>
-          <div className="space-y-1.5"><Label>Invoice Date</Label><Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Transport Contact No.</Label><Input value={transportContact} onChange={(e) => setTransportContact(e.target.value)} placeholder="Contact number" /></div>
-          <div className="space-y-1.5"><Label>LR Date</Label><Input type="date" value={lrDate} onChange={(e) => setLrDate(e.target.value)} /></div>
-        </div>
-      </div>
+              options={ordersForCustomer.map((o) => ({ value: o.id, label: o.order_number }))} disabled={isEdit} />
+          </FormField>
+          <FormField label="Dispatch Code"><Input value={dispatchCode} onChange={(e) => setDispatchCode(e.target.value)} placeholder="Dispatch Code" /></FormField>
+          <FormField label="Invoice No."><Input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder="Invoice No." /></FormField>
+          <FormField label="Invoice Date"><Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} /></FormField>
+          <FormField label="Transport Contact No."><Input value={transportContact} onChange={(e) => setTransportContact(e.target.value)} placeholder="Contact number" /></FormField>
+          <FormField label="LR Date"><Input type="date" value={lrDate} onChange={(e) => setLrDate(e.target.value)} /></FormField>
+        </FormGrid>
+      </DetailSection>
 
       {/* Billing */}
       {billingAddress && (
-        <div className="bg-card border border-border rounded-lg p-5">
-          <h3 className="text-lg font-semibold mb-2">Billing Details</h3>
+        <DetailSection bare className="rounded-lg border border-border bg-card p-4 sm:p-5">
+          <h3 className="mb-2 text-section font-semibold text-foreground">Billing Details</h3>
           <p className="text-sm text-muted-foreground">{billingAddress}</p>
-        </div>
+        </DetailSection>
       )}
 
       {/* Dispatch Information & Custom Fields */}
-      <div className="bg-card border border-border rounded-lg p-5">
+      <DetailSection bare className="rounded-lg border border-border bg-card p-4 sm:p-5">
         <CustomFieldsSectionRenderer
           accountId={accountId}
           moduleName="dispatch"
-          fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
+          fieldGridClassName={FORM_GRID_PAGE}
           customFields={customFields}
           customValues={customValues}
           onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
@@ -346,52 +359,52 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
             if (key === 'transporter_name') setTransport(val);
           }}
         />
-      </div>
+      </DetailSection>
 
       {/* Product Details */}
-      <div className="bg-card border border-border rounded-lg p-5">
-        <h3 className="text-lg font-semibold mb-4">Product Details</h3>
+      <DetailSection bare className="rounded-lg border border-border bg-card p-4 sm:p-5">
+        <h3 className="mb-4 text-section font-semibold text-foreground">Product Details</h3>
         {!orderId ? (
           <p className="text-sm text-muted-foreground py-4">Select an order to load its items.</p>
         ) : lines.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">This order has no items.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-muted-foreground border-b border-border">
-                  <th className="text-left font-medium pb-2">Product</th>
-                  <th className="text-right font-medium pb-2">Remaining</th>
-                  <th className="text-right font-medium pb-2">Quantity</th>
-                  <th className="text-right font-medium pb-2">Price</th>
-                  <th className="text-right font-medium pb-2">Sub Total</th>
+          <div>
+            <LineItemsTable
+              minWidth="34rem"
+              head={
+                <tr>
+                  <LineItemsHead>Product</LineItemsHead>
+                  <LineItemsHead className="text-right">Remaining</LineItemsHead>
+                  <LineItemsHead className="text-right">Quantity</LineItemsHead>
+                  <LineItemsHead className="text-right">Price</LineItemsHead>
+                  <LineItemsHead className="text-right">Sub Total</LineItemsHead>
                 </tr>
-              </thead>
-              <tbody>
-                {lines.map((l, i) => (
-                  <tr key={l.orderItemId} className="border-b border-border/50">
-                    <td className="py-2">{l.productName}{l.unit ? <span className="text-muted-foreground"> / {l.unit}</span> : null}</td>
-                    <td className="py-2 text-right text-muted-foreground">{l.remaining}</td>
-                    <td className="py-2 text-right">
-                      <Input type="number" value={l.qty} disabled={l.remaining <= 0}
-                        onChange={(e) => setLines((prev) => prev.map((x, j) => j === i ? { ...x, qty: e.target.value } : x))}
-                        className="w-24 h-8 ml-auto" />
-                    </td>
-                    <td className="py-2 text-right">{formatCurrency(l.price, defaultCurrency)}</td>
-                    <td className="py-2 text-right font-medium">{formatCurrency((Number(l.qty) || 0) * l.price, defaultCurrency)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="flex justify-end mt-4 pt-3 border-t border-border">
+              }
+            >
+              {lines.map((l, i) => (
+                <LineItemsRow key={l.orderItemId}>
+                  <LineItemsCell>{l.productName}{l.unit ? <span className="text-muted-foreground"> / {l.unit}</span> : null}</LineItemsCell>
+                  <LineItemsCell className="text-right text-muted-foreground">{l.remaining}</LineItemsCell>
+                  <LineItemsCell className="text-right">
+                    <Input type="number" value={l.qty} disabled={l.remaining <= 0}
+                      onChange={(e) => setLines((prev) => prev.map((x, j) => j === i ? { ...x, qty: e.target.value } : x))}
+                      className="ml-auto w-24" />
+                  </LineItemsCell>
+                  <LineItemsCell className="text-right">{formatCurrency(l.price, defaultCurrency)}</LineItemsCell>
+                  <LineItemsCell className="text-right font-medium">{formatCurrency((Number(l.qty) || 0) * l.price, defaultCurrency)}</LineItemsCell>
+                </LineItemsRow>
+              ))}
+            </LineItemsTable>
+            <div className="mt-4 flex justify-end border-t border-border pt-3">
               <div className="text-right">
-                <p className="text-sm text-muted-foreground">Sub Total</p>
-                <p className="text-xl font-bold">{formatCurrency(subTotal, defaultCurrency)}</p>
+                <p className="text-body text-muted-foreground">Sub Total</p>
+                <p className="text-page-title font-bold">{formatCurrency(subTotal, defaultCurrency)}</p>
               </div>
             </div>
           </div>
         )}
-      </div>
+      </DetailSection>
       </div>
     </FormPageShell>
   );

@@ -8,9 +8,16 @@ import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { toNumber, type StockPosition } from '@/lib/stock/financials';
 import { Timeline } from '@/components/shared/timeline';
+import {
+  DetailPageLayout,
+  LineItemsTable,
+  LineItemsHead,
+  LineItemsRow,
+  LineItemsCell,
+} from '@/components/shared';
 import { StockAdjustDialog } from '@/components/stock/stock-adjust-dialog';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Loader2, Boxes, ArrowLeft, SlidersHorizontal, BarChart3 } from 'lucide-react';
+import { Loader2, SlidersHorizontal, BarChart3 } from 'lucide-react';
 
 interface LedgerRow {
   id: string;
@@ -111,27 +118,26 @@ export default function StockDetailPage() {
   const closing = position?.closing ?? 0;
 
   return (
-    <div className="w-full p-4 sm:p-6 space-y-5">
-      <button onClick={() => router.push('/stock')} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back to Stock
-      </button>
-
-      {/* Header card */}
-      <div className="rounded-xl border border-border bg-card p-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="h-11 w-11 rounded-lg bg-primary/10 grid place-items-center"><Boxes className="h-5 w-5 text-primary" /></div>
-          <div>
-            <h1 className="text-lg font-semibold">{product.name}</h1>
-            <p className="text-sm text-muted-foreground">{product.sku ? `SKU ${product.sku}` : 'No SKU'}{product.unit ? ` · ${product.unit}` : ''}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    // Was `p-4 sm:p-6` on top of the gutter the workspace <main> already
+    // applies, plus a raw <button> "Back to Stock" where every other detail
+    // page has the arrow in its header.
+    <DetailPageLayout
+      title={product.name}
+      onBack={() => router.push('/stock')}
+      meta={
+        <span>
+          {product.sku ? `SKU ${product.sku}` : 'No SKU'}{product.unit ? ` · ${product.unit}` : ''}
+        </span>
+      }
+      actions={
+        <>
           <Link href="/reports/stock" className={buttonVariants({ variant: 'outline', size: 'sm' })}><BarChart3 className="h-4 w-4 mr-1" /> Report</Link>
           {canManage && (
             <Button size="sm" onClick={() => setAdjustOpen(true)}><SlidersHorizontal className="h-4 w-4 mr-1" /> Adjust stock</Button>
           )}
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {/* Two-column body: left tabs, right timeline */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
@@ -139,7 +145,7 @@ export default function StockDetailPage() {
           <div className="flex items-center gap-1 border-b border-border">
             {(['overview', 'ledger'] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)}
-                className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${tab === t ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+                className={`-mb-px border-b-2 px-3 py-2 text-body font-medium transition-colors ${tab === t ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
                 {t === 'overview' ? 'Overview' : 'Movement Ledger'}
               </button>
             ))}
@@ -154,8 +160,8 @@ export default function StockDetailPage() {
                 { label: 'Closing', value: closing, tone: closing <= 0 ? 'neg' : 'closing' },
               ].map((s) => (
                 <div key={s.label} className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</p>
-                  <p className={`mt-1 text-2xl font-semibold tabular-nums ${s.tone === 'neg' ? 'text-red-500' : s.tone === 'pos' ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
+                  <p className="text-caption uppercase tracking-wide text-muted-foreground">{s.label}</p>
+                  <p className={`mt-1 text-2xl font-semibold tabular-nums ${s.tone === 'neg' ? 'text-destructive' : s.tone === 'pos' ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
                     {s.tone === 'pos' && Number(s.value) > 0 ? `+${s.value}` : s.tone === 'neg' && s.label === 'Out' && Number(s.value) > 0 ? `-${s.value}` : s.value}
                   </p>
                 </div>
@@ -164,39 +170,37 @@ export default function StockDetailPage() {
           ) : withBalance.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">No stock movements yet.</div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40">
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="px-3 py-2.5 font-medium">Date</th>
-                    <th className="px-3 py-2.5 font-medium">Type</th>
-                    <th className="px-3 py-2.5 font-medium text-right">Qty</th>
-                    <th className="px-3 py-2.5 font-medium text-right">Balance</th>
-                    <th className="px-3 py-2.5 font-medium">Reference</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {withBalance.map((r) => {
-                    const qty = toNumber(r.quantity);
-                    const href = refHref(r);
-                    const ref = r.voucher_no || r.source_ref;
-                    return (
-                      <tr key={r.id} className="border-t border-border/60">
-                        <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{TYPE_LABEL[r.entry_type] ?? r.entry_type}{r.reason_code && r.entry_type.startsWith('manual') ? <span className="text-muted-foreground"> · {r.reason_code}</span> : null}</td>
-                        <td className={`px-3 py-2 text-right tabular-nums ${qty < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{qty > 0 ? `+${qty}` : qty}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{r.balance}</td>
-                        <td className="px-3 py-2">
-                          {href && ref ? <Link href={href} className="text-primary hover:underline font-mono text-xs">{ref}</Link>
-                            : ref ? <span className="font-mono text-xs text-muted-foreground">{ref}</span> : <span className="text-muted-foreground">—</span>}
-                          {r.notes ? <span className="block text-xs text-muted-foreground/70">{r.notes}</span> : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <LineItemsTable
+              minWidth="34rem"
+              head={
+                <tr>
+                  <LineItemsHead>Date</LineItemsHead>
+                  <LineItemsHead>Type</LineItemsHead>
+                  <LineItemsHead className="text-right">Qty</LineItemsHead>
+                  <LineItemsHead className="text-right">Balance</LineItemsHead>
+                  <LineItemsHead>Reference</LineItemsHead>
+                </tr>
+              }
+            >
+              {withBalance.map((r) => {
+                const qty = toNumber(r.quantity);
+                const href = refHref(r);
+                const ref = r.voucher_no || r.source_ref;
+                return (
+                  <LineItemsRow key={r.id}>
+                    <LineItemsCell className="text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</LineItemsCell>
+                    <LineItemsCell>{TYPE_LABEL[r.entry_type] ?? r.entry_type}{r.reason_code && r.entry_type.startsWith('manual') ? <span className="text-muted-foreground"> · {r.reason_code}</span> : null}</LineItemsCell>
+                    <LineItemsCell className={`text-right tabular-nums ${qty < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>{qty > 0 ? `+${qty}` : qty}</LineItemsCell>
+                    <LineItemsCell className="text-right tabular-nums">{r.balance}</LineItemsCell>
+                    <LineItemsCell className="whitespace-normal">
+                      {href && ref ? <Link href={href} className="font-mono text-caption text-primary hover:underline">{ref}</Link>
+                        : ref ? <span className="font-mono text-caption text-muted-foreground">{ref}</span> : <span className="text-muted-foreground">—</span>}
+                      {r.notes ? <span className="block text-caption text-muted-foreground/70">{r.notes}</span> : null}
+                    </LineItemsCell>
+                  </LineItemsRow>
+                );
+              })}
+            </LineItemsTable>
           )}
         </div>
 
@@ -216,6 +220,6 @@ export default function StockDetailPage() {
           onDone={load}
         />
       )}
-    </div>
+    </DetailPageLayout>
   );
 }

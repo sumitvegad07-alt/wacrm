@@ -83,16 +83,16 @@ export function ProductDetailsTable({ items, onChange, products, lockExistingPro
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-table">
           <thead className="bg-muted text-muted-foreground border-b border-border">
             <tr>
-              <th className="py-2.5 px-4 text-left font-medium w-1/3 min-w-[200px]">PRODUCT</th>
-              <th className="py-2.5 px-4 text-left font-medium w-20">UNIT</th>
-              <th className="py-2.5 px-4 text-right font-medium w-24">QTY</th>
-              <th className="py-2.5 px-4 text-right font-medium w-32">PRICE (₹)</th>
-              <th className="py-2.5 px-4 text-right font-medium w-24">TAX %</th>
-              <th className="py-2.5 px-4 text-right font-medium w-32">TOTAL (₹)</th>
-              <th className="py-2.5 px-4 text-center font-medium w-16"></th>
+              <th className="py-2.5 px-4 text-left text-caption font-semibold w-1/3 min-w-[200px]">PRODUCT</th>
+              <th className="py-2.5 px-4 text-left text-caption font-semibold w-20">UNIT</th>
+              <th className="py-2.5 px-4 text-right text-caption font-semibold w-24">QTY</th>
+              <th className="py-2.5 px-4 text-right text-caption font-semibold w-32">PRICE (₹)</th>
+              <th className="py-2.5 px-4 text-right text-caption font-semibold w-24">TAX %</th>
+              <th className="py-2.5 px-4 text-right text-caption font-semibold w-32">TOTAL (₹)</th>
+              <th className="py-2.5 px-4 text-center text-caption font-semibold w-16"></th>
             </tr>
           </thead>
           <tbody>

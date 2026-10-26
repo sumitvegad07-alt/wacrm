@@ -47,7 +47,7 @@ import { RowActions } from '@/components/ui/data-table/row-actions';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { getVisibleTableColumns, matchesSearchableCustomFields } from '@/lib/custom-fields';
 import { isDateInFilter } from "@/lib/date-filters";
-import { PageLayout, PageHeader, BulkActionBar, StatusBadge } from '@/components/shared';
+import { PageLayout, PageHeader, BulkActionBar, StatusBadge, ConfirmDialog } from '@/components/shared';
 import {
   inactiveSelection,
   reactivateDisabledReason,
@@ -98,6 +98,7 @@ export default function QuotationsPage() {
   const [customFields, setCustomFields] = useState<any[]>([]);
 
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
@@ -230,10 +231,13 @@ export default function QuotationsPage() {
     else { toast.success('Quotation re-activated'); fetchQuotations(); }
   }
 
-  async function handleBulkDelete() {
+  function handleBulkDelete() {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Move ${selectedIds.size} selected quotation(s) to Inactive? They can be re-activated later.`)) return;
+    setBulkDeactivateOpen(true);
+  }
 
+  async function doBulkDeactivate() {
+    setBulkDeactivateOpen(false);
     setBulkActionLoading(true);
     const ids = Array.from(selectedIds);
     const { error } = await supabase.from('quotations').update({ is_active: false }).in('id', ids);
@@ -548,6 +552,17 @@ export default function QuotationsPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={bulkDeactivateOpen}
+        onOpenChange={setBulkDeactivateOpen}
+        title={`Move ${selectedIds.size} quotation(s) to Inactive?`}
+        description="They stay in the system and can be re-activated later."
+        confirmLabel="Move to Inactive"
+        variant="warning"
+        loading={bulkActionLoading}
+        onConfirm={doBulkDeactivate}
+      />
     </PageLayout>
   );
 }

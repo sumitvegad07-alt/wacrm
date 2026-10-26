@@ -44,7 +44,7 @@ import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
 import { appendCustomFieldColumns, matchesSearchableCustomFields, getVisibleTableColumns } from "@/lib/custom-fields";
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, EmptyState, StatusBadge } from "@/components/shared";
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, EmptyState, StatusBadge, ConfirmDialog } from "@/components/shared";
 import { DEFAULT_PIPELINE_STAGES } from "@/lib/pipelines/default-stages";
 import { DEAL_BOARD_CAP } from "@/lib/table/reference-cap";
 
@@ -74,6 +74,8 @@ export default function PipelinesPage() {
 
   // Dialog / sheet state
   const [newPipelineOpen, setNewPipelineOpen] = useState(false);
+  const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
+  const [dealToDeactivate, setDealToDeactivate] = useState<any | null>(null);
   const [newPipelineName, setNewPipelineName] = useState("");
   const [creating, setCreating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -86,11 +88,14 @@ export default function PipelinesPage() {
   
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (!canCreateDeals) return;
     if (selectedDealIds.size === 0) return;
-    if (!confirm(`Move ${selectedDealIds.size} deal(s) to Inactive? They can be re-activated later.`)) return;
+    setBulkDeactivateOpen(true);
+  };
 
+  const doBulkDeactivate = async () => {
+    setBulkDeactivateOpen(false);
     setLoading(true);
     let successCount = 0;
     for (const id of Array.from(selectedDealIds)) {
@@ -108,8 +113,12 @@ export default function PipelinesPage() {
     }
   };
 
-  const handleDeleteDeal = async (deal: any) => {
-    if (!confirm(`Move "${deal.title}" to Inactive? It can be re-activated later.`)) return;
+  const handleDeleteDeal = (deal: any) => setDealToDeactivate(deal);
+
+  const doDeactivateDeal = async () => {
+    const deal = dealToDeactivate;
+    if (!deal) return;
+    setDealToDeactivate(null);
     const { error } = await supabase.from("deals").update({ is_active: false }).eq("id", deal.id);
     if (error) toast.error("Failed to deactivate deal");
     else { toast.success("Deal moved to Inactive"); refreshDeals(); }
@@ -931,6 +940,27 @@ export default function PipelinesPage() {
         onImported={() => {
           if (selectedPipelineId) refreshDeals();
         }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeactivateOpen}
+        onOpenChange={setBulkDeactivateOpen}
+        title={`Move ${selectedDealIds.size} deal(s) to Inactive?`}
+        description="They stay in the system and can be re-activated later."
+        confirmLabel="Move to Inactive"
+        variant="warning"
+        loading={loading}
+        onConfirm={doBulkDeactivate}
+      />
+
+      <ConfirmDialog
+        open={dealToDeactivate != null}
+        onOpenChange={(open) => { if (!open) setDealToDeactivate(null); }}
+        title="Move this deal to Inactive?"
+        description={`"${dealToDeactivate?.title ?? ''}" stays in the system and can be re-activated later.`}
+        confirmLabel="Move to Inactive"
+        variant="warning"
+        onConfirm={doDeactivateDeal}
       />
     </PageLayout>
   );

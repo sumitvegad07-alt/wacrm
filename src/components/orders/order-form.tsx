@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Loader2, Plus, Trash2, AlertTriangle, ShoppingCart, Tag } from 'lucide-react';
-import { FormPageShell, FormSection } from '@/components/shared';
+import { FormPageShell, FormSection, FormActions, FORM_GRID_PAGE } from '@/components/shared';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -647,6 +647,14 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       }
     }
 
+    // NOTE (design system): the two native confirm() calls below are the last
+    // ones in this module and are deliberately left as they are for now.
+    // Unlike the "click -> confirm -> act" sites converted in this batch, these
+    // gate the middle of handleSave and need its result synchronously, so
+    // swapping in ConfirmDialog means making the confirmation awaitable and
+    // restructuring the save path — the most business-critical flow in the app.
+    // That belongs in its own change with its own verification, not in a
+    // styling batch.
     if (paymentEnabled && financialData) {
       // 1. Credit Days (Overdue) check
       if (financialData.isOverdue && creditDaysAction !== 'ignore') {
@@ -835,7 +843,7 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
               <CustomFieldsSectionRenderer
                 accountId={accountId}
                 moduleName="order"
-                fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
+                fieldGridClassName={FORM_GRID_PAGE}
                 customFields={customFields}
                 customValues={customValues}
                 onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
@@ -1188,18 +1196,21 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-4">
-          {locked || loadError ? (
+        {/* A locked or failed order gets a single Close, so it keeps its own
+            row; everything else goes through the shared action bar. */}
+        {locked || loadError ? (
+          <div className="flex justify-end gap-2 border-t border-border pt-4 mt-4">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          ) : (
-            <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={handleSave} data-shortcut="save" disabled={saving || loading || (pricing != null && !pricing.valid)}>
-                {saving && <Loader2 className="size-4 mr-1 animate-spin" />} {isEdit ? 'Save Changes' : 'Create Order'}
-              </Button>
-            </>
-          )}
-        </div>
+          </div>
+        ) : (
+          <FormActions
+            onCancel={() => onOpenChange(false)}
+            onSave={handleSave}
+            saving={saving}
+            saveDisabled={loading || (pricing != null && !pricing.valid)}
+            saveLabel={isEdit ? 'Save Changes' : 'Create Order'}
+          />
+        )}
     </>
   );
 

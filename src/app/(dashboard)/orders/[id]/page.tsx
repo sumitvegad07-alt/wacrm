@@ -7,13 +7,23 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  ChevronLeft, Truck, Loader2, Package, AlertTriangle, CheckCircle2, XCircle, Ban,
+  Truck, Loader2, Package, AlertTriangle, CheckCircle2, XCircle, Ban,
   Phone, Mail, User as UserIcon, Plus,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { PrintSizeMenu } from '@/components/print/print-size-menu';
 import { formatCurrency } from '@/lib/currency';
 import { Timeline } from '@/components/shared/timeline';
+import {
+  DetailPageLayout,
+  DetailSection,
+  DetailGrid,
+  DetailItem,
+  LineItemsTable,
+  LineItemsHead,
+  LineItemsRow,
+  LineItemsCell,
+} from '@/components/shared';
 
 /** PostgREST errors are plain objects — pull the real reason out. */
 function supaErr(e: unknown): string {
@@ -205,56 +215,47 @@ export default function OrderDetailPage() {
   );
 
   return (
-    <div className="space-y-6 w-full max-w-none">
-      {/* Header card */}
-      <div className="bg-card border border-border rounded-lg shadow-sm">
-        <div className="flex items-start justify-between gap-4 p-5">
-          <div className="flex items-start gap-3">
-            <Button variant="ghost" size="icon" onClick={() => router.push('/orders')} className="text-muted-foreground hover:text-foreground shrink-0"><ChevronLeft className="size-5" /></Button>
-            <div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-xl font-bold text-foreground">{customerName}</h1>
-                <Badge variant="outline" className={`text-xs px-2.5 py-1 ${STATUS_BADGE[order.status] || ''}`}>{order.status}</Badge>
-                <Badge variant="outline" className={`capitalize text-xs ${CLASS_BADGE[order.classification]}`}>{order.classification}</Badge>
-              </div>
-              <div className="text-sm text-muted-foreground mt-1.5 flex items-center gap-4 flex-wrap">
-                {custPhone && <span className="flex items-center gap-1.5"><Phone className="size-3 text-primary/70" /> {custPhone}</span>}
-                {custEmail && <span className="flex items-center gap-1.5"><Mail className="size-3 text-primary/70" /> {custEmail}</span>}
-              </div>
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            <div className="text-2xl font-bold tracking-wide">ORDER <span className="text-primary">#{(order.order_number || '').split('-').pop() || order.order_number}</span></div>
-            <div className="mt-2 flex justify-end">
-              <PrintSizeMenu href={`/print/order/${id}`} />
-            </div>
-          </div>
-        </div>
-
-        {/* Meta strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-border px-5 py-4 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground italic mb-1">Order From</p>
-            <p className="font-semibold text-primary">{customerName}</p>
-            {custAddress && <p className="text-xs text-muted-foreground mt-0.5">{custAddress}</p>}
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Order Date</p>
-            <p className="font-medium">{new Date(order.date).toLocaleDateString('en-IN')}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Order Status</p>
-            <p className="font-medium capitalize">{order.status}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Created By</p>
-            <p className="font-medium flex items-center gap-1.5"><UserIcon className="size-3.5 text-muted-foreground" /> {createdBy}</p>
-          </div>
-        </div>
+    <DetailPageLayout
+      title={customerName}
+      onBack={() => router.push('/orders')}
+      // The order number was a `text-2xl` block on the right of the header,
+      // competing with the customer name for the role of title. It is the
+      // record's identifier, so it reads as a badge beside the name.
+      badges={
+        <>
+          <Badge variant="secondary" className="font-mono font-semibold">
+            ORDER #{(order.order_number || '').split('-').pop() || order.order_number}
+          </Badge>
+          <Badge variant="outline" className={`text-caption px-2.5 py-1 ${STATUS_BADGE[order.status] || ''}`}>{order.status}</Badge>
+          <Badge variant="outline" className={`capitalize text-caption ${CLASS_BADGE[order.classification]}`}>{order.classification}</Badge>
+        </>
+      }
+      meta={
+        <>
+          {custPhone && <span className="flex items-center gap-1.5"><Phone className="size-3 text-primary/70" /> {custPhone}</span>}
+          {custEmail && <span className="flex items-center gap-1.5"><Mail className="size-3 text-primary/70" /> {custEmail}</span>}
+        </>
+      }
+      actions={<PrintSizeMenu href={`/print/order/${id}`} />}
+    >
+      <DetailSection>
+        <DetailGrid cols={4}>
+          <DetailItem label="Order From">
+            <span className="text-primary">{customerName}</span>
+            {custAddress && <p className="mt-0.5 text-caption font-normal text-muted-foreground">{custAddress}</p>}
+          </DetailItem>
+          <DetailItem label="Order Date" value={new Date(order.date).toLocaleDateString('en-IN')} />
+          <DetailItem label="Order Status">
+            <span className="capitalize">{order.status}</span>
+          </DetailItem>
+          <DetailItem label="Created By">
+            <span className="flex items-center gap-1.5"><UserIcon className="size-3.5 text-muted-foreground" /> {createdBy}</span>
+          </DetailItem>
+        </DetailGrid>
 
         {/* Status actions */}
         {((canManageStatus && NEXT_STATUS[order.status]?.length) || (DISPATCHABLE.has(order.status) && anyRemaining)) ? (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
             {canManageStatus && (NEXT_STATUS[order.status] || []).map((t) => {
               const Icon = t.icon;
               return (
@@ -269,7 +270,7 @@ export default function OrderDetailPage() {
             )}
           </div>
         ) : null}
-      </div>
+      </DetailSection>
 
       {/* Pricing review banner — set by create_order when the quoted price the
           field team submitted drifted from the server-calculated price. */}
@@ -315,35 +316,35 @@ export default function OrderDetailPage() {
             {tab === 'details' && (
               <div className="p-5 space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">Order Items</h3>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-muted-foreground border-b border-border">
-                        <th className="text-left font-medium pb-2">Product</th>
-                        <th className="text-right font-medium pb-2">Qty</th>
-                        <th className="text-right font-medium pb-2">Price</th>
-                        <th className="text-right font-medium pb-2">Total</th>
+                  <h3 className="mb-4 text-section font-semibold text-foreground">Order Items</h3>
+                  <LineItemsTable
+                    minWidth="30rem"
+                    head={
+                      <tr>
+                        <LineItemsHead>Product</LineItemsHead>
+                        <LineItemsHead className="text-right">Qty</LineItemsHead>
+                        <LineItemsHead className="text-right">Price</LineItemsHead>
+                        <LineItemsHead className="text-right">Total</LineItemsHead>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((it) => (
-                        <tr key={it.id} className="border-b border-border/50">
-                          <td className="py-2">
-                            {it.product_name}{it.unit ? <span className="text-muted-foreground"> / {it.unit}</span> : null}
-                            {it.is_scheme_goods && (
-                              <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary align-middle">FREE</span>
-                            )}
-                            {it.schemes?.name && (
-                              <span className="block text-xs text-muted-foreground">Scheme: {it.schemes.name}</span>
-                            )}
-                          </td>
-                          <td className="py-2 text-right">{it.quantity}</td>
-                          <td className="py-2 text-right">{formatCurrency(it.price, defaultCurrency)}</td>
-                          <td className="py-2 text-right font-medium">{formatCurrency(it.total, defaultCurrency)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                    }
+                  >
+                    {items.map((it) => (
+                      <LineItemsRow key={it.id}>
+                        <LineItemsCell>
+                          {it.product_name}{it.unit ? <span className="text-muted-foreground"> / {it.unit}</span> : null}
+                          {it.is_scheme_goods && (
+                            <span className="ml-2 align-middle rounded bg-primary/15 px-1.5 py-0.5 text-micro font-bold text-primary">FREE</span>
+                          )}
+                          {it.schemes?.name && (
+                            <span className="block text-caption text-muted-foreground">Scheme: {it.schemes.name}</span>
+                          )}
+                        </LineItemsCell>
+                        <LineItemsCell className="text-right">{it.quantity}</LineItemsCell>
+                        <LineItemsCell className="text-right">{formatCurrency(it.price, defaultCurrency)}</LineItemsCell>
+                        <LineItemsCell className="text-right font-medium">{formatCurrency(it.total, defaultCurrency)}</LineItemsCell>
+                      </LineItemsRow>
+                    ))}
+                  </LineItemsTable>
                   {/* The line totals are tax-inclusive, so quantity x price does not equal
                       the order total. Without the breakdown the detail view looks like it has
                       dropped money — 100 x ₹150 reading as ₹15,300. Same figures the creation
@@ -374,7 +375,7 @@ export default function OrderDetailPage() {
 
                 {customValues.length > 0 && (
                   <div className="border-t border-border pt-5">
-                    <h3 className="text-lg font-semibold mb-4">Additional Details</h3>
+                    <h3 className="mb-4 text-section font-semibold text-foreground">Additional Details</h3>
                     <div className="grid grid-cols-2 gap-4">
                       {customValues.map((cv, i) => (
                         <div key={i}>
@@ -388,7 +389,7 @@ export default function OrderDetailPage() {
 
                 {order.notes && (
                   <div className="border-t border-border pt-5">
-                    <h3 className="text-lg font-semibold mb-2">Notes</h3>
+                    <h3 className="mb-2 text-section font-semibold text-foreground">Notes</h3>
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{order.notes}</p>
                   </div>
                 )}
@@ -399,7 +400,7 @@ export default function OrderDetailPage() {
             {tab === 'dispatches' && (
               <div className="p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2"><Truck className="size-4" /> Dispatches</h3>
+                  <h3 className="flex items-center gap-2 text-section font-semibold text-foreground"><Truck className="size-4" /> Dispatches</h3>
                   {DISPATCHABLE.has(order.status) && anyRemaining && (
                     <Button onClick={goCreateDispatch} size="sm" className="gap-2"><Plus className="size-4" /> Add</Button>
                   )}
@@ -407,39 +408,37 @@ export default function OrderDetailPage() {
                 {dispatches.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-6 text-center">Not dispatched yet.</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-muted-foreground border-b border-border">
-                          <th className="text-left font-medium pb-2">Dispatch #</th>
-                          <th className="text-left font-medium pb-2">Date</th>
-                          <th className="text-left font-medium pb-2">Items</th>
-                          <th className="text-left font-medium pb-2">Transport / Tracking</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dispatches.map((d) => (
-                          <tr key={d.id} className="border-b border-border/50 align-top cursor-pointer hover:bg-muted/40" onClick={() => router.push(`/dispatches/${d.id}`)}>
-                            <td className="py-3 font-mono font-medium text-primary">{d.dispatch_number}</td>
-                            <td className="py-3 text-muted-foreground">{new Date(d.dispatched_at).toLocaleDateString('en-IN')}</td>
-                            <td className="py-3">
-                              <div className="space-y-1">
-                                {d.items.map((di) => (
-                                  <div key={di.id} className="flex items-center gap-1 text-xs">
-                                    <Package className="size-3 text-muted-foreground" /> {di.product_name}
-                                    <span className="font-medium">· {di.quantity}{di.unit ? ` ${di.unit}` : ''}</span>
-                                  </div>
-                                ))}
+                  <LineItemsTable
+                    minWidth="38rem"
+                    head={
+                      <tr>
+                        <LineItemsHead>Dispatch #</LineItemsHead>
+                        <LineItemsHead>Date</LineItemsHead>
+                        <LineItemsHead>Items</LineItemsHead>
+                        <LineItemsHead>Transport / Tracking</LineItemsHead>
+                      </tr>
+                    }
+                  >
+                    {dispatches.map((d) => (
+                      <LineItemsRow key={d.id} onClick={() => router.push(`/dispatches/${d.id}`)} className="align-top">
+                        <LineItemsCell className="font-mono font-medium text-primary">{d.dispatch_number}</LineItemsCell>
+                        <LineItemsCell className="text-muted-foreground">{new Date(d.dispatched_at).toLocaleDateString('en-IN')}</LineItemsCell>
+                        <LineItemsCell className="whitespace-normal">
+                          <div className="space-y-1">
+                            {d.items.map((di) => (
+                              <div key={di.id} className="flex items-center gap-1 text-caption">
+                                <Package className="size-3 text-muted-foreground" /> {di.product_name}
+                                <span className="font-medium">· {di.quantity}{di.unit ? ` ${di.unit}` : ''}</span>
                               </div>
-                            </td>
-                            <td className="py-3 text-xs text-muted-foreground">
-                              {d.transport_name || '—'}{d.tracking_number ? <><br />Tracking: {d.tracking_number}</> : null}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                            ))}
+                          </div>
+                        </LineItemsCell>
+                        <LineItemsCell className="whitespace-normal text-caption text-muted-foreground">
+                          {d.transport_name || '—'}{d.tracking_number ? <><br />Tracking: {d.tracking_number}</> : null}
+                        </LineItemsCell>
+                      </LineItemsRow>
+                    ))}
+                  </LineItemsTable>
                 )}
               </div>
             )}
@@ -448,47 +447,45 @@ export default function OrderDetailPage() {
             {tab === 'summary' && (
               <div className="p-5 space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">Basic Details</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div><p className="text-muted-foreground mb-1">Order #</p><p className="font-medium">{order.order_number}</p></div>
-                    <div><p className="text-muted-foreground mb-1">Customer</p><p className="font-medium text-primary">{customerName}</p></div>
-                    <div><p className="text-muted-foreground mb-1">Date</p><p className="font-medium">{new Date(order.date).toLocaleDateString('en-IN')}</p></div>
-                    <div><p className="text-muted-foreground mb-1">Status</p><p className="font-medium capitalize">{order.status}</p></div>
-                  </div>
+                  <h3 className="mb-4 text-section font-semibold text-foreground">Basic Details</h3>
+                  <DetailGrid cols={4}>
+                    <DetailItem label="Order #" value={order.order_number} />
+                    <DetailItem label="Customer"><span className="text-primary">{customerName}</span></DetailItem>
+                    <DetailItem label="Date" value={new Date(order.date).toLocaleDateString('en-IN')} />
+                    <DetailItem label="Status"><span className="capitalize">{order.status}</span></DetailItem>
+                  </DetailGrid>
                 </div>
                 <div className="border-t border-border pt-5">
-                  <h3 className="text-lg font-semibold mb-4">Product Details</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-muted-foreground border-b border-border">
-                          <th className="text-left font-medium pb-2">Name</th>
-                          <th className="text-right font-medium pb-2">Ordered</th>
-                          <th className="text-right font-medium pb-2">Delivered</th>
-                          <th className="text-right font-medium pb-2">Difference</th>
-                          <th className="text-right font-medium pb-2">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((it) => (
-                          <tr key={it.id} className="border-b border-border/50">
-                            <td className="py-2">{it.product_name}</td>
-                            <td className="py-2 text-right">{it.quantity}{it.unit ? ` ${it.unit}` : ''}</td>
-                            <td className="py-2 text-right text-emerald-600">{dispatchedSoFar(it.id)}</td>
-                            <td className="py-2 text-right text-amber-600">{remaining(it)}</td>
-                            <td className="py-2 text-right font-medium">{formatCurrency(it.total, defaultCurrency)}</td>
-                          </tr>
-                        ))}
-                        <tr className="font-semibold">
-                          <td className="py-2 text-right" colSpan={1}>Total</td>
-                          <td className="py-2 text-right">{items.reduce((s, it) => s + Number(it.quantity), 0)}</td>
-                          <td className="py-2 text-right text-emerald-600">{items.reduce((s, it) => s + dispatchedSoFar(it.id), 0)}</td>
-                          <td className="py-2 text-right text-amber-600">{items.reduce((s, it) => s + remaining(it), 0)}</td>
-                          <td className="py-2 text-right">{formatCurrency(order.total_amount, defaultCurrency)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  <h3 className="mb-4 text-section font-semibold text-foreground">Product Details</h3>
+                  <LineItemsTable
+                    minWidth="34rem"
+                    head={
+                      <tr>
+                        <LineItemsHead>Name</LineItemsHead>
+                        <LineItemsHead className="text-right">Ordered</LineItemsHead>
+                        <LineItemsHead className="text-right">Delivered</LineItemsHead>
+                        <LineItemsHead className="text-right">Difference</LineItemsHead>
+                        <LineItemsHead className="text-right">Total</LineItemsHead>
+                      </tr>
+                    }
+                  >
+                    {items.map((it) => (
+                      <LineItemsRow key={it.id}>
+                        <LineItemsCell>{it.product_name}</LineItemsCell>
+                        <LineItemsCell className="text-right">{it.quantity}{it.unit ? ` ${it.unit}` : ''}</LineItemsCell>
+                        <LineItemsCell className="text-right text-emerald-600">{dispatchedSoFar(it.id)}</LineItemsCell>
+                        <LineItemsCell className="text-right text-amber-600">{remaining(it)}</LineItemsCell>
+                        <LineItemsCell className="text-right font-medium">{formatCurrency(it.total, defaultCurrency)}</LineItemsCell>
+                      </LineItemsRow>
+                    ))}
+                    <LineItemsRow className="font-semibold">
+                      <LineItemsCell className="text-right">Total</LineItemsCell>
+                      <LineItemsCell className="text-right">{items.reduce((s, it) => s + Number(it.quantity), 0)}</LineItemsCell>
+                      <LineItemsCell className="text-right text-emerald-600">{items.reduce((s, it) => s + dispatchedSoFar(it.id), 0)}</LineItemsCell>
+                      <LineItemsCell className="text-right text-amber-600">{items.reduce((s, it) => s + remaining(it), 0)}</LineItemsCell>
+                      <LineItemsCell className="text-right">{formatCurrency(order.total_amount, defaultCurrency)}</LineItemsCell>
+                    </LineItemsRow>
+                  </LineItemsTable>
                 </div>
               </div>
             )}
@@ -500,6 +497,6 @@ export default function OrderDetailPage() {
           <Timeline moduleName="order" recordId={id} tasks={tasks} activities={activities} onRefresh={fetchOrder} />
         </div>
       </div>
-    </div>
+    </DetailPageLayout>
   );
 }

@@ -9,7 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Save, FileText } from 'lucide-react';
-import { FormPageShell, EntityTypeToggle, FormSection } from '@/components/shared';
+import {
+  FormPageShell,
+  EntityTypeToggle,
+  FormSection,
+  FormActions,
+  FORM_GRID_PAGE,
+} from '@/components/shared';
 import { ProductDetailsTable, type PartialQuotationItem } from './product-details-table';
 import { TermsEditor } from './terms-editor';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -493,7 +499,7 @@ export function QuotationForm({
         <CustomFieldsSectionRenderer
           accountId={accountId}
           moduleName="quotation"
-          fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
+          fieldGridClassName={FORM_GRID_PAGE}
           customFields={customFields}
           customValues={customValues}
           onChange={(fieldId, val) =>
@@ -531,22 +537,12 @@ export function QuotationForm({
         )}
         
         {!loading && (
-          <div className="sm:justify-between items-center w-full mt-6 flex-row gap-4 flex border-t border-border pt-4">
-            <div className="flex-1"></div>
-            <div className="flex gap-2 justify-end shrink-0">
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                className="border-border bg-transparent text-muted-foreground hover:bg-muted"
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleSave} data-shortcut="save" disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2">
-                {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                {versionId ? 'SAVE NEW VERSION' : quotationId ? 'Update Quotation' : 'Create Quotation'}
-              </Button>
-            </div>
-          </div>
+          <FormActions
+            onCancel={() => onOpenChange(false)}
+            onSave={handleSave}
+            saving={saving}
+            saveLabel={versionId ? 'Save New Version' : quotationId ? 'Update Quotation' : 'Create Quotation'}
+          />
         )}
     </>
   );

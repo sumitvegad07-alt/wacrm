@@ -40,7 +40,20 @@ import {
   Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
-import { FormPageShell, FormActions } from "@/components/shared";
+import { cn } from "@/lib/utils";
+import {
+  FormPageShell,
+  FormActions,
+  FormGrid,
+  FormField,
+  FORM_GRID_PAGE,
+  SECTION_HEADER_CLASS,
+} from "@/components/shared";
+import {
+  controlHeightClassName,
+  controlSurfaceClassName,
+  controlTextClassName,
+} from "@/components/ui/control-base";
 import { TaskListEmbedded } from "@/components/tasks/task-list-embedded";
 import { logModuleActivity } from "@/lib/activities";
 
@@ -361,9 +374,7 @@ export function DealForm({
     onSaved();
   }
 
-  const fieldGrid = asPage
-    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
-    : undefined;
+  const fieldGrid = asPage ? FORM_GRID_PAGE : undefined;
 
   const formContent = (
     <>
@@ -403,7 +414,7 @@ export function DealForm({
                           value={value}
                           onChange={(e) => setValue(e.target.value)}
                           placeholder="0"
-                          className="border-border bg-muted pl-7 text-foreground"
+                          className="pl-7"
                         />
                       </div>
                     </div>
@@ -411,7 +422,7 @@ export function DealForm({
                       <select
                         value={currency}
                         onChange={(e) => setCurrency(e.target.value)}
-                        className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                        className={cn(controlSurfaceClassName, controlHeightClassName, controlTextClassName, "w-full px-3")}
                       >
                         {CURRENCIES.map((c) => (
                           <option key={c.code} value={c.code}>
@@ -430,10 +441,9 @@ export function DealForm({
           />
 
           <div className="space-y-4 pt-4 border-t border-border/50">
-            <h4 className="text-sm font-medium text-foreground">Additional Deal Details</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">Customer</Label>
+            <h4 className={SECTION_HEADER_CLASS}>Additional Deal Details</h4>
+            <FormGrid variant="dialog">
+              <FormField label="Customer">
                 <SearchableSelect
                   value={contactId}
                   onChange={setContactId}
@@ -449,35 +459,33 @@ export function DealForm({
                 {linkedConversation && (
                   <Link
                     href="/inbox"
-                    className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
+                    className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2 py-1 text-caption text-primary hover:bg-primary/20"
                   >
                     <MessageSquare className="h-3 w-3" />
                     Link to Conversation
                   </Link>
                 )}
-              </div>
+              </FormField>
 
               {/* Stage ("status") and Owner ("Assigned To") are not chosen at
                   creation. A new deal enters its pipeline's first stage and is
                   owned by its creator; both are changed on the deal's detail page
                   (the stage bar and the assignment panel). */}
-            </div>
+            </FormGrid>
 
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">Notes</Label>
+            <FormField label="Notes">
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add notes..."
-                className="min-h-[100px] border-border bg-muted text-foreground"
               />
-            </div>
+            </FormField>
           </div>
 
             {deal && (
               <>
                 <div className="space-y-2 rounded-lg border border-border bg-muted/50 p-3">
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <p className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
                     Status
                   </p>
                   <div className="flex gap-2">
