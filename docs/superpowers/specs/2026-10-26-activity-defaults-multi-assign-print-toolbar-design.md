@@ -35,8 +35,10 @@ So `Today` means **due today or not dated at all**. Only the `Today` default
 gets this treatment; picking `Tomorrow` or `This Week` by hand keeps today's
 strict behaviour, because there the user has named a date range on purpose.
 
-**"Clear filters" must agree.** Any reset path returns to `Today` + own-user,
-not to `All`. A reset that lands somewhere the page never opens is a bug.
+**There is no "Clear filters" on this page.** Checked: `/follow-ups` has no
+reset control, so nothing can strand the user on a filter combination the page
+never opens with. If one is ever added it returns to `Today` + own-user, not to
+`All` — a reset that lands somewhere the page never opens is a bug.
 
 ### Out of scope, but noted
 
