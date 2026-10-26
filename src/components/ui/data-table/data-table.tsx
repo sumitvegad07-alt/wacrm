@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useTableToolbarSlot } from "@/components/layout/table-toolbar-slot";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, Download, ChevronLeft, ChevronRight, Menu } from "lucide-react";
+import { LayoutGrid, Download, ChevronLeft, ChevronRight, Menu, Printer } from "lucide-react";
+import { stashListPayload } from "@/lib/print/list-payload";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -215,6 +216,11 @@ export function DataTable<T>({
    */
   const canExport = !serverPagination || Boolean(serverPagination.exportAll);
 
+  // Same rule as Export: without `exportAll` a server-paged screen could only
+  // print the page on screen, which is never what "print the list" means, so
+  // the entry is not offered rather than offered and misleading.
+  const canPrintList = canExport;
+
   const handleExport = async () => {
     const filename = `${storageKey.replace("wacrm_", "").replace("_table_columns", "")}_export_${new Date().toISOString().split("T")[0]}.csv`;
 
@@ -242,6 +248,48 @@ export function DataTable<T>({
     } finally {
       setIsExporting(false);
     }
+  };
+
+  /**
+   * Print the list, at A4 or A5.
+   *
+   * Reuses exactly what Export CSV uses — `exportAll()` for the server-paged
+   * screens, `safeData` otherwise — so the sheet carries every row matching
+   * the current search and filters, not the twenty on screen. Same rule about
+   * a screen without `exportAll`: see canPrintList.
+   */
+  const handlePrintList = async (size: "a4" | "a5") => {
+    let rows: Record<string, unknown>[] = safeData as Record<string, unknown>[];
+    let truncated = false;
+
+    if (serverPagination) {
+      if (!serverPagination.exportAll) return;
+      setIsExporting(true);
+      try {
+        const result = await serverPagination.exportAll();
+        rows = result.rows as Record<string, unknown>[];
+        truncated = result.truncated;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not prepare the print.");
+        return;
+      } finally {
+        setIsExporting(false);
+      }
+    }
+
+    const key = stashListPayload({
+      // document.title carries the screen's name, which is what the sheet
+      // should be headed — no screen has to pass one in.
+      title: (document.title || "List").replace(/\s*[|·-]\s*OZZO.*$/i, "").trim() || "List",
+      // `id`, not a guess: that is the key Export CSV resolves a value with.
+      columns: visibleColumns.map((c) => ({ key: c.id, label: c.label, type: c.type })),
+      rows,
+      total: serverPagination ? rows.length : totalRecords,
+      truncated,
+      printedAt: new Date().toISOString(),
+    });
+
+    window.open(`/print/list?key=${key}&size=${size}`, "_blank", "noopener");
   };
 
   const handleSaveColumns = (active: string[], visible: string[]) => {
@@ -368,6 +416,27 @@ export function DataTable<T>({
             >
               <Download className="size-3.5" />
               {isExporting ? "Exporting…" : "Export CSV"}
+            </DropdownMenuItem>
+          )}
+          {canPrintList && <DropdownMenuSeparator />}
+          {canPrintList && (
+            <DropdownMenuItem
+              onClick={() => handlePrintList("a4")}
+              disabled={isExporting}
+              className="cursor-pointer gap-2"
+            >
+              <Printer className="size-3.5" />
+              Print list (A4)
+            </DropdownMenuItem>
+          )}
+          {canPrintList && (
+            <DropdownMenuItem
+              onClick={() => handlePrintList("a5")}
+              disabled={isExporting}
+              className="cursor-pointer gap-2"
+            >
+              <Printer className="size-3.5" />
+              Print list (A5)
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
