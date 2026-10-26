@@ -8,6 +8,7 @@ import { executeReport } from '@/app/actions/reports';
 import { getReportByModule } from '@/lib/reports/registry';
 import { groupRowsForSubtotals } from '@/lib/reports/subtotals';
 import type { ReportMeasure } from '@/lib/reports/types';
+import { paperMetrics, parsePaperSize } from '@/lib/print/paper';
 
 /**
  * Print / PDF view for a report. Reads the report parameters from the query string
@@ -38,9 +39,9 @@ function ReportPrintInner() {
   const sortDirection = params.get('dir') === 'desc' ? 'desc' : 'asc';
   const withSubtotals = params.get('subtotals') === '1' && dims.length >= 2;
   // A5 is half an A4 sheet, so the same table has to come down a size to keep
-  // its columns on the page.
-  const pageSize = params.get('size') === 'a5' ? 'A5' : 'A4';
-  const compact = pageSize === 'A5';
+  // its columns on the page. The scale lives in lib/print/paper so the
+  // document routes use the identical one.
+  const { size: pageSize, compact } = paperMetrics(parsePaperSize(params.get('size')));
 
   // Plain JSON now; base64 still accepted because that is what this route's own
   // doc comment has always described. btoa throws on any non-Latin1 character,
