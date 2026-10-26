@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { PrintSizeMenu } from "@/components/print/print-size-menu";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, FileText, CheckCircle, XCircle, Info, Calendar, MapPin, Loader2, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -282,6 +283,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div className="flex items-center gap-2">
+          <PrintSizeMenu href={`/print/expense/${expense.id}`} label="Voucher" />
           {isAdmin && isPending && (
             <>
               <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleStatusUpdate("Approved")}>

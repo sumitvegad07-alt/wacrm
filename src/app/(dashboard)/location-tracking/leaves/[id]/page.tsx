@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { StatusBadge } from "@/components/shared";
 import { Button } from "@/components/ui/button";
+import { PrintSizeMenu } from "@/components/print/print-size-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Timeline } from "@/components/shared/timeline";
@@ -151,6 +152,9 @@ export default function LeaveDetailPage() {
         </Button>
         <h1 className="text-xl font-bold tracking-tight">{leave.leave_number}</h1>
         <StatusBadge status={leave.status.toLowerCase()} label={leave.status} />
+        <div className="ml-auto">
+          <PrintSizeMenu href={`/print/leave/${leave.id}`} label="Print" />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
