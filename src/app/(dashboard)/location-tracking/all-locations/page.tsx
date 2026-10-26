@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { MapPin, AlertTriangle } from 'lucide-react';
-import { PageLayout } from '@/components/shared';
+import { PageLayout, PageHeader } from '@/components/shared';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
 import {
@@ -417,6 +417,9 @@ export default function AllLocationsPage() {
               Recent
             </Button>
           )}
+          {/* Hosts the table's controls, which used to sit on a line of their
+              own below this one. */}
+          <PageHeader title="All Locations" className="py-0" />
         </div>
       </div>
 

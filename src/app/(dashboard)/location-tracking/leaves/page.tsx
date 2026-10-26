@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { PageLayout, PageToolbar, StatusBadge } from "@/components/shared";
+import { PageLayout, PageHeader, PageToolbar, StatusBadge } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
@@ -204,6 +204,9 @@ export default function LeavesPage() {
 
   return (
     <PageLayout fill>
+      {/* No actions of its own: it is here to host the table's
+          controls, which used to sit on a line of their own. */}
+      <PageHeader title="Leaves" />
       <PageToolbar
         filters={
           <div className="flex items-center gap-1">

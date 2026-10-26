@@ -5,7 +5,7 @@ import { matchesColumnFilters } from "@/lib/table/match-filters";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
-import { PageLayout } from "@/components/shared";
+import { PageLayout, PageHeader } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { ColumnDef } from "@/components/ui/data-table/data-table-types";
@@ -164,11 +164,16 @@ export default function PaymentReportPage() {
 
   return (
     <PageLayout fill spacing="tight">
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-2xl font-bold tracking-tight">Payment Reports</h1>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-2xl font-bold tracking-tight">Payment Reports</h1>
+        </div>
+        {/* Hosts the table's controls, which used to sit on a line of their
+            own below this one. */}
+        <PageHeader title="Payment Reports" className="py-0" />
       </div>
 
       <Tabs defaultValue="collections" className="w-full space-y-2 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">

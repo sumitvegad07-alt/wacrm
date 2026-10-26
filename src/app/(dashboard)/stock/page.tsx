@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { fetchStockPositions, type StockPosition } from '@/lib/stock/financials';
-import { PageLayout } from '@/components/shared';
+import { PageLayout, PageHeader } from '@/components/shared';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
@@ -91,7 +91,7 @@ export default function StockPage() {
 
   return (
     <PageLayout fill>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold flex items-center gap-2"><Boxes className="h-5 w-5" /> Stock</h1>
           <p className="text-sm text-muted-foreground">Closing stock per product, calculated automatically. Click a product for its full ledger and activity.</p>
@@ -101,6 +101,9 @@ export default function StockPage() {
             <AlertTriangle className="h-3.5 w-3.5" /> {outOfStock} out of stock
           </span>
         )}
+        {/* Hosts the table's controls, which used to sit on a line of their
+            own below this one. */}
+        <PageHeader title="Stock" className="py-0" />
       </div>
 
       <DataTable

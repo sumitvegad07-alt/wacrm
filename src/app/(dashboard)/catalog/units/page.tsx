@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { PageLayout, ConfirmDialog, BulkActionBar } from "@/components/shared";
+import { PageLayout, PageHeader, ConfirmDialog, BulkActionBar } from "@/components/shared";
 import {
   inactiveSelection,
   reactivateDisabledReason,
@@ -220,6 +220,9 @@ export default function CatalogUnitsPage() {
 
   return (
     <PageLayout fill>
+      {/* No actions of its own: it is here to host the table's controls,
+          which used to sit on a line of their own. */}
+      <PageHeader title="Units" />
       {canEditSettings && (
         <BulkActionBar
           selectedCount={selectedIds.size}

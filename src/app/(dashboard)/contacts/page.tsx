@@ -853,6 +853,9 @@ export default function ContactsPage() {
 
   return (
     <PageLayout fill>
+      {/* No actions of its own: it is here to host the table's
+          controls, which used to sit on a line of their own. */}
+      <PageHeader title="Customers" />
       <BulkActionBar
         selectedCount={selectedContacts.size}
         onClear={() => setSelectedContacts(new Set())}

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/metric-card";
-import { PageLayout } from "@/components/shared";
+import { PageLayout, PageHeader } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -464,9 +464,14 @@ export default function TrackingHealthPage() {
   return (
     <PageLayout fill>
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-          <HeartPulse className="size-6 text-primary" /> Tracking Health
-        </h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+            <HeartPulse className="size-6 text-primary" /> Tracking Health
+          </h1>
+          {/* Hosts the table's controls, which used to sit on a line of their
+              own further down the page. */}
+          <PageHeader title="Tracking Health" className="py-0" />
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Who&apos;s tracking correctly, who isn&apos;t, and exactly what to tell them to fix it.{" "}
           <span className="text-muted-foreground/80">

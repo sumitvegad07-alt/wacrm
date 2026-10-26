@@ -8,7 +8,7 @@ import { Camera, MapPin, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { PageLayout } from "@/components/shared";
+import { PageLayout, PageHeader } from "@/components/shared";
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
@@ -943,12 +943,15 @@ export default function UserAttendancePage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Input 
-            type="date" 
-            value={selectedDate} 
-            onChange={(e) => setSelectedDate(e.target.value)} 
+          <Input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
             className="w-auto h-9"
           />
+          {/* Hosts the table's controls, which used to sit on a line of their
+              own below this one. */}
+          <PageHeader title="User Attendance" className="py-0" />
         </div>
       </div>
 
