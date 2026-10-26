@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   ChevronLeft, Truck, Loader2, Package, AlertTriangle, CheckCircle2, XCircle, Ban,
-  Printer, Phone, Mail, User as UserIcon, Plus,
+  Phone, Mail, User as UserIcon, Plus,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { PrintSizeMenu } from '@/components/print/print-size-menu';
 import { formatCurrency } from '@/lib/currency';
 import { Timeline } from '@/components/shared/timeline';
 
@@ -224,9 +225,9 @@ export default function OrderDetailPage() {
           </div>
           <div className="text-right shrink-0">
             <div className="text-2xl font-bold tracking-wide">ORDER <span className="text-primary">#{(order.order_number || '').split('-').pop() || order.order_number}</span></div>
-            <Button variant="outline" size="sm" className="gap-2 mt-2" onClick={() => window.open(`/print/order/${id}`, '_blank')}>
-              <Printer className="size-4" /> Print
-            </Button>
+            <div className="mt-2 flex justify-end">
+              <PrintSizeMenu href={`/print/order/${id}`} />
+            </div>
           </div>
         </div>
 

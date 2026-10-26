@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Loader2, Printer, Pencil, Phone, Mail, User as UserIcon, Truck } from 'lucide-react';
+import { ChevronLeft, Loader2, Pencil, Phone, Mail, User as UserIcon, Truck } from 'lucide-react';
+import { PrintSizeMenu } from '@/components/print/print-size-menu';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { Timeline } from '@/components/shared/timeline';
@@ -112,9 +113,7 @@ export default function DispatchDetailPage() {
                   <Pencil className="size-4" /> Edit
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => window.open(`/print/dispatch/${id}`, '_blank')}>
-                <Printer className="size-4" /> Print
-              </Button>
+              <PrintSizeMenu href={`/print/dispatch/${id}`} />
             </div>
           </div>
         </div>

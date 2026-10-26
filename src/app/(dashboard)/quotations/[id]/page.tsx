@@ -7,7 +7,8 @@ import { sanitizeRichText } from '@/lib/security/sanitize-html';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Copy, Check, X, FileText, Loader2, Send, FilePlus2, Printer, Pencil, ArrowUpRight } from 'lucide-react';
+import { ArrowLeft, Edit, Copy, Check, X, FileText, Loader2, Send, FilePlus2, Pencil, ArrowUpRight } from 'lucide-react';
+import { PrintSizeMenu } from '@/components/print/print-size-menu';
 import Link from 'next/link';
 import { QuotationTimeline } from '@/components/quotations/quotation-timeline';
 import { Timeline } from '@/components/shared/timeline';
@@ -240,9 +241,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
             <X className="size-4" />
           </Button>
 
-          <Button variant="outline" size="icon" onClick={() => window.open(`/print/quotation/${quotation.id}`, '_blank')} disabled={actionLoading} className="rounded-sm border-border text-muted-foreground hover:bg-muted h-9 w-9">
-            <Printer className="size-4" />
-          </Button>
+          <PrintSizeMenu href={`/print/quotation/${quotation.id}`} />
         </div>
       </header>
 

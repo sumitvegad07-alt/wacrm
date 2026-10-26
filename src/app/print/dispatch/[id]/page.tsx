@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import { documentPrintCss } from '@/lib/print/document-styles';
+import { parsePaperSize } from '@/lib/print/paper';
 import { formatCurrency } from '@/lib/currency';
 import { buildDefaultConfig, type DocumentTemplateConfig } from '@/lib/document-templates/schema';
 import { resolveTemplateConfig } from '@/lib/document-templates/repository';
@@ -29,6 +31,8 @@ import {
 export default function DispatchPrintView() {
   const params = useParams();
   const id = params.id as string;
+  // ?size=a5 halves the sheet; anything else is A4, as it always was.
+  const paper = parsePaperSize(useSearchParams().get('size'));
   const supabase = createClient();
 
   const [data, setData] = useState<DocumentRenderData | null>(null);
@@ -102,13 +106,7 @@ export default function DispatchPrintView() {
 
   return (
     <div className="min-h-screen bg-white text-black font-sans print:bg-white print:p-0 p-8">
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; }
-          @page { margin: 10mm; size: A4 portrait; }
-          .print-hide { display: none !important; }
-        }
-      ` }} />
+      <style dangerouslySetInnerHTML={{ __html: documentPrintCss(paper) }} />
 
       <div className="max-w-[900px] mx-auto bg-white p-8 border border-gray-200 shadow-sm print:border-none print:shadow-none print:max-w-none print:p-0 flex flex-col min-h-[1100px]">
         <div className="fixed top-4 right-4 print-hide">

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { PrintSizeMenu } from '@/components/print/print-size-menu';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -237,6 +238,15 @@ export default function PaymentDetailPage() {
           </div>
           <div className="text-right shrink-0">
             <div className="text-2xl font-bold tracking-wide text-primary">{payment.payment_number}</div>
+            {/* The receipt route has existed since the payment module was
+                rebuilt, but nothing in the tenant app ever linked to it — only
+                the superadmin side could reach it. In the header rather than
+                the action row below, because that row only renders for Pending
+                and Approved, and a receipt stays printable whatever the
+                status. */}
+            <div className="mt-2 flex justify-end">
+              <PrintSizeMenu href={`/print/payment/${payment.id}`} label="Receipt" />
+            </div>
           </div>
         </div>
 

@@ -8,6 +8,8 @@ import {
   type DocumentRenderData,
 } from '@/components/settings/document-templates/document-template-preview';
 import { PrintButton } from './print-button';
+import { documentPrintCss } from '@/lib/print/document-styles';
+import { parsePaperSize } from '@/lib/print/paper';
 
 /**
  * Print / PDF view for a payment receipt, rendered from the account's Payment template
@@ -20,8 +22,13 @@ import { PrintButton } from './print-button';
  * Server component, unlike the order route, because it already was one. The shared
  * renderer is a client component receiving plain serialisable data, which works from here.
  */
-export default async function PaymentPrintView(props: { params: Promise<{ id: string }> }) {
+export default async function PaymentPrintView(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ size?: string }>;
+}) {
   const { id } = await props.params;
+  // ?size=a5 halves the sheet; anything else is A4, as it always was.
+  const paper = parsePaperSize((await props.searchParams)?.size);
   const supabase = await createClient();
 
   const { data: payment } = await supabase
@@ -96,13 +103,7 @@ export default async function PaymentPrintView(props: { params: Promise<{ id: st
 
   return (
     <div className="min-h-screen bg-white text-black font-sans print:bg-white print:p-0 p-8">
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; }
-          @page { margin: 10mm; size: A4 portrait; }
-          .print-hide { display: none !important; }
-        }
-      ` }} />
+      <style dangerouslySetInnerHTML={{ __html: documentPrintCss(paper) }} />
 
       <div className="max-w-[900px] mx-auto bg-white p-8 border border-gray-200 shadow-sm print:border-none print:shadow-none print:max-w-none print:p-0 flex flex-col min-h-[1100px]">
         <PrintButton />
