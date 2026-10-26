@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, Plus, CalendarCheck, Phone, MapPin, FileText, CheckCircle2, Loader2, Link as LinkIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { logModuleActivity } from "@/lib/activities";
 import type { Task } from "@/types";
 import { cn } from "@/lib/utils";
-import { isBefore, startOfToday, isToday, isTomorrow, isThisWeek, isThisMonth } from "date-fns";
+import { isBefore, startOfToday } from "date-fns";
+import { DEFAULT_PERIOD, matchesPeriod, type TaskPeriod } from "@/lib/tasks/period-filter";
 import Link from "next/link";
 import { PageLayout, PageHeader } from "@/components/shared";
 
@@ -34,14 +35,16 @@ type FollowUpTask = Task & {
 };
 
 export default function FollowUpsPage() {
-  const { accountId } = useAuth();
+  const { accountId, profile, profileLoading } = useAuth();
   const supabase = createClient();
   const [profiles, setProfiles] = useState<{ id: string; full_name: string }[]>([]);
   const [taskTypes, setTaskTypes] = useState<string[]>(["Task", "Call", "Visit", "Meeting", "Follow up", "Note"]);
   
+  // Opens on you, not the whole team — the screen is called My Activity.
+  // "all" until the profile row settles, then replaced by the effect below.
   const [assignTo, setAssignTo] = useState("all");
   const [activityStatus, setActivityStatus] = useState("Undone");
-  const [period, setPeriod] = useState("All");
+  const [period, setPeriod] = useState<TaskPeriod>(DEFAULT_PERIOD);
   const [activityType, setActivityType] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -84,12 +87,26 @@ export default function FollowUpsPage() {
     loadInitialData();
   }, [accountId, supabase]);
 
+  // Default the assignee filter to the signed-in user, once — after that the
+  // user owns the control and a re-render must not drag it back.
+  //
+  // A user with no profile row falls through to "all" rather than showing an
+  // empty screen with no explanation.
+  const defaultedAssignee = useRef(false);
   useEffect(() => {
-    if (accountId) {
+    if (profileLoading || defaultedAssignee.current) return;
+    defaultedAssignee.current = true;
+    if (profile?.id) setAssignTo(profile.id);
+  }, [profileLoading, profile?.id]);
+
+  useEffect(() => {
+    // Waiting on the profile matters: firing before it settles would show the
+    // whole team for a moment and then snap to one person.
+    if (accountId && !profileLoading) {
       fetchTasks();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId, assignTo, activityStatus, period, activityType, searchQuery, customStart, customEnd, priorityFilter]);
+  }, [accountId, profileLoading, assignTo, activityStatus, period, activityType, searchQuery, customStart, customEnd, priorityFilter]);
 
   async function fetchTasks() {
     setLoading(true);
@@ -116,30 +133,9 @@ export default function FollowUpsPage() {
     if (!error && data) {
       let filteredData = data as FollowUpTask[];
       
-      // Apply period filtering manually since date-fns helps handle exact local time boundaries easily
-      if (period !== "All") {
-        const today = startOfToday();
-        filteredData = filteredData.filter(task => {
-          if (!task.due_date) return false;
-          const taskDate = new Date(task.due_date);
-          switch(period) {
-            case "Overdue": return isBefore(taskDate, today);
-            case "Today": return isToday(taskDate);
-            case "Tomorrow": return isTomorrow(taskDate);
-            case "This Week": return isThisWeek(taskDate);
-            case "This Month": return isThisMonth(taskDate);
-            case "Custom Range":
-              if (customStart && customEnd) {
-                const s = new Date(customStart);
-                const e = new Date(customEnd);
-                e.setHours(23, 59, 59, 999);
-                return taskDate >= s && taskDate <= e;
-              }
-              return true;
-            default: return true;
-          }
-        });
-      }
+      filteredData = filteredData.filter((task) =>
+        matchesPeriod(task.due_date, period, customStart, customEnd),
+      );
 
       // Priority filter (default All).
       if (priorityFilter !== "All") {
@@ -374,7 +370,7 @@ export default function FollowUpsPage() {
 
           <div className="w-40">
             <Label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider font-semibold">Period</Label>
-            <Select value={period} onValueChange={(val) => setPeriod(val || "All")}>
+            <Select value={period} onValueChange={(val) => setPeriod((val || DEFAULT_PERIOD) as TaskPeriod)}>
               <SelectTrigger className="h-10 bg-background">
                 <SelectValue placeholder="Period" />
               </SelectTrigger>
