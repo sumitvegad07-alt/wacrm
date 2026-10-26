@@ -1,18 +1,38 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { formatCell, readListPayload, stashListPayload } from "./list-payload";
+import {
+  formatCell,
+  PRINT_TTL_MS,
+  readListPayload,
+  stashListPayload,
+  type ListPrintPayload,
+} from "./list-payload";
 
-const store = new Map<string, string>();
+/**
+ * A stand-in for the browser's localStorage, including `length` and `key(i)`.
+ *
+ * The previous version of these tests stubbed only getItem/setItem, which is
+ * what let the real bug through: the code used sessionStorage, the print tab
+ * is opened with `noopener` and so never received it, and nothing here could
+ * tell. This stub is shared between "tabs" exactly as localStorage really is.
+ */
+function makeStore(opts: { failWrites?: boolean } = {}) {
+  const map = new Map<string, string>();
+  return {
+    map,
+    get length() {
+      return map.size;
+    },
+    key: (i: number) => [...map.keys()][i] ?? null,
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      if (opts.failWrites) throw new Error("QuotaExceededError");
+      map.set(k, v);
+    },
+    removeItem: (k: string) => void map.delete(k),
+  };
+}
 
-beforeEach(() => {
-  store.clear();
-  vi.stubGlobal("sessionStorage", {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-    removeItem: (k: string) => void store.delete(k),
-  });
-});
-
-const payload = {
+const payload: ListPrintPayload = {
   title: "Orders",
   columns: [{ key: "no", label: "Order #" }],
   rows: [{ no: "SO-1" }],
@@ -21,9 +41,33 @@ const payload = {
   printedAt: "2026-10-26T10:00:00.000Z",
 };
 
+beforeEach(() => {
+  vi.useRealTimers();
+  vi.stubGlobal("localStorage", makeStore());
+});
+
 describe("list payload hand-off", () => {
   test("a stashed payload reads back identically", () => {
-    const key = stashListPayload(payload);
+    const key = stashListPayload(payload)!;
+    expect(readListPayload(key)).toEqual(payload);
+  });
+
+  // The actual bug: the print tab is a separate tab with no opener. It must
+  // be able to read what the list tab wrote, which is what localStorage does
+  // and sessionStorage does not.
+  test("it is written somewhere another tab can read", () => {
+    const store = makeStore();
+    vi.stubGlobal("localStorage", store);
+    const key = stashListPayload(payload)!;
+
+    // A different tab: same localStorage, no opener, no sessionStorage.
+    vi.stubGlobal("sessionStorage", makeStore());
+    expect(readListPayload(key)).toEqual(payload);
+  });
+
+  test("reloading the print tab still works — the read is not one-shot", () => {
+    const key = stashListPayload(payload)!;
+    expect(readListPayload(key)).toEqual(payload);
     expect(readListPayload(key)).toEqual(payload);
   });
 
@@ -36,28 +80,61 @@ describe("list payload hand-off", () => {
   });
 
   test("corrupt stored JSON gives null rather than throwing", () => {
-    store.set("wacrm_print_list_x", "{not json");
-    expect(readListPayload("wacrm_print_list_x")).toBeNull();
+    localStorage.setItem("wacrm_print_list_1_x", "{not json");
+    expect(readListPayload("wacrm_print_list_1_x")).toBeNull();
   });
 
-  // Private windows and blocked site data make these throw rather than
-  // return. A print that cannot be prepared must not take the page down.
-  test("a storage that throws does not take the caller down", () => {
-    vi.stubGlobal("sessionStorage", {
+  // Printed lists are big and worthless once printed. Left alone they would
+  // pile up until they blocked the next print.
+  test("old stashes are cleared out on the next write", () => {
+    const store = makeStore();
+    vi.stubGlobal("localStorage", store);
+    const stale = `wacrm_print_list_${Date.now() - PRINT_TTL_MS - 1000}_old`;
+    store.map.set(stale, "{}");
+
+    stashListPayload(payload);
+
+    expect(store.getItem(stale)).toBeNull();
+  });
+
+  test("only a few recent stashes are kept", () => {
+    const store = makeStore();
+    vi.stubGlobal("localStorage", store);
+    for (let i = 0; i < 6; i++) stashListPayload(payload);
+    expect(store.length).toBeLessThanOrEqual(3);
+  });
+
+  // A list too big for the browser's quota must be reported, not turned into
+  // a print tab that can only say the link expired.
+  test("a list that cannot be stored returns null instead of a dead key", () => {
+    vi.stubGlobal("localStorage", makeStore({ failWrites: true }));
+    expect(stashListPayload(payload)).toBeNull();
+  });
+
+  test("storage blocked outright is null, not a crash", () => {
+    vi.stubGlobal("localStorage", {
+      get length() {
+        throw new Error("blocked");
+      },
+      key: () => {
+        throw new Error("blocked");
+      },
       getItem: () => {
         throw new Error("blocked");
       },
       setItem: () => {
         throw new Error("blocked");
       },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
     });
-    expect(() => stashListPayload(payload)).not.toThrow();
+    expect(stashListPayload(payload)).toBeNull();
     expect(readListPayload("anything")).toBeNull();
   });
 });
 
 describe("formatCell", () => {
-  // Paper has no empty-cell affordance, so a blank must look deliberate.
   test("empty values print as a dash", () => {
     expect(formatCell(null)).toBe("—");
     expect(formatCell(undefined)).toBe("—");
@@ -85,8 +162,6 @@ describe("formatCell", () => {
     expect(formatCell([{ name: "A" }, { name: "B" }])).toBe("A, B");
   });
 
-  // Export CSV formats a date column this way, and the same list must not
-  // print a raw ISO string on paper while the spreadsheet shows a real date.
   test("a date column prints as a date, like the CSV export", () => {
     const out = formatCell("2026-10-26T00:00:00.000Z", "date");
     expect(out).toBe(new Date("2026-10-26T00:00:00.000Z").toLocaleDateString());

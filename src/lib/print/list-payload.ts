@@ -14,37 +14,99 @@ export interface ListPrintPayload {
 
 const PREFIX = "wacrm_print_list_";
 
+/** How long a print link keeps working. Long enough to reload the tab. */
+export const PRINT_TTL_MS = 60 * 60 * 1000;
+
+/** How many lists we keep at once, newest first. */
+const MAX_STASHES = 3;
+
 /**
  * Hand a list to the print tab.
  *
- * sessionStorage rather than the URL: a thousand-row list does not fit in a
- * query string, and re-querying in the print tab would print a different set
- * of rows than the one the user is looking at — the single thing a printed
- * list must never do.
+ * localStorage, NOT sessionStorage. The print tab is opened with `noopener`,
+ * which deliberately severs the link to the tab that opened it — and without
+ * that opener relationship the browser gives the new tab a brand-new, empty
+ * sessionStorage. The rows were therefore never there to read, and every
+ * print said the link had expired. localStorage is shared across every tab of
+ * the same origin with no opener needed.
  *
- * Every read and write is guarded. In a private window, or with site data
- * blocked, these throw rather than return empty, and a print that cannot be
- * prepared must not take the screen down with it.
+ * Not the URL either: a thousand-row list does not fit in a query string, and
+ * re-querying in the print tab could print a different set of rows than the
+ * one the user is looking at.
+ *
+ * Returns null when the rows could not be stored — the list is too big for
+ * the browser's quota. The caller must say so rather than opening a tab that
+ * can only report failure.
  */
-export function stashListPayload(payload: ListPrintPayload): string {
+export function stashListPayload(payload: ListPrintPayload): string | null {
   const key = `${PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const body = JSON.stringify(payload);
+
   try {
-    sessionStorage.setItem(key, JSON.stringify(payload));
+    prune();
+    localStorage.setItem(key, body);
+    return key;
   } catch {
-    // Quota, or storage blocked. The print tab shows its expired state.
+    // Most likely the quota. Drop every stash we own and try once more, so a
+    // big list still prints when the only thing in the way is an older one.
+    try {
+      clearAll();
+      localStorage.setItem(key, body);
+      return key;
+    } catch {
+      return null;
+    }
   }
-  return key;
 }
 
-/** Read it back, in the print tab. Never throws. */
+/**
+ * Read it back, in the print tab. Never throws.
+ *
+ * Deliberately does not delete what it read: reloading the print tab is the
+ * obvious thing to do when a sheet looks wrong, and a one-shot read would
+ * turn that into "expired". Old entries go on the next write instead.
+ */
 export function readListPayload(key: string): ListPrintPayload | null {
   try {
-    const raw = sessionStorage.getItem(key);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     return JSON.parse(raw) as ListPrintPayload;
   } catch {
     return null;
   }
+}
+
+/** Our keys, newest first. */
+function ourKeys(): string[] {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k?.startsWith(PREFIX)) keys.push(k);
+  }
+  return keys.sort((a, b) => stamp(b) - stamp(a));
+}
+
+function stamp(key: string): number {
+  return Number(key.slice(PREFIX.length).split("_")[0]) || 0;
+}
+
+function clearAll() {
+  for (const k of ourKeys()) localStorage.removeItem(k);
+}
+
+/**
+ * Drop anything past its time, and anything beyond the few most recent.
+ * Printed lists are large and worthless once printed; leaving them to pile up
+ * in a browser the user never clears would eventually block the next print.
+ */
+function prune() {
+  const now = Date.now();
+  const keys = ourKeys();
+  keys.forEach((k, i) => {
+    if (now - stamp(k) > PRINT_TTL_MS || i >= MAX_STASHES - 1) {
+      localStorage.removeItem(k);
+    }
+  });
 }
 
 /**

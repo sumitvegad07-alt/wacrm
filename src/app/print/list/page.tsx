@@ -8,15 +8,15 @@ import { paperMetrics, parsePaperSize } from '@/lib/print/paper';
 /**
  * Print view for whatever list is on screen.
  *
- * The rows are handed over through sessionStorage by the table that opened
+ * The rows are handed over through localStorage by the table that opened
  * this tab — see lib/print/list-payload. It deliberately does NOT re-run the
  * query: the screen's filters, column choices and sort are the user's, and a
  * print that quietly showed a different set of rows than the one they are
  * looking at would be worse than no print at all.
  *
- * One consequence worth knowing: the link is good only for this browser
- * session. Reopening it tomorrow finds nothing, and says so rather than
- * printing an empty table that looks like a real result.
+ * One consequence worth knowing: the link is good for about an hour, and
+ * only in the browser that made it. Reopening it tomorrow finds nothing, and
+ * says so rather than printing an empty table that looks like a real result.
  */
 function ListPrintInner() {
   const params = useSearchParams();
@@ -27,7 +27,7 @@ function ListPrintInner() {
   const [payload, setPayload] = useState<ListPrintPayload | null>(null);
   const [ready, setReady] = useState(false);
 
-  // sessionStorage is not available during server rendering, so the read
+  // localStorage is not available during server rendering, so the read
   // happens after mount. `ready` keeps the expired message from flashing up
   // before the data has been looked for.
   useEffect(() => {
@@ -42,8 +42,7 @@ function ListPrintInner() {
       <div className="min-h-screen bg-white p-10 text-center text-gray-600">
         <p className="text-lg font-semibold text-gray-900">This print link has expired.</p>
         <p className="mt-2 text-sm">
-          Print links last for the browser session that created them. Go back to the list and
-          choose Print again.
+          Print links last about an hour. Go back to the list and choose Print again.
         </p>
       </div>
     );

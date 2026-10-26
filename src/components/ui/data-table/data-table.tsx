@@ -289,6 +289,14 @@ export function DataTable<T>({
       printedAt: new Date().toISOString(),
     });
 
+    // Nowhere to put the rows — almost always a list too big for the
+    // browser's quota. Say so, rather than opening a tab that can only
+    // report that the link is dead.
+    if (!key) {
+      toast.error("That list is too large to print. Narrow the filter and try again.");
+      return;
+    }
+
     window.open(`/print/list?key=${key}&size=${size}`, "_blank", "noopener");
   };
 
