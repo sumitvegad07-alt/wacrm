@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useTableToolbarSlot } from "@/components/layout/table-toolbar-slot";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { LayoutGrid, Download, ChevronLeft, ChevronRight, Menu, Search } from "lucide-react";
+import { LayoutGrid, Download, ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,14 +99,11 @@ interface DataTableProps<T> {
     exportAll?: () => Promise<{ rows: unknown[]; truncated: boolean }>;
   };
   /**
-   * The screen's free-text search, rendered as the first control in the
-   * table's own toolbar.
+   * Accepted and ignored since the toolbar line was removed — every column
+   * carries its own filter now, which is what made the global box redundant.
    *
-   * It lives here rather than in a `<PageToolbar>` above the grid because a
-   * search box alone does not earn a band of its own: a separate strip cost
-   * ~50px of workspace and left a visible gap between the box and the rows it
-   * filters. A screen with filters or extra toolbar controls still uses
-   * PageToolbar for those.
+   * Kept on the interface so the twenty-odd screens that pass it keep
+   * compiling; the prop and its call sites come out in a separate pass.
    */
   search?: {
     value: string;
@@ -160,6 +158,16 @@ export function DataTable<T>({
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const toolbarSlot = useTableToolbarSlot();
+
+  // Claim on mount so PageHeader renders even on a page whose header has no
+  // content of its own; release on unmount so it goes back to returning null.
+  const { claim: claimToolbarSlot, release: releaseToolbarSlot } = toolbarSlot;
+  useEffect(() => {
+    claimToolbarSlot();
+    return () => releaseToolbarSlot();
+  }, [claimToolbarSlot, releaseToolbarSlot]);
 
   // The busy row clears when React finishes the navigation — or when this page
   // is left, so a row never stays highlighted behind a cancelled one.
@@ -330,6 +338,43 @@ export function DataTable<T>({
   const allOnPageSelected = paginatedData.length > 0 && paginatedData.every(row => selection?.selectedIds.has(rowKey(row)));
   const someOnPageSelected = paginatedData.some(row => selection?.selectedIds.has(rowKey(row)));
 
+  /**
+   * Everything that used to live on the toolbar line. Built once so the same
+   * markup can go either to the page heading row or, with no slot, inline.
+   */
+  const toolbarControls = (
+    <>
+      <TableViewsBar view={tableView} />
+      <span className="font-semibold text-foreground text-xs whitespace-nowrap">
+        Total: {totalRecords} records
+      </span>
+      {actions}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label="More table actions"
+          className="flex h-11 w-11 md:h-7 md:w-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none"
+          title="Table actions menu"
+        >
+          <Menu className="size-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48 text-xs">
+          {menuActions}
+          {menuActions && canExport && <DropdownMenuSeparator />}
+          {canExport && (
+            <DropdownMenuItem
+              onClick={handleExport}
+              disabled={isExporting}
+              className="cursor-pointer gap-2"
+            >
+              <Download className="size-3.5" />
+              {isExporting ? "Exporting…" : "Export CSV"}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+
   return (
     <div
       data-slot="data-table"
@@ -345,58 +390,24 @@ export function DataTable<T>({
         fill && "lg:flex-1 lg:min-h-[280px]",
       )}
     >
-      {/* Top Table Toolbar (in that vertical line just before the starting of the table) */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-2.5 py-1.5 rounded-t-xl border border-b-0 border-border bg-muted/20 text-xs min-h-[44px] lg:min-h-0">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          {search && (
-            <div className="relative w-full sm:w-64 lg:w-72">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                value={search.value}
-                onChange={(e) => search.onChange(e.target.value)}
-                placeholder={search.placeholder ?? "Search..."}
-                aria-label={search.placeholder ?? "Search"}
-                className="h-11 md:h-8 lg:h-7 pl-8 text-xs"
-              />
-            </div>
-          )}
-          <TableViewsBar view={tableView} />
-          <span className="font-semibold text-foreground text-xs">
-            Total: {totalRecords} records
-          </span>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {actions}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label="More table actions"
-              className="flex h-11 w-11 md:h-7 md:w-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none"
-              title="Table actions menu"
-            >
-              <Menu className="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 text-xs">
-              {menuActions}
-              {menuActions && canExport && <DropdownMenuSeparator />}
-              {canExport && (
-                <DropdownMenuItem
-                  onClick={handleExport}
-                  disabled={isExporting}
-                  className="cursor-pointer gap-2"
-                >
-                  <Download className="size-3.5" />
-                  {isExporting ? "Exporting…" : "Export CSV"}
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      {/* The toolbar line is gone. Its controls now sit in the page heading
+          row, reached through a portal, so the grid starts right at the top of
+          the page. The inline fallback is not decorative: a table rendered
+          outside the dashboard shell has no slot, and controls with nowhere to
+          go would vanish silently. */}
+      {toolbarSlot.node
+        ? createPortal(toolbarControls, toolbarSlot.node)
+        : (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-2.5 py-1.5 text-xs">
+            {toolbarControls}
+          </div>
+        )}
 
       <div
         className={cn(
-          "flex flex-col border border-border bg-card",
+          // `rounded-t-xl` moved here from the toolbar line that used to sit
+          // above: the grid is the top edge of the card now.
+          "flex flex-col rounded-t-xl border border-border bg-card",
           fill ? "lg:min-h-0 lg:flex-1" : "overflow-hidden",
         )}
       >
