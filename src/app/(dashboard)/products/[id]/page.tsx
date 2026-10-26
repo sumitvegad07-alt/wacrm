@@ -6,12 +6,18 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { Product, CustomField, Task } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, Package, Calendar, CheckSquare, Plus, Pencil, Loader2, FileText, Link2 } from 'lucide-react';
+import { Plus, Pencil, Loader2, FileText, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProductForm } from '@/components/products/product-form';
 import { TaskForm } from '@/components/tasks/task-form';
 import { Timeline } from '@/components/shared/timeline';
+import {
+  DetailPageLayout,
+  DetailSection,
+  DetailGrid,
+  DetailItem,
+  StatusBadge,
+} from '@/components/shared';
 import { formatCurrency } from '@/lib/currency';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -161,38 +167,22 @@ export default function ProductDetailsPage() {
   const pastTasks = tasks.filter(t => t.status === 'Completed' || t.status === 'Cancelled');
 
   return (
-    <div className="space-y-6 w-full max-w-none flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 bg-card border border-border p-4 rounded-lg">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => router.back()}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <ChevronLeft className="size-5" />
-          </Button>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center size-10 rounded-lg bg-primary/10 text-primary">
-              <Package className="size-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-                {product.name}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1 flex items-center gap-4">
-                {product.sku && <span className="flex items-center gap-1 font-mono text-xs"><Link2 className="size-3" /> SKU: {product.sku}</span>}
-                {product.active ? (
-                  <Badge className="bg-emerald-600 text-white shadow-sm border-transparent py-0 text-[10px] font-semibold">Active</Badge>
-                ) : (
-                  <Badge className="bg-slate-600 text-white shadow-sm border-transparent py-0 text-[10px] font-semibold">Inactive</Badge>
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <DetailPageLayout
+      title={product.name}
+      onBack={() => router.back()}
+      // The status was a hand-rolled emerald/slate Badge at 10px. StatusBadge
+      // maps the value through the shared status vocabulary, so Active here
+      // looks like Active everywhere else in the app.
+      badges={<StatusBadge status={product.active ? "active" : "inactive"} />}
+      meta={
+        product.sku ? (
+          <span className="flex items-center gap-1 font-mono">
+            <Link2 className="size-3" /> SKU: {product.sku}
+          </span>
+        ) : undefined
+      }
+      actions={
+        <>
           <Button variant="outline" onClick={() => setTaskFormOpen(true)} className="gap-2">
             <Plus className="size-4" />
             Add Task
@@ -201,16 +191,16 @@ export default function ProductDetailsPage() {
             <Pencil className="size-4" />
             Edit
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Column: Details & Custom Fields */}
         <div className="lg:col-span-2 space-y-6">
           
           {product.image && (
-            <div className="bg-card border border-border rounded-lg p-5 flex flex-col gap-3">
-              <h3 className="text-lg font-semibold">Product Image</h3>
+            <DetailSection title="Product Image" className="flex flex-col gap-3">
               <div className="relative w-full max-w-sm rounded-lg overflow-hidden border border-border">
                 <img src={product.image} alt={product.name} className="w-full h-auto object-cover" />
               </div>
@@ -219,69 +209,64 @@ export default function ProductDetailsPage() {
                 download={`${product.name}-image.jpg`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary hover:underline text-sm font-medium w-fit"
+                className="text-body font-medium text-primary hover:underline w-fit"
               >
                 Download Image
               </a>
-            </div>
+            </DetailSection>
           )}
 
-          <div className="bg-card border border-border rounded-lg p-5">
-            <h3 className="text-lg font-semibold mb-4">Product Details</h3>
+          <DetailSection title="Product Details">
             
-            <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Name</p>
-                <p className="font-medium">{product.name}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Product Code</p>
-                <p className="font-medium">{product.sku || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Price</p>
-                <p className="font-medium">{product.price != null ? formatCurrency(product.price, account?.default_currency) : '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Status</p>
-                <p className="font-medium">{product.active ? 'Active' : 'Inactive'}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-sm text-muted-foreground mb-1">Description</p>
-                <p className="font-medium whitespace-pre-wrap">{product.description || '-'}</p>
-              </div>
-            </div>
+            <DetailGrid>
+              <DetailItem label="Name" value={product.name} />
+              <DetailItem label="Product Code" value={product.sku} />
+              <DetailItem
+                label="Price"
+                value={product.price != null ? formatCurrency(product.price, account?.default_currency) : undefined}
+              />
+              <DetailItem label="Status" value={product.active ? 'Active' : 'Inactive'} />
+              <DetailItem span="full" label="Description">
+                {product.description ? (
+                  <span className="whitespace-pre-wrap">{product.description}</span>
+                ) : undefined}
+              </DetailItem>
+            </DetailGrid>
 
             {(systemRows.length > 0 || extraFields.length > 0) && (
               <>
                 <div className="my-6 border-t border-border/50" />
-                <h3 className="text-lg font-semibold mb-4">Other Details</h3>
-                <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                <h3 className="mb-4 text-section font-semibold text-foreground">Other Details</h3>
+                <DetailGrid>
                   {systemRows.map(({ field, value }) => (
-                    <div key={field.id}>
-                      <p className="text-sm text-muted-foreground mb-1 capitalize">{field.field_name}</p>
-                      <p className="font-medium break-words">{value}</p>
-                    </div>
+                    <DetailItem
+                      key={field.id}
+                      label={field.field_name}
+                      className="[&>p:first-child]:capitalize"
+                      value={value}
+                    />
                   ))}
                   {extraFields.map((field) => {
                     const val = customValues[field.id];
                     return (
-                      <div key={field.id}>
-                        <p className="text-sm text-muted-foreground mb-1 capitalize">{field.field_name}</p>
+                      <DetailItem
+                        key={field.id}
+                        label={field.field_name}
+                        className="[&>p:first-child]:capitalize"
+                        value={field.field_type === 'attachment' ? undefined : val}
+                      >
                         {field.field_type === 'attachment' && val ? (
-                          <a href={val} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium flex items-center gap-1">
+                          <a href={val} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-medium text-primary hover:underline">
                             <FileText className="size-4" /> View Attachment
                           </a>
-                        ) : (
-                          <p className="font-medium break-words">{val || '-'}</p>
-                        )}
-                      </div>
+                        ) : undefined}
+                      </DetailItem>
                     );
                   })}
-                </div>
+                </DetailGrid>
               </>
             )}
-          </div>
+          </DetailSection>
         </div>
 
         {/* Right Column: Timeline */}
@@ -309,6 +294,6 @@ export default function ProductDetailsPage() {
         defaultProductId={product.id}
         onSaved={fetchAllData}
       />
-    </div>
+    </DetailPageLayout>
   );
 }

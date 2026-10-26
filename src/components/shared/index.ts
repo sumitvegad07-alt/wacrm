@@ -25,4 +25,5 @@ export * from "./form-grid";
 export * from "./form-field";
 export * from "./detail-page-layout";
 export * from "./report-page-layout";
+export * from "./line-items-table";
 export * from "./entity-type-toggle";

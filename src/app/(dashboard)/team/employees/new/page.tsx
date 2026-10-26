@@ -12,7 +12,13 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
-import { FormPageShell, FormActions, PhotoUpload } from "@/components/shared";
+import {
+  FormPageShell,
+  FormActions,
+  PhotoUpload,
+  FORM_GRID_PAGE,
+  SECTION_HEADER_CLASS,
+} from "@/components/shared";
 import type { EmployeeRole, CustomField } from "@/types";
 import { TerritoryPicker } from "@/components/territories/territory-picker";
 import { getTerritoryRows, getAccountTerritorySettings, assignEmployeeAreas } from "@/lib/territories/api";
@@ -258,7 +264,7 @@ export default function NewEmployeePage() {
         <CustomFieldsSectionRenderer
           accountId={accountId || ""}
           moduleName="user"
-          fieldGridClassName="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
+          fieldGridClassName={FORM_GRID_PAGE}
           customFields={customFields}
           customValues={customValues}
           onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
@@ -269,9 +275,7 @@ export default function NewEmployeePage() {
         {/* Geography, once, full-width — the Country → State → City cascade that
             also gets assigned as the employee's territory on save. */}
         <div className="space-y-3" data-tour="employee-area">
-          <h4 className="text-sm font-medium text-foreground border-b border-border pb-1.5">
-            Assigned Area
-          </h4>
+          <h4 className={SECTION_HEADER_CLASS}>Assigned Area</h4>
           <TerritoryPicker
             rows={territoryRows}
             settings={territorySettings}

@@ -36,11 +36,25 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Users } from 'lucide-react';
-import { FormPageShell, FormActions, FormSection } from '@/components/shared';
+import {
+  FormPageShell,
+  FormActions,
+  FormSection,
+  FormGrid,
+  FormField,
+  FORM_GRID_PAGE,
+  FORM_GRID_DIALOG,
+} from '@/components/shared';
+import {
+  controlHeightClassName,
+  controlSurfaceClassName,
+  controlTextClassName,
+} from '@/components/ui/control-base';
 
 interface ContactFormProps {
   open: boolean;
@@ -502,20 +516,18 @@ export function ContactForm({
 
   // Full-page forms use the horizontal space (up to 4 columns) like the
   // reference SFA product; the dialog form keeps a safe 2-column grid.
-  const fieldGrid = asPage
-    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
-    : undefined;
+  const fieldGrid = asPage ? FORM_GRID_PAGE : undefined;
 
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-5 mt-2">
           {!fieldsLoaded ? (
             <div className="space-y-4" aria-hidden="true">
               <div className="h-4 w-32 rounded bg-muted animate-pulse" />
-              <div className={fieldGrid ?? "grid grid-cols-1 md:grid-cols-2 gap-4"}>
+              <div className={fieldGrid ?? FORM_GRID_DIALOG}>
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="space-y-2">
+                  <div key={i} className="flex flex-col gap-1.5">
                     <div className="h-3 w-24 rounded bg-muted animate-pulse" />
-                    <div className="h-9 w-full rounded bg-muted animate-pulse" />
+                    <div className="h-control w-full rounded bg-muted animate-pulse" />
                   </div>
                 ))}
               </div>
@@ -653,16 +665,19 @@ export function ContactForm({
                   </div>
                 );
               }
+              // These return the CONTROL only. The renderer wraps whatever comes
+              // back in a FormField and labels it from the tenant's own field
+              // configuration — so a <Label> here was a second label stacked on
+              // the first, which is what shipped.
               if (fld.system_key === 'collaborator_ids') {
                 return (
                   <div className="space-y-1">
-                    <Label className="text-muted-foreground text-xs">Also Assigned To</Label>
                     <CollaboratorsSelect
                       profiles={profiles}
                       selectedIds={collaboratorIds}
                       onChange={setCollaboratorIds}
                     />
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-micro text-muted-foreground">
                       Everyone here gets full access to this customer. The main owner above is
                       unchanged, so reports and targets still credit one person.
                     </p>
@@ -671,18 +686,15 @@ export function ContactForm({
               }
               if (fld.system_key === 'employee_id') {
                 return (
-                  <div className="space-y-1">
-                    <Label className="text-muted-foreground text-xs">Assign Employee</Label>
-                    <SearchableSelect
-                      value={employeeId}
-                      onChange={setEmployeeId}
-                      options={profiles.map((p) => ({
-                        label: p.full_name || p.email,
-                        value: p.id,
-                      }))}
-                      placeholder="Select employee..."
-                    />
-                  </div>
+                  <SearchableSelect
+                    value={employeeId}
+                    onChange={setEmployeeId}
+                    options={profiles.map((p) => ({
+                      label: p.full_name || p.email,
+                      value: p.id,
+                    }))}
+                    placeholder="Select employee..."
+                  />
                 );
               }
               return undefined;
@@ -723,31 +735,32 @@ export function ContactForm({
           )}
 
           <FormSection title="GPS Coordinates (Optional)">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs">Latitude</Label>
-                <Input value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="e.g. 19.1197" className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs">Longitude</Label>
-                 <Input value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="e.g. 72.8464" className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs" />
-              </div>
-            </div>
+            <FormGrid variant="dialog">
+              <FormField label="Latitude">
+                <Input value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="e.g. 19.1197" inputMode="decimal" />
+              </FormField>
+              <FormField label="Longitude">
+                <Input value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="e.g. 72.8464" inputMode="decimal" />
+              </FormField>
+            </FormGrid>
           </FormSection>
 
           {/* GST Number (customer GSTIN). Its first two digits are the GST state
               code, used as the authoritative place of supply for a registered
               (B2B) customer and snapshotted onto each order as party_gstin. */}
-          <div className="space-y-2">
-            <Label className="text-muted-foreground text-xs">GST Number</Label>
+          <FormField
+            label="GST Number"
+            hint="First two digits are the GST state code."
+            className="max-w-md"
+          >
             <Input
               value={gstNumber}
               onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
               placeholder="24AAACX0000X1Z5"
               maxLength={15}
-              className="bg-muted border-border text-foreground h-8 text-xs uppercase"
+              className="uppercase"
             />
-          </div>
+          </FormField>
 
 
           {/* Financial Settings (credit limit / days / opening balance) are an
@@ -755,67 +768,69 @@ export function ContactForm({
               (SFA, CRM+SFA, and legacy full-access) AND have the payment module on.
               CRM / WFA / CRM+WFA plans never see these fields. */}
           {hasSFA && isModuleEnabled('payment') && (
-            <div className="space-y-4">
-              <h4 className="text-sm font-semibold text-foreground border-b border-border pb-1.5">Financial Settings</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormSection title="Financial Settings">
+              <FormGrid variant="dialog" className="md:grid-cols-3">
                 {/* Two of these are money and one is a day count. They were three
                     identical number boxes, which invited typing a rupee value into
-                    Credit Days. Affordances only — behaviour is unchanged. */}
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs">Credit Limit</Label>
+                    Credit Days. Affordances only — behaviour is unchanged.
+                    `pl-7`/`pr-14` clear the symbol against the shared `px-3`. */}
+                <FormField label="Credit Limit">
                   <div className="relative">
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{currencySymbol}</span>
-                    <Input type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0.00" disabled={!canEditCreditTerms} className="bg-muted border-border text-foreground h-8 text-xs pl-6 disabled:opacity-60" />
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-body text-muted-foreground">{currencySymbol}</span>
+                    <Input type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0.00" disabled={!canEditCreditTerms} className="w-full pl-7 disabled:opacity-60" />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs">Credit Days</Label>
+                </FormField>
+                <FormField label="Credit Days">
                   <div className="relative">
-                    <Input type="number" value={creditDays} onChange={(e) => setCreditDays(e.target.value)} placeholder="30" disabled={!canEditCreditTerms} className="bg-muted border-border text-foreground h-8 text-xs pr-12 disabled:opacity-60" />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">days</span>
+                    <Input type="number" value={creditDays} onChange={(e) => setCreditDays(e.target.value)} placeholder="30" disabled={!canEditCreditTerms} className="w-full pr-14 disabled:opacity-60" />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-body text-muted-foreground">days</span>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs">Opening Balance</Label>
+                </FormField>
+                <FormField label="Opening Balance">
                   <div className="relative">
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{currencySymbol}</span>
-                    <Input type="number" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" disabled={!canEditOpeningBalance} className="bg-muted border-border text-foreground h-8 text-xs pl-6 disabled:opacity-60" />
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-body text-muted-foreground">{currencySymbol}</span>
+                    <Input type="number" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" disabled={!canEditOpeningBalance} className="w-full pl-7 disabled:opacity-60" />
                   </div>
-                </div>
+                </FormField>
                 {(!canEditCreditTerms || !canEditOpeningBalance) && (
-                  <p className="md:col-span-3 text-xs text-muted-foreground">
+                  <p className="text-micro text-muted-foreground md:col-span-3">
                     Some financial fields are locked. Changing a customer&apos;s credit terms or
                     opening balance needs a finance permission.
                   </p>
                 )}
-              </div>
-            </div>
+              </FormGrid>
+            </FormSection>
           )}
 
           {/* Price List (v5) — customer-specific pricing, SFA line only. The
               chosen list's prices apply automatically on web and mobile orders. */}
           {hasSFA && (
-            <div className="space-y-4">
-              <h4 className="text-sm font-semibold text-foreground border-b border-border pb-1.5">Pricing</h4>
-              <div className="space-y-2 max-w-md">
-                <Label className="text-muted-foreground text-xs">Price List</Label>
+            <FormSection title="Pricing">
+              <FormField
+                label="Price List"
+                className="max-w-md"
+                hint={
+                  priceLists.length === 0
+                    ? "No active price lists yet. Create one in Settings → Catalogue Settings → Manage price lists."
+                    : "This customer's orders use this list's prices automatically, on web and mobile."
+                }
+              >
+                {/* Native <select> kept deliberately: it is a short, static list
+                    and the native control is the most reliable on Android. It
+                    now borrows the shared control shape rather than inventing
+                    its own 28px/12px one. */}
                 <select
                   value={priceListId ?? ''}
                   onChange={(e) => setPriceListId(e.target.value || null)}
-                  className="w-full h-8 rounded-md border border-border bg-muted px-2 text-xs text-foreground"
+                  className={cn(controlSurfaceClassName, controlHeightClassName, controlTextClassName, "w-full px-3")}
                 >
                   <option value="">Catalogue price (no price list)</option>
                   {priceLists.map((pl) => (
                     <option key={pl.id} value={pl.id}>{pl.name}</option>
                   ))}
                 </select>
-                <p className="text-xs text-muted-foreground">
-                  {priceLists.length === 0
-                    ? "No active price lists yet. Create one in Settings → Catalogue Settings → Manage price lists."
-                    : "This customer's orders use this list's prices automatically, on web and mobile."}
-                </p>
-              </div>
-            </div>
+              </FormField>
+            </FormSection>
           )}
           </>
           )}

@@ -8,11 +8,23 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
-import { ChevronLeft, MessageSquare, Pencil, UserCheck, MapPin, FileText, Loader2, ExternalLink, CheckCircle2 } from "lucide-react";
+import { MessageSquare, Pencil, UserCheck, MapPin, FileText, Loader2, ExternalLink, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { LeadForm } from "@/components/leads/lead-form";
 import { Timeline } from "@/components/shared/timeline";
+import {
+  DetailPageLayout,
+  DetailSection,
+  DetailGrid,
+  DetailItem,
+  FormGrid,
+  FormField,
+  LineItemsTable,
+  LineItemsHead,
+  LineItemsRow,
+  LineItemsCell,
+} from "@/components/shared";
 import { logModuleActivity } from "@/lib/activities";
 import type { Profile } from "@/types";
 
@@ -260,18 +272,28 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const showCoords = lead.latitude != null && lead.longitude != null;
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
-      {/* Breadcrumb + actions */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
-        <div className="flex items-center gap-2 text-sm">
-          <Button variant="ghost" size="icon-sm" onClick={() => router.push("/leads")} className="text-muted-foreground hover:text-foreground">
-            <ChevronLeft className="size-5" />
-          </Button>
-          <Link href="/leads" className="text-muted-foreground hover:text-foreground">Lead</Link>
-          <span className="text-muted-foreground">›</span>
-          <span className="font-medium text-foreground">{lead.name}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    // Was `mx-auto w-full max-w-7xl` — the only centred, width-capped page in
+    // the app, so a lead record was narrower than every other detail screen on
+    // a wide monitor. DetailPageLayout is full width like the rest.
+    <DetailPageLayout
+      title={lead.name}
+      onBack={() => router.push("/leads")}
+      badges={
+        lead.is_converted ? (
+          <Badge className="gap-1 border-transparent bg-emerald-600 text-white">
+            <CheckCircle2 className="h-3 w-3" /> Converted
+          </Badge>
+        ) : undefined
+      }
+      meta={
+        locationParts.length > 0 ? (
+          <span className="flex items-center gap-1.5">
+            <MapPin className="size-4" /> {locationParts.join(", ")}
+          </span>
+        ) : undefined
+      }
+      actions={
+        <>
           {lead.is_converted && lead.converted_contact_id ? (
             <Link href={`/contacts/${lead.converted_contact_id}`}>
               <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"><ExternalLink className="size-4" /> View Customer</Button>
@@ -285,165 +307,143 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             <Button onClick={() => router.push(`/inbox?phone=${lead.whatsapp || lead.phone}`)} variant="outline" className="gap-2"><MessageSquare className="size-4" /> Message</Button>
           )}
           <Button onClick={() => router.push(`/leads/${lead.id}/edit`)} variant="secondary" className="gap-2"><Pencil className="size-4" /> Edit</Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
-      {/* Owner / Collaborators band */}
-      <div className="flex flex-col gap-4 border-y border-border bg-muted/30 px-4 py-3 sm:flex-row sm:items-start sm:gap-10">
-        <div className="min-w-[200px]">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Lead Owner</p>
-          <SearchableSelect
-            value={lead.owner_id || ""}
-            onChange={(val) => persistLead({ owner_id: val || null }, `Owner changed to ${nameForUser(val)}.`)}
-            options={ownerOptions}
-            placeholder="Unassigned"
-            disabled={!canEdit}
-            className="bg-background"
-          />
-        </div>
-        <div className="flex-1">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Collaborators</p>
-          <CollaboratorsSelect
-            profiles={allProfiles}
-            selectedIds={collaboratorIds}
-            disabled={!canEdit}
-            onChange={(ids) => persistLead({ collaborator_ids: ids })}
-          />
-        </div>
-      </div>
+      {/* The inline-editable band: everything on this record that is changed
+          without opening the edit form. Status joined Owner and Collaborators
+          here — it used to float beside the h1, which is the one place on a
+          detail page that is otherwise read-only. */}
+      <DetailSection bare className="rounded-lg border border-border bg-muted/30 p-4">
+        <FormGrid variant="dialog" className="md:grid-cols-3">
+          <FormField label="Lead Owner">
+            <SearchableSelect
+              value={lead.owner_id || ""}
+              onChange={(val) => persistLead({ owner_id: val || null }, `Owner changed to ${nameForUser(val)}.`)}
+              options={ownerOptions}
+              placeholder="Unassigned"
+              disabled={!canEdit}
+            />
+          </FormField>
+          <FormField label="Status">
+            <SearchableSelect
+              value={lead.status || ""}
+              onChange={(val) => persistLead({ status: val || null }, `Status changed to ${val}.`)}
+              options={statuses.map((st) => ({ value: st.name, label: st.name }))}
+              placeholder="Set status..."
+              disabled={!canEdit}
+              onCreateOption={createStatusInline}
+              createLabel="status"
+            />
+          </FormField>
+          <FormField label="Collaborators">
+            <CollaboratorsSelect
+              profiles={allProfiles}
+              selectedIds={collaboratorIds}
+              disabled={!canEdit}
+              onChange={(ids) => persistLead({ collaborator_ids: ids })}
+            />
+          </FormField>
+        </FormGrid>
+      </DetailSection>
 
       {/* Two columns: details on the left, activity timeline on the right. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-      {/* Name + status */}
-      <div className="flex flex-col gap-4 px-4 py-6 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
-            {lead.name}
-            {lead.is_converted && (
-              <Badge className="gap-1 border-transparent bg-emerald-600 text-white"><CheckCircle2 className="h-3 w-3" /> Converted</Badge>
-            )}
-          </h1>
-          {locationParts.length > 0 && (
-            <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-              <MapPin className="size-4" /> {locationParts.join(", ")}.
-            </p>
-          )}
-        </div>
-        <div className="w-full sm:w-56">
-          <SearchableSelect
-            value={lead.status || ""}
-            onChange={(val) => persistLead({ status: val || null }, `Status changed to ${val}.`)}
-            options={statuses.map((s) => ({ value: s.name, label: s.name }))}
-            placeholder="Set status..."
-            disabled={!canEdit}
-            onCreateOption={createStatusInline}
-            createLabel="status"
-          />
-        </div>
-      </div>
 
       {/* Source / Industry. "Price Group" used to sit here showing a permanent "-";
           leads have no price group, so the tile is gone. */}
       {(hasSystem("source") || hasSystem("industry")) && (
-        <div className="grid grid-cols-1 gap-6 border-t border-border px-4 py-6 sm:grid-cols-3">
-          {hasSystem("source") && (
-            <div>
-              <p className="text-sm text-muted-foreground">{labelFor("source", "Source")}</p>
-              <p className="mt-1 font-medium text-foreground">{lead.source || "-"}</p>
-            </div>
-          )}
-          {hasSystem("industry") && (
-            <div>
-              <p className="text-sm text-muted-foreground">{labelFor("industry", "Industry")}</p>
-              <p className="mt-1 font-medium text-foreground">{lead.industry || "-"}</p>
-            </div>
-          )}
-        </div>
+        <DetailSection>
+          <DetailGrid cols={3}>
+            {hasSystem("source") && (
+              <DetailItem label={labelFor("source", "Source")} value={lead.source} />
+            )}
+            {hasSystem("industry") && (
+              <DetailItem label={labelFor("industry", "Industry")} value={lead.industry} />
+            )}
+          </DetailGrid>
+        </DetailSection>
       )}
 
       {/* Contact + location details */}
       {(contactRows.length > 0 || showAddress || showCoords) && (
-        <div className="grid grid-cols-1 gap-6 border-t border-border px-4 py-6 sm:grid-cols-3">
-          {contactRows.map(([key, fallback, value]) => (
-            <div key={key}>
-              <p className="text-sm text-muted-foreground">{labelFor(key, fallback)}</p>
-              <p className="mt-1 font-medium text-foreground break-words">{value}</p>
-            </div>
-          ))}
-          {showAddress && (
-            <div className="sm:col-span-3"><p className="text-sm text-muted-foreground">{labelFor("address", "Address")}</p><p className="mt-1 font-medium text-foreground">{lead.address}</p></div>
-          )}
-          {showCoords && (
-            <div><p className="text-sm text-muted-foreground">Coordinates (geo-tagged)</p><p className="mt-1 font-medium font-mono text-sm text-foreground">{lead.latitude}, {lead.longitude}</p></div>
-          )}
-        </div>
+        <DetailSection title="Contact &amp; Location">
+          <DetailGrid cols={3}>
+            {contactRows.map(([key, fallback, value]) => (
+              <DetailItem key={key} label={labelFor(key, fallback)} value={value} />
+            ))}
+            {showAddress && (
+              <DetailItem span="full" label={labelFor("address", "Address")} value={lead.address} />
+            )}
+            {showCoords && (
+              <DetailItem label="Coordinates (geo-tagged)">
+                <span className="font-mono">{lead.latitude}, {lead.longitude}</span>
+              </DetailItem>
+            )}
+          </DetailGrid>
+        </DetailSection>
       )}
 
       {/* Other Details (custom fields) */}
-      <div className="border-t border-border px-4 py-6">
-        <h2 className="mb-4 text-lg font-semibold text-foreground">Other Details</h2>
+      <DetailSection title="Other Details">
         {extraFields.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No additional details.</p>
+          <p className="text-body text-muted-foreground">No additional details.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          <DetailGrid cols={3}>
             {extraFields.map((field) => {
               const val = customValues[field.id];
               return (
-                <div key={field.id}>
-                  <p className="text-sm capitalize text-muted-foreground">{field.field_name}</p>
+                <DetailItem
+                  key={field.id}
+                  label={field.field_name}
+                  className="[&>p:first-child]:capitalize"
+                  value={field.field_type === "attachment" ? undefined : val}
+                >
                   {field.field_type === "attachment" && val ? (
-                    <a href={val} target="_blank" rel="noopener noreferrer" className="mt-1 flex items-center gap-1 font-medium text-primary hover:underline">
+                    <a href={val} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-medium text-primary hover:underline">
                       <FileText className="size-4" /> View Attachment
                     </a>
-                  ) : (
-                    <p className="mt-1 font-medium text-foreground break-words">{val || "-"}</p>
-                  )}
-                </div>
+                  ) : undefined}
+                </DetailItem>
               );
             })}
-          </div>
+          </DetailGrid>
         )}
-      </div>
+      </DetailSection>
 
       {/* Deal Details */}
-      <div className="border-t border-border px-4 py-6">
-        <h2 className="mb-4 text-lg font-semibold text-foreground">Deal Details</h2>
+      <DetailSection title="Deal Details">
         {deals.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No deals linked to this lead.</p>
+          <p className="text-body text-muted-foreground">No deals linked to this lead.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Deal #</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Pipeline Name</th>
-                  <th className="px-4 py-3 font-medium">Pipeline Status</th>
-                  <th className="px-4 py-3 font-medium">Owner</th>
-                  <th className="px-4 py-3 font-medium">Created By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deals.map((d) => (
-                  <tr
-                    key={d.id}
-                    onClick={() => router.push(`/deals/${d.id}`)}
-                    className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-muted/40"
-                  >
-                    <td className="px-4 py-3 font-mono text-xs text-primary">#{d.id.slice(0, 6)}</td>
-                    <td className="px-4 py-3 text-foreground">{new Date(d.created_at).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-foreground">{d.pipeline?.name || "—"}</td>
-                    <td className="px-4 py-3 text-foreground">{d.stage?.name || "-"}</td>
-                    <td className="px-4 py-3 text-foreground">{nameForUser(d.assigned_to)}</td>
-                    <td className="px-4 py-3 text-foreground">{nameForUser(d.user_id)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <LineItemsTable
+            minWidth="45rem"
+            head={
+              <tr>
+                <LineItemsHead>Deal #</LineItemsHead>
+                <LineItemsHead>Date</LineItemsHead>
+                <LineItemsHead>Pipeline Name</LineItemsHead>
+                <LineItemsHead>Pipeline Status</LineItemsHead>
+                <LineItemsHead>Owner</LineItemsHead>
+                <LineItemsHead>Created By</LineItemsHead>
+              </tr>
+            }
+          >
+            {deals.map((d) => (
+              <LineItemsRow key={d.id} onClick={() => router.push(`/deals/${d.id}`)}>
+                <LineItemsCell className="font-mono text-caption text-primary">#{d.id.slice(0, 6)}</LineItemsCell>
+                <LineItemsCell>{new Date(d.created_at).toLocaleString()}</LineItemsCell>
+                <LineItemsCell>{d.pipeline?.name || "—"}</LineItemsCell>
+                <LineItemsCell>{d.stage?.name || "—"}</LineItemsCell>
+                <LineItemsCell>{nameForUser(d.assigned_to)}</LineItemsCell>
+                <LineItemsCell>{nameForUser(d.user_id)}</LineItemsCell>
+              </LineItemsRow>
+            ))}
+          </LineItemsTable>
         )}
-      </div>
+      </DetailSection>
 
         </div>
 
@@ -456,6 +456,6 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <LeadForm open={editOpen} onOpenChange={setEditOpen} lead={lead} onSaved={fetchAllData} />
-    </div>
+    </DetailPageLayout>
   );
 }

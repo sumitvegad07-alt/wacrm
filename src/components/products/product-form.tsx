@@ -21,7 +21,23 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Trash2, Package, Plus } from 'lucide-react';
-import { FormPageShell, FormActions, FormSection, MediaUpload } from '@/components/shared';
+import {
+  FormPageShell,
+  FormActions,
+  FormSection,
+  MediaUpload,
+  FormGrid,
+  FormField,
+  FORM_GRID_PAGE,
+  FORM_GRID_DIALOG,
+  SECTION_HEADER_CLASS,
+} from '@/components/shared';
+import { cn } from '@/lib/utils';
+import {
+  controlHeightClassName,
+  controlSurfaceClassName,
+  controlTextClassName,
+} from '@/components/ui/control-base';
 import { logModuleActivity } from '@/lib/activities';
 
 interface ProductFormProps {
@@ -472,9 +488,7 @@ export function ProductForm({
   // Required off in Manage Fields, the product can be saved without a name.
   const nameRequired = customFields.find((f) => f.system_key === 'name')?.is_required ?? true;
 
-  const fieldGrid = asPage
-    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
-    : undefined;
+  const fieldGrid = asPage ? FORM_GRID_PAGE : undefined;
 
   const formContent = (
     <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -482,11 +496,11 @@ export function ProductForm({
             {!fieldsLoaded ? (
               <div className="space-y-4" aria-hidden="true">
                 <div className="h-4 w-32 rounded bg-muted animate-pulse" />
-                <div className={fieldGrid ?? "grid grid-cols-1 md:grid-cols-2 gap-4"}>
+                <div className={fieldGrid ?? FORM_GRID_DIALOG}>
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="space-y-2">
+                    <div key={i} className="flex flex-col gap-1.5">
                       <div className="h-3 w-24 rounded bg-muted animate-pulse" />
-                      <div className="h-9 w-full rounded bg-muted animate-pulse" />
+                      <div className="h-control w-full rounded bg-muted animate-pulse" />
                     </div>
                   ))}
                 </div>
@@ -700,18 +714,16 @@ export function ProductForm({
             />
 
             <div className="space-y-4 pt-4 border-t border-border/50">
-              <h4 className="text-sm font-medium text-foreground">Additional Details</h4>
+              <h4 className={SECTION_HEADER_CLASS}>Additional Details</h4>
               {showDescription ? (
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Description</Label>
+                <FormField label="Description">
                   <Textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Brief description..."
-                    className="min-h-[80px] border-border bg-muted text-foreground"
                     autoFocus
                   />
-                </div>
+                </FormField>
               ) : (
                 <button
                   type="button"
@@ -737,23 +749,21 @@ export function ProductForm({
                     </Label>
                   </div>
                   {trackStock ? (
-                    <div className="grid gap-2">
-                      <Label className="text-muted-foreground">Opening stock</Label>
+                    <FormField
+                      label="Opening stock"
+                      className="max-w-xs"
+                      hint="The starting balance. Closing stock is calculated from orders, dispatches and manual adjustments — set it once here."
+                    >
                       <Input
                         type="number"
                         step="0.01"
                         value={openingStock}
                         onChange={(e) => setOpeningStock(e.target.value)}
                         placeholder="0"
-                        className="border-border bg-muted text-foreground max-w-xs"
                       />
-                      <p className="text-[11px] text-muted-foreground">
-                        The starting balance. Closing stock is then calculated automatically from
-                        orders, dispatches and manual adjustments — set it once here.
-                      </p>
-                    </div>
+                    </FormField>
                   ) : (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-micro text-muted-foreground">
                       Stock is not tracked for this product (e.g. a service). It will never show a
                       stock figure or block an order.
                     </p>
@@ -761,13 +771,12 @@ export function ProductForm({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Tax slab</Label>
+              <FormGrid variant="dialog">
+                <FormField label="Tax slab">
                   <select
                     value={taxSlabId}
                     onChange={(e) => setTaxSlabId(e.target.value)}
-                    className="h-9 rounded-md border border-border bg-muted px-3 text-sm text-foreground"
+                    className={cn(controlSurfaceClassName, controlHeightClassName, controlTextClassName, "w-full px-3")}
                   >
                     <option value="">No tax (0%)</option>
                     {taxSlabs.map((slab) => (
@@ -809,34 +818,32 @@ export function ProductForm({
                       </Button>
                     </div>
                   )}
-                </div>
+                </FormField>
 
                 {/* HSN Code */}
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">HSN / SAC Code</Label>
+                <FormField
+                  label="HSN / SAC Code"
+                  hint="Harmonised System of Nomenclature code for GST invoicing."
+                >
                   <Input
                     type="text"
                     value={hsnCode}
                     onChange={(e) => setHsnCode(e.target.value)}
                     placeholder="e.g. 3304, 6109"
-                    className="border-border bg-muted text-foreground"
                     maxLength={8}
                   />
-                  <p className="text-[11px] text-muted-foreground">
-                    Harmonised System of Nomenclature code for GST invoicing.
-                  </p>
-                </div>
-              </div>
+                </FormField>
+              </FormGrid>
 
 
-              <div className="space-y-1.5 pt-2">
-                <Label className="text-muted-foreground">Status</Label>
-                <div className="flex items-center gap-6 h-9">
+              <FormField label="Status" htmlFor="product-status-active" className="pt-2">
+                <div className="flex h-control-touch items-center gap-6 md:h-control">
                   {([['active', 'Active', true], ['inactive', 'Inactive', false]] as const).map(
                     ([key, label, val]) => (
-                      <label key={key} className="flex items-center gap-1.5 text-sm cursor-pointer text-foreground">
+                      <label key={key} className="flex cursor-pointer items-center gap-1.5 text-body text-foreground">
                         <input
                           type="radio"
+                          id={"product-status-" + key}
                           name="product-status"
                           checked={active === val}
                           onChange={() => setActive(val)}
@@ -847,7 +854,7 @@ export function ProductForm({
                     ),
                   )}
                 </div>
-              </div>
+              </FormField>
             </div>
           </>
           )}

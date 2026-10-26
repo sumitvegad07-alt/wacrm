@@ -6,19 +6,23 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
-  ArrowLeft, Edit2, Loader2, Save, Trash2, Smartphone, Lock, Unlock, CheckCircle2, XCircle, Camera, User, MapPin, CalendarDays
+  Edit2, Loader2, Save, Trash2, Smartphone, Lock, Unlock, CheckCircle2, XCircle, Camera, User, MapPin, CalendarDays
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import { Timeline } from "@/components/shared/timeline";
+import {
+  DetailPageLayout,
+  DetailSection,
+  StatusBadge,
+} from "@/components/shared";
 import { EmployeeRouteTab } from "@/components/territories/employee-route-tab";
 import { EmployeeAreaAssignment } from "@/components/territories/employee-area-assignment";
 import { logModuleActivity } from "@/lib/activities";
@@ -65,7 +69,7 @@ function AvatarUploader({ url, onUpload, isEditing }: { url?: string | null; onU
           </label>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">{isEditing ? "Click to upload a new profile picture" : "Profile Picture"}</p>
+      <p className="text-micro text-muted-foreground">{isEditing ? "Click to upload a new profile picture" : "Profile Picture"}</p>
     </div>
   );
 }
@@ -373,39 +377,35 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   if (!employee) return null;
 
   return (
-    <div className="p-4 sm:p-5 w-full max-w-none space-y-4">
-      {/* Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => router.push("/team/employees")} className="shrink-0">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">{employee.full_name || "Employee Profile"}</h1>
-              <Badge className={employee.status === "active" ? "bg-emerald-600 text-white shadow-sm border-transparent" : "bg-red-600 text-white shadow-sm border-transparent"}>
-                {employee.status || "active"}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">
-              {employee.email} {employee.employee_code && `• ID: ${employee.employee_code}`}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {!isEditing ? (
-            <Button onClick={() => setIsEditing(true)} className="gap-2"><Edit2 className="w-4 h-4" />Edit Employee</Button>
-          ) : (
-            <>
-              <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
-              <Button onClick={handleSaveEmployee} data-shortcut="save" disabled={saving} className="gap-2">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                <Save className="w-4 h-4" /> Save Changes
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+    // Was `p-4 sm:p-5` on top of the gutter the workspace <main> already
+    // applies — the same double-indent FormPageShell had. DetailPageLayout
+    // adds none.
+    <DetailPageLayout
+      title={employee.full_name || "Employee Profile"}
+      onBack={() => router.push("/team/employees")}
+      // Was a hand-rolled emerald/red Badge. StatusBadge runs the value
+      // through the shared status vocabulary like every other module.
+      badges={<StatusBadge status={employee.status || "active"} />}
+      meta={
+        <>
+          <span>{employee.email}</span>
+          {employee.employee_code && <span>ID: {employee.employee_code}</span>}
+        </>
+      }
+      actions={
+        !isEditing ? (
+          <Button onClick={() => setIsEditing(true)} className="gap-2"><Edit2 className="w-4 h-4" />Edit Employee</Button>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
+            <Button onClick={handleSaveEmployee} data-shortcut="save" disabled={saving} className="gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              <Save className="w-4 h-4" /> Save Changes
+            </Button>
+          </>
+        )
+      }
+    >
 
       {/* Tab bar — Details | Territory Assignment | Route Management */}
       <div className="flex items-center gap-1 border-b border-border -mt-2">
@@ -418,7 +418,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             key={tab.key}
             type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
+            className={`relative px-4 py-2.5 text-body font-medium transition-colors ${
               activeTab === tab.key
                 ? "text-primary"
                 : "text-muted-foreground hover:text-foreground"
@@ -447,7 +447,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 ${activeTab === "details" ? "" : "hidden"}`}>
         {/* Left Col: Details & Devices */}
         <div className="lg:col-span-2 space-y-8">
-          <Card className="p-6 border-border shadow-sm">
+          <DetailSection>
             <AvatarUploader url={form.avatar_url} onUpload={(url) => setForm({...form, avatar_url: url})} isEditing={isEditing} />
             <CustomFieldsSectionRenderer
               accountId={accountId || ""}
@@ -456,18 +456,18 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               customValues={customValues}
               onChange={(id, val) => setCustomValues({ ...customValues, [id]: val })}
               renderCustomSystemField={renderCustomSystemField}
-              isEditing={isEditing} // We'll need to patch CustomFieldsSectionRenderer for this prop if missing, but it handles inputs normally. Wait, CustomFieldsSectionRenderer always renders Inputs. I will need to patch it or just handle it.
+              isEditing={isEditing}
             />
-          </Card>
+          </DetailSection>
 
-          <Card className="border-border shadow-sm overflow-hidden">
+          <DetailSection bare className="overflow-hidden rounded-lg border border-border bg-card">
             <div className="p-4 border-b bg-muted/20">
-              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <h2 className="flex items-center gap-2 text-section font-semibold text-foreground">
                 <CalendarDays className="w-5 h-5 text-primary" /> Holiday List
               </h2>
             </div>
             <div className="p-4 space-y-3">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-micro text-muted-foreground">
                 Decides this employee&apos;s weekly offs and holidays. Leave taken across those days
                 is not counted, and the attendance page judges them against this calendar.
               </p>
@@ -500,26 +500,26 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                     defaultHolidayListLabel}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">
+              <p className="text-micro text-muted-foreground">
                 {isEditing
                   ? "Saved when you press Save."
                   : "Press Edit to change which calendar this employee follows."}{" "}
                 Lists are built in <strong>Settings → Leave Settings → Holiday Lists</strong>.
               </p>
             </div>
-          </Card>
+          </DetailSection>
 
           {/* Reporting Manager — only when Reporting Hierarchy is enabled in Organisation Settings.
               Sets profiles.manager_id, which drives the View Subordinate/Manager Data rights. */}
           {isModuleEnabled("reporting_hierarchy") && (
-            <Card className="border-border shadow-sm overflow-hidden">
+            <DetailSection bare className="overflow-hidden rounded-lg border border-border bg-card">
               <div className="p-4 border-b bg-muted/20">
-                <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <h2 className="flex items-center gap-2 text-section font-semibold text-foreground">
                   <User className="w-5 h-5 text-primary" /> Reporting Manager
                 </h2>
               </div>
               <div className="p-4 space-y-3">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   Who this employee reports to. Sets the reporting hierarchy that the
                   &ldquo;View Subordinate / Manager Data&rdquo; rights walk.
                 </p>
@@ -550,12 +550,12 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   </p>
                 )}
               </div>
-            </Card>
+            </DetailSection>
           )}
 
-          <Card className="border-border shadow-sm overflow-hidden">
+          <DetailSection bare className="overflow-hidden rounded-lg border border-border bg-card">
             <div className="p-4 border-b bg-muted/20">
-              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <h2 className="flex items-center gap-2 text-section font-semibold text-foreground">
                 <Smartphone className="w-5 h-5 text-primary" /> User Devices
               </h2>
             </div>
@@ -611,7 +611,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 <p className="px-4 py-8 text-center text-muted-foreground">No devices registered.</p>
               )}
             </div>
-          </Card>
+          </DetailSection>
         </div>
 
         {/* Right Col: Timeline */}
@@ -626,7 +626,6 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           />
         </div>
       </div>
-
-    </div>
+    </DetailPageLayout>
   );
 }
