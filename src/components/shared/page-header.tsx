@@ -6,11 +6,24 @@ import { shouldRenderHeader, useTableToolbarSlot } from "@/components/layout/tab
 
 export interface PageHeaderProps extends Omit<React.ComponentProps<"div">, "title"> {
   /**
-   * Main page title (renders as an h1 at 24px/700).
+   * @deprecated NOT RENDERED. Accepted so the ~31 screens that pass it keep
+   * compiling.
+   *
+   * The page title moved to the app topbar when the toolbar line was removed,
+   * and it is resolved there from a hand-maintained route map in
+   * `components/layout/header.tsx`. This prop has rendered nothing since; its
+   * doc comment still claimed "renders as an h1 at 24px/700", which is how it
+   * went unnoticed.
+   *
+   * Known consequence of the route map, left as an open decision: it matches by
+   * path prefix, so `/contacts/new` resolves to the `/contacts` entry and the
+   * Add Customer screen is titled "Customers". Either this prop comes back and
+   * the map is retired, or the prop and its call sites are removed and the map
+   * gains entries for the `/new` and `/[id]` routes. Do not add a third way.
    */
-  title: string | React.ReactNode;
+  title?: string | React.ReactNode;
   /**
-   * Subtitle / description below the main title.
+   * @deprecated NOT RENDERED. See `title`.
    */
   subtitle?: string | React.ReactNode;
   /**

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, ChevronsUpDown, X, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { controlTriggerClassName } from "@/components/ui/control-base";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import type { Profile } from "@/types";
@@ -47,7 +48,7 @@ export function CollaboratorsSelect({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           disabled={disabled}
-          className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 h-9 font-normal text-left"
+          className={controlTriggerClassName}
         >
           <span className={cn("truncate", selectedIds.length === 0 && "text-muted-foreground")}>
             {/* "Employees", not "collaborators": the label above this control now

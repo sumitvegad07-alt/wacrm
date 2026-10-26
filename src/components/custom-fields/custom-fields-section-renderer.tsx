@@ -2,9 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Label } from '@/components/ui/label';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import { visibleSectionFields } from '@/components/custom-fields/visible-fields';
+import {
+  FORM_GRID_DIALOG,
+  FORM_GRID_PAGE,
+  SECTION_HEADER_CLASS as SHARED_SECTION_HEADER_CLASS,
+} from '@/components/shared/form-grid';
+import { FormField } from '@/components/shared/form-field';
 import type { CustomField, CustomFieldSection } from '@/types';
 
 interface CustomFieldsSectionRendererProps {
@@ -26,23 +31,25 @@ interface CustomFieldsSectionRendererProps {
   fieldGridClassName?: string;
 }
 
-const DEFAULT_FIELD_GRID = "grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4";
+const DEFAULT_FIELD_GRID = FORM_GRID_DIALOG;
 
 /**
- * The canonical field grid for full-page create/edit forms. Every "as page"
- * form uses this exact grid so field widths, columns and row spacing are
- * identical across modules. Dialogs fall back to DEFAULT_FIELD_GRID (2-col) so
- * they don't cram 4 columns into a narrow popup.
+ * The canonical field grid for full-page create/edit forms.
+ *
+ * Re-exported from `shared/form-grid` rather than defined here. It used to be
+ * defined here with a comment calling it canonical, and it had **zero
+ * importers** — the same string was copy-pasted into six form files instead.
+ * Keeping the name as an alias means the renderer's own callers keep working
+ * while there is only one definition.
  */
-export const PAGE_FIELD_GRID =
-  "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4";
+export const PAGE_FIELD_GRID = FORM_GRID_PAGE;
 
 /**
- * The one section-header style shared by the renderer, FormSection and every
- * hand-built section, so a form never mixes three different header looks.
+ * The one section-header style. Re-exported from `shared/form-grid`, which is
+ * where it now lives so `FormSection` can import it without pulling this
+ * module's Supabase client into its graph.
  */
-export const SECTION_HEADER_CLASS =
-  "text-sm font-semibold text-foreground border-b border-border pb-1.5";
+export const SECTION_HEADER_CLASS = SHARED_SECTION_HEADER_CLASS;
 
 export function CustomFieldsSectionRenderer({
   accountId,
@@ -105,7 +112,7 @@ export function CustomFieldsSectionRenderer({
           {Array.from({ length: Math.min(activeFields.length, 6) }).map((_, i) => (
             <div key={i} className="space-y-2">
               <div className="h-3 w-24 rounded bg-muted animate-pulse" />
-              <div className="h-9 w-full rounded bg-muted animate-pulse" />
+              <div className="h-control w-full rounded bg-muted animate-pulse" />
             </div>
           ))}
         </div>
@@ -176,17 +183,16 @@ export function CustomFieldsSectionRenderer({
                 };
 
                 return (
-                  <div key={field.id} className="space-y-1.5">
-                    <Label className="text-muted-foreground capitalize flex items-center gap-1">
-                      {field.field_name}
-                      {field.is_required && (
-                        <span className="text-destructive font-bold">*</span>
-                      )}
-                    </Label>
+                  <FormField
+                    key={field.id}
+                    label={field.field_name}
+                    labelClassName="capitalize"
+                    required={field.is_required}
+                  >
                     {customNode !== undefined ? (
                       customNode
                     ) : isEditing === false ? (
-                      <p className="font-medium text-foreground text-base">
+                      <p className="text-body font-medium text-foreground">
                         {value || "—"}
                       </p>
                     ) : (
@@ -196,7 +202,7 @@ export function CustomFieldsSectionRenderer({
                         onChange={handleChange}
                       />
                     )}
-                  </div>
+                  </FormField>
                 );
               })}
             </div>

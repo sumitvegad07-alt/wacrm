@@ -1,147 +1,54 @@
 /**
- * WACRM / OZZO CRM Design Tokens
- * Source of truth for layout, typography, animation, and component constraints.
+ * WACRM / OZZO CRM — status vocabulary.
+ *
+ * ## This file is NOT the design system
+ *
+ * It used to be: a 215-line `tokens` object covering spacing, typography,
+ * radius, z-index, layout dimensions, button heights, dialog and drawer sizes.
+ * In the whole app it was imported exactly once, and only for
+ * `STATUS_MAPPINGS` below. Everything else had no consumer at all, and having
+ * never been read it had quietly drifted away from what ships — it claimed a
+ * 16rem sidebar (it is 13rem), a 3rem table row (it is 2rem), 1.5rem of page
+ * padding (it is 1rem) and a 6px `md` radius (it is 8px). Anyone who had
+ * started using it would have produced new inconsistency, not less.
+ *
+ * The real tokens live in `src/app/globals.css`, in the `@theme inline` block,
+ * because that is the only place Tailwind can turn them into utilities and the
+ * only place the browser actually reads. Add a token there:
+ *
+ *   control heights   --spacing-control{,-sm,-lg,-touch}  -> h-control, …
+ *   type scale        --text-{micro,caption,table,label,body,section,page-title}
+ *   stacking order    --z-index-{dropdown,sticky,overlay,modal,popover,tooltip,toast}
+ *   layout dimensions --layout-{header-h,sidebar-w,page-gutter,row-h,grid-min-h}
+ *   colour + radius   --primary*, --success/--warning/--info, --radius*
+ *
+ * Do not reintroduce a TypeScript mirror of those. A second source of truth is
+ * what produced the drift the first time.
+ *
+ * What stays here is the one thing that genuinely belongs in TypeScript: the
+ * mapping from a status string the database stores to a semantic variant the
+ * UI paints. That is data, not styling.
  *
  * @module src/lib/design-tokens
  */
 
-export const tokens = {
-  spacing: {
-    1: '0.25rem',    // 4px
-    2: '0.5rem',     // 8px
-    3: '0.75rem',    // 12px
-    4: '1rem',       // 16px
-    5: '1.25rem',    // 20px
-    6: '1.5rem',     // 24px
-    8: '2rem',       // 32px
-    10: '2.5rem',    // 40px
-    12: '3rem',      // 48px
-  },
-
-  radius: {
-    sm: '4px',
-    md: '6px',
-    lg: '8px',
-    xl: '12px',
-    '2xl': '16px',
-    full: '9999px',
-  },
-
-  typography: {
-    pageTitle: { size: '1.5rem', weight: 700, lineHeight: 1.2 },
-    sectionTitle: { size: '1.125rem', weight: 600, lineHeight: 1.3 },
-    tableHeader: { size: '0.75rem', weight: 600, transform: 'uppercase', letterSpacing: '0.05em' },
-    body: { size: '0.875rem', weight: 400, lineHeight: 1.5 },
-    caption: { size: '0.75rem', weight: 400 },
-    helper: { size: '0.6875rem', weight: 400 },
-    button: { size: '0.875rem', weight: 500 },
-    badge: { size: '0.75rem', weight: 500 },
-  },
-
-  animation: {
-    hover: '120ms',
-    dropdown: '180ms',
-    modal: '100ms',
-    drawer: '200ms',
-    tooltip: '100ms',
-    accordion: '180ms',
-    page: '200ms',
-    skeleton: '1.5s',
-    maxAllowed: '300ms',
-  },
-
-  breakpoints: {
-    mobile: '768px',
-    tablet: '1024px',
-    desktop: '1280px',
-    wide: '1440px',
-  },
-
-  zIndex: {
-    base: 0,
-    dropdown: 10,
-    sticky: 20,
-    overlay: 30,
-    modal: 40,
-    popover: 50,
-    tooltip: 60,
-    toast: 70,
-  },
-
-  layout: {
-    pageMaxWidth: '1440px',
-    pagePadding: '1.5rem',
-    headerHeight: '3.5rem',
-    sidebarWidth: '16rem',
-    sidebarCollapsedWidth: '4rem',
-    toolbarHeight: '3rem',
-    tableHeaderHeight: '2.5rem',
-    tableRowHeight: '3rem',
-    tableRowCompactHeight: '2.25rem',
-    tableRowExpandedHeight: '3.5rem',
-    tableCheckboxWidth: '3rem',
-    tableActionWidth: '7.5rem',
-  },
-
-  button: {
-    heights: { xs: '1.5rem', sm: '1.75rem', default: '2rem', lg: '2.25rem' },
-    iconSizes: { xs: '1.5rem', sm: '1.75rem', default: '2rem', lg: '2.25rem' },
-  },
-
-  avatar: {
-    sizes: { xs: '1.5rem', sm: '2rem', default: '2.5rem', lg: '3rem', xl: '4rem' },
-  },
-
-  icon: {
-    sizes: { xs: '0.75rem', sm: '0.875rem', default: '1rem', lg: '1.25rem', xl: '1.5rem', '2xl': '2.5rem' },
-  },
-} as const;
-
-/**
- * Standardized Dialog sizes.
- * Use these constants instead of inline width styles.
- */
-export const DIALOG_SIZES = {
-  sm: '400px',
-  md: '600px',
-  lg: '800px',
-  xl: '1000px',
-  full: 'calc(100vw - 2rem)', // Leaves a 1rem margin on all sides
-} as const;
-
-export type DialogSize = keyof typeof DIALOG_SIZES;
-
-/**
- * Standardized Drawer sizes.
- */
-export const DRAWER_SIZES = {
-  sm: '320px',
-  md: '480px',
-  lg: '640px',
-  full: '100vw',
-} as const;
-
-export type DrawerSize = keyof typeof DRAWER_SIZES;
-
-/**
- * Toast duration presets in milliseconds.
- */
-export const TOAST_DURATIONS = {
-  default: 4000,
-  success: 3000,
-  error: 6000,
-  actionRequired: 10000,
-  infinite: 0, // Requires manual dismissal
-} as const;
-
 /**
  * Valid badge/status variants in the CRM design system.
  */
-export type StatusVariant = 'success' | 'warning' | 'destructive' | 'info' | 'neutral' | 'default' | 'secondary' | 'outline';
+export type StatusVariant =
+  | 'success'
+  | 'warning'
+  | 'destructive'
+  | 'info'
+  | 'neutral'
+  | 'default'
+  | 'secondary'
+  | 'outline';
 
 /**
  * Maps logical data statuses to semantic UI variants.
- * Feeds directly into CVA badge/status indicator props.
+ * Feeds directly into CVA badge/status indicator props — see
+ * `src/components/shared/status-badge.tsx`, the only consumer.
  */
 export const STATUS_MAPPINGS: Record<string, StatusVariant> = {
   // Positive / Success
@@ -199,17 +106,3 @@ export const STATUS_MAPPINGS: Record<string, StatusVariant> = {
   unassigned: 'neutral',
   offline: 'neutral',
 };
-
-/**
- * Enforces a standard order for standard action buttons across the CRM.
- * Use to dynamically sort arrays of actions in toolbars or table rows.
- */
-export const ACTION_ORDER = {
-  view: 1,
-  edit: 2,
-  approve: 3,
-  duplicate: 4,
-  export: 5,
-  archive: 6,
-  delete: 7,
-} as const;

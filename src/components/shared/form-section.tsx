@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { SECTION_HEADER_CLASS } from "@/components/shared/form-grid";
 
 interface FormSectionProps {
   /** Section heading, e.g. "Primary Details", "Products". */
@@ -21,10 +22,13 @@ interface FormSectionProps {
 export function FormSection({ title, action, subtitle, children, className }: FormSectionProps) {
   return (
     <div className={cn("space-y-4", className)}>
-      <div className="flex items-end justify-between gap-3 border-b border-border pb-1.5">
+      {/* The border lives on this row, not on the h3, so the row can also hold
+          an action. SECTION_HEADER_CLASS carries the same border for a section
+          header built without this component — hence `border-0` here. */}
+      <div className={cn(SECTION_HEADER_CLASS, "flex items-end justify-between gap-3 border-0 border-b font-normal")}>
         <div>
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+          <h3 className="text-section font-semibold text-foreground">{title}</h3>
+          {subtitle && <p className="text-caption text-muted-foreground mt-0.5">{subtitle}</p>}
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>

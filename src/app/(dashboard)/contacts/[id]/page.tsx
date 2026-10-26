@@ -7,12 +7,18 @@ import { createClient } from "@/lib/supabase/client";
 import type { Contact, Tag, ContactNote, CustomField, Deal, Task, Conversation } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Phone, Mail, Building2, Calendar, CheckSquare, MessageSquare, Briefcase, FileText, Loader2, Plus, Pencil } from "lucide-react";
+import { Phone, Mail, Building2, Calendar, CheckSquare, MessageSquare, Briefcase, FileText, Loader2, Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import { ContactForm } from "@/components/contacts/contact-form";
 import { Timeline } from "@/components/shared/timeline";
+import {
+  DetailPageLayout,
+  DetailSection,
+  DetailGrid,
+  DetailItem,
+} from "@/components/shared/detail-page-layout";
 import { CustomerFinancialCard } from "@/components/payments/customer-financial-card";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 import { CustomerAssetsPanel } from "@/components/service/customer-assets-panel";
@@ -158,36 +164,42 @@ export default function ContactDetailsPage() {
   if (!contact) return null;
 
   return (
-    <div className="space-y-6 w-full max-w-none flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 bg-card border border-border p-4 rounded-lg">
-        <div className="flex items-center gap-4">
+    <DetailPageLayout
+      title={contact.company || contact.name || "Unnamed Customer"}
+      onBack={() => router.back()}
+      badges={tags.map((t) => (
+        <Badge
+          key={t.id}
+          style={{ backgroundColor: t.color }}
+          className="border-transparent font-semibold text-white shadow-sm"
+        >
+          {t.name}
+        </Badge>
+      ))}
+      meta={
+        <>
+          {contact.name && (
+            <span className="flex items-center gap-1">
+              <Building2 className="size-3" /> {contact.name}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <Phone className="size-3" /> {contact.phone}
+          </span>
+          {contact.email && (
+            <span className="flex items-center gap-1">
+              <Mail className="size-3" /> {contact.email}
+            </span>
+          )}
+        </>
+      }
+      actions={
+        <>
           <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => router.back()}
-            className="text-muted-foreground hover:text-foreground"
+            onClick={() => router.push(`/inbox?phone=${contact.phone}`)}
+            variant="outline"
+            className="gap-2"
           >
-            <ChevronLeft className="size-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-              {contact.company || contact.name || "Unnamed Customer"}
-              {tags.map(t => (
-                <Badge key={t.id} style={{ backgroundColor: t.color }} className="text-white border-transparent shadow-sm font-semibold">
-                  {t.name}
-                </Badge>
-              ))}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-4">
-              {contact.name && <span className="flex items-center gap-1"><Building2 className="size-3" /> {contact.name}</span>}
-              <span className="flex items-center gap-1"><Phone className="size-3" /> {contact.phone}</span>
-              {contact.email && <span className="flex items-center gap-1"><Mail className="size-3" /> {contact.email}</span>}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => router.push(`/inbox?phone=${contact.phone}`)} variant="outline" className="gap-2">
             <MessageSquare className="size-4" />
             Message
           </Button>
@@ -195,9 +207,9 @@ export default function ContactDetailsPage() {
             <Pencil className="size-4" />
             Edit
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Column: Details & Custom Fields */}
         <div className="lg:col-span-2 space-y-6">
@@ -211,29 +223,14 @@ export default function ContactDetailsPage() {
             />
           )}
 
-          <div className="bg-card border border-border rounded-lg p-5">
-            <h3 className="text-lg font-semibold mb-4">Customer Details</h3>
-            
-            <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Company Name</p>
-                <p className="font-medium">{contact.company || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Contact Person</p>
-                <p className="font-medium">{contact.name || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Phone Number</p>
-                <p className="font-medium">{contact.phone}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Email</p>
-                <p className="font-medium">{contact.email || '-'}</p>
-              </div>
+          <DetailSection title="Customer Details">
+            <DetailGrid>
+              <DetailItem label="Company Name" value={contact.company} />
+              <DetailItem label="Contact Person" value={contact.name} />
+              <DetailItem label="Phone Number" value={contact.phone} />
+              <DetailItem label="Email" value={contact.email} />
               {hierarchy.enabled && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Customer Level</p>
+                <DetailItem label="Customer Level">
                   <select
                     value={(contact as any).hierarchy_level ?? ""}
                     onChange={async (e) => {
@@ -243,7 +240,7 @@ export default function ContactDetailsPage() {
                       if (error) toast.error("Failed to update level");
                       else toast.success("Customer level updated");
                     }}
-                    className="text-sm bg-muted border border-border rounded-md px-2 py-1.5 font-medium w-full"
+                    className="text-body bg-muted border border-border rounded-md px-2 py-1.5 font-medium w-full"
                   >
                     <option value="">Not set</option>
                     {hierarchy.levels.map((lvl) => (
@@ -252,61 +249,61 @@ export default function ContactDetailsPage() {
                       </option>
                     ))}
                   </select>
-                </div>
+                </DetailItem>
               )}
-            </div>
+            </DetailGrid>
 
             {/* Address & Location */}
             {(contact.address || contact.area || contact.city || contact.state || contact.country || contact.pincode || contact.latitude != null) && (
               <>
                 <div className="my-6 border-t border-border/50" />
-                <h3 className="text-lg font-semibold mb-4">Address &amp; Location</h3>
-                <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                  {contact.address && <div className="col-span-2"><p className="text-sm text-muted-foreground mb-1">Full Address</p><p className="font-medium">{contact.address}</p></div>}
-                  {contact.area && <div><p className="text-sm text-muted-foreground mb-1">Area</p><p className="font-medium">{contact.area}</p></div>}
-                  {contact.city && <div><p className="text-sm text-muted-foreground mb-1">City</p><p className="font-medium">{contact.city}</p></div>}
-                  {contact.state && <div><p className="text-sm text-muted-foreground mb-1">State</p><p className="font-medium">{contact.state}</p></div>}
-                  {contact.country && <div><p className="text-sm text-muted-foreground mb-1">Country</p><p className="font-medium">{contact.country}</p></div>}
-                  {contact.pincode && <div><p className="text-sm text-muted-foreground mb-1">Pincode</p><p className="font-medium">{contact.pincode}</p></div>}
+                <h3 className="mb-4 text-section font-semibold text-foreground">Address &amp; Location</h3>
+                <DetailGrid>
+                  {contact.address && <DetailItem span="full" label="Full Address" value={contact.address} />}
+                  {contact.area && <DetailItem label="Area" value={contact.area} />}
+                  {contact.city && <DetailItem label="City" value={contact.city} />}
+                  {contact.state && <DetailItem label="State" value={contact.state} />}
+                  {contact.country && <DetailItem label="Country" value={contact.country} />}
+                  {contact.pincode && <DetailItem label="Pincode" value={contact.pincode} />}
                   {contact.latitude != null && contact.longitude != null && (
-                    <div className="col-span-2">
-                      <p className="text-sm text-muted-foreground mb-1">Coordinates (geo-tagged)</p>
-                      <p className="font-medium font-mono text-sm">{contact.latitude}, {contact.longitude}</p>
-                    </div>
+                    <DetailItem span="full" label="Coordinates (geo-tagged)">
+                      <span className="font-mono">{contact.latitude}, {contact.longitude}</span>
+                    </DetailItem>
                   )}
-                </div>
+                </DetailGrid>
               </>
             )}
 
             {customFields.length > 0 && (
               <>
                 <div className="my-6 border-t border-border/50" />
-                <h3 className="text-lg font-semibold mb-4">Other Details</h3>
-                <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                <h3 className="mb-4 text-section font-semibold text-foreground">Other Details</h3>
+                <DetailGrid>
                   {customFields.map((field) => {
                     const val = customValues[field.id];
                     return (
-                      <div key={field.id}>
-                        <p className="text-sm text-muted-foreground mb-1 capitalize">{field.field_name}</p>
+                      <DetailItem
+                        key={field.id}
+                        label={field.field_name}
+                        className="[&>p:first-child]:capitalize"
+                        value={field.field_type === 'attachment' ? undefined : val}
+                      >
                         {field.field_type === 'attachment' && val ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium flex items-center gap-1">
                             <FileText className="size-4" /> View Attachment
                           </a>
-                        ) : (
-                          <p className="font-medium break-words">{val || '-'}</p>
-                        )}
-                      </div>
+                        ) : undefined}
+                      </DetailItem>
                     );
                   })}
-                </div>
+                </DetailGrid>
               </>
             )}
-          </div>
+          </DetailSection>
           
-          <div className="bg-card border border-border rounded-lg p-5">
-             <h3 className="text-lg font-semibold mb-4">Deals</h3>
+          <DetailSection title="Deals">
              {deals.length === 0 ? (
-               <p className="text-sm text-muted-foreground italic">No deals associated with this contact.</p>
+               <p className="text-body text-muted-foreground italic">No deals associated with this contact.</p>
              ) : (
                <div className="space-y-3">
                  {deals.map(deal => (
@@ -315,7 +312,7 @@ export default function ContactDetailsPage() {
                        <p className="font-medium text-primary hover:underline cursor-pointer">
                          <Link href={`/pipelines`}>{deal.title}</Link>
                        </p>
-                       <p className="text-xs text-muted-foreground mt-1">
+                       <p className="text-caption text-muted-foreground mt-1">
                          {deal.stage?.name || 'No Stage'} • {new Date(deal.created_at).toLocaleDateString()}
                        </p>
                      </div>
@@ -329,7 +326,7 @@ export default function ContactDetailsPage() {
                  ))}
                </div>
              )}
-          </div>
+          </DetailSection>
 
           {/* FSM only: not mounted (so nothing is fetched) unless the plan has the fsm line and the user can view assets. */}
           {shouldShowCustomerAssets({
@@ -366,6 +363,6 @@ export default function ContactDetailsPage() {
         contact={contact}
         onSaved={fetchAllData}
       />
-    </div>
+    </DetailPageLayout>
   );
 }

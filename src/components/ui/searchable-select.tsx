@@ -4,6 +4,10 @@ import { useState, useRef, useEffect } from "react";
 import { Check, ChevronsUpDown, Search, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  controlPanelWidthClassName,
+  controlTriggerClassName,
+} from "@/components/ui/control-base";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -120,7 +124,7 @@ export function SearchableSelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         disabled={disabled}
-        className={cn("flex w-full items-center justify-between rounded-md bg-muted border border-border px-3 py-2 text-sm font-normal text-foreground hover:bg-muted outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:cursor-not-allowed disabled:opacity-50", className)}
+        className={cn(controlTriggerClassName, "text-foreground", className)}
       >
         <span className="truncate">
           {value
@@ -129,7 +133,7 @@ export function SearchableSelect({
         </span>
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-popover border-border">
+      <PopoverContent className={cn(controlPanelWidthClassName, "p-0 bg-popover border-border")}>
         <div className="flex items-center border-b border-border/50 px-3">
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
           <input

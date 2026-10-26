@@ -40,6 +40,7 @@
     "test:responsive": "playwright test",
     "test:responsive:all": "cross-env RESPONSIVE_SCOPE=all playwright test --project=phone-chromium --project=tablet-portrait-chromium --project=laptop-chromium",
     "test:responsive:laptop": "playwright test --project=laptop-chromium",
+    "test:responsive:desktop": "playwright test --project=laptop-small-chromium --project=laptop-chromium --project=desktop-wide-chromium",
     "test:responsive:report": "playwright show-report"
   },
   "dependencies": {

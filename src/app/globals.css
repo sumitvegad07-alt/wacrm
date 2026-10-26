@@ -4,6 +4,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Documentation is prose, not a source of utilities.
+ *
+ * Tailwind v4 detects sources across the whole repository, so a markdown file
+ * that quotes a class name makes Tailwind emit CSS for it. The design-system
+ * audit under docs/engineering cites dozens by name — `text-[9px]`,
+ * `z-[9999]`, `text-[28px]`, and a dead `w-[--radix-popover-trigger-width]`
+ * that compiles to an invalid declaration — and every one of them was being
+ * added to the shipped stylesheet. Verified: the radix rule was in the built
+ * CSS while no source file used it any more. */
+@source not "../../docs";
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -63,6 +74,82 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* ============================================================
+   * DESIGN SYSTEM V1 — the non-colour tokens
+   *
+   * Colour and radius were already tokenised above. Everything
+   * else the app repeats — control heights, the type scale, the
+   * stacking order — was written inline at ~500 call sites, and a
+   * parallel spec in src/lib/design-tokens.ts had drifted out of
+   * step with what actually shipped. These values are MEASURED
+   * from the live app, so adding them changes nothing visually;
+   * they exist so a call site can name the decision instead of
+   * re-making it.
+   *
+   * Namespaces are Tailwind v4's own, so each entry becomes a
+   * real utility: --spacing-* feeds h-/w-/p-/gap-, --text-*
+   * feeds text-*, --z-index-* feeds z-*.
+   * ============================================================ */
+
+  /* ---- Control heights ----
+   * 32px on desktop is deliberate: it is what the 2026-10-22
+   * density pass set so a 1366x768 laptop fits a useful number of
+   * grid rows. Below md every control grows to 44px for a thumb —
+   * that pairing is written as `h-control-touch md:h-control`, and
+   * the global min-height net in @layer base backs it up. */
+  --spacing-control: 2rem; /* 32px — Button / Input / Select trigger */
+  --spacing-control-sm: 1.75rem; /* 28px — dense toolbar + pagination controls */
+  --spacing-control-lg: 2.25rem; /* 36px — primary action on a marketing surface */
+  --spacing-control-touch: 2.75rem; /* 44px — the sub-md tap target */
+
+  /* ---- Type scale ----
+   * Seven steps, which is every size the app actually needs. The
+   * 350 arbitrary `text-[11px]` / `text-[10px]` call sites map onto
+   * --text-micro; `text-[13px]` onto --text-label / --text-table. */
+  --text-micro: 0.6875rem; /* 11px — helper text, chart axis labels */
+  --text-micro--line-height: 1rem;
+  --text-caption: 0.75rem; /* 12px — badges, table headers, pagination */
+  --text-caption--line-height: 1rem;
+  --text-table: 0.8125rem; /* 13px — table cell content */
+  --text-table--line-height: 1.125rem;
+  --text-label: 0.8125rem; /* 13px — form field labels */
+  --text-label--line-height: 1.125rem;
+  --text-body: 0.875rem; /* 14px — body copy, control text */
+  --text-body--line-height: 1.25rem;
+  --text-section: 0.875rem; /* 14px — section headings (weight carries it) */
+  --text-section--line-height: 1.25rem;
+  --text-page-title: 1.25rem; /* 20px — page / record title */
+  --text-page-title--line-height: 1.75rem;
+
+  /* ---- Stacking order ----
+   * Replaces the ad-hoc ladder (z-10/20/30/40/50 plus a z-[500]
+   * and a z-[9999]). Named so a new overlay is placed, not guessed. */
+  --z-index-dropdown: 10;
+  --z-index-sticky: 20;
+  --z-index-overlay: 30;
+  --z-index-modal: 40;
+  --z-index-popover: 50;
+  --z-index-tooltip: 60;
+  --z-index-toast: 70;
+}
+
+/* ---- Layout dimensions ----
+ *
+ * Plain custom properties, not @theme entries: these are read in
+ * calc() and in `h-(--layout-header-h)`-style arbitrary values, not
+ * as a utility scale. Measured from the shipping shell — change the
+ * shell and change these in the same commit.
+ *
+ * In their own :root block rather than the mode blocks above, so
+ * switching light/dark cannot drop them. */
+:root {
+  --layout-header-h: 3.5rem; /* header.tsx h-14 */
+  --layout-sidebar-w: 13rem; /* sidebar.tsx lg:w-52 */
+  --layout-page-gutter: 1rem; /* dashboard-shell <main> lg:px-4 */
+  --layout-page-gutter-sm: 0.75rem; /* dashboard-shell <main> px-3 */
+  --layout-row-h: 2rem; /* DataTable row h-8 */
+  --layout-grid-min-h: 17.5rem; /* 280px — the `fill` grid's floor */
 }
 
 /* ============================================================

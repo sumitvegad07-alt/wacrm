@@ -18,7 +18,14 @@ import { getTerritoryRows, getAccountTerritorySettings } from "@/lib/territories
 import { DEFAULT_TERRITORY_SETTINGS, enabledLevels } from "@/lib/territories/settings";
 import type { Territory, TerritorySettings } from "@/lib/territories/types";
 import { UserPlus } from "lucide-react";
-import { FormPageShell, FormActions, FormSection } from "@/components/shared";
+import {
+  FormPageShell,
+  FormActions,
+  FormSection,
+  FormGrid,
+  FormField,
+  FORM_GRID_PAGE,
+} from "@/components/shared";
 import { logModuleActivity } from "@/lib/activities";
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
@@ -342,9 +349,9 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
       : base;
   }, [customFields, showTerritoryCascade]);
 
-  const fieldGrid = asPage
-    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4"
-    : undefined;
+  // Imported, not copy-pasted. The same literal used to appear in six form
+  // files; the renderer falls back to the 2-column dialog grid when undefined.
+  const fieldGrid = asPage ? FORM_GRID_PAGE : undefined;
 
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -404,7 +411,6 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                   onChange={(val) => setFormData((prev) => ({ ...prev, source: val }))}
                   options={sources.map((s) => ({ value: s.name, label: s.name }))}
                   placeholder="Select source..."
-                  className="bg-muted border-border"
                   onCreateOption={(name) => createLeadLookup('lead_sources', name)}
                   createLabel="source"
                 />
@@ -417,7 +423,6 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                   onChange={(val) => setFormData((prev) => ({ ...prev, industry: val }))}
                   options={industries.map((i) => ({ value: i.name, label: i.name }))}
                   placeholder="Select industry..."
-                  className="bg-muted border-border"
                   onCreateOption={(name) => createLeadLookup('lead_industries', name)}
                   createLabel="industry"
                 />
@@ -458,7 +463,6 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                 <Input
                   value={formData.phone}
                   onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
-                  className="bg-muted border-border"
                   placeholder="+1 234 567 8900"
                 />
               );
@@ -474,7 +478,6 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
                       setFormData((prev) => ({ ...prev, whatsapp: e.target.value }));
                       setSameAsPhone(false);
                     }}
-                    className="bg-muted border-border"
                     placeholder="+91..."
                   />
                   <div className="flex items-center gap-2 mt-2">
@@ -530,16 +533,29 @@ export function LeadForm({ open, onOpenChange, lead, onSaved, asPage = false }: 
         )}
 
         <FormSection title="GPS Coordinates (Optional)">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-muted-foreground text-xs">Latitude</Label>
-              <Input value={formData.latitude} onChange={(e) => setFormData((prev) => ({ ...prev, latitude: e.target.value }))} placeholder="e.g. 19.0760" className="h-8 text-xs" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-muted-foreground text-xs">Longitude</Label>
-              <Input value={formData.longitude} onChange={(e) => setFormData((prev) => ({ ...prev, longitude: e.target.value }))} placeholder="e.g. 72.8777" className="h-8 text-xs" />
-            </div>
-          </div>
+          {/* Reference migration for FormField. What this replaced: two
+              hand-written label blocks on `space-y-2` (the renderer above uses
+              1.5, FormActions uses 4), and `h-8 text-xs` on both inputs — so
+              these two fields were visibly smaller than every other field on
+              the same form. */}
+          <FormGrid variant="dialog">
+            <FormField label="Latitude" hint="Decimal degrees, e.g. 19.0760">
+              <Input
+                value={formData.latitude}
+                onChange={(e) => setFormData((prev) => ({ ...prev, latitude: e.target.value }))}
+                placeholder="e.g. 19.0760"
+                inputMode="decimal"
+              />
+            </FormField>
+            <FormField label="Longitude" hint="Decimal degrees, e.g. 72.8777">
+              <Input
+                value={formData.longitude}
+                onChange={(e) => setFormData((prev) => ({ ...prev, longitude: e.target.value }))}
+                placeholder="e.g. 72.8777"
+                inputMode="decimal"
+              />
+            </FormField>
+          </FormGrid>
         </FormSection>
         </>
         )}

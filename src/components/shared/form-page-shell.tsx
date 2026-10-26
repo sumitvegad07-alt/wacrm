@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowLeft, type LucideIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface FormPageShellProps {
@@ -49,22 +50,29 @@ export function FormPageShell({
   const header = (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-3 min-w-0">
-        <button
+        {/* Was a raw <button> with its own border and hover. 312 raw buttons in
+            the app sit outside the shared focus-ring system; this is one of the
+            most-used of them, so it goes first. */}
+        <Button
           type="button"
+          variant="outline"
+          size="icon"
           data-shortcut="back"
           onClick={onBack}
           aria-label="Go back"
-          className="inline-flex items-center justify-center rounded-md h-11 w-11 md:h-8 md:w-8 border border-border hover:bg-accent shrink-0"
+          className="shrink-0"
         >
-          <ArrowLeft className="h-4 w-4 text-foreground" />
-        </button>
+          <ArrowLeft className="size-4" />
+        </Button>
         <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-bold text-foreground flex items-center gap-2">
-            <Icon className="w-5 h-5 text-primary shrink-0" />
+          {/* Same size as a detail page's title, so moving between a record and
+              its edit form does not change the heading. */}
+          <h1 className="flex items-center gap-2 text-page-title font-bold text-foreground">
+            <Icon className="size-5 shrink-0 text-primary" />
             {title}
           </h1>
           {subtitle && (
-            <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+            <p className="mt-0.5 text-caption text-muted-foreground">{subtitle}</p>
           )}
         </div>
       </div>
@@ -73,7 +81,17 @@ export function FormPageShell({
   );
 
   return (
-    <div className="p-4 sm:p-5 w-full max-w-none space-y-4">
+    // No padding of its own. The page gutter belongs to the workspace <main>
+    // in dashboard-shell, which already applies it — this used to add
+    // `p-4 sm:p-5` on top, so every create/edit screen was indented twice
+    // (36px a side at lg against the 16px every list page gets). It is the
+    // same bug that was fixed for list pages by taking the padding out of
+    // PageLayout; this component was missed at the time.
+    //
+    // Shell-only by design: every caller renders it behind an `asPage` check
+    // and uses a Dialog on the other branch, so no instance is inside a
+    // dialog that would need its own inset.
+    <div className="w-full max-w-none space-y-4">
       {header}
       {card ? (
         <div

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { CustomField } from '@/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Loader2, X } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
@@ -190,7 +191,7 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
               accept={isCamera ? "image/*" : undefined}
               capture={isCamera ? "environment" : undefined}
               disabled={uploading}
-              className="bg-muted border-border text-foreground h-9 text-sm file:mr-2 file:py-1 file:px-2 file:border-0 file:text-xs file:bg-primary/20 file:text-primary file:rounded cursor-pointer"
+              className="cursor-pointer file:mr-2 file:rounded file:border-0 file:bg-primary/20 file:px-2 file:py-1 file:text-xs file:text-primary"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
@@ -217,11 +218,10 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
 
   if (field.field_type === 'textarea') {
     return (
-      <textarea
+      <Textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={`Enter ${field.field_name}...`}
-        className="w-full min-h-[80px] rounded-md bg-muted border border-border text-foreground p-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
       />
     );
   }
@@ -238,7 +238,6 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={`Enter ${field.field_name}...`}
-      className="bg-muted border-border text-foreground h-9 text-sm placeholder:text-muted-foreground"
     />
   );
 }

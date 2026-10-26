@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import {
+  controlPanelWidthClassName,
+  controlSurfaceClassName,
+  controlTextClassName,
+} from "@/components/ui/control-base";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -55,7 +59,15 @@ export function MultiSelect({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           disabled={disabled}
-          className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-h-10 h-auto font-normal text-left"
+          className={cn(
+            controlSurfaceClassName,
+            controlTextClassName,
+            // `min-h` + `h-auto` rather than the shared fixed height: the
+            // trigger holds wrapping chips, so it has to grow. The minimum is
+            // the shared control height so an empty multi-select lines up with
+            // the Input beside it.
+            "flex min-h-control-touch h-auto w-full items-center justify-between px-3 py-1 text-left font-normal select-none md:min-h-control"
+          )}
         >
           <div className="flex flex-wrap gap-1.5 items-center">
             {selectedValues.length === 0 ? (
@@ -86,7 +98,10 @@ export function MultiSelect({
           </div>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[320px] p-0" align="start">
+        <PopoverContent
+          className={cn(controlPanelWidthClassName, "min-w-[20rem] p-0")}
+          align="start"
+        >
           {searchable && (
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
               <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
