@@ -1,4 +1,5 @@
 import type { AccountRole } from "@/lib/auth/roles";
+import type { TaskAssignee } from "@/lib/tasks/assignees";
 
 export interface Profile {
   id: string;
@@ -717,6 +718,8 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   assigned_user_id?: string | null;
+  /** Everyone on the task. `assigned_user_id` is the first of these. */
+  assignees?: TaskAssignee[];
   due_date?: string | null;
   due_time?: string | null;
   start_date?: string | null;

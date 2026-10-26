@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, X, CheckSquare } from "lucide-react";
 import { FormPageShell, FormActions } from "@/components/shared";
@@ -105,7 +106,9 @@ export function TaskForm({
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("Pending");
   const [priority, setPriority] = useState<TaskPriority>("Medium");
-  const [assignedUserId, setAssignedUserId] = useState("");
+  // First in the list is the one written to tasks.assigned_user_id, which is
+  // what the report engine and the APKs already in the field read.
+  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
   const [activityType, setActivityType] = useState("Task");
@@ -164,6 +167,30 @@ export function TaskForm({
     }
   }, [accountId, open, supabase]);
 
+  // Load who the task is assigned to, from the form itself.
+  //
+  // It would be lighter to rely on whatever screen opened this dialog having
+  // selected the rows — but a screen that did not would show one assignee for
+  // a three-person task, and saving would then drop the other two. The form
+  // owns the question instead, so every entry point behaves the same.
+  useEffect(() => {
+    if (!open || !task?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("task_assignees")
+        .select("profile_id, created_at, id")
+        .eq("task_id", task.id)
+        .order("created_at")
+        .order("id");
+      if (cancelled || !data) return;
+      if (data.length > 0) setAssignedUserIds(data.map((r) => r.profile_id));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, task?.id, supabase]);
+
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (open) {
@@ -172,7 +199,13 @@ export function TaskForm({
         setDescription(task.description || "");
         setStatus(task.status);
         setPriority(task.priority);
-        setAssignedUserId(task.assigned_user_id || "");
+        setAssignedUserIds(
+          task.assignees?.length
+            ? task.assignees.map((a) => a.profile_id)
+            : task.assigned_user_id
+              ? [task.assigned_user_id]
+              : [],
+        );
         setDueDate(task.due_date ? task.due_date.split("T")[0] : "");
         setDueTime(task.due_time || "");
         setActivityType(task.activity_type || "Task");
@@ -207,7 +240,7 @@ export function TaskForm({
         setDescription("");
         setStatus("Pending");
         setPriority("Medium");
-        setAssignedUserId(profile?.id || "");
+        setAssignedUserIds(profile?.id ? [profile.id] : []);
         // Default a new task to today's date and the current time (device-local),
         // so the user isn't forced to fill them in every time. They stay editable.
         {
@@ -344,7 +377,11 @@ export function TaskForm({
       activity_type: activityType,
       status: activityType.toLowerCase() === "note" ? "Completed" : status,
       priority,
-      assigned_user_id: assignedUserId || null,
+      // The first assignee. Setting it here rather than leaving it to the
+      // rollup trigger is deliberate: the trigger would change the column
+      // after the fact, which fires trg_notif_task_assigned_upd and tells
+      // this person they were assigned a second time.
+      assigned_user_id: assignedUserIds[0] || null,
       due_date: dueDate || null,
       due_time: dueTime || null,
       contact_id: linkedModule === "Contact" ? contactId : null,
@@ -396,6 +433,51 @@ export function TaskForm({
 
     if (savedTaskId) {
       const tid = savedTaskId;
+
+      // Assignees, reconciled rather than replaced.
+      //
+      // Delete-then-insert would be shorter, but it would throw away the
+      // completed_at of everyone already done — so editing a task's due date
+      // would quietly un-complete it for the whole team. Only the people who
+      // actually joined or left are touched.
+      //
+      // Awaited and checked, unlike the activity logs below: these rows are
+      // what My Activity filters on, so a task whose rows failed to write
+      // would be invisible to the very people it was assigned to.
+      {
+        const { data: existingRows, error: readErr } = await supabase
+          .from("task_assignees")
+          .select("id, profile_id")
+          .eq("task_id", tid);
+
+        if (readErr) {
+          toast.error("Saved, but could not read who this is assigned to.");
+        } else {
+          const existing = existingRows ?? [];
+          const keep = new Set(assignedUserIds);
+          const have = new Set(existing.map((r) => r.profile_id));
+
+          const removeIds = existing.filter((r) => !keep.has(r.profile_id)).map((r) => r.id);
+          const addRows = assignedUserIds
+            .filter((pid) => !have.has(pid))
+            .map((pid) => ({ task_id: tid, profile_id: pid }));
+
+          // account_id is filled in by a BEFORE trigger from the parent task,
+          // so it is deliberately not sent here.
+          const [del, ins] = await Promise.all([
+            removeIds.length
+              ? supabase.from("task_assignees").delete().in("id", removeIds)
+              : Promise.resolve({ error: null }),
+            addRows.length
+              ? supabase.from("task_assignees").insert(addRows)
+              : Promise.resolve({ error: null }),
+          ]);
+
+          if (del.error || ins.error) {
+            toast.error("Saved, but assigning it to everyone failed.");
+          }
+        }
+      }
       // Custom values + the linked-record activity logs are all independent →
       // run them in one parallel batch (was: delete, insert, then the logs).
       // task_custom_values has no unique key, so its values stay delete-then-
@@ -551,21 +633,21 @@ export function TaskForm({
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-muted-foreground text-xs uppercase font-medium">Assigned To</Label>
-                  {/* Searchable: an account with a hundred employees cannot be scrolled. */}
-                  <SearchableSelect
-                    value={assignedUserId}
-                    onChange={setAssignedUserId}
+                  {/* Several people can share a task, and each ticks off their
+                      own copy. Searchable: an account with a hundred employees
+                      cannot be scrolled. Assignment stays optional — nobody on
+                      a task is still valid. */}
+                  <MultiSelect
+                    selectedValues={assignedUserIds}
+                    onChange={setAssignedUserIds}
                     disabled={!canAssignOthers}
                     placeholder="Unassigned"
-                    searchPlaceholder="Search employees..."
-                    options={[
-                      ...(canAssignOthers ? [{ value: "", label: "Unassigned" }] : []),
-                      ...assignableProfiles.map((p) => ({
-                        value: p.id,
-                        label: p.full_name || p.email,
-                      })),
-                    ]}
-                    className="h-10 w-full"
+                    emptyMessage="No employees found."
+                    searchable
+                    options={assignableProfiles.map((p) => ({
+                      value: p.id,
+                      label: p.full_name || p.email,
+                    }))}
                   />
                 </div>
               </div>
