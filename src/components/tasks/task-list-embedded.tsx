@@ -11,6 +11,8 @@ import { TaskForm } from "@/components/tasks/task-form";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { isBefore, startOfToday } from "date-fns";
+import { useAuth } from "@/hooks/use-auth";
+import { displayedStatus, setTaskCompletion } from "@/lib/tasks/complete";
 
 interface TaskListEmbeddedProps {
   contactId?: string;
@@ -21,6 +23,7 @@ interface TaskListEmbeddedProps {
 
 export function TaskListEmbedded({ contactId, dealId, conversationId, leadId }: TaskListEmbeddedProps) {
   const supabase = createClient();
+  const { profile } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -34,7 +37,7 @@ export function TaskListEmbedded({ contactId, dealId, conversationId, leadId }: 
     setLoading(true);
     let query = supabase
       .from("tasks")
-      .select("*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email)")
+      .select("*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), assignees:task_assignees(id, task_id, profile_id, status, completed_at, created_at)")
       .order("created_at", { ascending: false });
 
     if (contactId) query = query.eq("contact_id", contactId);
@@ -53,16 +56,23 @@ export function TaskListEmbedded({ contactId, dealId, conversationId, leadId }: 
     e.preventDefault();
     e.stopPropagation();
     
-    const newStatus = task.status === "Completed" ? "Pending" : "Completed";
-    const { error } = await supabase
-      .from("tasks")
-      .update({ status: newStatus })
-      .eq("id", task.id);
+    const rows = task.assignees ?? [];
+    const newStatus =
+      displayedStatus(rows, profile?.id, task.status) === "Completed" ? "Pending" : "Completed";
+
+    const { error } = await setTaskCompletion(supabase, {
+      taskId: task.id,
+      assignees: rows,
+      profileId: profile?.id,
+      newStatus,
+    });
 
     if (error) {
       toast.error("Failed to update task");
     } else {
-      setTasks(tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+      // Refetch: with several people on a task, whether the task itself is now
+      // done is the rollup trigger's call, not something to guess at here.
+      await fetchTasks();
     }
   }
 

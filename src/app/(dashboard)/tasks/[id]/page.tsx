@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, Calendar, User, Clock, Bell, Briefcase, Users, MessageSquare, Pencil, Loader2, FileText, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import { TaskForm } from "@/components/tasks/task-form";
+import { cn } from "@/lib/utils";
+import { progressLabel } from "@/lib/tasks/assignees";
 import { TaskChecklistSection } from "@/components/tasks/task-checklist";
 import { TaskCommentsSection } from "@/components/tasks/task-comments";
 import { TaskAttachmentsSection } from "@/components/tasks/task-attachments";
@@ -49,7 +51,7 @@ export default function TaskDetailsPage() {
     const [taskRes, fieldsRes, valuesRes] = await Promise.all([
       supabase
         .from("tasks")
-        .select("*, assignee:profiles!tasks_assigned_user_id_fkey(*), contact:contacts!tasks_contact_id_fkey(*), deal:deals!tasks_deal_id_fkey(*), product:products!tasks_product_id_fkey(*), conversation:conversations!tasks_conversation_id_fkey(*)")
+        .select("*, assignee:profiles!tasks_assigned_user_id_fkey(*), assignees:task_assignees(id, task_id, profile_id, status, completed_at, created_at, profile:profiles(full_name, email)), contact:contacts!tasks_contact_id_fkey(*), deal:deals!tasks_deal_id_fkey(*), product:products!tasks_product_id_fkey(*), conversation:conversations!tasks_conversation_id_fkey(*)")
         .eq("id", id)
         .maybeSingle(),
       supabase
@@ -154,7 +156,39 @@ export default function TaskDetailsPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-4">
               {task.due_date && <span className="flex items-center gap-1"><Calendar className="size-3" /> Scheduled: {new Date(task.due_date).toLocaleDateString()} {task.due_time && `at ${task.due_time.substring(0, 5)}`}</span>}
-              <span className="flex items-center gap-1"><User className="size-3" /> {task.assignee ? (task.assignee.full_name || task.assignee.email) : "Unassigned"}</span>
+              {/* The detail page names everyone and shows each person's own
+                  state — a count would hide exactly what someone opens this
+                  page to find out: who still has it outstanding. */}
+              <span className="flex items-center gap-1">
+                <User className="size-3" />
+                {(task.assignees?.length ?? 0) > 0 ? (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {task.assignees!.map((a) => (
+                      <span
+                        key={a.id}
+                        className={cn(
+                          "rounded px-1.5 py-0.5 text-xs",
+                          a.status === "Completed"
+                            ? "bg-green-500/10 text-green-700 dark:text-green-400 line-through"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                        title={a.status === "Completed" ? "Done" : "Still outstanding"}
+                      >
+                        {a.profile?.full_name || a.profile?.email || "Unknown"}
+                      </span>
+                    ))}
+                    {progressLabel(task.assignees ?? []) && (
+                      <span className="text-xs font-medium">
+                        ({progressLabel(task.assignees ?? [])})
+                      </span>
+                    )}
+                  </span>
+                ) : task.assignee ? (
+                  task.assignee.full_name || task.assignee.email
+                ) : (
+                  "Unassigned"
+                )}
+              </span>
             </p>
           </div>
         </div>

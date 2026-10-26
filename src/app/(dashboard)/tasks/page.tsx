@@ -7,6 +7,9 @@ import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { toast } from 'sonner';
 import type { Task, CustomField } from '@/types';
 import { useCan } from '@/hooks/use-can';
+import { useAuth } from '@/hooks/use-auth';
+import { displayedStatus, setTaskCompletion } from '@/lib/tasks/complete';
+import type { TaskAssignee } from '@/lib/tasks/assignees';
 
 function isOverdue(task: any) {
   if (task.status === 'Completed' || task.status === 'Cancelled') return false;
@@ -105,6 +108,7 @@ export default function TasksPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const canEditSettings = useCan('edit-settings');
+  const { profile } = useAuth();
 
   
   // DataTable state
@@ -148,7 +152,7 @@ export default function TasksPage() {
       let q = sb
         .from('tasks')
         .select(
-          '*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), contact:contacts!tasks_contact_id_fkey(name, phone), deal:deals!tasks_deal_id_fkey(title)',
+          '*, assignee:profiles!tasks_assigned_user_id_fkey(full_name, email), assignees:task_assignees(id, task_id, profile_id, status, completed_at, created_at), contact:contacts!tasks_contact_id_fkey(name, phone), deal:deals!tasks_deal_id_fkey(title)',
           { count: 'exact' },
         );
 
@@ -250,10 +254,25 @@ export default function TasksPage() {
 
   async function handleQuickComplete(task: any, e: React.MouseEvent) {
     e.stopPropagation();
-    const newStatus = task.status === 'Completed' ? 'Pending' : 'Completed';
-    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id);
+    const rows: TaskAssignee[] = task.assignees ?? [];
+    const newStatus =
+      displayedStatus(rows, profile?.id, task.status) === 'Completed' ? 'Pending' : 'Completed';
+
+    const { error, perPerson } = await setTaskCompletion(supabase, {
+      taskId: task.id,
+      assignees: rows,
+      profileId: profile?.id,
+      newStatus,
+    });
+
     if (!error) {
-      toast.success(newStatus === 'Completed' ? 'Task marked as completed' : 'Task reopened');
+      toast.success(
+        newStatus === 'Completed'
+          ? perPerson
+            ? 'Marked done for you'
+            : 'Task marked as completed'
+          : 'Task reopened',
+      );
       fetchTasks();
     } else {
       toast.error('Failed to update task');
@@ -264,9 +283,51 @@ export default function TasksPage() {
     if (selectedTaskIds.size === 0) return;
     setBulkActionLoading(true);
     const ids = Array.from(selectedTaskIds);
-    const { error } = await supabase.from('tasks').update({ status: newStatus }).in('id', ids);
+
+    // Completing in bulk follows the same rule as completing one: the tasks
+    // you are assigned to get YOUR row ticked, and the rollup trigger decides
+    // whether that finishes each of them. The rest — tasks you are only
+    // managing — take the status directly, as before.
+    //
+    // Any other status (In Progress, Cancelled…) is a property of the task
+    // itself, not of one person's share of it, so it is set directly.
+    let error: unknown = null;
+    let mineCount = 0;
+
+    if (newStatus === 'Completed' && profile?.id) {
+      const { data: myRows } = await supabase
+        .from('task_assignees')
+        .select('task_id')
+        .eq('profile_id', profile.id)
+        .in('task_id', ids);
+
+      const mineIds = new Set((myRows ?? []).map((r) => r.task_id as string));
+      mineCount = mineIds.size;
+      const otherIds = ids.filter((id) => !mineIds.has(id));
+
+      const [mineRes, otherRes] = await Promise.all([
+        mineIds.size
+          ? supabase
+              .from('task_assignees')
+              .update({ status: 'Completed', completed_at: new Date().toISOString() })
+              .eq('profile_id', profile.id)
+              .in('task_id', Array.from(mineIds))
+          : Promise.resolve({ error: null }),
+        otherIds.length
+          ? supabase.from('tasks').update({ status: newStatus }).in('id', otherIds)
+          : Promise.resolve({ error: null }),
+      ]);
+      error = mineRes.error ?? otherRes.error;
+    } else {
+      ({ error } = await supabase.from('tasks').update({ status: newStatus }).in('id', ids));
+    }
+
     if (!error) {
-      toast.success(`Updated ${ids.length} tasks`);
+      toast.success(
+        mineCount > 0
+          ? `Marked done for you on ${mineCount} of ${ids.length} tasks`
+          : `Updated ${ids.length} tasks`,
+      );
       fetchTasks();
     } else {
       toast.error('Failed to update tasks');
