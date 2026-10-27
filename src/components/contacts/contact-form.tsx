@@ -179,7 +179,11 @@ export function ContactForm({
         id: 'sys-collaborator_ids',
         account_id: accountId || '',
         module_name: 'contact',
-        name: 'Also Assigned To',
+        // `field_name`, not `name`: CustomFieldsSectionRenderer labels every
+        // field from `field.field_name`. These two synthetic fields used `name`
+        // and the `as unknown as CustomField` cast hid it from the compiler, so
+        // both rendered an EMPTY label once the inline <Label>s were removed.
+        field_name: 'Also Assigned To',
         system_key: 'collaborator_ids',
         field_type: 'select',
         is_system: true,
@@ -197,7 +201,7 @@ export function ContactForm({
           id: 'sys-employee_id',
           account_id: accountId || '',
           module_name: 'contact',
-          name: 'Assign Employee',
+          field_name: 'Assign Employee',
           system_key: 'employee_id',
           field_type: 'select',
           is_system: true,
