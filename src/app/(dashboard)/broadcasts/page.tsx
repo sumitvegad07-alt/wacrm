@@ -128,25 +128,6 @@ export default function BroadcastsPage() {
     };
   }, [anySending]);
 
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center gap-2">
-        <p className="text-sm text-red-400">{error}</p>
-        <Button variant="outline" onClick={() => window.location.reload()}>
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
   const columns: ColumnDef<Broadcast>[] = [
     {
       id: "name",
@@ -220,6 +201,36 @@ export default function BroadcastsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [broadcasts, tableView.filterState],
   );
+
+  // These two early returns MUST stay below every hook above them.
+  //
+  // They used to sit above `columns` and `visibleBroadcasts`. `loading` starts
+  // true, so the first render took this branch and ran one hook fewer than the
+  // render after it -- React refused the component with error #310 ("Rendered
+  // more hooks than during the previous render") and the page died inside its
+  // error boundary showing "This page couldn't load". Not data-dependent: every
+  // account that could reach Broadcasts saw it on every load.
+  //
+  // `npm run lint` catches this (react-hooks/rules-of-hooks); it shipped
+  // because lint was not clean at the time. Keep hooks above the returns.
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-2">
+        <p className="text-sm text-red-400">{error}</p>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <PageLayout fill>
