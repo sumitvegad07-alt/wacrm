@@ -163,6 +163,40 @@ export default function ContactDetailsPage() {
 
   if (!contact) return null;
 
+  // "Other Details" must not repeat the predefined fields already drawn above.
+  //
+  // Every field in `customFields` was rendered here, predefined ones included,
+  // reading its value from `customValues` -- which only ever holds true custom
+  // fields. A predefined field keeps its value on the contact row, so each one
+  // printed a dash: thirteen of them, directly beneath the same values shown
+  // correctly in Customer Details and Address & Location. Customers read that
+  // as their data having been lost.
+  //
+  // Same shape as the product detail page: drop the keys already drawn, read
+  // the rest from the row, and hide the ones with nothing in them.
+  const NATIVE_SYSTEM_KEYS = new Set([
+    // Customer Details
+    'company', 'name', 'phone', 'email',
+    // Address & Location
+    'address', 'area', 'city', 'state', 'country', 'pincode',
+    // Has its own editable control in Customer Details when hierarchy is on,
+    // and means nothing when it is off.
+    'hierarchy_level',
+  ]);
+  const contactRowValue = (key: string): string => {
+    const raw = (contact as unknown as Record<string, unknown>)[key];
+    if (raw == null || raw === '') return '';
+    return String(raw);
+  };
+  const activeCustomFields = customFields.filter((f) => f.is_active !== false);
+  // Predefined fields NOT drawn above (Customer Code, WhatsApp Number) now show
+  // their real value instead of a permanent dash.
+  const systemRows = activeCustomFields
+    .filter((f) => f.system_key && !NATIVE_SYSTEM_KEYS.has(f.system_key))
+    .map((f) => ({ field: f, value: contactRowValue(f.system_key as string) }))
+    .filter((r) => r.value !== '');
+  const extraFields = activeCustomFields.filter((f) => !f.system_key);
+
   return (
     <DetailPageLayout
       title={contact.company || contact.name || "Unnamed Customer"}
@@ -274,12 +308,20 @@ export default function ContactDetailsPage() {
               </>
             )}
 
-            {customFields.length > 0 && (
+            {(systemRows.length > 0 || extraFields.length > 0) && (
               <>
                 <div className="my-6 border-t border-border/50" />
                 <h3 className="mb-4 text-section font-semibold text-foreground">Other Details</h3>
                 <DetailGrid>
-                  {customFields.map((field) => {
+                  {systemRows.map(({ field, value }) => (
+                    <DetailItem
+                      key={field.id}
+                      label={field.field_name}
+                      className="[&>p:first-child]:capitalize"
+                      value={value}
+                    />
+                  ))}
+                  {extraFields.map((field) => {
                     const val = customValues[field.id];
                     return (
                       <DetailItem
