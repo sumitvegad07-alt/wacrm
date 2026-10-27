@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ContentTabs } from './ContentTabs';
 import { STEP_TOURS } from '@/lib/tour/scripts';
+import { metricLabel } from '@/lib/implementation/metric-labels';
 import { launchTour } from '@/lib/tour/launch';
 
 // The mobile app download/share link shown on the "mobile login" step — the live
@@ -35,11 +36,8 @@ function CopyableUrl({ url }: { url: string }) {
 }
 
 // Customer-facing labels for validation metrics — never show raw source_keys.
-const VALIDATION_LABELS: Record<string, string> = {
-  territory_count: 'Territories', customer_count: 'Customers', role_count: 'Roles',
-  employee_count: 'Employees', employee_logged_in: 'Team member logged in',
-  attendance_or_visit: 'First activity recorded', meaningful_data: 'Live data flowing',
-};
+// The map lives beside the resolvers now (metric-labels.ts) so this panel and
+// HealthPanel cannot drift apart again; a resolver without a label fails a test.
 
 export function StepPanel({ evaluated, answers, busy, spotlight = false, stepNumber, stepTotal, supportUrl, onAnswer, onSkip, onMarkDone, onToggleTask, onHelp }: {
   evaluated: EvaluatedStep; answers: AnswerMap; busy: string | null;
@@ -188,7 +186,7 @@ export function StepPanel({ evaluated, answers, busy, spotlight = false, stepNum
       {ruleResults.some((r) => r.source_key !== 'answer') && (
         <div className="space-y-1 rounded-lg bg-muted/50 p-3 text-sm">
           {ruleResults.filter((r) => r.source_key !== 'answer').map((r) => {
-            const label = VALIDATION_LABELS[r.source_key] ?? r.source_key;
+            const label = metricLabel(r.source_key);
             const isCount = typeof r.value === 'number';
             // Roles carry no prescribed target (founder decision) — show the count,
             // never a "recommended N" nag. Keep the recommendation on other metrics.
