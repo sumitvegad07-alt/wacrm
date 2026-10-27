@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissionGate } from '@/hooks/use-permission-gate';
+import { PageLoader } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/currency';
 import { AlertTriangle, Loader2, ShieldAlert, TrendingUp } from 'lucide-react';
@@ -103,7 +105,11 @@ export default function OrderSyncHealthPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  if (!canView) {
+  // `canView` is isAdmin || isOwner, and both read off the profile row — so
+  // they are false until it lands, not just for non-admins.
+  const gate = usePermissionGate(canView);
+  if (gate === "loading") return <PageLoader text="Checking your access…" />;
+  if (gate === "denied") {
     return (
       <div className="p-8">
         <div className="flex items-center gap-2 text-muted-foreground">

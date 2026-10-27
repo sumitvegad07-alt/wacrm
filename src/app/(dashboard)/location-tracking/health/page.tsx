@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/metric-card";
-import { PageLayout, PageHeader } from "@/components/shared";
+import { PageLayout, PageHeader, PageLoader } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
@@ -17,6 +17,7 @@ import { ISSUE_CATALOG } from "@/lib/location/tracking-issues";
 import { normalizeTrackingSettings } from "@/lib/location/tracking-window";
 import { computeFilteredDistanceKm, isTrustworthyPing } from "@/lib/location/distance";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissionGate } from "@/hooks/use-permission-gate";
 import { ScreenAccessDenied } from "@/components/location-tracking/screen-access-denied";
 import { matchesColumnFilters } from "@/lib/table/match-filters";
 
@@ -457,7 +458,10 @@ export default function TrackingHealthPage() {
   );
 
   // Direct-URL guard — the sidebar hides this without view_tracking_health. Owner/admin pass.
-  if (!hasPermission("view_tracking_health")) {
+  // ...but only once the profile has landed — see the note in use-permission-gate.
+  const gate = usePermissionGate(hasPermission("view_tracking_health"));
+  if (gate === "loading") return <PageLoader text="Checking your access…" />;
+  if (gate === "denied") {
     return <ScreenAccessDenied title="No access to Tracking Health" rightLabel="View tracking health" />;
   }
 

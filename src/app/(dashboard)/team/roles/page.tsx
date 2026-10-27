@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
+import { usePermissionGate } from "@/hooks/use-permission-gate";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import type { ColumnDef, FilterState } from "@/components/ui/data-table/data-table-types";
-import { ConfirmDialog } from "@/components/shared";
+import { ConfirmDialog, PageLoader } from "@/components/shared";
 import type { RolePermissions } from "@/lib/auth/rbac";
 import {
   PERMISSION_GROUPS,
@@ -299,7 +300,13 @@ export default function RolesPage() {
   };
   const allVisibleOn = visibleGroups.length > 0 && visibleGroups.every((g) => g.permissions.every((p) => !!permissions[p.id]));
 
-  if (!hasPermission("view_team_management") && !isSuperadmin) {
+  // Permissions ride in on the profile row, which lands after the session, so
+  // until it does `hasPermission` is false for everyone — the owner included.
+  // Refusing on that gap is what rendered "Access Denied" here for ~700ms of
+  // every cold load.
+  const gate = usePermissionGate(hasPermission("view_team_management") || isSuperadmin);
+  if (gate === "loading") return <PageLoader text="Checking your access…" />;
+  if (gate === "denied") {
     return (
       <div className="p-8">
         <Alert variant="destructive">

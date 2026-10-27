@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { PageLoader } from '@/components/shared';
 import { PasswordForm } from '@/components/settings/password-form';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { NotificationPreferencesPanel } from '@/components/settings/notification-preferences-panel';
@@ -41,7 +42,7 @@ function SettingsContent() {
   const searchParams = useSearchParams();
   const {
     hasCRM, hasWFA, hasSFA, hasFSM,
-    isModuleEnabled, moduleSettingsLoaded, hasPermission,
+    isModuleEnabled, moduleSettingsLoaded, hasPermission, profileLoading,
   } = useAuth();
 
   const rawTab = searchParams.get('tab') || searchParams.get('section');
@@ -126,7 +127,17 @@ function SettingsContent() {
       </div>
 
       <div className="min-w-0">
-        {blocked ? <SectionBlocked reason={blocked} /> : panel[section]}
+        {/* `blocked` reads `hasPermission`, which is false for everyone until
+            the profile row lands — the same reason `moduleSettingsLoaded`
+            guards the plan branch above. Waiting here avoids refusing a panel
+            the user owns, without flashing the panel to someone who doesn't. */}
+        {profileLoading ? (
+          <PageLoader text="Checking your access…" />
+        ) : blocked ? (
+          <SectionBlocked reason={blocked} />
+        ) : (
+          panel[section]
+        )}
       </div>
     </div>
   );

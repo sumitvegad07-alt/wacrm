@@ -21,6 +21,8 @@ import type { RouteOverlay } from '@/components/location-tracking/map-view';
 import { computeFilteredDistanceKm, isTrustworthyPing } from '@/lib/location/distance';
 import { isManualPing, pingSourceLabel } from '@/lib/location/ping-source';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissionGate } from '@/hooks/use-permission-gate';
+import { PageLoader } from '@/components/shared';
 import { ScreenAccessDenied } from '@/components/location-tracking/screen-access-denied';
 
 /** Colour for a visit's feedback verdict, so a bad call stands out when scanning the day. */
@@ -551,7 +553,10 @@ export default function LocationDashboardPage() {
   }, [pointsData, filters]);
 
   // Direct-URL guard — the sidebar hides Live Feed without view_live_feed. Owner/admin pass.
-  if (!hasPermission("view_live_feed")) {
+  // ...but only once the profile has landed — see the note in use-permission-gate.
+  const gate = usePermissionGate(hasPermission("view_live_feed"));
+  if (gate === "loading") return <PageLoader text="Checking your access…" />;
+  if (gate === "denied") {
     return <ScreenAccessDenied title="No access to Live Feed" rightLabel="View live feed" />;
   }
 

@@ -8,12 +8,13 @@ import { Camera, MapPin, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { PageLayout, PageHeader } from "@/components/shared";
+import { PageLayout, PageHeader, PageLoader } from "@/components/shared";
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
 import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-types';
 import { isDateInFilter } from "@/lib/date-filters";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissionGate } from "@/hooks/use-permission-gate";
 import {
   PointMapDialog,
   formatLatLng,
@@ -923,7 +924,10 @@ export default function UserAttendancePage() {
   const peopleCounted = attendanceMatrix?.employees.length ?? 0;
 
   // Direct-URL guard — the sidebar hides this without view_attendance. Owner/admin pass.
-  if (!hasPermission("view_attendance")) {
+  // ...but only once the profile has landed — see the note in use-permission-gate.
+  const gate = usePermissionGate(hasPermission("view_attendance"));
+  if (gate === "loading") return <PageLoader text="Checking your access…" />;
+  if (gate === "denied") {
     return <ScreenAccessDenied title="No access to User Attendance" rightLabel="View attendance" />;
   }
 

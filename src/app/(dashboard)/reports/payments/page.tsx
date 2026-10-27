@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo } from "react";
 import { matchesColumnFilters } from "@/lib/table/match-filters";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissionGate } from "@/hooks/use-permission-gate";
 import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
-import { PageLayout, PageHeader } from "@/components/shared";
+import { PageLayout, PageHeader, PageLoader } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { ColumnDef } from "@/components/ui/data-table/data-table-types";
@@ -158,7 +159,11 @@ export default function PaymentReportPage() {
     [financialsData, tableView.filterState],
   );
 
-  if (!hasPermission("view_payment_reports")) {
+  // Wait for the profile before refusing — permissions read false for everyone
+  // until it lands.
+  const gate = usePermissionGate(hasPermission("view_payment_reports"));
+  if (gate === "loading") return <PageLoader text="Checking your access…" />;
+  if (gate === "denied") {
     return <div className="p-8">You do not have permission to view payment reports.</div>;
   }
 

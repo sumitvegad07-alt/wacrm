@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { MapPin, AlertTriangle } from 'lucide-react';
-import { PageLayout, PageHeader } from '@/components/shared';
+import { PageLayout, PageHeader, PageLoader } from '@/components/shared';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
 import {
@@ -28,6 +28,7 @@ import { explainGap } from '@/lib/location/tracking-health';
 import { ISSUE_CATALOG, type IssueCode } from '@/lib/location/tracking-issues';
 import { normalizeTrackingSettings } from '@/lib/location/tracking-window';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissionGate } from '@/hooks/use-permission-gate';
 import {
   PointMapDialog,
   formatLatLng,
@@ -396,7 +397,11 @@ export default function AllLocationsPage() {
 
   // Direct-URL guard: the sidebar hides this link without view_live_feed, but a bookmark would
   // still render it. Owner/admin pass inside hasPermission.
-  if (!hasPermission("view_live_feed")) {
+  // ...but only once the profile has landed: until then hasPermission is false
+  // for everyone, so refusing here flashed this screen at the owner.
+  const gate = usePermissionGate(hasPermission("view_live_feed"));
+  if (gate === "loading") return <PageLoader text="Checking your access…" />;
+  if (gate === "denied") {
     return <ScreenAccessDenied title="No access to All Locations" rightLabel="View live feed" />;
   }
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissionGate } from "@/hooks/use-permission-gate";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageLayout, PageHeader, StatusBadge, ConfirmDialog } from "@/components/shared";
+import { PageLayout, PageHeader, StatusBadge, ConfirmDialog, PageLoader } from "@/components/shared";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { useTableView } from "@/hooks/use-table-view";
 import { RowActions } from "@/components/ui/data-table/row-actions";
@@ -472,7 +473,11 @@ export default function EmployeesPage() {
 
   // Permission guard — safe here because every hook above has already run, so the
   // hook count is identical whether or not this returns early (avoids React #310).
-  if (!hasPermission("view_team_management") && !isSuperadmin) {
+  // See the note on the Roles page: permissions are false for everyone until
+  // the profile row lands, so the gap must wait rather than refuse.
+  const gate = usePermissionGate(hasPermission("view_team_management") || isSuperadmin);
+  if (gate === "loading") return <PageLoader text="Checking your access…" />;
+  if (gate === "denied") {
     return (
       <div className="p-8">
         <Alert variant="destructive">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissionGate } from "@/hooks/use-permission-gate";
 import { PlannerBoard } from "@/components/routes/planner-board";
 import { MonthlyPlannerBoard } from "@/components/routes/monthly-planner";
 import { ROUTE_PERMISSIONS } from "@/lib/route";
@@ -11,12 +12,16 @@ import { ShieldAlert, Calendar, LayoutGrid } from "lucide-react";
 export default function RoutePlannerPage() {
   const { loading, isModuleEnabled, hasPermission } = useAuth();
   const [viewMode, setViewMode] = useState<"month" | "week">("month");
+  // Resolved above the early returns below, so hook order never shifts.
+  const gate = usePermissionGate(hasPermission(ROUTE_PERMISSIONS.VIEW));
 
   if (loading) return null;
   if (!isModuleEnabled("route")) return null; // shell also redirects /routes* when off
 
   // Viewing the planner needs view_routes; assign/manage actions are gated inside the board.
-  if (!hasPermission(ROUTE_PERMISSIONS.VIEW)) {
+  // `loading` above is the SESSION; permissions arrive later with the profile.
+  if (gate === "loading") return null;
+  if (gate === "denied") {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-8 py-16 text-center">
         <ShieldAlert className="mb-3 h-10 w-10 text-muted-foreground" />
