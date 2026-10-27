@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
 import { Receipt } from "lucide-react";
-import { FormPageShell, FormActions, MediaUpload } from "@/components/shared";
+import { FormPageShell, FormActions, MediaUpload, FormField } from "@/components/shared";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
@@ -19,7 +19,6 @@ import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-f
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
@@ -319,8 +318,7 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
   const formContent = (
     <>
           <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="expense_type">Expense Type <span className="text-destructive">*</span></Label>
+            <FormField label="Expense Type" required error={form.formState.errors.expense_type_id?.message}>
               <Controller
                 control={form.control}
                 name="expense_type_id"
@@ -349,16 +347,12 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
                   />
                 )}
               />
-              {form.formState.errors.expense_type_id && (
-                <p className="text-xs text-destructive">{form.formState.errors.expense_type_id.message}</p>
-              )}
-            </div>
+            </FormField>
 
             {selectedType?.allowance_type === "TRAVELLING" && selectedType.is_per_km !== "NO" && (
               <div className="grid gap-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-2">
-                    <Label>Odometer Start (KM)</Label>
+                  <FormField label="Odometer Start (KM)">
                     <Input
                       type="number"
                       step="0.1"
@@ -366,9 +360,8 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
                       {...form.register("odometer_start", { valueAsNumber: true })}
                       onChange={handleOdoStartChange}
                     />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Odometer End (KM)</Label>
+                  </FormField>
+                  <FormField label="Odometer End (KM)">
                     <Input
                       type="number"
                       step="0.1"
@@ -376,7 +369,7 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
                       {...form.register("odometer_end", { valueAsNumber: true })}
                       onChange={handleOdoEndChange}
                     />
-                  </div>
+                  </FormField>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Distance: {form.watch("travel_km") || 0} KM × ₹{resolvedRate !== null ? resolvedRate : selectedType.rate_per_km}/KM
@@ -427,16 +420,14 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label>Remarks</Label>
+            <FormField label="Remarks">
               <Textarea
                 placeholder="Optional notes..."
                 {...form.register("remarks")}
               />
-            </div>
+            </FormField>
 
-            <div className="grid gap-2">
-              <Label>Proof Attachment {selectedType?.proof_required && <span className="text-destructive">*</span>}</Label>
+            <FormField label="Proof Attachment" required={selectedType?.proof_required}>
               <MediaUpload
                 accept="image/*,application/pdf"
                 items={
@@ -456,7 +447,7 @@ export function ExpenseForm({ open, onOpenChange, asPage = false, expense, onSav
                   ? 'A receipt photo or PDF is required for this expense type.'
                   : 'Attach a receipt photo or PDF. Optional.'}
               />
-            </div>
+            </FormField>
 
           </div>
           <FormActions

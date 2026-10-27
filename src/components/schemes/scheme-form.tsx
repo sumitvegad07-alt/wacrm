@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/shared";
 import { Switch } from "@/components/ui/switch";
 import { MultiSelect } from "@/components/ui/multi-select";
 import {
@@ -299,26 +300,22 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
   ) : (
     <div className="space-y-6">
       {/* 1. Name */}
-      <div className="space-y-1.5">
-        <Label>Scheme name</Label>
+      <FormField label="Scheme name">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Diwali — Buy 10 get 1" />
-      </div>
+      </FormField>
 
       {/* 2-3. Dates */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Start date</Label>
+        <FormField label="Start date">
           <Input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>End date (optional)</Label>
+        </FormField>
+        <FormField label="End date (optional)">
           <Input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
-        </div>
+        </FormField>
       </div>
 
       {/* 4. Type */}
-      <div className="space-y-1.5">
-        <Label>Scheme type</Label>
+      <FormField label="Scheme type">
         <Select value={schemeType} items={SCHEME_TYPE_LABELS} onValueChange={(v) => setSchemeType(v as SchemeType)}>
           <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -327,15 +324,14 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground flex gap-1.5 pt-1">
+        <p className="text-micro text-muted-foreground flex gap-1.5 pt-1">
           <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {SCHEME_TYPE_HELP[schemeType]}
         </p>
-      </div>
+      </FormField>
 
       {/* 5-6. Reward + how bands apply */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Reward</Label>
+        <FormField label="Reward">
           <Select value={rewardType} items={REWARD_TYPE_LABELS} onValueChange={(v) => setRewardType(v as SchemeRewardType)} disabled={schemeType === "free_goods"}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -344,12 +340,11 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">{REWARD_HELP[schemeType]}</p>
-        </div>
+          <p className="text-micro text-muted-foreground">{REWARD_HELP[schemeType]}</p>
+        </FormField>
 
         {!useValue && (
-          <div className="space-y-1.5">
-            <Label>How bands apply</Label>
+          <FormField label="How bands apply">
             <Select value={slabMode} items={SLAB_MODE_LABELS} onValueChange={(v) => setSlabMode(v as "step_up" | "repeat")}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -357,18 +352,17 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
                 <SelectItem value="repeat">{SLAB_MODE_LABELS.repeat}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{SLAB_MODE_HELP[slabMode]}</p>
-          </div>
+            <p className="text-micro text-muted-foreground">{SLAB_MODE_HELP[slabMode]}</p>
+          </FormField>
         )}
       </div>
 
       {/* 7. Max free units */}
       {isFreeGoods && !useValue && (
-        <div className="space-y-1.5">
-          <Label>Max free units per order</Label>
+        <FormField label="Max free units per order">
           <Input type="number" value={maxFree} onChange={(e) => setMaxFree(e.target.value)} placeholder="Blank = no cap" />
-          <p className="text-xs text-muted-foreground">A ceiling on total free units this scheme can give on one order.</p>
-        </div>
+          <p className="text-micro text-muted-foreground">A ceiling on total free units this scheme can give on one order.</p>
+        </FormField>
       )}
 
       {/* 8. Bands */}
@@ -376,7 +370,7 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
         <div className="flex items-center justify-between">
           <div>
             <Label>{useValue ? "Order-value bands" : "Quantity bands"}</Label>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-micro text-muted-foreground mt-0.5">
               {useValue ? "Each band is an order-value range and the discount it earns." : "Each band is a quantity range and the reward it earns."}
             </p>
           </div>
@@ -390,17 +384,17 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
             <div key={i} className="rounded-md border border-border p-3">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="flex-1 min-w-[120px] space-y-1">
-                  <Label className="text-xs">Min {boundLabel}</Label>
+                  <Label className="text-label text-muted-foreground">Min {boundLabel}</Label>
                   <Input type="number" value={s.lo} onChange={(e) => setSlab(i, { lo: e.target.value })} />
                 </div>
                 <div className="flex-1 min-w-[120px] space-y-1">
-                  <Label className="text-xs">Max {boundLabel} (blank = ∞)</Label>
+                  <Label className="text-label text-muted-foreground">Max {boundLabel} (blank = ∞)</Label>
                   <Input type="number" value={s.hi} onChange={(e) => setSlab(i, { hi: e.target.value })} />
                 </div>
                 {isFreeGoods ? (
                   <>
                     <div className="flex-1 min-w-[180px] space-y-1">
-                      <Label className="text-xs">Free product</Label>
+                      <Label className="text-label text-muted-foreground">Free product</Label>
                       <Select value={s.freeProductId ?? ""} items={productItems} onValueChange={(v) => setSlab(i, { freeProductId: v })}>
                         <SelectTrigger className="w-full"><SelectValue placeholder="Choose…" /></SelectTrigger>
                         <SelectContent>
@@ -409,13 +403,13 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
                       </Select>
                     </div>
                     <div className="w-28 space-y-1">
-                      <Label className="text-xs">Free qty</Label>
+                      <Label className="text-label text-muted-foreground">Free qty</Label>
                       <Input type="number" value={s.freeQty} onChange={(e) => setSlab(i, { freeQty: e.target.value })} />
                     </div>
                   </>
                 ) : (
                   <div className="flex-1 min-w-[150px] space-y-1">
-                    <Label className="text-xs">
+                    <Label className="text-label text-muted-foreground">
                       {rewardType === "discount_percent" ? "% off" : rewardType === "special_price" ? "Special price ₹" : "₹ off / unit"}
                     </Label>
                     <Input type="number" value={s.rewardValue} onChange={(e) => setSlab(i, { rewardValue: e.target.value })} />
@@ -447,8 +441,7 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
 
       {/* 10. Customer selection */}
       <div className="space-y-4">
-        <div className="space-y-1.5">
-          <Label>Who it applies to</Label>
+        <FormField label="Who it applies to">
           <Select value={targetType} items={TARGET_LABELS} onValueChange={(v) => setTargetType(v as "all" | "specific_customers")}>
             <SelectTrigger className="w-full sm:max-w-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -456,29 +449,26 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
               <SelectItem value="specific_customers">{TARGET_LABELS.specific_customers}</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </FormField>
         {targetType === "specific_customers" && (
-          <div className="space-y-1.5">
-            <Label>Customers</Label>
+          <FormField label="Customers">
             <MultiSelect options={customerOptions} selectedValues={customerIds} onChange={setCustomerIds} placeholder="Select customers…" searchable />
-          </div>
+          </FormField>
         )}
       </div>
 
       {/* 11. Priority */}
-      <div className="space-y-1.5 border-t border-border pt-5">
-        <Label>Priority (tie-breaker)</Label>
+      <FormField label="Priority (tie-breaker)" className="border-t border-border pt-5">
         <Input type="number" value={priority} onChange={(e) => setPriority(e.target.value)} className="sm:max-w-xs" />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-micro text-muted-foreground">
           Only matters when <strong>two schemes could apply to the same product at once</strong>. The higher number wins;
           the other is ignored. If your schemes never overlap, leave this at 0.
         </p>
-      </div>
+      </FormField>
 
       {/* Multi Unit: measure qty thresholds in base or entered units */}
       {multiUnitEnabled && schemeType !== "value_slab" && (
-        <div className="space-y-1.5 border-t border-border pt-5">
-          <Label>Quantity is measured in</Label>
+        <FormField label="Quantity is measured in" className="border-t border-border pt-5">
           <Select value={qtyUnitBasis} onValueChange={(v) => setQtyUnitBasis(v as "base" | "entered")}>
             <SelectTrigger className="sm:max-w-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -486,12 +476,12 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
               <SelectItem value="entered">Entered unit (e.g. 2 BOX)</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-micro text-muted-foreground">
             With Multi Unit on, choose whether this scheme&apos;s quantity slabs are counted in the
             product&apos;s <strong>base unit</strong> (a line of 2 BOX counts as 24) or the
             <strong> entered unit</strong> (counts as 2).
           </p>
-        </div>
+        </FormField>
       )}
 
       {/* Active (edit only — new schemes start active) */}
@@ -499,7 +489,7 @@ export function SchemeForm({ asPage = false, schemeId, cloneFromId, open = true,
         <div className="flex items-center justify-between border-t border-border pt-5">
           <div>
             <Label>Active</Label>
-            <p className="text-xs text-muted-foreground">Off = never suggested, even within its dates. Turn back on any time.</p>
+            <p className="text-micro text-muted-foreground">Off = never suggested, even within its dates. Turn back on any time.</p>
           </div>
           <Switch checked={active} onCheckedChange={setActive} />
         </div>

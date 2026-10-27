@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Loader2, Plus, Trash2, AlertTriangle, ShoppingCart, Tag } from 'lucide-react';
-import { FormPageShell, FormSection, FormActions, FORM_GRID_PAGE } from '@/components/shared';
+import { FormPageShell, FormSection, FormActions, FORM_GRID_PAGE, useConfirm } from '@/components/shared';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -182,6 +182,7 @@ function supaErr(e: unknown): string {
 }
 
 export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefillContactId, prefillSiteVisitId, orderId }: OrderFormProps) {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { user, accountId, defaultCurrency, hasPermission, isModuleEnabled } = useAuth();
   const paymentEnabled = isModuleEnabled('payment');
@@ -647,14 +648,11 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
       }
     }
 
-    // NOTE (design system): the two native confirm() calls below are the last
-    // ones in this module and are deliberately left as they are for now.
-    // Unlike the "click -> confirm -> act" sites converted in this batch, these
-    // gate the middle of handleSave and need its result synchronously, so
-    // swapping in ConfirmDialog means making the confirmation awaitable and
-    // restructuring the save path — the most business-critical flow in the app.
-    // That belongs in its own change with its own verification, not in a
-    // styling batch.
+    // These two gate the MIDDLE of handleSave and need the answer before
+    // deciding whether to continue. A controlled ConfirmDialog cannot express
+    // that, which is why they stayed native through Batch 3. useConfirm()
+    // returns a promise, so they convert without touching the save logic:
+    // handleSave was already async.
     if (paymentEnabled && financialData) {
       // 1. Credit Days (Overdue) check
       if (financialData.isOverdue && creditDaysAction !== 'ignore') {
@@ -662,7 +660,12 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
           toast.error(`Customer has overdue invoices. Order cannot be saved.`);
           return;
         } else if (creditDaysAction === 'warn') {
-          if (!confirm(`Warning: This customer has overdue invoices. Do you want to proceed?`)) {
+          if (!(await confirm({
+            title: "This customer has overdue invoices",
+            description: "You can still save this order. Continue?",
+            confirmLabel: "Save anyway",
+            variant: "warning",
+          }))) {
             return;
           }
         }
@@ -677,7 +680,12 @@ export function OrderForm({ open, onOpenChange, asPage = false, onSaved, prefill
             toast.error(`Order amount (${formatCurrency(orderTotal, defaultCurrency || 'USD')}) exceeds available credit (${formatCurrency(available, defaultCurrency || 'USD')}).`);
             return;
           } else if (creditLimitAction === 'warn') {
-            if (!confirm(`Warning: This order exceeds the customer's available credit. Do you want to proceed?`)) {
+            if (!(await confirm({
+              title: "This order exceeds the customer's available credit",
+              description: "You can still save this order. Continue?",
+              confirmLabel: "Save anyway",
+              variant: "warning",
+            }))) {
               return;
             }
           }

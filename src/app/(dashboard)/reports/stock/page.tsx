@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { fetchStockPositions, toNumber, type StockPosition } from '@/lib/stock/financials';
+import { ReportPageLayout, LineItemsTable, LineItemsHead } from '@/components/shared';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Boxes, Download } from 'lucide-react';
@@ -108,10 +109,10 @@ export default function StockReportPage() {
   ];
 
   return (
-    <div className="w-full p-4 sm:p-6 space-y-5">
+    <ReportPageLayout className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold flex items-center gap-2"><Boxes className="h-5 w-5" /> Stock Report</h1>
+          <h1 className="flex items-center gap-2 text-page-title font-semibold"><Boxes className="h-5 w-5" /> Stock Report</h1>
           <p className="text-sm text-muted-foreground">Closing position, every movement, and what&apos;s run out.</p>
         </div>
         <Link href="/stock" className={buttonVariants({ variant: 'outline', size: 'sm' })}>Manage stock</Link>
@@ -228,7 +229,7 @@ export default function StockReportPage() {
           );
         })()
       )}
-    </div>
+    </ReportPageLayout>
   );
 }
 
@@ -238,17 +239,22 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 function TableWrap({ head, children, numericFrom }: { head: string[]; children: React.ReactNode; numericFrom?: number }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/40">
-          <tr className="text-xs text-muted-foreground">
-            {head.map((h, i) => (
-              <th key={h} className={`px-4 py-2.5 font-medium ${numericFrom !== undefined && i >= numericFrom ? 'text-right' : 'text-left'}`}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
+    <LineItemsTable
+      minWidth="38rem"
+      head={
+        <tr>
+          {head.map((h, i) => (
+            <LineItemsHead
+              key={h}
+              className={numericFrom !== undefined && i >= numericFrom ? 'text-right' : undefined}
+            >
+              {h}
+            </LineItemsHead>
+          ))}
+        </tr>
+      }
+    >
+      {children}
+    </LineItemsTable>
   );
 }

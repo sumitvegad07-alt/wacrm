@@ -5,6 +5,7 @@ import {
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useConfirm } from "@/components/shared";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 
 export function ExpenseTypesSettings() {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { accountId, user } = useAuth();
   
@@ -135,7 +137,7 @@ export function ExpenseTypesSettings() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this expense type? It will fail if already used in expenses.")) return;
+    if (!(await confirm({ title: "Delete this expense type?", description: "If it is already used by an expense, the delete will fail.", confirmLabel: "Delete", variant: "danger" }))) return;
     
     const { error } = await supabase.from("expense_types").delete().eq("id", id);
     if (error) {

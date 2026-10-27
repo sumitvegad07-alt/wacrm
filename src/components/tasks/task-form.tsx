@@ -22,7 +22,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, X, CheckSquare } from "lucide-react";
-import { FormPageShell, FormActions } from "@/components/shared";
+import { FormPageShell, FormActions, FormField} from "@/components/shared";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -592,17 +592,15 @@ export function TaskForm({
 
               {/* Order requested: Schedule Date, Schedule Time, Priority, Assigned To, then the rest. */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground text-xs uppercase font-medium">Scheduled Date</Label>
+                <FormField label="Scheduled Date" labelClassName="uppercase">
                   <Input
                     type="date"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
                     className="h-10 w-full bg-background"
                   />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground text-xs uppercase font-medium">Scheduled Time</Label>
+                </FormField>
+                <FormField label="Scheduled Time" labelClassName="uppercase">
                   <SearchableSelect
                     value={dueTime}
                     onChange={setDueTime}
@@ -610,12 +608,11 @@ export function TaskForm({
                     placeholder="Select time"
                     className="h-10 w-full bg-background"
                   />
-                </div>
+                </FormField>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground text-xs uppercase font-medium">Priority</Label>
+                <FormField label="Priority" labelClassName="uppercase">
                   <Select
                     value={priority}
                     items={Object.fromEntries(PRIORITIES.map((p) => [p, p]))}
@@ -630,9 +627,8 @@ export function TaskForm({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground text-xs uppercase font-medium">Assigned To</Label>
+                </FormField>
+                <FormField label="Assigned To" labelClassName="uppercase">
                   {/* Several people can share a task, and each ticks off their
                       own copy. Searchable: an account with a hundred employees
                       cannot be scrolled. Assignment stays optional — nobody on
@@ -649,7 +645,7 @@ export function TaskForm({
                       label: p.full_name || p.email,
                     }))}
                   />
-                </div>
+                </FormField>
               </div>
 
               {/* `empty:hidden` so the divider goes too when the renderer paints
@@ -682,8 +678,7 @@ export function TaskForm({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border/50">
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground text-xs uppercase font-medium">Linked To</Label>
+                <FormField label="Linked To" labelClassName="uppercase">
                   {/* A native <select> renders a BROWSER dropdown, which opens whichever way the
                       browser feels like and cannot be styled. Using the house Select keeps this
                       opening downward like every other dropdown on the form. */}
@@ -701,7 +696,7 @@ export function TaskForm({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </FormField>
 
                 {linkedModule !== "None" && (
                   <div className="grid gap-2">

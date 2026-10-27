@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { ArrowLeft, CheckCircle, Edit2, Loader2, Paperclip, XCircle } from "lucide-react";
+import { CheckCircle, Edit2, Loader2, Paperclip, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { StatusBadge } from "@/components/shared";
+import { StatusBadge, DetailPageLayout } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { PrintSizeMenu } from "@/components/print/print-size-menu";
 import { Input } from "@/components/ui/input";
@@ -116,12 +116,12 @@ export default function LeaveDetailPage() {
   };
 
   if (loading) {
-    return <div className="p-8 text-center text-muted-foreground">Loading leave...</div>;
+    return <div className="py-10 text-center text-muted-foreground">Loading leave...</div>;
   }
 
   if (!leave) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
+      <div className="py-10 text-center text-muted-foreground">
         <p>This leave could not be found.</p>
         <Button variant="outline" className="mt-4" onClick={() => router.push("/location-tracking/leaves")}>
           Back to Leaves
@@ -140,22 +140,12 @@ export default function LeaveDetailPage() {
   const canEdit = canManage || (isOwn && isPending);
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => router.push("/location-tracking/leaves")}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-xl font-bold tracking-tight">{leave.leave_number}</h1>
-        <StatusBadge status={leave.status.toLowerCase()} label={leave.status} />
-        <div className="ml-auto">
-          <PrintSizeMenu href={`/print/leave/${leave.id}`} label="Print" />
-        </div>
-      </div>
+    <DetailPageLayout
+      title={leave.leave_number}
+      onBack={() => router.push("/location-tracking/leaves")}
+      badges={<StatusBadge status={leave.status.toLowerCase()} label={leave.status} />}
+      actions={<PrintSizeMenu href={`/print/leave/${leave.id}`} label="Print" />}
+    >
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* LEFT — the record */}
@@ -341,7 +331,7 @@ export default function LeaveDetailPage() {
         calendars={calendars}
         onSaved={fetchLeave}
       />
-    </div>
+    </DetailPageLayout>
   );
 }
 

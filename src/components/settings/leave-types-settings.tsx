@@ -1,5 +1,6 @@
 "use client";
 import { SettingsPanel } from '@/components/settings/settings-layout';
+import { useConfirm } from "@/components/shared";
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -44,6 +45,7 @@ interface LeaveType {
 }
 
 export function LeaveTypesSettings() {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { accountId, user } = useAuth();
 
@@ -130,7 +132,7 @@ export function LeaveTypesSettings() {
   };
 
   const handleDelete = async (lt: LeaveType) => {
-    if (!confirm(`Delete "${lt.name}"? This cannot be undone.`)) return;
+    if (!(await confirm({ title: `Delete "${lt.name}"?`, description: "This cannot be undone.", confirmLabel: "Delete", variant: "danger" }))) return;
     const { error } = await supabase.from("leave_types").delete().eq("id", lt.id);
     if (error) {
       // ON DELETE RESTRICT: a type that has been used cannot be removed without taking the

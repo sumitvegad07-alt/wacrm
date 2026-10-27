@@ -14,7 +14,7 @@ import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 import { useAuth } from "@/hooks/use-auth";
 import { useDataScope } from "@/hooks/use-data-scope";
-import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog } from "@/components/shared";
+import { PageLayout, PageHeader, PageToolbar, BulkActionBar, StatusBadge, ConfirmDialog, useConfirm} from "@/components/shared";
 import {
   inactiveSelection,
   reactivateDisabledReason,
@@ -50,6 +50,7 @@ const EXPENSE_EXTRA_COLUMNS: readonly ExtraColumnSpec<Expense>[] = [
 ];
 
 export default function ExpensesPage() {
+  const confirm = useConfirm();
   const { accountId, profile, accountRole, user } = useAuth();
   const scope = useDataScope();
   const router = useRouter();
@@ -266,7 +267,7 @@ export default function ExpensesPage() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to approve ${pendingIds.length} expense(s)?`)) return;
+    if (!(await confirm({ title: `Approve ${pendingIds.length} expense(s)?`, description: "Approved expenses can no longer be edited by the claimant.", confirmLabel: "Approve", variant: "default" }))) return;
 
     setBusy(true);
     let successCount = 0;
@@ -352,7 +353,7 @@ export default function ExpensesPage() {
       return;
     }
 
-    if (!confirm(`Move ${pendingIds.length} pending expense(s) to Inactive? They can be re-activated later.`)) return;
+    if (!(await confirm({ title: `Move ${pendingIds.length} pending expense(s) to Inactive?`, description: "They stay in the system and can be re-activated later.", confirmLabel: "Move to Inactive", variant: "warning" }))) return;
 
     setBusy(true);
     let successCount = 0;

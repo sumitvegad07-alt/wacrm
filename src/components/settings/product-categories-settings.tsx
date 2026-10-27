@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useConfirm } from "@/components/shared";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Tag, Layers } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -31,6 +32,7 @@ export function ProductCategoriesSettings({
   level3Name,
   setLevel3Name,
 }: ProductCategoriesSettingsProps) {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { accountId, canEditSettings } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -81,7 +83,7 @@ export function ProductCategoriesSettings({
   }
 
   async function handleDeleteCategory(id: string) {
-    if (!confirm("Are you sure? This will delete all sub-categories as well. Products assigned to these categories will lose their category.")) return;
+    if (!(await confirm({ title: "Delete this category?", description: "Its sub-categories go too, and products assigned to them lose their category.", confirmLabel: "Delete", variant: "danger" }))) return;
     const { error } = await supabase.from("product_categories").delete().eq("id", id);
     if (error) { toast.error("Could not delete category"); return; }
     toast.success("Category deleted");

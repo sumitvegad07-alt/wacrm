@@ -1,4 +1,5 @@
 import { ReportViewer } from "@/components/reports/report-viewer";
+import { ReportPageLayout } from "@/components/shared";
 import { productSummaryReportConfig } from "@/lib/reports/productSummaryReportConfig";
 
 export const metadata = {
@@ -7,8 +8,8 @@ export const metadata = {
 
 export default function ProductSummaryReportPage() {
   return (
-    <div className="flex flex-col h-full space-y-4 p-8">
+    <ReportPageLayout>
       <ReportViewer config={productSummaryReportConfig} />
-    </div>
+    </ReportPageLayout>
   );
 }

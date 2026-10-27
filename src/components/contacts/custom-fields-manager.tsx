@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useConfirm } from "@/components/shared";
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
@@ -56,6 +57,7 @@ export function CustomFieldsManager({
  * `custom_fields` RLS also rejects non-admin writes as defense in depth.
  */
 export function CustomFieldsPanel() {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { user, accountId } = useAuth();
 
@@ -173,13 +175,13 @@ export function CustomFieldsPanel() {
   }
 
   async function handleDelete(field: CustomField) {
-    if (
-      !window.confirm(
-        `Delete "${field.field_name}"? This also removes its stored value on every contact. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
+    const yes = await confirm({
+      title: `Delete "${field.field_name}"?`,
+      description: "Its stored value is removed from every contact. This cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!yes) return;
     setBusyId(field.id);
     const { error } = await supabase
       .from('custom_fields')

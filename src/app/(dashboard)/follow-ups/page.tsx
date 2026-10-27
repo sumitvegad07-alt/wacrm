@@ -25,7 +25,7 @@ import { isBefore, startOfToday } from "date-fns";
 import { DEFAULT_PERIOD, matchesPeriod, type TaskPeriod } from "@/lib/tasks/period-filter";
 import { assigneeLabel, myStatus, progressLabel } from "@/lib/tasks/assignees";
 import Link from "next/link";
-import { PageLayout, PageHeader } from "@/components/shared";
+import { PageLayout, PageHeader, useConfirm} from "@/components/shared";
 
 // Extend Task type for this component to include joined relations
 type FollowUpTask = Task & {
@@ -36,6 +36,7 @@ type FollowUpTask = Task & {
 };
 
 export default function FollowUpsPage() {
+  const confirm = useConfirm();
   const { accountId, profile, profileLoading } = useAuth();
   const supabase = createClient();
   const [profiles, setProfiles] = useState<{ id: string; full_name: string }[]>([]);
@@ -231,7 +232,7 @@ export default function FollowUpsPage() {
   async function deleteTask(task: FollowUpTask, e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this activity?")) return;
+    if (!(await confirm({ title: "Delete this activity?", description: "This cannot be undone.", confirmLabel: "Delete", variant: "danger" }))) return;
 
     const { error } = await supabase.from("tasks").delete().eq("id", task.id);
     if (error) {

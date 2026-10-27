@@ -1,4 +1,5 @@
 import { ReportViewer } from "@/components/reports/report-viewer";
+import { ReportPageLayout } from "@/components/shared";
 import { outstandingReportConfig } from "@/lib/reports/outstandingReportConfig";
 
 export const metadata = {
@@ -7,8 +8,8 @@ export const metadata = {
 
 export default function CustomerOutstandingReportPage() {
   return (
-    <div className="flex flex-col h-full space-y-4 p-8">
+    <ReportPageLayout>
       <ReportViewer config={outstandingReportConfig} />
-    </div>
+    </ReportPageLayout>
   );
 }

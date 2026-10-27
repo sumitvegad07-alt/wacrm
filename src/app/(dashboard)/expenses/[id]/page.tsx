@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { ExpenseForm } from "@/components/expenses/expense-form";
 import { Timeline } from "@/components/shared/timeline";
+import { ConfirmDialog } from "@/components/shared";
 import { getApproverProfile } from "@/lib/reporting/api";
 import { format } from "date-fns";
 
@@ -33,6 +34,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
   
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const fetchAllData = useCallback(async () => {
     if (!accountId) return;
@@ -192,9 +194,10 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this expense? This action cannot be undone.")) return;
-    
+  // Was a native browser confirm(), which cannot be styled and reads like a
+  // different product. The shared ConfirmDialog has existed all along.
+  const doDelete = async () => {
+    setDeleteOpen(false);
     const { error } = await supabase.from("expenses").delete().eq("id", expense.id);
     if (error) {
       toast.error("Failed to delete expense");
@@ -308,7 +311,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
             </Button>
           )}
           {isPending && (isAdmin || expense.employee_id === profile?.id) && (
-            <Button size="sm" variant="destructive" onClick={handleDelete}>
+            <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)}>
               Delete
             </Button>
           )}
@@ -322,8 +325,8 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Primary Info Card */}
-            <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
-              <h3 className="font-semibold text-foreground flex items-center gap-2 border-b border-border pb-3">
+            <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
+              <h3 className="flex items-center gap-2 border-b border-border pb-3 text-section font-semibold text-foreground">
                 <Info className="h-4 w-4 text-primary" /> Expense Details
               </h3>
               <div className="space-y-3 pt-1">
@@ -360,8 +363,8 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
             </div>
 
             {/* Amounts & Travel Card */}
-            <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
-              <h3 className="font-semibold text-foreground flex items-center gap-2 border-b border-border pb-3">
+            <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
+              <h3 className="flex items-center gap-2 border-b border-border pb-3 text-section font-semibold text-foreground">
                 <MapPin className="h-4 w-4 text-primary" /> Amounts & Travel
               </h3>
               <div className="space-y-3 pt-1">
@@ -395,8 +398,8 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
             
             {/* Odometer Verification Card */}
             {odometerSession && (
-              <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
-                <h3 className="font-semibold text-foreground flex items-center gap-2 border-b border-border pb-3">
+              <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
+                <h3 className="flex items-center gap-2 border-b border-border pb-3 text-section font-semibold text-foreground">
                   <CheckCircle className="h-4 w-4 text-primary" /> Odometer Verification
                 </h3>
                 
@@ -439,7 +442,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
           </div>
 
           {/* Remarks & Proof Card */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+          <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
              <h3 className="font-semibold text-foreground border-b border-border pb-3">Additional Information</h3>
              
              {expense.remarks && (
@@ -471,7 +474,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Custom Fields Card */}
           {(systemRows.length > 0 || extraFields.length > 0) && (
-            <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+            <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
               <h3 className="font-semibold text-foreground border-b border-border pb-3">Custom Fields</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 pt-1">
                 {systemRows.map(({ field, value }) => (
@@ -515,6 +518,16 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
         onOpenChange={setEditOpen} 
         expense={expense} 
         onSaved={fetchAllData} 
+      />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this expense?"
+        description="This permanently deletes the expense claim. It cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={doDelete}
       />
     </div>
   );

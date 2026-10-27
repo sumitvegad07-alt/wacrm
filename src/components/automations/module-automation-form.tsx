@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/shared";
 import {
   Select,
   SelectContent,
@@ -246,7 +247,7 @@ export function ModuleAutomationForm({
   return (
     <div className="space-y-5">
       {/* Name */}
-      <Field label="Name" required htmlFor="auto-name">
+      <FormField label="Name" required htmlFor="auto-name">
         <Input
           id="auto-name"
           value={draft.name}
@@ -255,11 +256,11 @@ export function ModuleAutomationForm({
           placeholder="Enter name..."
           className="bg-muted border-border"
         />
-      </Field>
+      </FormField>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Module */}
-        <Field label="Module" required>
+        <FormField label="Module" required>
           <Select
             value={draft.module || undefined}
             disabled={disabled}
@@ -285,10 +286,10 @@ export function ModuleAutomationForm({
               ))}
             </SelectContent>
           </Select>
-        </Field>
+        </FormField>
 
         {/* Event — depends on module */}
-        <Field label="Event" required>
+        <FormField label="Event" required>
           <Select
             value={draft.event || undefined}
             disabled={disabled || !draft.module || catalogLoading}
@@ -313,12 +314,12 @@ export function ModuleAutomationForm({
               ))}
             </SelectContent>
           </Select>
-        </Field>
+        </FormField>
       </div>
 
       {/* Action — a select, not fixed text, so future actions slot in
           without redesigning the form. */}
-      <Field label="Action" required>
+      <FormField label="Action" required>
         <Select value="send_whatsapp" disabled>
           <SelectTrigger className="bg-muted border-border">
             <SelectValue />
@@ -330,11 +331,11 @@ export function ModuleAutomationForm({
         <p className="text-muted-foreground mt-1 text-xs">
           More actions (SMS, create activity, update field) come later.
         </p>
-      </Field>
+      </FormField>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Template */}
-        <Field label="WhatsApp template" required>
+        <FormField label="WhatsApp template" required>
           <Select
             value={draft.templateName || undefined}
             disabled={disabled || templatesLoading || templates.length === 0}
@@ -369,10 +370,10 @@ export function ModuleAutomationForm({
               Create one in Settings → Templates.
             </p>
           )}
-        </Field>
+        </FormField>
 
         {/* Send to */}
-        <Field label="Send to" required>
+        <FormField label="Send to" required>
           <div className="bg-muted border-border flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border px-2 py-1.5">
             {(catalog?.recipientTypes ?? []).map((r) => {
               const active = draft.recipients.some((x) => x.type === r.value);
@@ -407,12 +408,12 @@ export function ModuleAutomationForm({
               will not receive this.
             </p>
           )}
-        </Field>
+        </FormField>
       </div>
 
       {/* Template variables */}
       {selectedTemplate && selectedTemplate.variableCount > 0 && (
-        <Field label="Message details">
+        <FormField label="Message details">
           <div className="space-y-2">
             {Array.from({ length: selectedTemplate.variableCount }, (_, i) => {
               const slot = String(i + 1);
@@ -441,7 +442,7 @@ export function ModuleAutomationForm({
               );
             })}
           </div>
-        </Field>
+        </FormField>
       )}
 
       {/* Conditions */}
@@ -647,27 +648,6 @@ function SelectGroupBlock({ group }: { group: CatalogGroup }) {
         </SelectItem>
       ))}
     </>
-  );
-}
-
-function Field({
-  label,
-  required,
-  htmlFor,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  htmlFor?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={htmlFor} className="text-sm">
-        {label} {required && <span className="text-red-400">*</span>}
-      </Label>
-      {children}
-    </div>
   );
 }
 

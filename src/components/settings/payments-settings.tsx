@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useConfirm } from "@/components/shared";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -111,6 +112,7 @@ function SortablePaymentTypeItem({
 }
 
 export function PaymentSettings() {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { accountId, canEditSettings } = useAuth();
   
@@ -247,7 +249,7 @@ export function PaymentSettings() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this payment type? It will fail if already used in payments.")) return;
+    if (!(await confirm({ title: "Delete this payment type?", description: "If it is already used by a payment, the delete will fail.", confirmLabel: "Delete", variant: "danger" }))) return;
     const { error } = await supabase.from("payment_types").delete().eq("id", id);
     if (error) {
       toast.error("Cannot delete payment type. It might be used by existing payments.");

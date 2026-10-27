@@ -42,6 +42,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useConfirm } from "@/components/shared";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -236,6 +237,7 @@ export function FlowEditorProvider({
   initialNodes,
   children,
 }: ProviderProps) {
+  const confirm = useConfirm();
   const router = useRouter();
 
   const [state, setStateRaw] = useState<BuilderState>(() => ({
@@ -400,9 +402,12 @@ export function FlowEditorProvider({
 
   // ---- Delete ----
   const deleteFlow = useCallback(async () => {
-    const yes = window.confirm(
-      `Delete "${state.name}"? Any active runs end immediately. This can't be undone.`,
-    );
+    const yes = await confirm({
+      title: `Delete "${state.name}"?`,
+      description: "Any active runs end immediately. This cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
     if (!yes) return;
     try {
       const res = await fetch(`/api/flows/${initialFlow.id}`, {

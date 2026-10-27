@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useConfirm } from "@/components/shared";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Scale, History } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +14,7 @@ import { ImportButton } from "@/components/import/import-button";
 import { ImportHistoryDialog } from "@/components/import/import-history-dialog";
 
 export function ProductUnitsSettings() {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { accountId, canEditSettings } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -59,7 +61,7 @@ export function ProductUnitsSettings() {
   }
 
   async function handleDeleteUnit(id: string) {
-    if (!confirm("Are you sure? Products using this unit will lose their unit value.")) return;
+    if (!(await confirm({ title: "Delete this unit?", description: "Products using it lose their unit value.", confirmLabel: "Delete", variant: "danger" }))) return;
     const { error } = await supabase.from("product_units").delete().eq("id", id);
     if (error) { toast.error("Could not delete unit"); return; }
     toast.success("Unit deleted");

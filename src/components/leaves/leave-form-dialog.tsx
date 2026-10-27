@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/shared";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -254,8 +255,7 @@ export function LeaveFormDialog({
 
         <div className="space-y-5 py-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Employee</Label>
+            <FormField label="Employee">
               {/* SearchableSelect, not a plain Select: an account with a hundred employees needs a
                   search box, and this one opens as a popover BELOW the trigger rather than
                   overlaying it upwards the way the Base UI select does. Same component the task
@@ -277,12 +277,9 @@ export function LeaveFormDialog({
                   You can only apply for your own leave.
                 </p>
               )}
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <Label>
-                Leave Type <span className="text-destructive">*</span>
-              </Label>
+            <FormField label={<>Leave Type <span className="text-destructive">*</span></>}>
               <Select value={leaveTypeId} items={leaveTypeItems} onValueChange={(v) => setLeaveTypeId(v ?? "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a leave type" />
@@ -300,12 +297,9 @@ export function LeaveFormDialog({
                   No leave types exist yet. An admin must add one in Settings → Leave Settings.
                 </p>
               )}
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <Label>
-                From <span className="text-destructive">*</span>
-              </Label>
+            <FormField label={<>From <span className="text-destructive">*</span></>}>
               <Input
                 type="date"
                 value={fromDate}
@@ -316,19 +310,16 @@ export function LeaveFormDialog({
                   if (toDate && next > toDate) setToDate(next);
                 }}
               />
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <Label>
-                To <span className="text-destructive">*</span>
-              </Label>
+            <FormField label={<>To <span className="text-destructive">*</span></>}>
               <Input
                 type="date"
                 value={toDate}
                 min={fromDate || undefined}
                 onChange={(e) => setToDate(e.target.value)}
               />
-            </div>
+            </FormField>
           </div>
 
           {isPastStart && canManageOthers && (
@@ -408,23 +399,17 @@ export function LeaveFormDialog({
           )}
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>
-                Reason <span className="text-destructive">*</span>
-              </Label>
+            <FormField label={<>Reason <span className="text-destructive">*</span></>}>
               <Textarea
                 rows={3}
                 placeholder="Why are you taking this leave?"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
-            </div>
+            </FormField>
 
           {needsChangeReason && (
-            <div className="space-y-2">
-              <Label>
-                Reason for the change <span className="text-destructive">*</span>
-              </Label>
+            <FormField label={<>Reason for the change <span className="text-destructive">*</span></>}>
               <Input
                 placeholder="e.g. Employee asked to move it by a day"
                 value={changeReason}
@@ -433,7 +418,7 @@ export function LeaveFormDialog({
               <p className="text-xs text-muted-foreground">
                 Recorded on the leave&apos;s history, with your name and the time.
               </p>
-            </div>
+            </FormField>
           )}
           </div>
 

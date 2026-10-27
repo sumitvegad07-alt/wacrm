@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useConfirm } from "@/components/shared";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Boxes, ListChecks } from "lucide-react";
@@ -64,6 +65,7 @@ const DISCOUNT_VALUE_TYPES: { value: DiscountValueType; label: string; help: str
 ];
 
 export function PricingSchemesSettings() {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { accountId, account, canEditSettings, moduleSettings, refreshModuleSettings, hasSFA } = useAuth();
 
@@ -305,7 +307,7 @@ export function PricingSchemesSettings() {
   }
 
   async function handleDeleteSlab(slab: TaxSlab) {
-    if (!confirm(`Remove "${slab.name}"? Products using it will fall back to no tax until you pick another slab. Existing orders keep the rate they were saved with.`)) return;
+    if (!(await confirm({ title: `Remove "${slab.name}"?`, description: "Products using it fall back to no tax until you pick another slab. Existing orders keep the rate they were saved with.", confirmLabel: "Remove", variant: "danger" }))) return;
     const { error } = await supabase.from("tax_slabs").delete().eq("id", slab.id);
     if (error) { toast.error("Could not delete slab"); return; }
     toast.success("Deleted");
@@ -319,7 +321,7 @@ export function PricingSchemesSettings() {
    */
   async function assignSlabToAllProducts(slab: TaxSlab) {
     if (!accountId) return;
-    if (!confirm(`Set every product without a tax slab to "${slab.name}" (${slab.rate}%)?\n\nThis affects ${productsWithoutSlab} product${productsWithoutSlab === 1 ? "" : "s"}. Products that already have a slab are left alone. Existing orders are unaffected.`)) return;
+    if (!(await confirm({ title: `Set every product without a tax slab to "${slab.name}" (${slab.rate}%)?`, description: `This affects ${productsWithoutSlab} product${productsWithoutSlab === 1 ? "" : "s"}. Products that already have a slab are left alone. Existing orders are unaffected.`, confirmLabel: "Apply", variant: "warning" }))) return;
     setAssigning(true);
     const { error } = await supabase
       .from("products")

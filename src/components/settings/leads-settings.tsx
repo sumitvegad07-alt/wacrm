@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/components/shared";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Tag, Building2, Globe2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -18,6 +19,7 @@ interface LookupItem {
 }
 
 export function LeadsSettings() {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { accountId, canEditSettings } = useAuth();
   const [statuses, setStatuses] = useState<LookupItem[]>([]);
@@ -78,7 +80,7 @@ export function LeadsSettings() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Are you sure? This will not delete leads but will remove this option from dropdowns.")) return;
+    if (!(await confirm({ title: "Remove this option?", description: "No leads are deleted, but the option disappears from dropdowns.", confirmLabel: "Remove", variant: "warning" }))) return;
     
     const table = `lead_${activeTab}`;
     const { error } = await supabase.from(table).delete().eq("id", id);

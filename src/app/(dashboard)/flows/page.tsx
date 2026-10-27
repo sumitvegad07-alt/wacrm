@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/components/shared";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -82,6 +83,7 @@ const TEMPLATE_ICONS = {
 } as const;
 
 export default function FlowsPage() {
+  const confirm = useConfirm();
   const router = useRouter();
   const canCreate = useCan("send-messages");
   const [flows, setFlows] = useState<FlowRow[]>([]);
@@ -176,9 +178,12 @@ export default function FlowsPage() {
   }
 
   async function handleDelete(flow: FlowRow) {
-    const yes = window.confirm(
-      `Delete "${flow.name}"? Any active runs will end immediately.`,
-    );
+    const yes = await confirm({
+      title: `Delete "${flow.name}"?`,
+      description: "Any active runs end immediately. This cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
     if (!yes) return;
     try {
       const res = await fetch(`/api/flows/${flow.id}`, { method: "DELETE" });

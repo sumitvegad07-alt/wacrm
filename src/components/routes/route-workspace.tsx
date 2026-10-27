@@ -6,6 +6,7 @@
 // (grouped by date). Edits happen in a Sheet. UI → hooks → SDK only.
 
 import { useMemo, useState } from "react";
+import { useConfirm } from "@/components/shared";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -53,6 +54,7 @@ function nextDateForDow(dow: number): Date {
 }
 
 export function RouteWorkspace({ routeId, readOnly = false }: { routeId: string; readOnly?: boolean }) {
+  const confirm = useConfirm();
   const router = useRouter();
   const { accountId, hasPermission } = useAuth();
   const [tab, setTab] = useState<TabKey>("overview");
@@ -168,7 +170,7 @@ export function RouteWorkspace({ routeId, readOnly = false }: { routeId: string;
   const bulkRemove = async () => {
     const ids = [...selected];
     if (ids.length === 0) return;
-    if (!window.confirm(`Remove ${ids.length} customer${ids.length === 1 ? "" : "s"} from this route?`)) return;
+    if (!(await confirm({ title: `Remove ${ids.length} customer${ids.length === 1 ? "" : "s"} from this route?`, description: "They stay as customers; only this route stop is removed.", confirmLabel: "Remove", variant: "warning" }))) return;
     try {
       for (const id of ids) await removeCustomer.mutateAsync({ routeId, contactId: id });
       toast.success(`Removed ${ids.length} customer${ids.length === 1 ? "" : "s"}`);

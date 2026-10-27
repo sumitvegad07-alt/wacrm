@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -10,9 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import { DetailPageLayout } from "@/components/shared";
 import {
-  ArrowLeft,
-  Activity,
+    Activity,
   Gauge,
   Clock,
   BatteryMedium,
@@ -62,6 +61,7 @@ function SnapshotRow({ label, value, ok }: { label: string; value: string; ok?: 
 
 export default function AgentHealthDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const { accountId } = useAuth();
   const userId = params.userId as string;
   const supabase = createClient();
@@ -162,27 +162,19 @@ export default function AgentHealthDetailPage() {
           : "bg-destructive";
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/location-tracking/health"
-            className="flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{name}</h1>
-            <p className="text-sm text-muted-foreground">Tracking diagnostics for the selected day</p>
-          </div>
-        </div>
+    <DetailPageLayout
+      title={name}
+      onBack={() => router.push("/location-tracking/health")}
+      meta={<span>Tracking diagnostics for the selected day</span>}
+      actions={
         <Input
           type="date"
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
-          className="w-auto h-9 bg-background border-border"
+          className="w-auto"
         />
-      </div>
+      }
+    >
 
       {isLoading ? (
         <div className="rounded-xl border border-border bg-card p-10 text-center text-muted-foreground">
@@ -343,6 +335,6 @@ export default function AgentHealthDetailPage() {
           </div>
         </>
       )}
-    </div>
+    </DetailPageLayout>
   );
 }

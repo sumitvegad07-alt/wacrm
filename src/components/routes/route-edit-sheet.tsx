@@ -5,6 +5,7 @@
 // and uses optimistic concurrency (expectedVersion) so a stale edit is rejected cleanly.
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/components/shared";
 import { useSaveRoute } from "@/hooks/route/use-route-mutations";
 import { useAccountEmployees } from "@/hooks/route/use-route-refdata";
 import type { Route, RouteError } from "@/lib/route";
@@ -34,6 +35,7 @@ export function RouteEditSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const confirm = useConfirm();
   const employees = useAccountEmployees(accountId);
   const save = useSaveRoute(accountId);
 
@@ -55,8 +57,8 @@ export function RouteEditSheet({
     description !== (route.description ?? "") ||
     assigneeId !== (route.primary_assignee_id ?? "");
 
-  const requestClose = (next: boolean) => {
-    if (!next && dirty && !window.confirm("Discard unsaved changes to this route?")) return;
+  const requestClose = async (next: boolean) => {
+    if (!next && dirty && !(await confirm({ title: "Discard unsaved changes?", description: "The edits you made to this route are lost.", confirmLabel: "Discard", variant: "warning" }))) return;
     onOpenChange(next);
   };
 

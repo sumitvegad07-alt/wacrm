@@ -1,5 +1,6 @@
 "use client";
 import { SettingsCard } from '@/components/settings/settings-layout';
+import { useConfirm } from "@/components/shared";
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +16,7 @@ import { DEFAULT_PIPELINE_STAGES } from "@/lib/pipelines/default-stages";
 import { useAuth } from "@/hooks/use-auth";
 
 export function DealPipelinesSettings() {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { account } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -123,7 +125,7 @@ export function DealPipelinesSettings() {
   };
 
   const handleDeletePipeline = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete the "${name}" pipeline? All deals in this pipeline will be deleted.`)) {
+    if (!(await confirm({ title: `Delete the "${name}" pipeline?`, description: "Every deal in this pipeline is deleted with it. This cannot be undone.", confirmLabel: "Delete", variant: "danger" }))) {
       return;
     }
     const { error } = await supabase.from("pipelines").delete().eq("id", id);

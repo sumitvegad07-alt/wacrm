@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/currency";
 import { haversineKm } from "@/lib/location/distance";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DetailPageLayout } from "@/components/shared";
 import { Card } from "@/components/ui/card";
 import {
   ArrowLeft,
@@ -204,7 +205,7 @@ export default function VisitDetailPage() {
   }
   if (notFound || !visit) {
     return (
-      <div className="p-8">
+      <div className="py-10 text-center">
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="gap-2 mb-4">
           <ArrowLeft className="size-4" /> Back
         </Button>
@@ -221,15 +222,10 @@ export default function VisitDetailPage() {
     .join(", ");
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.back()} className="gap-2">
-            <ArrowLeft className="size-4" /> Back
-          </Button>
-          <h1 className="text-xl font-semibold text-foreground">Customer Visit</h1>
-        </div>
-      </div>
+    // Was `mx-auto max-w-6xl px-4 py-6` — centred and width-capped, on top of
+    // the gutter the workspace <main> already applies. Same outlier shape
+    // leads/[id] had.
+    <DetailPageLayout title="Customer Visit" onBack={() => router.back()}>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main column */}
@@ -278,9 +274,9 @@ export default function VisitDetailPage() {
           {/* Transactions */}
           {(orders.length > 0 || payments.length > 0) && (
             <Card className="p-6">
-              <h2 className="mb-4 text-lg font-semibold text-foreground">Transactions</h2>
+              <h2 className="mb-4 text-section font-semibold text-foreground">Transactions</h2>
               <div className="overflow-hidden rounded-md border border-border">
-                <table className="w-full text-sm">
+                <table className="w-full text-table">
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="px-4 py-2 text-left font-semibold text-foreground">Module</th>
@@ -308,7 +304,7 @@ export default function VisitDetailPage() {
 
           {/* Feedback */}
           <Card className="p-6">
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Feedback Details</h2>
+            <h2 className="mb-4 text-section font-semibold text-foreground">Feedback Details</h2>
             <div className="space-y-4">
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Feedback Type</p>
@@ -330,7 +326,7 @@ export default function VisitDetailPage() {
           {/* Other details: notes + shop photo */}
           {(visit.notes || visit.visit_photo_url) && (
             <Card className="p-6">
-              <h2 className="mb-4 text-lg font-semibold text-foreground">Other Details</h2>
+              <h2 className="mb-4 text-section font-semibold text-foreground">Other Details</h2>
               {visit.notes && (
                 <div className="mb-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Notes</p>
@@ -356,7 +352,7 @@ export default function VisitDetailPage() {
         {/* Visit Log sidebar */}
         <div className="lg:col-span-1">
           <Card className="p-6">
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Visit Log</h2>
+            <h2 className="mb-4 text-section font-semibold text-foreground">Visit Log</h2>
             {logEntries.length === 0 ? (
               <p className="text-sm text-muted-foreground">No transactions were generated on this visit.</p>
             ) : (
@@ -390,6 +386,6 @@ export default function VisitDetailPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </DetailPageLayout>
   );
 }

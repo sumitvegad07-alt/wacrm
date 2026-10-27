@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useConfirm } from "@/components/shared";
 import { Plus, MoreVertical, Copy, Trash2, Pencil, LayoutTemplate, Loader2, UserPlus, Users } from "lucide-react";
 import {
   Dialog,
@@ -52,6 +53,7 @@ import {
 const MODULES = DOCUMENT_MODULES.map((id) => ({ id, label: MODULE_LABELS[id] }));
 
 export function DocumentTemplatesPanel() {
+  const confirm = useConfirm();
   const router = useRouter();
   const supabase = createClient();
   const { accountId, user } = useAuth();
@@ -165,7 +167,7 @@ export function DocumentTemplatesPanel() {
       toast.error("This is the default template. Make another one the default first.");
       return;
     }
-    if (!window.confirm(`Delete "${tpl.name}"? This cannot be undone.`)) return;
+    if (!(await confirm({ title: `Delete "${tpl.name}"?`, description: "This cannot be undone.", confirmLabel: "Delete", variant: "danger" }))) return;
 
     setBusyId(tpl.id);
     try {

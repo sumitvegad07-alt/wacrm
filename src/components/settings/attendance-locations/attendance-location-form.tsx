@@ -13,9 +13,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/use-auth";
-import { FormActions, FormPageShell, FormSection } from "@/components/shared";
+import { FormActions, FormPageShell, FormSection, FormField} from "@/components/shared";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { toast } from "sonner";
@@ -207,26 +206,21 @@ export function AttendanceLocationForm({ locationId }: { locationId?: string }) 
         <div className="space-y-6">
           <FormSection title="Location Details">
             <div className={fieldGrid}>
-              <div className="space-y-2">
-                <Label>
-                  Name <span className="text-destructive">*</span>
-                </Label>
+              <FormField label={<>Name <span className="text-destructive">*</span></>}>
                 <Input
                   placeholder="e.g. Head Office"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Address</Label>
+              </FormField>
+              <FormField label="Address" className="sm:col-span-2">
                 <Input
                   placeholder="For your own reference"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label>Status</Label>
+              </FormField>
+              <FormField label="Status">
                 <div className="flex h-9 items-center gap-3">
                   <Switch
                     checked={status === "Active"}
@@ -237,7 +231,7 @@ export function AttendanceLocationForm({ locationId }: { locationId?: string }) 
                     {status === "Active" ? "Active" : "Inactive — fences nobody"}
                   </span>
                 </div>
-              </div>
+              </FormField>
             </div>
           </FormSection>
 
@@ -246,28 +240,21 @@ export function AttendanceLocationForm({ locationId }: { locationId?: string }) 
             subtitle="Click the map or drag the pin. The circle is the allowed radius."
           >
             <div className={fieldGrid}>
-              <div className="space-y-2">
-                <Label>
-                  Latitude <span className="text-destructive">*</span>
-                </Label>
+              <FormField label={<>Latitude <span className="text-destructive">*</span></>}>
                 <Input
                   value={lat}
                   onChange={(e) => setLat(e.target.value)}
                   onBlur={() => setRecentreKey((k) => k + 1)}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  Longitude <span className="text-destructive">*</span>
-                </Label>
+              </FormField>
+              <FormField label={<>Longitude <span className="text-destructive">*</span></>}>
                 <Input
                   value={lng}
                   onChange={(e) => setLng(e.target.value)}
                   onBlur={() => setRecentreKey((k) => k + 1)}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label>Allowed radius</Label>
+              </FormField>
+              <FormField label="Allowed radius">
                 <select
                   value={radiusM}
                   onChange={(e) => setRadiusM(Number(e.target.value) as FenceRadius)}
@@ -280,7 +267,7 @@ export function AttendanceLocationForm({ locationId }: { locationId?: string }) 
                     </option>
                   ))}
                 </select>
-              </div>
+              </FormField>
             </div>
 
             {coordsValid ? (
@@ -311,8 +298,7 @@ export function AttendanceLocationForm({ locationId }: { locationId?: string }) 
             subtitle="Which punch this location applies to"
           >
             <div className={fieldGrid}>
-              <div className="space-y-2">
-                <Label>This location fences</Label>
+              <FormField label="This location fences">
                 <select
                   value={fenceScope}
                   onChange={(e) => setFenceScope(e.target.value as FenceScope)}
@@ -325,7 +311,7 @@ export function AttendanceLocationForm({ locationId }: { locationId?: string }) 
                     </option>
                   ))}
                 </select>
-              </div>
+              </FormField>
             </div>
             {fenceScope !== "punch_in" && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
@@ -351,8 +337,7 @@ export function AttendanceLocationForm({ locationId }: { locationId?: string }) 
             </div>
 
             {!appliesToAll && (
-              <div className="space-y-2">
-                <Label>Assigned users</Label>
+              <FormField label="Assigned users">
                 <MultiSelect
                   options={employeeOptions}
                   selectedValues={assigned}
@@ -365,7 +350,7 @@ export function AttendanceLocationForm({ locationId }: { locationId?: string }) 
                   A user may be assigned to several locations and can punch at any of them. Anyone
                   with no location assigned keeps punching from anywhere.
                 </p>
-              </div>
+              </FormField>
             )}
           </FormSection>
         </div>

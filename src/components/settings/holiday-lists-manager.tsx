@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useConfirm } from "@/components/shared";
 import { toast } from "sonner";
 import {
   CalendarDays,
@@ -49,6 +50,7 @@ interface EmployeeRow {
  * not enough. An employee with no assignment follows the account's Default list.
  */
 export function HolidayListsManager() {
+  const confirm = useConfirm();
   const supabase = createClient();
   const { accountId, user } = useAuth();
 
@@ -203,14 +205,16 @@ export function HolidayListsManager() {
       return;
     }
     const following = employees.filter((e) => e.holiday_list_id === list.id).length;
-    if (
-      !confirm(
+    const yes = await confirm({
+      title: `Delete "${list.name}"?`,
+      description:
         following > 0
-          ? `Delete "${list.name}"? ${following} employee${following === 1 ? "" : "s"} will fall back to the default list.`
-          : `Delete "${list.name}" and its holidays?`,
-      )
-    )
-      return;
+          ? `${following} employee${following === 1 ? "" : "s"} will fall back to the default list.`
+          : "Its holidays are deleted with it.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!yes) return;
     const { error } = await supabase.from("holiday_lists").delete().eq("id", list.id);
     if (error) {
       toast.error("Could not delete the list");

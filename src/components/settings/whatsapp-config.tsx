@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useConfirm } from "@/components/shared";
 import { toast } from 'sonner';
 import {
   Eye,
@@ -37,6 +38,7 @@ type ConnectionStatus = 'connected' | 'disconnected' | 'unknown';
 type ResetReason = 'token_corrupted' | 'meta_api_error' | null;
 
 export function WhatsAppConfig() {
+  const confirm = useConfirm();
   const supabase = createClient();
   // After multi-user, whatsapp_config is one-row-per-account, not
   // one-row-per-user. We pull `accountId` straight off the auth
@@ -323,7 +325,7 @@ export function WhatsAppConfig() {
   }
 
   async function handleReset() {
-    if (!confirm('This will delete the current WhatsApp config so you can re-enter it. Continue?')) {
+    if (!(await confirm({ title: "Reset the WhatsApp configuration?", description: "The current configuration is deleted so you can enter it again.", confirmLabel: "Reset", variant: "danger" }))) {
       return;
     }
 

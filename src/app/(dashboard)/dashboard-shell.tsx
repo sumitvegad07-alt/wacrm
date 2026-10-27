@@ -18,6 +18,7 @@ import { BrandSplash } from "@/components/shared/brand";
 import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcuts-provider";
 import { TableFilterNavReset } from "@/components/layout/table-filter-nav-reset";
 import { TableToolbarSlotProvider } from "@/components/layout/table-toolbar-slot";
+import { ConfirmProvider } from "@/components/shared/confirm-provider";
 import { BackToGettingStarted } from "@/components/getting-started/BackToGettingStarted";
 import { TourRunner } from "@/components/tour/TourRunner";
 import { isRouteRestricted } from "@/lib/plans/surface-gates";
@@ -339,7 +340,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             mounted inside would be torn down and remounted as the page
             settles — and the table's portal target with it. */}
         <TableToolbarSlotProvider>
-          <DashboardShellInner>{children}</DashboardShellInner>
+          {/* Lets any screen `await confirm(...)` the shared dialog as cheaply
+              as the browser's confirm(). Out here for the same reason as the
+              slot provider: DashboardShellInner early-returns for its loading,
+              error and getting-started branches, so a provider mounted inside
+              would be torn down and remounted as the page settles. */}
+          <ConfirmProvider>
+            <DashboardShellInner>{children}</DashboardShellInner>
+          </ConfirmProvider>
         </TableToolbarSlotProvider>
       </AuthProvider>
     </AppQueryProvider>

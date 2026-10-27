@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/shared";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
@@ -122,18 +123,16 @@ export function AnnouncementForm({ initialData }: AnnouncementFormProps) {
           <div className="bg-card border border-border rounded-xl p-6 space-y-5">
             <h2 className="text-base font-semibold">Basic Details</h2>
             
-            <div className="space-y-2">
-              <Label>Title <span className="text-destructive">*</span></Label>
+            <FormField label={<>Title <span className="text-destructive">*</span></>}>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Announcement Title"
               />
-            </div>
+            </FormField>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 flex flex-col">
-                <Label>Expiry Date</Label>
+              <FormField label="Expiry Date" className="flex flex-col">
                 <Popover>
                   <PopoverTrigger 
                     render={
@@ -150,9 +149,8 @@ export function AnnouncementForm({ initialData }: AnnouncementFormProps) {
                     <Calendar mode="single" selected={expiryDate} onSelect={setExpiryDate} />
                   </PopoverContent>
                 </Popover>
-              </div>
-              <div className="space-y-2 flex flex-col">
-                <Label>External Link</Label>
+              </FormField>
+              <FormField label="External Link" className="flex flex-col">
                 <div className="relative">
                   <LinkIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -162,12 +160,11 @@ export function AnnouncementForm({ initialData }: AnnouncementFormProps) {
                     className="pl-9"
                   />
                 </div>
-              </div>
+              </FormField>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 flex flex-col">
-                <Label>Employee</Label>
+              <FormField label="Employee" className="flex flex-col">
                 <MultiSelect
                   options={employees.map(e => ({ label: e.full_name, value: e.id }))}
                   selectedValues={employeeIds}
@@ -175,9 +172,8 @@ export function AnnouncementForm({ initialData }: AnnouncementFormProps) {
                   placeholder="All Users (Default)"
                   emptyMessage="No users found."
                 />
-              </div>
-              <div className="space-y-2 flex flex-col">
-                <Label>Employee Role</Label>
+              </FormField>
+              <FormField label="Employee Role" className="flex flex-col">
                 <MultiSelect
                   options={roles.map(r => ({ label: r.name, value: r.id }))}
                   selectedValues={employeeRoleIds}
@@ -185,7 +181,7 @@ export function AnnouncementForm({ initialData }: AnnouncementFormProps) {
                   placeholder="All Roles (Default)"
                   emptyMessage="No roles found."
                 />
-              </div>
+              </FormField>
             </div>
           </div>
         </div>

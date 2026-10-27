@@ -15,6 +15,7 @@ export * from "./status-badge";
 export * from "./empty-state";
 export * from "./loading-state";
 export * from "./confirm-dialog";
+export * from "./confirm-provider";
 export * from "./bulk-action-bar";
 export * from "./form-page-shell";
 export * from "./form-actions";

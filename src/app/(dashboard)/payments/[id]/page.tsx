@@ -17,11 +17,17 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import {
-  ChevronLeft, Loader2, CheckCircle2, XCircle, Ban, User as UserIcon, Phone, Mail, MapPin, FileText
+  Loader2, CheckCircle2, XCircle, Ban, User as UserIcon, Phone, Mail, MapPin, FileText
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { Timeline } from '@/components/shared/timeline';
+import {
+  DetailPageLayout,
+  DetailSection,
+  DetailGrid,
+  DetailItem,
+} from '@/components/shared';
 import { PaymentStatusBadge } from '@/components/payments/payment-status-badge';
 import { getSourceLabel, canTransitionTo } from '@/lib/payments/statuses';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
@@ -220,56 +226,57 @@ export default function PaymentDetailPage() {
   );
 
   return (
-    <div className="space-y-6 w-full max-w-none">
-      <div className="bg-card border border-border rounded-lg shadow-sm">
-        <div className="flex items-start justify-between gap-4 p-5">
-          <div className="flex items-start gap-3">
-            <Button variant="ghost" size="icon" onClick={() => router.push('/payments')} className="text-muted-foreground hover:text-foreground shrink-0"><ChevronLeft className="size-5" /></Button>
-            <div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-xl font-bold text-foreground">{customerName}</h1>
-                <PaymentStatusBadge status={payment.status} />
-              </div>
-              <div className="text-sm text-muted-foreground mt-1.5 flex items-center gap-4 flex-wrap">
-                {custPhone && <span className="flex items-center gap-1.5"><Phone className="size-3 text-primary/70" /> {custPhone}</span>}
-                {custEmail && <span className="flex items-center gap-1.5"><Mail className="size-3 text-primary/70" /> {custEmail}</span>}
-              </div>
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            <div className="text-2xl font-bold tracking-wide text-primary">{payment.payment_number}</div>
+    <DetailPageLayout
+      title={customerName}
+      onBack={() => router.push('/payments')}
+      // The payment number was a `text-2xl` block floated right, competing
+      // with the customer name for the role of title — same pattern as orders
+      // and dispatches. It is the record's identifier, so it is a badge.
+      badges={
+        <>
+          <Badge variant="secondary" className="font-mono font-semibold">{payment.payment_number}</Badge>
+          <PaymentStatusBadge status={payment.status} />
+        </>
+      }
+      meta={
+        <>
+          {custPhone && <span className="flex items-center gap-1.5"><Phone className="size-3 text-primary/70" /> {custPhone}</span>}
+          {custEmail && <span className="flex items-center gap-1.5"><Mail className="size-3 text-primary/70" /> {custEmail}</span>}
+        </>
+      }
+      actions={
+        <>
             {/* The receipt route has existed since the payment module was
                 rebuilt, but nothing in the tenant app ever linked to it — only
                 the superadmin side could reach it. In the header rather than
                 the action row below, because that row only renders for Pending
                 and Approved, and a receipt stays printable whatever the
                 status. */}
-            <div className="mt-2 flex justify-end">
-              <PrintSizeMenu href={`/print/payment/${payment.id}`} label="Receipt" />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-border px-5 py-4 text-sm">
+          <PrintSizeMenu href={`/print/payment/${payment.id}`} label="Receipt" />
+        </>
+      }
+    >
+      <DetailSection>
+        <DetailGrid cols={4}>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Amount</p>
+            <p className="mb-1 text-label text-muted-foreground">Amount</p>
             <p className="font-semibold text-lg">{formatCurrency(payment.amount, defaultCurrency)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Verified Amount</p>
+            <p className="mb-1 text-label text-muted-foreground">Verified Amount</p>
             <p className="font-semibold text-lg text-emerald-600">
               {payment.verified_amount != null ? formatCurrency(payment.verified_amount, defaultCurrency) : '—'}
             </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Date</p>
+            <p className="mb-1 text-label text-muted-foreground">Date</p>
             <p className="font-medium">{new Date(payment.payment_date).toLocaleDateString('en-IN')}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Collected By</p>
+            <p className="mb-1 text-label text-muted-foreground">Collected By</p>
             <p className="font-medium flex items-center gap-1.5"><UserIcon className="size-3.5 text-muted-foreground" /> {createdBy}</p>
           </div>
-        </div>
+        </DetailGrid>
 
         {/* Pending payments can be ruled on. An Approved payment is otherwise immutable,
             but must stay cancellable — a cheque bounces, or the wrong customer was
@@ -298,7 +305,7 @@ export default function PaymentDetailPage() {
             )}
           </div>
         )}
-      </div>
+      </DetailSection>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2">
@@ -311,44 +318,36 @@ export default function PaymentDetailPage() {
             {tab === 'details' && (
               <div className="p-5 space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">Payment Details</h3>
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
-                    <div>
-                      <p className="text-muted-foreground mb-1">Payment Type</p>
-                      <p className="font-medium">{payment.payment_types?.name || 'Unknown'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground mb-1">Source</p>
-                      <p className="font-medium">{getSourceLabel(payment.source)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground mb-1">Reference Number</p>
-                      <p className="font-medium">{payment.reference_number || '—'}</p>
-                    </div>
+                  <h3 className="mb-4 text-section font-semibold text-foreground">Payment Details</h3>
+                  <DetailGrid>
+                    <DetailItem label="Payment Type" value={payment.payment_types?.name || 'Unknown'} />
+                    <DetailItem label="Source" value={getSourceLabel(payment.source)} />
+                    <DetailItem label="Reference Number" value={payment.reference_number} />
                     {payment.rejection_reason && (
-                      <div className="col-span-2">
-                        <p className="text-muted-foreground mb-1 text-red-600">Rejection Reason</p>
-                        <p className="font-medium text-red-600 bg-red-50 p-3 rounded-md">{payment.rejection_reason}</p>
-                      </div>
+                      <DetailItem span="full" label="Rejection Reason">
+                        {/* `bg-red-50` has no dark-mode pair, so this panel was
+                            white-on-white in dark mode. The destructive token
+                            works in both. */}
+                        <p className="rounded-md bg-destructive/10 p-3 text-destructive">{payment.rejection_reason}</p>
+                      </DetailItem>
                     )}
                     {payment.status === 'Cancelled' && (
-                      <div className="col-span-2">
-                        <p className="text-muted-foreground mb-1">Cancellation</p>
-                        <div className="bg-muted/50 border border-border p-3 rounded-md space-y-1">
-                          <p className="font-medium">{payment.cancellation_reason || 'No reason recorded'}</p>
-                          <p className="text-xs text-muted-foreground">
+                      <DetailItem span="full" label="Cancellation">
+                        <div className="space-y-1 rounded-md border border-border bg-muted/50 p-3">
+                          <p>{payment.cancellation_reason || 'No reason recorded'}</p>
+                          <p className="text-caption font-normal text-muted-foreground">
                             {cancelledByName ? `Cancelled by ${cancelledByName}` : 'Cancelled'}
                             {payment.cancelled_at ? ` on ${new Date(payment.cancelled_at).toLocaleString('en-IN')}` : ''}
                           </p>
                         </div>
-                      </div>
+                      </DetailItem>
                     )}
-                  </div>
+                  </DetailGrid>
                 </div>
 
                 {customValues.length > 0 && (
                   <div className="border-t border-border pt-5">
-                    <h3 className="text-lg font-semibold mb-4">Additional Details</h3>
+                    <h3 className="mb-4 text-section font-semibold text-foreground">Additional Details</h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       {customValues.map((cv, i) => (
                         <div key={i}>
@@ -362,14 +361,14 @@ export default function PaymentDetailPage() {
 
                 {payment.notes && (
                   <div className="border-t border-border pt-5">
-                    <h3 className="text-lg font-semibold mb-2">Notes</h3>
+                    <h3 className="mb-2 text-section font-semibold text-foreground">Notes</h3>
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{payment.notes}</p>
                   </div>
                 )}
                 
                 {hasLocation && (
                   <div className="border-t border-border pt-5">
-                    <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><MapPin className="size-4" /> Location</h3>
+                    <h3 className="mb-2 flex items-center gap-2 text-section font-semibold text-foreground"><MapPin className="size-4" /> Location</h3>
                     <div className="h-48 bg-muted rounded-md flex items-center justify-center overflow-hidden border">
                        {/* This would be an actual map component in a full implementation */}
                        <a 
@@ -386,7 +385,7 @@ export default function PaymentDetailPage() {
                 
                 {attachments.length > 0 && canViewAttachments && (
                   <div className="border-t border-border pt-5">
-                    <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                    <h3 className="mb-2 flex items-center gap-2 text-section font-semibold text-foreground">
                       <FileText className="size-4" /> Attachments
                     </h3>
                     <div className="mt-2 space-y-2">
@@ -525,6 +524,6 @@ export default function PaymentDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </DetailPageLayout>
   );
 }

@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/shared";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { enabledLevels, levelName } from "@/lib/territories/settings";
 import type { Territory, TerritorySettings } from "@/lib/territories/types";
@@ -178,12 +179,9 @@ export function TerritoryFormDialog({
           </div>
 
           {/* Name */}
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">
-              Name <span className="text-destructive">*</span>
-            </Label>
+          <FormField label={<>Name <span className="text-destructive">*</span></>} labelClassName="text-xs text-muted-foreground">
             <Input data-tour="territory-city" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter name…" autoFocus />
-          </div>
+          </FormField>
 
           {/* Parent — a single searchable picker of the level directly above the
               one being created, labelled by full path ("India / Gujarat / Rajkot").
@@ -197,10 +195,7 @@ export function TerritoryFormDialog({
               .sort((a, b) => a.label.localeCompare(b.label));
             const selectedParent = path[path.length - 1] ?? "";
             return (
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
-                  {parentLevel.name} <span className="text-destructive">*</span>
-                </Label>
+              <FormField label={<>{parentLevel.name} <span className="text-destructive">*</span></>} labelClassName="text-xs text-muted-foreground">
                 <SearchableSelect
                   options={parentOptions}
                   value={selectedParent}
@@ -213,7 +208,7 @@ export function TerritoryFormDialog({
                 <p className="text-[11px] text-muted-foreground">
                   Pick the {parentLevel.name.toLowerCase()}; its parents are filled in automatically.
                 </p>
-              </div>
+              </FormField>
             );
           })()}
 

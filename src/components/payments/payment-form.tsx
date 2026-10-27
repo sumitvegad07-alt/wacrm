@@ -7,11 +7,10 @@ import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, Banknote } from 'lucide-react';
-import { FormPageShell, FormActions, MediaUpload } from '@/components/shared';
+import { FormPageShell, FormActions, MediaUpload, FormGrid, FormField } from '@/components/shared';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
@@ -433,9 +432,16 @@ export function PaymentForm({
     <div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   ) : (
     <form onSubmit={handleSubmit(onSubmit)} className={cn("space-y-6", !asPage && "max-h-[80vh] overflow-y-auto px-4 pb-4")}>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Customer <span className="text-red-500">*</span></Label>
+      {/* This is one of only two forms in the app on react-hook-form, so it
+          actually has validation messages — which makes it the right place to
+          show FormField's `error`. It also gets aria-invalid and
+          aria-describedby on the control for free, which the hand-written
+          `<p className="text-sm text-destructive">` under each field never
+          wired up. The required marker was `text-red-500`, the raw palette,
+          while the error text below it used the `text-destructive` token: two
+          different reds in the same field. */}
+      <FormGrid variant="dialog">
+        <FormField label="Customer" required error={errors.contact_id?.message}>
           <Controller
             control={control}
             name="contact_id"
@@ -448,11 +454,9 @@ export function PaymentForm({
               />
             )}
           />
-          {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
-        </div>
-        
-        <div className="space-y-2">
-          <Label>Amount <span className="text-red-500">*</span></Label>
+        </FormField>
+
+        <FormField label="Amount" required error={errors.amount?.message}>
           <Controller
             control={control}
             name="amount"
@@ -467,11 +471,9 @@ export function PaymentForm({
               />
             )}
           />
-          {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-        </div>
+        </FormField>
 
-        <div className="space-y-2">
-          <Label>Payment Type <span className="text-red-500">*</span></Label>
+        <FormField label="Payment Type" required error={errors.payment_type?.message}>
           <Controller
             control={control}
             name="payment_type"
@@ -499,11 +501,9 @@ export function PaymentForm({
               />
             )}
           />
-          {errors.payment_type && <p className="text-sm text-destructive">{errors.payment_type.message}</p>}
-        </div>
+        </FormField>
 
-        <div className="space-y-2">
-          <Label>Payment Date <span className="text-red-500">*</span></Label>
+        <FormField label="Payment Date" required error={errors.payment_date?.message}>
           <Controller
             control={control}
             name="payment_date"
@@ -515,14 +515,15 @@ export function PaymentForm({
               />
             )}
           />
-          {errors.payment_date && <p className="text-sm text-destructive">{errors.payment_date.message}</p>}
-        </div>
+        </FormField>
 
-        <div className="space-y-2">
-          <Label>
-            Reference Number
-            {requirements.reference && <span className="text-red-500"> *</span>}
-          </Label>
+        <FormField
+          label="Reference Number"
+          required={requirements.reference}
+          hint={requirements.reference
+            ? `Required for ${paymentTypes.find((t) => t.id === selectedPaymentTypeId)?.name} payments.`
+            : undefined}
+        >
           <Controller
             control={control}
             name="reference_number"
@@ -530,18 +531,9 @@ export function PaymentForm({
               <Input value={field.value} onChange={field.onChange} placeholder="Cheque #, UTR, etc." />
             )}
           />
-          {requirements.reference && (
-            <p className="text-xs text-muted-foreground">
-              Required for {paymentTypes.find((t) => t.id === selectedPaymentTypeId)?.name} payments.
-            </p>
-          )}
-        </div>
+        </FormField>
 
-        <div className="space-y-2 md:col-span-2">
-          <Label>
-            Notes
-            {requirements.notes && <span className="text-red-500"> *</span>}
-          </Label>
+        <FormField label="Notes" required={requirements.notes} span={2}>
           <Controller
             control={control}
             name="notes"
@@ -553,16 +545,13 @@ export function PaymentForm({
               />
             )}
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-2 md:col-span-2">
-          <Label>
-            {requirements.attachment ? (
-              <>Proof of Payment <span className="text-red-500">*</span></>
-            ) : (
-              'Attachment (Optional)'
-            )}
-          </Label>
+        <FormField
+          label={requirements.attachment ? 'Proof of Payment' : 'Attachment (Optional)'}
+          required={requirements.attachment}
+          span={2}
+        >
           <MediaUpload
             accept="image/*,application/pdf"
             items={proofFile ? [{
@@ -576,15 +565,15 @@ export function PaymentForm({
               ? 'A photo of the receipt or cheque is required before this payment can be approved.'
               : 'Attach a receipt or cheque photo (image or PDF). Optional.'}
           />
-        </div>
-      </div>
+        </FormField>
+      </FormGrid>
 
       {financials && !financialsLoading && (
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             {/* A negative balance means the customer is in credit — showing "-₹4,500"
                 asks the collector to interpret a negative liability. Label it instead. */}
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+            <p className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
               {financials.outstanding < 0 ? 'Customer Credit' : 'Outstanding'}
             </p>
             <p className="text-lg font-bold">{money(Math.abs(financials.outstanding))}</p>
@@ -592,17 +581,17 @@ export function PaymentForm({
           {financials.has_credit_limit && (
             <>
               <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Credit Limit</p>
+                <p className="text-micro font-medium uppercase tracking-wider text-muted-foreground">Credit Limit</p>
                 <p className="text-lg font-bold">{money(financials.credit_limit)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Available Credit</p>
+                <p className="text-micro font-medium uppercase tracking-wider text-muted-foreground">Available Credit</p>
                 <p className="text-lg font-bold">{money(financials.available_credit)}</p>
               </div>
             </>
           )}
           <div>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Overdue Days</p>
+            <p className="text-micro font-medium uppercase tracking-wider text-muted-foreground">Overdue Days</p>
             <p className="text-lg font-bold">{financials.overdue_days}</p>
           </div>
         </div>

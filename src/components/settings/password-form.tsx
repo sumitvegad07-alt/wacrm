@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { FormField } from "@/components/shared";
 import {
   Card,
   CardContent,
@@ -98,10 +98,7 @@ export function PasswordForm() {
         </CardHeader>
         <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="current-password" className="text-foreground">
-              Current password
-            </Label>
+          <FormField label="Current password" htmlFor="current-password">
             <Input
               id="current-password"
               type="password"
@@ -111,13 +108,10 @@ export function PasswordForm() {
               disabled={saving}
               required
             />
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="new-password" className="text-foreground">
-                New password
-              </Label>
+            <FormField label="New password" htmlFor="new-password">
               <Input
                 id="new-password"
                 type="password"
@@ -128,11 +122,8 @@ export function PasswordForm() {
                 disabled={saving}
                 required
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password" className="text-foreground">
-                Confirm new password
-              </Label>
+            </FormField>
+            <FormField label="Confirm new password" htmlFor="confirm-password">
               <Input
                 id="confirm-password"
                 type="password"
@@ -143,7 +134,7 @@ export function PasswordForm() {
                 disabled={saving}
                 required
               />
-            </div>
+            </FormField>
           </div>
 
           {confirmError && (
