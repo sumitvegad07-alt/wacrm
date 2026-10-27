@@ -16,7 +16,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { beforeAll, describe, expect, it } from "vitest";
 import { allDataSets } from "./catalog";
-import { testDbTarget } from "./test-db";
+import { testDbTarget, LIVE_DB_TIMEOUT } from "./test-db";
 
 const target = testDbTarget();
 const canRun = "target" in target;
@@ -26,7 +26,7 @@ if (!canRun) {
 const url = canRun ? target.target.url : "";
 const key = canRun ? target.target.key : "";
 
-describe.skipIf(!canRun)("reader descriptors match the live schema", () => {
+describe.skipIf(!canRun)("reader descriptors match the live schema", { timeout: LIVE_DB_TIMEOUT }, () => {
   /** table -> set of real column names. */
   const columns = new Map<string, Set<string>>();
 

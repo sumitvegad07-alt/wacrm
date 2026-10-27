@@ -17,7 +17,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { testDbTarget } from "../test-db";
+import { testDbTarget, LIVE_DB_TIMEOUT } from "../test-db";
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   consumeAuthCode,
@@ -44,7 +44,7 @@ const TEST_CLIENT_NAME = "vitest-mcp-store-lifecycle";
 
 const sha256 = (v: string) => createHash("sha256").update(v).digest("hex");
 
-describe.skipIf(!canRun)("OAuth store lifecycle", () => {
+describe.skipIf(!canRun)("OAuth store lifecycle", { timeout: LIVE_DB_TIMEOUT }, () => {
   let db: SupabaseClient;
   let accountId: string;
   let profileId: string;

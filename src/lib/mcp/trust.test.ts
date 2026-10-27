@@ -19,7 +19,7 @@ import { allDataSets } from "./catalog";
 import { fetchData } from "./fetch";
 import { resolvePeriod } from "./periods";
 import type { McpContext } from "./session";
-import { testDbTarget } from "./test-db";
+import { testDbTarget, LIVE_DB_TIMEOUT } from "./test-db";
 
 const target = testDbTarget();
 const canRun = "target" in target;
@@ -62,7 +62,7 @@ const CASES = [
   { dataset: "leads", period: "current_year", group_by: ["status"], measures: ["lead_count"] },
 ] as const;
 
-describe.skipIf(!canRun)("connector matches dashboard", () => {
+describe.skipIf(!canRun)("connector matches dashboard", { timeout: LIVE_DB_TIMEOUT }, () => {
   let db: SupabaseClient;
   let accountId: string;
 

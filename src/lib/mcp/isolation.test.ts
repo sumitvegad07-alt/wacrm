@@ -17,7 +17,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { allDataSets } from "./catalog";
 import { fetchData } from "./fetch";
 import type { McpContext } from "./session";
-import { testDbTarget } from "./test-db";
+import { testDbTarget, LIVE_DB_TIMEOUT } from "./test-db";
 
 const target = testDbTarget();
 const canRun = "target" in target;
@@ -28,7 +28,7 @@ if (!canRun) {
 /** Reader data sets, which are the ones fetch.ts filters by hand. */
 const READER_SETS = allDataSets().filter((s) => s.route === "reader" && s.table);
 
-describe.skipIf(!canRun)("tenant isolation", () => {
+describe.skipIf(!canRun)("tenant isolation", { timeout: LIVE_DB_TIMEOUT }, () => {
   let db: SupabaseClient;
   let accountA: string;
   let accountB: string;

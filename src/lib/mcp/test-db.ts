@@ -19,6 +19,31 @@ import dotenv from "dotenv";
 /** Production, Mumbai. The only project these tests may assert against. */
 export const EXPECTED_PROJECT_REF = "ltigfpywdbfilsagtpyd";
 
+/**
+ * Per-test timeout for the suites in this folder, in ms.
+ *
+ * Vitest's default is 5000, which is a sensible budget for a unit test and the
+ * wrong one for a test that crosses the internet to Mumbai and back. Applied
+ * per suite — `describe(name, { timeout: LIVE_DB_TIMEOUT }, …)` — rather than
+ * globally, so the other ~3,700 unit tests keep the tight default and a real
+ * hang still shows up as a hang.
+ *
+ * Sized from measurement, not taste. The slowest single live test here is
+ * ~1.8s uncontended (tenant isolation over `territories`, which reads 1,000
+ * ids and then re-reads them in chunks of 150 to check their owner). During a
+ * full 202-file run that crossed 5s often enough to fail a different
+ * tenant-isolation test on roughly one run in two — the worst possible place
+ * to have a test people learn to ignore, because the day it fails for a real
+ * reason it looks like the usual noise. 20s leaves about 11x headroom over the
+ * worst case observed while still bounding a genuinely stuck request.
+ *
+ * If a test here needs more than this, that is a signal about the test, not
+ * about the number: `scenarios.test.ts` once awaited 24 windows one after
+ * another in a single test and took 9.3s. Fetching them concurrently brought
+ * it to 0.8s. Prefer fixing the serialisation.
+ */
+export const LIVE_DB_TIMEOUT = 20_000;
+
 export interface TestDbTarget {
   url: string;
   key: string;

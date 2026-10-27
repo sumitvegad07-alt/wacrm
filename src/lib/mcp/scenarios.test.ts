@@ -25,7 +25,7 @@ import { allDataSets } from "./catalog";
 import { fetchData, type FetchArgs } from "./fetch";
 import { MCP_PERIODS, resolvePeriod } from "./periods";
 import type { McpContext } from "./session";
-import { testDbTarget } from "./test-db";
+import { testDbTarget, LIVE_DB_TIMEOUT } from "./test-db";
 
 const target = testDbTarget();
 const canRun = "target" in target;
@@ -50,7 +50,7 @@ const WINDOWS: Array<{ label: string; args: Partial<FetchArgs> }> = [
   { label: "no window", args: {} },
 ];
 
-describe.skipIf(!canRun)("scenario matrix", () => {
+describe.skipIf(!canRun)("scenario matrix", { timeout: LIVE_DB_TIMEOUT }, () => {
   let db: SupabaseClient;
   let accountId: string;
 
@@ -245,12 +245,29 @@ describe.skipIf(!canRun)("scenario matrix", () => {
 
   it("always reports back the window it used", async () => {
     // The admin has to be able to check the dates an answer was built on.
-    for (const w of WINDOWS) {
-      if (!Object.keys(w.args).length) continue;
-      const r = await fetchData({ dataset: "visits", ...w.args } as FetchArgs, ctx());
+    //
+    // Concurrent, not sequential. There are 24 windows, and awaited one after
+    // another they cost ~390ms each: 9.3s against the 5s default timeout, so
+    // this was the suite's one reliably failing test — and a 10x outlier
+    // against its slowest sibling (853ms). The windows are independent reads
+    // with no shared state, and the identical WINDOWS list is already fetched
+    // concurrently above as `it.each`, so there was never a reason to
+    // serialise them here.
+    const windows = WINDOWS.filter((w) => Object.keys(w.args).length > 0);
+    const resolved = await Promise.all(
+      windows.map(async (w) => ({
+        w,
+        r: await fetchData({ dataset: "visits", ...w.args } as FetchArgs, ctx()),
+      })),
+    );
+    // Assertions stay in a loop, so a failure still names the window.
+    for (const { w, r } of resolved) {
       expect(r.period_resolved, w.label).toBeTruthy();
       expect(r.period_resolved!.timezone, w.label).toBe(IST);
-      expect(r.period_resolved!.start_date <= r.period_resolved!.end_date).toBe(true);
+      expect(
+        r.period_resolved!.start_date <= r.period_resolved!.end_date,
+        w.label,
+      ).toBe(true);
     }
   });
 
