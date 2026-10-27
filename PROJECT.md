@@ -42,6 +42,29 @@ shared by both repos. A schema change here affects mobile, and vice versa.
 Scripts: `npm run dev` · `npm run build` · `npm run typecheck` (`tsc --noEmit`) ·
 `npm run lint` · `npm test` (`vitest run`)
 
+## UI work — read these two first
+
+Any screen, form, table or panel goes through the design system. Do not write a
+page layout, a label/control block or a confirmation dialog by hand.
+
+- **[docs/engineering/UI_COMPONENT_GUIDELINES.md](docs/engineering/UI_COMPONENT_GUIDELINES.md)** — which component, where the tokens live, and the three traps that make a token paint nothing.
+- **[docs/engineering/PAGE_PATTERNS.md](docs/engineering/PAGE_PATTERNS.md)** — the six page patterns. Every screen is one of them.
+
+Two gates, and they are different on purpose:
+
+```bash
+npm run lint:ui
+```
+
+A **ratchet** over the anti-patterns that still have real debt (raw `<button>`,
+`text-red-*`, arbitrary font sizes, …). It fails only when a count goes **up**,
+so existing code is allowed and new code is not. ESLint separately hard-errors
+the patterns already at zero: `hsl(var(`, Radix CSS vars, native
+`confirm`/`alert`, the dead `design-tokens` exports.
+
+`npm run lint` is **not** a usable gate yet — it carries ~300 pre-existing
+errors from before the design-system programme. Clearing those is its own task.
+
 ## Absolute rules
 
 1. **No fabricated stubs, mock services, or placeholder implementations presented as working code.**

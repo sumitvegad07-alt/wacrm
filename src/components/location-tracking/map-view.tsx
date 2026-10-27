@@ -431,7 +431,12 @@ export default function MapView({
           <Polyline
             positions={polylinePositions}
             pathOptions={{
-              color: 'hsl(var(--primary))',
+              // Was `hsl(var(--primary))`, which drew NOTHING: --primary holds a
+              // complete colour (oklch/hex), not bare HSL channels, so wrapping
+              // it in hsl() is invalid CSS and Leaflet fell back to no stroke.
+              // Leaflet takes a plain colour string, not a Tailwind class, so it
+              // reads the custom property directly.
+              color: 'var(--primary)',
               weight: 3,
               opacity: 0.6,
               dashArray: '6, 10',

@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/use-auth";
-import { FormActions, FormPageShell, FormSection, FormField} from "@/components/shared";
+import { FormActions, FormPageShell, FormSection, FormField, FORM_GRID_PAGE } from "@/components/shared";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -171,7 +171,7 @@ export function AttendanceLocationForm({ locationId }: { locationId?: string }) 
   };
 
   // 4 columns on wide screens, exactly like the full-page Customer / Product forms.
-  const fieldGrid = "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-4";
+  const fieldGrid = FORM_GRID_PAGE;
 
   return (
     <FormPageShell

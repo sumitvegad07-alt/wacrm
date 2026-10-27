@@ -1,0 +1,14 @@
+{
+  "recorded": "2026-10-27",
+  "counts": {
+    "rawButton": 212,
+    "rawPaletteRed": 192,
+    "rawPaletteBgRed": 123,
+    "arbitraryFontSize": 301,
+    "hardcodedControlHeight": 464,
+    "inlineGridCols": 347,
+    "adHocCardSurface": 18,
+    "rawTableFiles": 14,
+    "adHocSpinnerFiles": 133
+  }
+}

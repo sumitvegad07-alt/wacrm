@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { type ReportDefinition, type ReportConfig, type TabConfig } from "@/lib/reports/types";
 import { executeReport, getDefaultReportView } from "@/app/actions/reports";
@@ -338,12 +339,12 @@ export function ReportViewer({ config }: ReportViewerProps) {
       );
 
       if (!exportData || exportData.length === 0) {
-        alert("No data available to export.");
+        toast.error("No data available to export.");
         return;
       }
 
       if (exportData.length >= 50000) {
-        alert("Dataset too large. Please apply more filters before exporting.");
+        toast.error("Dataset too large. Apply more filters before exporting.");
         return;
       }
 
@@ -425,7 +426,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
       }
     } catch (e) {
       console.error(e);
-      alert("Failed to generate export");
+      toast.error("Could not generate the export.");
     }
   };
 
