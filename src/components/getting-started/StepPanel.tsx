@@ -8,10 +8,10 @@ import { ContentTabs } from './ContentTabs';
 import { STEP_TOURS } from '@/lib/tour/scripts';
 import { launchTour } from '@/lib/tour/launch';
 
-// The mobile app download/share link shown on the "mobile login" step. Empty for
-// now (no public app link yet) → renders a "coming soon" placeholder. Set this to
-// the real URL (e.g. the Play Store link) when ready and it becomes copyable.
-const MOBILE_APP_URL = '';
+// The mobile app download/share link shown on the "mobile login" step — the live
+// Google Play listing for OZZO SALES, public since 2026-10-27. An empty string
+// here would render a "coming soon" placeholder instead of a copyable link.
+const MOBILE_APP_URL = 'https://play.google.com/store/apps/details?id=com.wacrm.fieldforce';
 
 function CopyableUrl({ url }: { url: string }) {
   if (!url) {
