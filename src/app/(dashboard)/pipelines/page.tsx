@@ -485,7 +485,19 @@ export default function PipelinesPage() {
       options: stages.map(s => ({ label: s.name, value: s.id })),
       render: (deal) => {
         const stage = stages.find(s => s.id === deal.stage_id);
-        return <span className="px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-sm" style={{ backgroundColor: stage?.color || '#64748b' }}>{stage?.name || '-'}</span>
+        // The same Badge and classes the deal detail header uses, so a stage
+        // reads identically in the table and on the record itself. This was a
+        // hand-rolled span: `rounded-md` against the badge's pill radius, and
+        // a taller box, so "Won" changed shape when you opened the deal. The
+        // colour stays the tenant's own stage colour.
+        return (
+          <Badge
+            style={{ backgroundColor: stage?.color || '#64748b' }}
+            className="border-transparent font-semibold text-white shadow-sm"
+          >
+            {stage?.name || '-'}
+          </Badge>
+        );
       }
     },
     {
