@@ -82,6 +82,13 @@ export function InvoiceDocument({ invoice }: { invoice: InvoiceRow }) {
 
   const hasBank = !!(seller?.bankName || seller?.bankAccountNo || seller?.upiId);
 
+  // Blank lines dropped so a stray Enter in the Offer box cannot open a gap in
+  // the printed document.
+  const offerLines = (invoice.data?.offer ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   return (
     <div className="inv">
       <style>{CSS}</style>
@@ -151,6 +158,12 @@ export function InvoiceDocument({ invoice }: { invoice: InvoiceRow }) {
             label="Billing Term"
             value={TERM_LABEL[invoice.billing_term] ?? invoice.billing_term}
           />
+          {/* The count was only ever visible inside the plan line's own row. On
+              a subscription invoice it is one of the three things being bought —
+              plan, users, period — so it belongs in the header with them. */}
+          {invoice.users_billed > 0 ? (
+            <Field label="Users" value={String(invoice.users_billed)} />
+          ) : null}
           {invoice.period_start && invoice.period_end ? (
             <Field
               label="Service Period"
@@ -247,6 +260,20 @@ export function InvoiceDocument({ invoice }: { invoice: InvoiceRow }) {
         <span className="muted">Amount in words: </span>
         <span style={{ fontWeight: 600 }}>{amountInWords(invoice.total)}</span>
       </div>
+
+      {/* The offer sits here, right under the total, and not down with Notes and
+          Terms: it is the one line the client is meant to read. Printed as typed,
+          one line per line, and never folded into a figure above it. */}
+      {offerLines.length > 0 ? (
+        <div style={{ marginTop: "8px" }}>
+          <div style={{ fontWeight: 600, marginBottom: "2px" }}>Offer</div>
+          {offerLines.map((line, i) => (
+            <div key={i} className="muted">
+              {line}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <div className="rule" />
 

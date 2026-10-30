@@ -12,7 +12,7 @@
 // about the price.
 // ============================================================
 
-import type { ProposalData } from "../types";
+import type { ProposalData, ProposalPayee } from "../types";
 import type { PlanContent } from "./content-types";
 import type { FeatureGroup } from "../plan-features";
 import type { PlanId } from "@/lib/plans/catalog";
@@ -132,6 +132,7 @@ export function ProposalPages({
   content,
   groups,
   plan,
+  payee,
 }: {
   data: ProposalData;
   content: PlanContent;
@@ -139,6 +140,12 @@ export function ProposalPages({
   groups: FeatureGroup[];
   /** Needed to re-price the deal on the other two terms. */
   plan: PlanId;
+  /**
+   * Bank details and signature, read live from Invoice Settings by the print
+   * route. Optional so the document still renders if Invoice Settings has never
+   * been filled in — each block below simply doesn't print.
+   */
+  payee?: ProposalPayee;
 }) {
   const term = asTerm(data.billingTerm);
 
@@ -147,6 +154,15 @@ export function ProposalPages({
     gstRate: Number(data.gstRate) || 0,
     term,
   });
+
+  // Typed as free text, printed as lines. Blank lines are dropped so a stray
+  // Enter at the end of the box cannot open a gap in the document.
+  const offerLines = (data.offer ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const hasBank = !!(payee?.bankName || payee?.bankAccountNo || payee?.upiId);
 
   const full = data.client?.name || "—";
   const short = data.client?.shortName || data.client?.name || "—";
@@ -331,6 +347,44 @@ export function ProposalPages({
               <span className="l">Total payable</span>
               <span className="v">₹{inr(t.grandTotal)}</span>
             </div>
+
+            {/* Whatever the founder typed for this deal, printed under the
+                figures and never folded into them — a stated concession must
+                not be able to change the amount owed. One line per line. */}
+            {offerLines.length > 0 ? (
+              <div className="offerbox">
+                <div className="offerh">Offer</div>
+                {offerLines.map((line, i) => (
+                  <div key={i} className="offerl">
+                    {line}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {hasBank ? (
+              <div className="offerbox">
+                <div className="offerh">How to pay</div>
+                {payee?.bankName ? (
+                  <div className="offerl">Bank: {payee.bankName}</div>
+                ) : null}
+                {payee?.bankAccountNo ? (
+                  <div className="offerl">A/c No: {payee.bankAccountNo}</div>
+                ) : null}
+                {payee?.ifsc ? <div className="offerl">IFSC: {payee.ifsc}</div> : null}
+                {payee?.upiId ? <div className="offerl">UPI: {payee.upiId}</div> : null}
+              </div>
+            ) : null}
+
+            {payee?.signatureUrl ? (
+              <div className="signbox">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="signimg" src={payee.signatureUrl} alt="" />
+                <div className="signl">
+                  For {payee.firmName || "OZZO"} · {data.preparedBy?.name ?? ""}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="incl">

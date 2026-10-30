@@ -13,7 +13,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireFounder, serviceClient } from "@/lib/auth/superadmin";
 import { ProposalDocument } from "@/lib/proposals/templates/document";
-import type { ProposalData } from "@/lib/proposals/types";
+import type { ProposalData, ProposalPayee } from "@/lib/proposals/types";
+import type { InvoiceSettingsRow } from "@/lib/invoices/types";
 import { ProposalPrintFrame } from "@/lib/proposals/templates/print-frame";
 import { DownloadButton } from "./download-button";
 
@@ -43,6 +44,36 @@ async function loadProposal(id: string): Promise<ProposalRow | null> {
 }
 
 /**
+ * Bank details and signature for the quotation, from Invoice Settings.
+ *
+ * Read live, and read here rather than stored on the proposal: Invoice Settings
+ * is already the one place these are maintained, so the quotation cannot drift
+ * from the invoice, and an unsent quotation picks up a corrected bank account.
+ * Returns undefined when the settings row is missing or the read fails — the
+ * document then prints without those blocks rather than not printing at all.
+ * The caller is already behind requireFounder().
+ */
+async function loadPayee(): Promise<ProposalPayee | undefined> {
+  const { data } = await serviceClient()
+    .from("platform_invoice_settings")
+    .select("firm_name, bank_name, bank_account_no, ifsc, upi_id, signature_url")
+    .eq("id", true)
+    .maybeSingle();
+
+  if (!data) return undefined;
+  const row = data as Partial<InvoiceSettingsRow>;
+
+  return {
+    firmName: row.firm_name ?? "",
+    bankName: row.bank_name ?? "",
+    bankAccountNo: row.bank_account_no ?? "",
+    ifsc: row.ifsc ?? "",
+    upiId: row.upi_id ?? "",
+    signatureUrl: row.signature_url ?? null,
+  };
+}
+
+/**
  * Chrome names the saved PDF after the document title, so the title IS the
  * filename. `absolute` skips the root layout's "%s — wacrm" template, which
  * would otherwise end up in the filename the client receives.
@@ -66,10 +97,12 @@ export default async function ProposalPrintView(props: { params: Promise<{ id: s
   // 404 rather than "forbidden": a non-founder should not learn the route exists.
   if (!proposal) notFound();
 
+  const payee = await loadPayee();
+
   return (
     <ProposalPrintFrame>
       <DownloadButton />
-      <ProposalDocument plan={proposal.plan} data={proposal.data} />
+      <ProposalDocument plan={proposal.plan} data={proposal.data} payee={payee} />
     </ProposalPrintFrame>
   );
 }

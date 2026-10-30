@@ -189,6 +189,22 @@
   .ltotal .l{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink);}
   .ltotal .v{font-weight:800;font-size:21px;letter-spacing:-0.02em;color:var(--ink);}
 
+  /* ═════ PAGE 2 · OFFER, BANK, SIGNATURE ═════
+     All three sit under the price ladder, in the ladder's own column, and all
+     three print only when there is something to print — an empty Offer box or
+     an unfilled Invoice Settings must not leave a labelled empty frame on a
+     document that goes to a client. */
+  .offerbox{margin-top:9px;border:1px solid var(--border);border-radius:9px;
+    padding:7px 10px;background:var(--card);}
+  .offerh{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;
+    font-weight:700;margin-bottom:3px;}
+  .offerl{font-size:11px;color:var(--fg);line-height:1.45;}
+  .signbox{margin-top:11px;text-align:right;}
+  /* Height-capped, width auto: a signature is photographed at whatever size the
+     phone chose, and a 3000px-wide PNG would otherwise push the page over. */
+  .signimg{height:17mm;width:auto;max-width:60mm;object-fit:contain;}
+  .signl{font-size:9.5px;color:var(--muted);margin-top:3px;}
+
   /* ═════ PAGE 2 · HEADLINE TILES ═════ */
   .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:12px;}
   .tile{border:1px solid var(--border);border-radius:11px;padding:7px 10px;background:var(--card);}

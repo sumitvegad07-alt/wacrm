@@ -28,6 +28,17 @@ export const PROPOSAL_GROUPS: ProposalFieldGroup[] = [
     ],
   },
   {
+    title: "Offer",
+    fields: [
+      {
+        path: "offer",
+        label: "Offer / notes for this quotation",
+        kind: "textarea",
+        hint: "One open box, printed under the price table exactly as you type it — one line per line. Anything this deal needs said: \"2 months free subscription\", the subscription period, the user count, a condition. It never changes the amounts above it. Leave it empty and nothing is printed.",
+      },
+    ],
+  },
+  {
     title: "Client",
     fields: [
       { path: "client.name", label: "Company name", kind: "text", hint: "Cover and all seven page footers." },

@@ -6,12 +6,21 @@
 // the React tree.
 // ============================================================
 
-import type { ProposalData } from "../types";
+import type { ProposalData, ProposalPayee } from "../types";
 import { getTemplate } from "../registry";
 import { includedGroupsForPlan } from "../plan-features";
 import { ProposalPages } from "./proposal-pages";
 
-export function ProposalDocument({ plan, data }: { plan: string; data: ProposalData }) {
+export function ProposalDocument({
+  plan,
+  data,
+  payee,
+}: {
+  plan: string;
+  data: ProposalData;
+  /** Bank details + signature from Invoice Settings; absent = those blocks don't print. */
+  payee?: ProposalPayee;
+}) {
   const template = getTemplate(plan);
 
   if (!template) {
@@ -28,6 +37,7 @@ export function ProposalDocument({ plan, data }: { plan: string; data: ProposalD
       plan={template.plan}
       content={template.content}
       groups={includedGroupsForPlan(template.plan)}
+      payee={payee}
     />
   );
 }

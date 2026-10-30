@@ -97,6 +97,20 @@ export interface InvoiceData {
   discountAmount: number;
   notes: string;
   terms: string;
+  /**
+   * The concession being granted on this invoice, in the founder's own words —
+   * "2 months free subscription", an extended period, a waived charge.
+   *
+   * Separate from `notes` on purpose, and printed next to the total rather than
+   * down with the terms: an offer is something the client should see, and Notes
+   * is where delivery or reference detail goes. Like the quotation's box, it is
+   * text only and never touches a figure, so what is owed stays exactly what
+   * the lines and tax add up to.
+   *
+   * Optional: `data` is stored JSONB, and invoices issued before this existed
+   * have no such key.
+   */
+  offer?: string;
 }
 
 /** The row as the API returns it. Numeric columns arrive as numbers. */

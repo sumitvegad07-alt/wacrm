@@ -148,3 +148,59 @@ describe("InvoiceDocument — non-GST variant", () => {
     expect(out).not.toContain("SAC");
   });
 });
+
+// ---------------------------------------------------------------------------
+// The Offer box (founder batch 2026-10-30, item 7).
+//
+// Two properties matter and both are easy to get wrong: a concession stated in
+// words must never move a figure, and an empty box must leave no trace — an
+// "Offer" heading over blank space on a document that goes to a client is worse
+// than no box at all.
+// ---------------------------------------------------------------------------
+describe("offer", () => {
+  test("prints each line of what the founder typed", () => {
+    const out = text(
+      renderToStaticMarkup(
+        <InvoiceDocument
+          invoice={row({
+            data: {
+              ...row().data,
+              offer: "2 months free subscription\nFree data migration",
+            },
+          })}
+        />,
+      ),
+    );
+
+    expect(out).toContain("Offer");
+    expect(out).toContain("2 months free subscription");
+    expect(out).toContain("Free data migration");
+  });
+
+  test("leaves the amount payable exactly as the lines and tax add up", () => {
+    const withOffer = row({
+      data: { ...row().data, offer: "2 months free subscription" },
+    });
+    const out = text(renderToStaticMarkup(<InvoiceDocument invoice={withOffer} />));
+
+    // 24,000 + 2,160 + 2,160 = 28,320, unchanged by the words above.
+    expect(out).toContain("Rupees Twenty Eight Thousand Three Hundred Twenty Only");
+  });
+
+  test("prints no heading when the box is empty or absent", () => {
+    const blank = text(
+      renderToStaticMarkup(<InvoiceDocument invoice={row({ data: { ...row().data, offer: "   \n  " } })} />),
+    );
+    const absent = text(renderToStaticMarkup(<InvoiceDocument invoice={row()} />));
+
+    expect(blank).not.toContain("Offer");
+    expect(absent).not.toContain("Offer");
+  });
+
+  test("names the user count in the header, next to plan and period", () => {
+    const out = text(renderToStaticMarkup(<InvoiceDocument invoice={row()} />));
+
+    expect(out).toContain("Users");
+    expect(out).toContain("5");
+  });
+});

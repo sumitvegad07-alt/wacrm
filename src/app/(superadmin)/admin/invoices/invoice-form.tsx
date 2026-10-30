@@ -119,6 +119,7 @@ export default function InvoiceForm({
   );
   const [discountPct, setDiscountPct] = useState(invoice?.data?.discountPct ?? 0);
   const [discountAmount, setDiscountAmount] = useState(invoice?.data?.discountAmount ?? 0);
+  const [offer, setOffer] = useState(invoice?.data?.offer ?? "");
   const [notes, setNotes] = useState(invoice?.data?.notes ?? "");
   const [terms, setTerms] = useState(invoice?.data?.terms ?? "");
 
@@ -283,6 +284,7 @@ export default function InvoiceForm({
           lines,
           discountPct,
           discountAmount,
+          offer,
           notes,
           terms,
         },
@@ -715,7 +717,16 @@ export default function InvoiceForm({
 
           {/* ---------------- notes ---------------- */}
           <div className="bg-card border border-border rounded-xl p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Notes &amp; terms</h2>
+            <h2 className="text-lg font-semibold">Offer, notes &amp; terms</h2>
+            <div className="space-y-1.5">
+              <Label>Offer</Label>
+              <Textarea rows={2} value={offer} onChange={(e) => setOffer(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                Printed next to the total, one line per line — &ldquo;2 months free
+                subscription&rdquo;, an extended period, a waived charge. Text only: it
+                never changes the amount payable.
+              </p>
+            </div>
             <div className="space-y-1.5">
               <Label>Notes</Label>
               <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />

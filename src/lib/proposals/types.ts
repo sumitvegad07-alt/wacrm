@@ -75,6 +75,19 @@ export interface ProposalData {
    * and the safe reading is the quieter document — one term, the one quoted.
    */
   showAllTerms?: boolean;
+  /**
+   * Free text for this one quotation, printed verbatim under the price ladder.
+   *
+   * Deliberately one open box rather than a field per thing: what goes here is
+   * whatever needs saying on this deal — "2 months free subscription", the
+   * subscription period, a user count, a condition. Each line is printed as its
+   * own line. It never touches a figure: the totals above it stay exactly as
+   * calculated, so a stated concession can never silently change what is owed.
+   *
+   * Optional, because this is a stored JSONB payload — quotations written
+   * before the box existed have no such key, and a missing one prints nothing.
+   */
+  offer?: string;
   /** ISO date (yyyy-mm-dd). Rendered in the account's own wording, not UTC. */
   proposalDate: string;
   validDays: number;
@@ -109,6 +122,24 @@ export interface ProposalTotals {
    * the only figure comparable between a quarterly and a yearly proposal.
    */
   annualised: number;
+}
+
+/**
+ * Where the money goes, and who signed, on a printed quotation.
+ *
+ * Read live from Invoice Settings at print time rather than stored on the
+ * proposal: Invoice Settings is already the one place these details are
+ * maintained, and a quotation is a live offer — if the bank account changes, the
+ * right thing is for an unsent quotation to print the new one. (An *invoice* is
+ * the opposite and freezes its seller snapshot at save time, by design.)
+ */
+export interface ProposalPayee {
+  firmName: string;
+  bankName: string;
+  bankAccountNo: string;
+  ifsc: string;
+  upiId: string;
+  signatureUrl: string | null;
 }
 
 /**

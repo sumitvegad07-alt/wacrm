@@ -407,3 +407,86 @@ describe("no plan's document promises another plan's product line", () => {
     expect(headingsFor("CRM")).toContain("Attendance & Leave");
   });
 });
+
+// ---------------------------------------------------------------------------
+// The Offer box and the payment block (founder batch 2026-10-30, item 7).
+//
+// Same two properties as on the invoice: words must never move a figure, and an
+// empty box must leave no trace on a document that goes to a client. The payee
+// details are read live from Invoice Settings at print time, so the document has
+// to render correctly when they are missing too — a quotation that fails to
+// print because nobody filled in a bank account is not an acceptable failure.
+// ---------------------------------------------------------------------------
+describe("offer and payment details", () => {
+  const PAYEE = {
+    firmName: "OZZO Technologies",
+    bankName: "HDFC Bank",
+    bankAccountNo: "50200012345678",
+    ifsc: "HDFC0001234",
+    upiId: "ozzo@hdfcbank",
+    signatureUrl: "https://example.test/sign.png",
+  };
+
+  function renderWithPayee(
+    data: ProposalData,
+    payee?: typeof PAYEE,
+  ): string {
+    return renderToStaticMarkup(
+      <ProposalPages
+        data={data}
+        plan="SFA"
+        content={SFA_CONTENT}
+        groups={includedGroupsForPlan("SFA")}
+        payee={payee}
+      />,
+    )
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  test("prints each line the founder typed in the Offer box", () => {
+    const out = renderWithPayee({
+      ...SHAAHI,
+      offer: "2 months free subscription\nImplementation at no charge",
+    });
+
+    expect(out).toContain("Offer");
+    expect(out).toContain("2 months free subscription");
+    expect(out).toContain("Implementation at no charge");
+  });
+
+  test("leaves the total payable exactly as it was without the offer", () => {
+    const plain = renderText(SHAAHI);
+    const withOffer = renderText({ ...SHAAHI, offer: "2 months free subscription" });
+
+    // `renderText` drops tags without inserting a space, so the label and the
+    // figure come out adjacent.
+    const total = (s: string) => s.match(/Total payable\s*₹([\d,]+)/)?.[1];
+
+    expect(total(plain)).toBeDefined();
+    expect(total(withOffer)).toBe(total(plain));
+  });
+
+  test("prints no Offer heading when the box is empty or absent", () => {
+    expect(renderWithPayee({ ...SHAAHI, offer: "  \n " })).not.toContain("Offer");
+    expect(renderWithPayee({ ...SHAAHI, offer: undefined })).not.toContain("Offer");
+  });
+
+  test("prints the bank account and the signature when Invoice Settings has them", () => {
+    const out = renderWithPayee(SHAAHI, PAYEE);
+
+    expect(out).toContain("How to pay");
+    expect(out).toContain("HDFC Bank");
+    expect(out).toContain("50200012345678");
+    expect(out).toContain("HDFC0001234");
+    expect(out).toContain("ozzo@hdfcbank");
+  });
+
+  test("still renders, with no payment block, when Invoice Settings is empty", () => {
+    const out = renderWithPayee(SHAAHI, undefined);
+
+    expect(out).toContain("Total payable");
+    expect(out).not.toContain("How to pay");
+  });
+});

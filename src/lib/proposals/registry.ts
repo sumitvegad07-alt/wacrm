@@ -77,6 +77,9 @@ function buildTemplate(plan: PlanId): ProposalTemplate {
       billingTerm: "yearly",
       proposalDate,
       validDays: 10,
+      // Empty, and empty prints nothing — a quotation with no concession on it
+      // must not carry an "Offer" heading with blank space under it.
+      offer: "",
       client: { name: "", shortName: "", industry: "", website: "", address: "" },
       preparedBy: { name: "Sumit", phone: "+91 92271 26301", email: "sales@ozzo.co.in" },
       voice: { ...content.defaultVoice },
