@@ -315,7 +315,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     : "Company default";
 
   const renderCustomSystemField = (field: CustomField) => {
-    if (!field.system_key) return null;
+    // No system_key means the account added this field itself. `undefined` lets
+    // the renderer draw the default input (edit mode) or the stored value (read
+    // mode); null would hide it — see the custom-fields render contract.
+    if (!field.system_key) return undefined;
 
     if (!isEditing) {
       let val = form[field.system_key as keyof typeof form] || "—";

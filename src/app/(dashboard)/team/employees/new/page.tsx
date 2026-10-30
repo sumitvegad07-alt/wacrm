@@ -180,7 +180,12 @@ export default function NewEmployeePage() {
   };
 
   const renderCustomSystemField = (field: CustomField) => {
-    if (!field.system_key) return null;
+    // No system_key means the account added this field itself on the Custom
+    // Fields screen. `undefined` is "I have no opinion — draw the default input
+    // for it"; returning null here would hide it entirely (see the
+    // custom-fields render contract), which is how a field the account created
+    // for Employees was stored and never painted.
+    if (!field.system_key) return undefined;
     const key = field.system_key as keyof typeof form;
 
     // Geography (area + country/state/city) is captured once by the full-width

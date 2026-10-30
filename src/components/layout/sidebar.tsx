@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useLinkStatus } from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { useExtraSettings, type AssignmentMode } from "@/hooks/use-extra-settings";
 import { attendanceFencingOn, readGeoFencing } from "@/lib/location/geofence-config";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
+import { InlineLoader } from "@/components/shared";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useImplementationComplete } from "@/hooks/use-implementation-complete";
 import {
@@ -672,6 +674,24 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
     };
   }, [open, onClose]);
 
+  /**
+   * A spinner on the nav item itself, for the window between the click and the
+   * destination's loading boundary taking over.
+   *
+   * The route-level `loading.tsx` is the main fix for the dead-feeling sidebar,
+   * but it can only paint once the router has started rendering the new segment.
+   * Until then — while a cold route chunk is still downloading — the only thing
+   * on screen is the page being left behind, which is what had people clicking
+   * Customers or Orders four times and then opening it in a new tab instead.
+   * `useLinkStatus` is Next's own hook for exactly this gap and must be called
+   * from inside the <Link>, hence a child component rather than a flag here.
+   */
+  const NavPending = () => {
+    const { pending } = useLinkStatus();
+    if (!pending) return null;
+    return <InlineLoader className="shrink-0 text-current" aria-label="Opening…" />;
+  };
+
   const renderNavLink = (item: NavItem, isTopLevel: boolean) => {
     const isActive = isNavItemActive(item.href, pathname, searchParams);
     const showUnreadDot =
@@ -705,6 +725,7 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
           )}
         />
         <span className="flex-1 truncate">{item.label}</span>
+        <NavPending />
         {item.beta && (
           <span
             aria-label="Beta feature"

@@ -1,4 +1,11 @@
-import * as XLSX from "xlsx";
+// Type-only, so the ~430 KB SheetJS bundle never lands in a route chunk. Four
+// list pages (Customers, Leads, Products, Tasks) and the asset list import the
+// Import Wizard statically, which imports this module — so a plain
+// `import * as XLSX` here put the whole spreadsheet parser into the JavaScript
+// those screens must download and parse *before they can paint*, for a library
+// that is only needed once someone actually picks a file. `parseFile` pulls it
+// in at that moment instead (see the dynamic import below).
+import type * as XLSX from "xlsx";
 import type { ParsedFile } from "./types";
 
 /** Normalize a header/value for matching: lowercase, strip all non-alphanumerics. */
@@ -107,7 +114,10 @@ export async function parseFile(file: File): Promise<ParsedFile> {
   const buf = await file.arrayBuffer();
   const format: ParsedFile["format"] = /\.xlsx?$/i.test(file.name) ? "xlsx" : "csv";
 
-  const wb = XLSX.read(new Uint8Array(buf), {
+  // Loaded here, not at module scope — see the import note at the top of the file.
+  const xlsx = await import("xlsx");
+
+  const wb = xlsx.read(new Uint8Array(buf), {
     type: "array",
     // CSV: literal text, no date guessing. XLSX: formatted text (see above).
     raw: format === "csv",
@@ -120,7 +130,7 @@ export async function parseFile(file: File): Promise<ParsedFile> {
 
   if (format === "xlsx") rewriteDateCellsToIso(ws);
 
-  const matrix = XLSX.utils.sheet_to_json<string[]>(ws, {
+  const matrix = xlsx.utils.sheet_to_json<string[]>(ws, {
     header: 1,
     blankrows: false,
     defval: "",

@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+// No static `import * as XLSX` here on purpose. SheetJS is ~430 KB and every
+// one of the fourteen report routes carried it in the chunk the browser has to
+// download and parse before the report can paint — for a library used only when
+// someone clicks Export → Excel. `handleExport` imports it at that click.
 import { type ReportDefinition, type ReportConfig, type TabConfig } from "@/lib/reports/types";
 import { executeReport, getDefaultReportView } from "@/app/actions/reports";
 import { Button } from "@/components/ui/button";
@@ -419,6 +422,8 @@ export function ReportViewer({ config }: ReportViewerProps) {
         link.click();
         document.body.removeChild(link);
       } else if (format === 'xlsx') {
+        // Loaded on the click, not with the page — see the note at the imports.
+        const XLSX = await import("xlsx");
         const worksheet = XLSX.utils.json_to_sheet(formattedExportData);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Report Data");
