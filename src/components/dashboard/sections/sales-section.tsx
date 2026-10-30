@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useDataScope } from "@/hooks/use-data-scope";
+import { useRefreshOnReturnKey } from "@/hooks/use-refresh-on-return";
 import { formatCurrency } from "@/lib/currency";
 import { ShoppingCart, TrendingUp, Truck, DollarSign } from "lucide-react";
 
@@ -39,6 +40,12 @@ export function SalesSection() {
 
   const [metrics, setMetrics] = useState<SalesMetrics | null>(null);
 
+  // Orders Today and Sales This Month are read once, when this section mounts.
+  // An order booked after that — on the phone, in another tab — never reached
+  // the tiles, which is what "I took the orders but the dashboard does not show
+  // them" was. Returning to the tab re-runs the fetch below.
+  const returnKey = useRefreshOnReturnKey();
+
   useEffect(() => {
     if (!accountId || !scope.ready) return;
     let alive = true;
@@ -51,7 +58,7 @@ export function SalesSection() {
     return () => {
       alive = false;
     };
-  }, [accountId, scope.ready, scope.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accountId, scope.ready, scope.key, returnKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loading = metrics === null;
 

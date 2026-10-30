@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRefreshOnReturn } from "@/hooks/use-refresh-on-return";
 
 /**
  * Subscribe to Supabase Realtime `postgres_changes` for one or more tables and invoke `onChange`
@@ -70,44 +71,8 @@ export function useRealtimeRefresh(
    * symptom was precisely this: a rep books an order on the phone, the admin's
    * open Orders tab shows nothing, and only a manual browser reload finds it.
    * A dropped websocket, a sleeping laptop or a DELETE that RLS cannot evaluate
-   * all produce the same silence.
-   *
-   * So: whenever the tab has been hidden or unfocused for a while and the user
-   * returns to it, assume the screen is stale and re-read. The threshold keeps
-   * an alt-tab to WhatsApp and back from turning into a query storm, and the
-   * query is the same one the page runs on mount.
+   * all produce the same silence, so the screen never depends on the
+   * subscription alone.
    */
-  const STALE_AFTER_MS = 15_000;
-  useEffect(() => {
-    if (!enabled) return;
-    if (typeof document === "undefined") return;
-
-    let awaySince: number | null = document.hidden ? Date.now() : null;
-
-    const refreshIfStale = () => {
-      if (document.hidden) return;
-      if (awaySince !== null && Date.now() - awaySince >= STALE_AFTER_MS) {
-        cb.current();
-      }
-      awaySince = null;
-    };
-
-    const onVisibility = () => {
-      if (document.hidden) awaySince = awaySince ?? Date.now();
-      else refreshIfStale();
-    };
-    const onBlur = () => {
-      awaySince = awaySince ?? Date.now();
-    };
-
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", refreshIfStale);
-
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", refreshIfStale);
-    };
-  }, [enabled]);
+  useRefreshOnReturn(() => cb.current(), enabled);
 }

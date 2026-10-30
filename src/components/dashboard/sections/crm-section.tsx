@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useRefreshOnReturn } from "@/hooks/use-refresh-on-return";
 import { formatCurrency } from "@/lib/currency";
 import { UserPlus, DollarSign, GitBranch, Users } from "lucide-react";
 
@@ -49,6 +50,11 @@ export function CrmSection() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // These tiles are a snapshot taken when the section mounted and nothing
+  // re-reads them, so a lead or deal added elsewhere — another tab, the phone —
+  // left the dashboard quietly out of date until a manual browser reload.
+  useRefreshOnReturn(loadAll);
 
   return (
     <section className="space-y-4">

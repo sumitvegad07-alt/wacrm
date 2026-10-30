@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useRefreshOnReturnKey } from "@/hooks/use-refresh-on-return";
 import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
 import { MetricCard } from "./metric-card";
 import { SkeletonCard } from "./skeleton";
@@ -26,11 +27,13 @@ export function TodaysCollectionWidget() {
   const { accountId, defaultCurrency } = useAuth();
   const [data, setData] = useState<number | null>(null);
   
+  const returnKey = useRefreshOnReturnKey();
+
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
     fetchTodaysCollection(db, accountId).then(setData);
-  }, [accountId]);
+  }, [accountId, returnKey]);
 
   if (data === null) return <SkeletonCard />;
 
@@ -47,11 +50,13 @@ export function MonthlyCollectionWidget() {
   const { accountId, defaultCurrency } = useAuth();
   const [data, setData] = useState<{current: number, previous: number} | null>(null);
 
+  const returnKey = useRefreshOnReturnKey();
+
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
     fetchMonthlyCollection(db, accountId).then(setData);
-  }, [accountId]);
+  }, [accountId, returnKey]);
 
   if (!data) return <SkeletonCard />;
 
@@ -80,11 +85,13 @@ export function OutstandingAmountWidget() {
     [account?.settings]
   );
 
+  const returnKey = useRefreshOnReturnKey();
+
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
     fetchTotalOutstanding(db, accountId, outstandingConfig).then(setData);
-  }, [accountId, outstandingConfig]);
+  }, [accountId, outstandingConfig, returnKey]);
 
   if (data === null) return <SkeletonCard />;
 
@@ -102,11 +109,13 @@ export function CollectionByTypeWidget() {
   const { accountId, defaultCurrency } = useAuth();
   const [data, setData] = useState<{name: string, amount: number}[] | null>(null);
 
+  const returnKey = useRefreshOnReturnKey();
+
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
     fetchCollectionByPaymentType(db, accountId).then(setData);
-  }, [accountId]);
+  }, [accountId, returnKey]);
 
   if (!data) return <Card className="h-[300px] animate-pulse bg-muted/20" />;
 
@@ -152,11 +161,13 @@ export function CollectionByUserWidget() {
   const { accountId, defaultCurrency } = useAuth();
   const [data, setData] = useState<{name: string, amount: number}[] | null>(null);
 
+  const returnKey = useRefreshOnReturnKey();
+
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
     fetchCollectionByUser(db, accountId).then(setData);
-  }, [accountId]);
+  }, [accountId, returnKey]);
 
   if (!data) return <Card className="h-[300px] animate-pulse bg-muted/20" />;
 
@@ -202,11 +213,13 @@ export function PendingApprovalAgingWidget() {
   const { accountId, defaultCurrency } = useAuth();
   const [data, setData] = useState<{count: number, payments: any[]} | null>(null);
 
+  const returnKey = useRefreshOnReturnKey();
+
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
     fetchPendingApprovalAging(db, accountId).then(setData);
-  }, [accountId]);
+  }, [accountId, returnKey]);
 
   if (!data) return <Card className="h-[300px] animate-pulse bg-muted/20" />;
 
@@ -259,11 +272,13 @@ export function OverdueCustomersWidget() {
     [account?.settings]
   );
 
+  const returnKey = useRefreshOnReturnKey();
+
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
     fetchOverdueCustomers(db, accountId, outstandingConfig).then(setData);
-  }, [accountId, outstandingConfig]);
+  }, [accountId, outstandingConfig, returnKey]);
 
   if (!data) return <Card className="h-[300px] animate-pulse bg-muted/20" />;
 
@@ -316,11 +331,13 @@ export function CreditExceededWidget() {
     [account?.settings]
   );
 
+  const returnKey = useRefreshOnReturnKey();
+
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
     fetchCreditExceededCustomers(db, accountId, outstandingConfig).then(setData);
-  }, [accountId, outstandingConfig]);
+  }, [accountId, outstandingConfig, returnKey]);
 
   if (!data) return <Card className="h-[300px] animate-pulse bg-muted/20" />;
 

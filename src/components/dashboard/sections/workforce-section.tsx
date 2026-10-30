@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useDataScope } from "@/hooks/use-data-scope";
+import { useRefreshOnReturnKey } from "@/hooks/use-refresh-on-return";
 import { formatCurrency } from "@/lib/currency";
 import { MapPin, Users, Battery, Activity, Receipt, CalendarClock } from "lucide-react";
 
@@ -43,6 +44,10 @@ export function WorkforceSection() {
 
   const [metrics, setMetrics] = useState<WorkforceMetrics | null>(null);
   const [points, setPoints] = useState<Point[]>([]);
+
+  // Read once on mount otherwise, so a visit or expense logged from the field
+  // after that never reached these tiles. See use-refresh-on-return.
+  const returnKey = useRefreshOnReturnKey();
 
   useEffect(() => {
     if (!accountId || !scope.ready) return;
@@ -112,7 +117,7 @@ export function WorkforceSection() {
       alive = false;
     };
     // scope.key changes whenever the visible-user set changes.
-  }, [accountId, scope.ready, scope.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accountId, scope.ready, scope.key, returnKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loading = metrics === null;
 
