@@ -48,6 +48,7 @@ import type {
   TemplateSampleValues,
 } from '@/types';
 import { templateStatusConfig } from '@/lib/template-status';
+import { errorMessage } from '@/lib/errors/message';
 import {
   extractVariableIndices,
   TEMPLATE_LIMITS,
@@ -279,7 +280,7 @@ export function TemplateManager() {
       setEditingId(null);
     } catch (err) {
       console.error('Submit error:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to submit');
+      toast.error(errorMessage(err, 'Failed to submit'));
     } finally {
       setSubmitting(false);
     }
@@ -321,7 +322,7 @@ export function TemplateManager() {
       await fetchTemplates(user.id);
     } catch (err) {
       console.error('Template sync error:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to sync templates');
+      toast.error(errorMessage(err, 'Failed to sync templates'));
     } finally {
       setSyncing(false);
     }
@@ -347,7 +348,7 @@ export function TemplateManager() {
       setTemplateToDelete(null);
     } catch (err) {
       console.error('Delete error:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to delete template');
+      toast.error(errorMessage(err, 'Failed to delete template'));
     } finally {
       setDeletingId(null);
     }
@@ -459,7 +460,7 @@ export function TemplateManager() {
       setForm((f) => ({ ...f, header_media_url: publicUrl }));
       toast.success('Image uploaded.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed.');
+      toast.error(errorMessage(err, 'Upload failed.'));
     } finally {
       setUploadingHeader(false);
     }

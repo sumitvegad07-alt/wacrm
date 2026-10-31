@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { getMcpWorkforceAccess, setMcpWorkforceAccess } from "@/app/actions/mcp-settings";
+import { errorMessage } from '@/lib/errors/message';
 
 export function McpWorkforceAccessCard() {
   const [enabled, setEnabled] = useState(false);
@@ -49,7 +50,7 @@ export function McpWorkforceAccessCard() {
     } catch (err) {
       setEnabled(previous); // put it back; never leave the UI claiming a save
       setError(
-        err instanceof Error ? err.message : "Could not save that setting.",
+        errorMessage(err, "Could not save that setting."),
       );
     } finally {
       setSaving(false);

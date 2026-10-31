@@ -41,6 +41,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Users } from 'lucide-react';
+import { errorMessage } from '@/lib/errors/message';
 import {
   FormPageShell,
   FormActions,
@@ -511,7 +512,7 @@ export function ContactForm({
       onOpenChange(false);
       onSaved();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save customer';
+      const message = errorMessage(err, 'Failed to save customer');
       toast.error(message);
     } finally {
       setSaving(false);

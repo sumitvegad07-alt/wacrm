@@ -8,6 +8,7 @@ import { Hero } from '@/components/getting-started/Hero';
 import { JourneyRail } from '@/components/getting-started/JourneyRail';
 import { StepPanel } from '@/components/getting-started/StepPanel';
 import { MilestoneCard } from '@/components/getting-started/MilestoneCard';
+import { errorMessage } from '@/lib/errors/message';
 
 export default function GettingStartedClient({ initial, focus = false }: { initial: LoadResult; focus?: boolean }) {
   const [state, setState] = useState<LoadResult>(initial);
@@ -49,7 +50,7 @@ export default function GettingStartedClient({ initial, focus = false }: { initi
         setOptimisticAnswer(null);
         if (opts.msg) toast.success(opts.msg);
       } catch (e) {
-        if (my === seq.current) toast.error(e instanceof Error ? e.message : 'Something went wrong');
+        if (my === seq.current) toast.error(errorMessage(e, 'Something went wrong'));
       } finally {
         if (my === seq.current) setBusy(null);
       }

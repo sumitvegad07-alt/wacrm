@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { TableViewApi } from "@/hooks/use-table-view";
 import { pageRange, type ServerTableQuery } from "@/lib/table/server-query";
+import { errorMessage } from '@/lib/errors/message';
 
 /**
  * One page of rows from the server, instead of the whole table in the browser.
@@ -127,7 +128,7 @@ export function useServerTable<T>({
         }
       } catch (err) {
         if (cancelled || id !== requestId.current) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(errorMessage(err, String(err)));
         setRows([]);
         setTotal(0);
       } finally {

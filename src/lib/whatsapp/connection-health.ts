@@ -26,6 +26,7 @@
 // ------------------------------------------------------------
 
 import { debugToken, getSubscribedApps, subscribeWabaToApp, verifyPhoneNumber } from './meta-api'
+import { errorMessage } from '@/lib/errors/message';
 
 export type HealthLevel = 'healthy' | 'warning' | 'broken'
 
@@ -83,7 +84,7 @@ export async function checkConnectionHealth(
   const token = await debugToken({ accessToken: args.accessToken }).catch((err) => ({
     isValid: false,
     expiresAt: null,
-    error: err instanceof Error ? err.message : String(err),
+    error: errorMessage(err, String(err)),
   }))
 
   const tokenIsPermanent = token.isValid && token.expiresAt === null

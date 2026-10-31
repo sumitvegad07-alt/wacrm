@@ -16,6 +16,7 @@ import {
 import { enabledLevels, levelName } from "@/lib/territories/settings";
 import { fetchDirectCustomerCounts, rollUpCustomerCounts } from "@/lib/territories/customer-counts";
 import type { TerritoryNode, TerritorySettings } from "@/lib/territories/types";
+import { errorMessage } from '@/lib/errors/message';
 
 interface Props {
   employeeId: string; // profiles.id
@@ -149,7 +150,7 @@ export function EmployeeAreaAssignment({ employeeId, accountId, canEdit }: Props
       toast.success(`Assigned ${res.assigned ?? selected.size} area(s).`);
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Save failed");
+      toast.error(errorMessage(e, "Save failed"));
     } finally {
       setSaving(false);
     }

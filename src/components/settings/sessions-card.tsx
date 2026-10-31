@@ -6,6 +6,7 @@ import { Loader2, LogOut } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
+import { errorMessage } from '@/lib/errors/message';
 import {
   Card,
   CardContent,
@@ -40,7 +41,7 @@ export function SessionsCard() {
       }
       window.location.href = '/login';
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const msg = errorMessage(err, 'Unknown error');
       toast.error(msg);
     } finally {
       setSigningOut(false);

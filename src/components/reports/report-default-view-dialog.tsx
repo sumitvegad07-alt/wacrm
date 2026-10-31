@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { saveDefaultReportView, clearDefaultReportView } from "@/app/actions/reports";
 import { type ReportConfig } from "@/lib/reports/types";
+import { errorMessage } from '@/lib/errors/message';
 
 interface ReportDefaultViewDialogProps {
   moduleName: string;
@@ -64,7 +65,7 @@ export function ReportDefaultViewDialog({
       }, 900);
     } catch (e) {
       console.error(e);
-      setError(e instanceof Error ? e.message : "Could not save the default view. Please try again.");
+      setError(errorMessage(e, "Could not save the default view. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -80,7 +81,7 @@ export function ReportDefaultViewDialog({
       setOpen(false);
     } catch (e) {
       console.error(e);
-      setError(e instanceof Error ? e.message : "Could not remove the default view.");
+      setError(errorMessage(e, "Could not remove the default view."));
     } finally {
       setLoading(false);
     }

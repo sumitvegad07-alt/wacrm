@@ -28,6 +28,7 @@ import { reconcileColumns } from "@/lib/table-views";
 import { TableSkeleton, EmptyState } from "@/components/shared";
 import { toast } from "sonner";
 import { EXPORT_MAX_ROWS } from "@/lib/table/export-all-pages";
+import { errorMessage } from '@/lib/errors/message';
 
 interface DataTableProps<T> {
   columns: ColumnDef<T>[];
@@ -263,7 +264,7 @@ export function DataTable<T>({
         toast.success(`Exported ${rows.length.toLocaleString()} rows.`, { id: toastId });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Export failed.", { id: toastId });
+      toast.error(errorMessage(err, "Export failed."), { id: toastId });
     } finally {
       setIsExporting(false);
     }
@@ -289,7 +290,7 @@ export function DataTable<T>({
         rows = result.rows as Record<string, unknown>[];
         truncated = result.truncated;
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Could not prepare the print.");
+        toast.error(errorMessage(err, "Could not prepare the print."));
         return;
       } finally {
         setIsExporting(false);

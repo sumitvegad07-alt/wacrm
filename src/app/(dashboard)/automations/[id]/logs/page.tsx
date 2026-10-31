@@ -20,6 +20,7 @@ import type {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { formatRelative } from "@/lib/automations/trigger-meta"
+import { errorMessage } from '@/lib/errors/message';
 
 export default function AutomationLogsPage({
   params,
@@ -56,7 +57,7 @@ export default function AutomationLogsPage({
         setAutomation(autRes.data as Automation | null)
         setLogs((logRes.data ?? []) as AutomationLog[])
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load logs")
+        setError(errorMessage(err, "Failed to load logs"))
       }
     }
     load()

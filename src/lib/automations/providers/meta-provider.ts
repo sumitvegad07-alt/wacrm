@@ -25,6 +25,7 @@ import {
   type SendTemplateRequest,
   type SendTemplateResult,
 } from './types'
+import { errorMessage } from '@/lib/errors/message';
 
 interface WhatsAppConfigRow {
   phone_number_id: string
@@ -67,7 +68,7 @@ export class MetaProvider implements MessageProvider {
         lastError = null
         break
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = errorMessage(err, String(err))
         // Only "recipient not allowed" is worth trying another variant for;
         // anything else is a real failure and must surface immediately rather
         // than being retried against every permutation of the number.
@@ -149,7 +150,7 @@ export class MetaProvider implements MessageProvider {
  * transient blip loses a customer's order confirmation for good.
  */
 export function classifyMetaError(err: unknown): Error {
-  const message = err instanceof Error ? err.message : String(err)
+  const message = errorMessage(err, String(err))
   const lower = message.toLowerCase()
 
   const permanentSignals = [

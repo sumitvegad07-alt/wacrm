@@ -19,6 +19,7 @@ import { SettingsPanel } from '@/components/settings/settings-layout';
 import { getAccountTerritorySettings, updateTerritorySettings } from "@/lib/territories/api";
 import { DEFAULT_TERRITORY_LEVELS } from "@/lib/territories/settings";
 import type { AssignmentMode, TerritoryLevel } from "@/lib/territories/types";
+import { errorMessage } from '@/lib/errors/message';
 
 interface AffectedLevel { position: number; name: string; count: number }
 
@@ -84,7 +85,7 @@ export function TerritorySettings({ onSaved }: { onSaved?: () => void } = {}) {
       // otherwise it keeps stale levels until a full page reload.
       onSaved?.();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to save");
+      toast.error(errorMessage(e, "Failed to save"));
     } finally {
       setSaving(false);
     }

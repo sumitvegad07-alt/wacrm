@@ -9,6 +9,7 @@ import { getReportByModule } from '@/lib/reports/registry';
 import { groupRowsForSubtotals } from '@/lib/reports/subtotals';
 import type { ReportMeasure } from '@/lib/reports/types';
 import { paperMetrics, parsePaperSize } from '@/lib/print/paper';
+import { errorMessage } from '@/lib/errors/message';
 
 /**
  * Print / PDF view for a report. Reads the report parameters from the query string
@@ -80,7 +81,7 @@ function ReportPrintInner() {
         );
         setRows((data as Row[]) || []);
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : 'Failed to run report');
+        setError(errorMessage(e, 'Failed to run report'));
       } finally {
         setLoading(false);
       }

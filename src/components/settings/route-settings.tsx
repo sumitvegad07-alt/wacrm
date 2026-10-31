@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Route as RouteIcon } from "lucide-react";
+import { errorMessage } from '@/lib/errors/message';
 
 type Enforcement = "warn" | "block";
 type ApprovalMode = "none" | "manager" | "admin";
@@ -120,7 +121,7 @@ export function RouteSettings() {
           setDraft(rs);
         }
       } catch (err) {
-        if (active) setLoadError(err instanceof Error ? err.message : "Failed to load");
+        if (active) setLoadError(errorMessage(err, "Failed to load"));
       } finally {
         if (active) setLoading(false);
       }
@@ -156,7 +157,7 @@ export function RouteSettings() {
       setDraft(rs);
       setToast({ type: "success", message: "Route settings saved." });
     } catch (err) {
-      setToast({ type: "error", message: err instanceof Error ? err.message : "An error occurred." });
+      setToast({ type: "error", message: errorMessage(err, "An error occurred.") });
     } finally {
       setSaving(false);
     }

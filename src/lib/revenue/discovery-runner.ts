@@ -38,6 +38,7 @@ import {
   type SkipReason,
 } from "./discovery-query";
 import { placesApiKey, searchText } from "./places-client";
+import { errorMessage } from '@/lib/errors/message';
 
 /**
  * The service-role client's type, taken from the factory rather than imported
@@ -418,7 +419,7 @@ export async function harvestRun(
   try {
     return await harvest(admin, runId, deadline);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = errorMessage(err, "Unknown error");
     console.error("[discover] harvest failed", runId, message);
     // Left queued, not failed: the fault is far more likely to be this
     // invocation (a timeout, a cold database) than the harvest, and a run

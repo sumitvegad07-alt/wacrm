@@ -26,6 +26,7 @@ import { PageLayout, PageHeader, PageToolbar, EmptyState, StatusBadge, ConfirmDi
 import { inactiveSelection, reactivateDisabledReason, reactivatedMessage } from "@/lib/table/bulk-activation";
 import { RowActions } from "@/components/ui/data-table/row-actions";
 import { getSchemes, setSchemeActive } from "@/lib/schemes/api";
+import { errorMessage } from '@/lib/errors/message';
 import {
   SCHEME_TYPE_LABELS,
   schemeStatus,
@@ -112,7 +113,7 @@ export function SchemeManager() {
       setSelectedIds(new Set());
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update.");
+      toast.error(errorMessage(e, "Failed to update."));
     } finally {
       setBusy(false);
     }

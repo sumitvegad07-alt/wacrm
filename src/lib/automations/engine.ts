@@ -17,6 +17,7 @@ import type {
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
 import { findOrCreateConversation } from '@/lib/whatsapp/conversations'
+import { errorMessage as toErrorMessage } from '@/lib/errors/message';
 
 // ------------------------------------------------------------
 // Public API
@@ -317,7 +318,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
         detail,
       })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = toErrorMessage(err, String(err))
       results.push({
         step_id: step.id,
         step_type: step.step_type,

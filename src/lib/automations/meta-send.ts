@@ -7,6 +7,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
 import { supabaseAdmin } from './admin-client'
+import { errorMessage } from '@/lib/errors/message';
 
 // ------------------------------------------------------------
 // Automation-side Meta sender.
@@ -129,7 +130,7 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
       lastError = null
       break
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = errorMessage(err, String(err))
       if (!isRecipientNotAllowedError(msg)) throw err
       lastError = err
     }

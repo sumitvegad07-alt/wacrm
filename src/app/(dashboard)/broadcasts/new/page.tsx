@@ -12,6 +12,7 @@ import { Step3Personalize } from '@/components/broadcasts/step3-personalize';
 import { Step4ScheduleSend } from '@/components/broadcasts/step4-schedule-send';
 import { useBroadcastSending } from '@/hooks/use-broadcast-sending';
 import { Check } from 'lucide-react';
+import { errorMessage } from '@/lib/errors/message';
 
 const steps = [
   { label: 'Template', key: 'template' },
@@ -65,7 +66,7 @@ export default function NewBroadcastPage() {
     } catch (err) {
       // Previously swallowed with console.error — the wizard would
       // just no-op, leaving the user confused. Surface the reason.
-      const message = err instanceof Error ? err.message : 'Broadcast failed';
+      const message = errorMessage(err, 'Broadcast failed');
       console.error('Broadcast failed:', err);
       toast.error(message);
     }

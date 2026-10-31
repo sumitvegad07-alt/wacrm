@@ -22,6 +22,7 @@ import { planLine } from "@/lib/invoices/denormalise";
 import { amountInWords, invoiceTotals, lineAmount } from "@/lib/invoices/totals";
 import { placeOfSupply } from "@/lib/invoices/tax";
 import type { InvoicePrefill } from "@/lib/invoices/from-proposal";
+import { errorMessage } from '@/lib/errors/message';
 import {
   DEFAULT_SAC,
   sellerFromSettings,
@@ -354,7 +355,7 @@ export default function InvoiceForm({
       toast.success(mode === "create" ? "Invoice created" : "Invoice saved");
       router.push(`/admin/invoices/${mode === "create" ? payload.id : invoice!.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save the invoice");
+      toast.error(errorMessage(err, "Could not save the invoice"));
     } finally {
       setSaving(false);
     }

@@ -21,6 +21,7 @@ import {
   getPriceLists, getPriceListWithItems, createPriceList, updatePriceList, setPriceListActive,
 } from "@/lib/price-lists/api";
 import type { PriceList, PriceListItem } from "@/lib/price-lists/types";
+import { errorMessage } from '@/lib/errors/message';
 
 interface ProductOpt { id: string; name: string; price: number; }
 
@@ -79,7 +80,7 @@ export function PriceListManager() {
       toast.success(reactivatedMessage(ids.length, "price list"));
       setSelectedIds(new Set());
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not update price lists.");
+      toast.error(errorMessage(e, "Could not update price lists."));
     } finally {
       setBulkBusy(false);
     }

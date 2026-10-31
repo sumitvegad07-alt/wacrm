@@ -28,6 +28,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { errorMessage } from '@/lib/errors/message';
 import {
   Upload,
   FileText,
@@ -441,7 +442,7 @@ export function ImportModal({
         );
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Import failed';
+      const message = errorMessage(err, 'Import failed');
       toast.error(message);
     } finally {
       setImporting(false);

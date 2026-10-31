@@ -24,6 +24,7 @@ import {
   extractAnnouncementTargets,
 } from './catalog'
 import { decideRecipients, type CandidateProfile } from './generator-core'
+import { errorMessage } from '@/lib/errors/message';
 
 const BATCH_SIZE = 100
 const MAX_ATTEMPTS = 3
@@ -84,7 +85,7 @@ export async function drainNotifications({
         .update({
           status: attempts >= MAX_ATTEMPTS ? 'failed' : 'pending',
           attempts,
-          last_error: err instanceof Error ? err.message : String(err),
+          last_error: errorMessage(err, String(err)),
         })
         .eq('id', ev.id)
     }

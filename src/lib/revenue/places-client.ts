@@ -15,6 +15,7 @@
 // ============================================================
 
 import { MAX_PAGES, PLACES_FIELD_MASK, RESULTS_PER_PAGE, type PlacesResult } from "./discovery-query";
+import { errorMessage } from '@/lib/errors/message';
 
 const ENDPOINT = "https://places.googleapis.com/v1/places:searchText";
 
@@ -74,7 +75,7 @@ export async function searchText(
         results,
         // The request was attempted, so assume Google counted it.
         pagesFetched: pagesFetched + 1,
-        error: err instanceof Error ? err.message : "Network error calling Google Places",
+        error: errorMessage(err, "Network error calling Google Places"),
         quotaExhausted: false,
       };
     }

@@ -42,6 +42,7 @@ import {
 import { AUTOMATION_TEMPLATES, type TemplateSlug } from "@/lib/automations/templates"
 import { triggerMeta, formatRelative } from "@/lib/automations/trigger-meta"
 import { cn } from "@/lib/utils"
+import { errorMessage } from '@/lib/errors/message';
 
 const TEMPLATE_ORDER: TemplateSlug[] = [
   "welcome_message",
@@ -75,7 +76,7 @@ export default function AutomationsPage() {
       if (fetchErr) throw fetchErr
       setAutomations((data ?? []) as Automation[])
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load automations")
+      setError(errorMessage(err, "Failed to load automations"))
     }
   }
 

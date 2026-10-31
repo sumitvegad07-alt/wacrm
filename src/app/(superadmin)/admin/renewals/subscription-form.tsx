@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PLAN_IDS, PLAN_LABEL } from "@/lib/plans/catalog";
 import { BILLING_TERMS, TERM_LABEL, type BillingTerm } from "@/lib/plans/pricing";
 import { periodEnd } from "@/lib/renewals/next-period";
+import { errorMessage } from '@/lib/errors/message';
 import {
   RENEWAL_STATUSES,
   RENEWAL_STATUS_LABEL,
@@ -182,7 +183,7 @@ export function SubscriptionForm({
     } catch (err) {
       // The dialog deliberately stays open with the values intact — never clear
       // a form the founder has just filled in.
-      toast.error(err instanceof Error ? err.message : "Could not save the subscription");
+      toast.error(errorMessage(err, "Could not save the subscription"));
     } finally {
       setSaving(false);
     }

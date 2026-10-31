@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 import type { ImportJob } from "@/lib/import/types";
+import { errorMessage } from '@/lib/errors/message';
 
 interface Props {
   open: boolean;
@@ -66,7 +67,7 @@ export function ImportHistoryDialog({ open, onOpenChange, module, onChanged }: P
       await load();
       onChanged?.();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not undo the import.");
+      toast.error(errorMessage(err, "Could not undo the import."));
     } finally {
       setUndoingId(null);
     }

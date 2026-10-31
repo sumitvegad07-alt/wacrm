@@ -30,6 +30,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { errorMessage } from '@/lib/errors/message';
 import {
   Phone,
   Mail,
@@ -369,7 +370,7 @@ export function ContactDetailView({
 
       toast.success(`Template "${template.name}" sent`);
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'network error';
+      const reason = errorMessage(err, 'network error');
       toast.error(`Failed to send template: ${reason}`);
     } finally {
       setSendingTemplate(false);

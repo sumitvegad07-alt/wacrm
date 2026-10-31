@@ -41,6 +41,10 @@ function LoginPageInner() {
   // which sends a signed-out admin here and needs them back on the same
   // /authorize URL with its query intact.
   const nextPath = safeNextPath(searchParams.get("next"));
+  // Set by the Supabase client when a tab's sign-in lapsed and could not be
+  // renewed. Without this the user was returned to a blank sign-in form with
+  // no idea why they had been thrown out mid-edit.
+  const sessionExpired = searchParams.get("expired") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -116,6 +120,13 @@ function LoginPageInner() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            {sessionExpired && !error && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
+                Your sign-in had expired, so we signed you out. Please sign in again — anything
+                you had not saved will need to be entered once more.
+              </div>
+            )}
+
             {error && (
               <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 {error}

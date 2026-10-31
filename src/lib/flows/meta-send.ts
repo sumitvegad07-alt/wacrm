@@ -15,6 +15,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
 import { supabaseAdmin } from './admin-client'
+import { errorMessage } from '@/lib/errors/message';
 
 // ------------------------------------------------------------
 // Flows-side Meta sender (interactive variants).
@@ -109,7 +110,7 @@ export async function engineSendText(
       lastError = null
       break
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = errorMessage(err, String(err))
       if (!isRecipientNotAllowedError(msg)) throw err
       lastError = err
     }
@@ -221,7 +222,7 @@ export async function engineSendMedia(
       lastError = null
       break
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = errorMessage(err, String(err))
       if (!isRecipientNotAllowedError(msg)) throw err
       lastError = err
     }
@@ -389,7 +390,7 @@ async function sendInteractiveViaMeta(
       lastError = null
       break
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = errorMessage(err, String(err))
       if (!isRecipientNotAllowedError(msg)) throw err
       lastError = err
     }

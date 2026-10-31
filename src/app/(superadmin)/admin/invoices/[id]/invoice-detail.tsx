@@ -35,6 +35,7 @@ import { amountInWords, lineAmount } from "@/lib/invoices/totals";
 import { isEditable, nextStatuses } from "@/lib/invoices/status";
 import { SERIES_LABEL, type InvoiceRow, type InvoiceStatus } from "@/lib/invoices/types";
 import { StatusBadge } from "../status-badge";
+import { errorMessage } from '@/lib/errors/message';
 
 // ============================================================
 // One invoice.
@@ -117,7 +118,7 @@ export default function InvoiceDetail({ invoice }: { invoice: InvoiceRow }) {
       setCancelOpen(false);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not update the invoice");
+      toast.error(errorMessage(err, "Could not update the invoice"));
     } finally {
       setBusy(null);
     }
@@ -133,7 +134,7 @@ export default function InvoiceDetail({ invoice }: { invoice: InvoiceRow }) {
       toast.success("Draft deleted");
       router.push("/admin/invoices");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not delete the invoice");
+      toast.error(errorMessage(err, "Could not delete the invoice"));
     } finally {
       setBusy(null);
       setDeleteOpen(false);

@@ -40,6 +40,7 @@ import {
   engineSendText,
 } from "./meta-send";
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
+import { errorMessage } from '@/lib/errors/message';
 import {
   type CollectInputNodeConfig,
   type ConditionNodeConfig,
@@ -594,7 +595,7 @@ async function advanceFromNodeKey(
       } catch (err) {
         await logEvent(db, run.id, "error", node.node_key, {
           reason: "send_text_failed",
-          detail: err instanceof Error ? err.message : String(err),
+          detail: errorMessage(err, String(err)),
         });
         await endRun(db, run.id, "failed", "send_text_failed");
         return { outcome: "completed" };
@@ -625,7 +626,7 @@ async function advanceFromNodeKey(
       } catch (err) {
         await logEvent(db, run.id, "error", node.node_key, {
           reason: "send_media_failed",
-          detail: err instanceof Error ? err.message : String(err),
+          detail: errorMessage(err, String(err)),
         });
         await endRun(db, run.id, "failed", "send_media_failed");
         return { outcome: "completed" };
@@ -663,7 +664,7 @@ async function advanceFromNodeKey(
       } catch (err) {
         await logEvent(db, run.id, "error", node.node_key, {
           reason: "collect_input_prompt_failed",
-          detail: err instanceof Error ? err.message : String(err),
+          detail: errorMessage(err, String(err)),
         });
         await endRun(db, run.id, "failed", "collect_input_prompt_failed");
         return { outcome: "completed" };
@@ -691,7 +692,7 @@ async function advanceFromNodeKey(
       } catch (err) {
         await logEvent(db, run.id, "error", node.node_key, {
           reason: "condition_evaluation_failed",
-          detail: err instanceof Error ? err.message : String(err),
+          detail: errorMessage(err, String(err)),
         });
         await endRun(db, run.id, "failed", "condition_evaluation_failed");
         return { outcome: "completed" };
@@ -726,7 +727,7 @@ async function advanceFromNodeKey(
         // strand the customer mid-flow.
         await logEvent(db, run.id, "error", node.node_key, {
           reason: "set_tag_failed",
-          detail: err instanceof Error ? err.message : String(err),
+          detail: errorMessage(err, String(err)),
         });
       }
       currentKey = cfg.next_node_key;
@@ -1024,7 +1025,7 @@ async function handleReplyForActiveRun(
       } catch (err) {
         await logEvent(db, run.id, "error", currentNode.node_key, {
           reason: "reprompt_send_failed",
-          detail: err instanceof Error ? err.message : String(err),
+          detail: errorMessage(err, String(err)),
         });
       }
     }

@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { errorMessage } from '@/lib/errors/message';
 import {
   ACCEPT_ATTRIBUTE,
   ATTACHMENT_SLOTS,
@@ -216,7 +217,7 @@ export default function OutreachClient() {
       setData(body as Payload);
       setLoadError("");
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
+      setLoadError(errorMessage(error, String(error)));
     }
   }, []);
 
@@ -282,7 +283,7 @@ export default function OutreachClient() {
       if (nameGuess) setNameColumn(nameGuess.index);
     } catch (error) {
       setProblem(
-        `Could not read that file: ${error instanceof Error ? error.message : String(error)}`,
+        `Could not read that file: ${errorMessage(error, String(error))}`,
       );
     }
   }
@@ -386,7 +387,7 @@ export default function OutreachClient() {
       resetUpload();
       await load();
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : String(error));
+      setProblem(errorMessage(error, String(error)));
     } finally {
       setBusy(false);
     }
@@ -416,7 +417,7 @@ export default function OutreachClient() {
       setNotice(`${file.name} saved. Every new campaign will send it.`);
       await load();
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : String(error));
+      setProblem(errorMessage(error, String(error)));
     } finally {
       setUploadingSlot(null);
       const input = attachmentInputs.current[slot];
@@ -438,7 +439,7 @@ export default function OutreachClient() {
       setNotice("Removed. New campaigns will not send it.");
       await load();
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : String(error));
+      setProblem(errorMessage(error, String(error)));
     } finally {
       setUploadingSlot(null);
     }
@@ -453,7 +454,7 @@ export default function OutreachClient() {
       setNotice(success);
       await load();
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : String(error));
+      setProblem(errorMessage(error, String(error)));
     } finally {
       setBusy(false);
     }
@@ -1111,7 +1112,7 @@ export default function OutreachClient() {
               setNewToken(made.token);
               await load();
             } catch (error) {
-              setProblem(error instanceof Error ? error.message : String(error));
+              setProblem(errorMessage(error, String(error)));
             } finally {
               setBusy(false);
             }

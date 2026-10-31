@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ColumnDef, ColumnOption } from "@/components/ui/data-table/data-table-types";
+import { errorMessage } from '@/lib/errors/message';
 
 /**
  * The values a table filter dropdown offers.
@@ -156,7 +157,7 @@ export function useColumnFilterOptions<T>(
       .catch((err: unknown) => {
         if (id !== requestId.current) return;
         setOptions([]);
-        setError(err instanceof Error ? err.message : "Could not load values");
+        setError(errorMessage(err, "Could not load values"));
       })
       .finally(() => {
         if (id === requestId.current) setLoading(false);

@@ -19,6 +19,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { groupPingsByLocalDay, parseGroupKey, type UserPing } from "./group";
 import { retentionPlan, type RetentionJob } from "./policy";
 import { summariseDay } from "./summarise";
+import { errorMessage } from '@/lib/errors/message';
 
 /** How many user-days to process per account per run. */
 const DAY_BATCH = 200;
@@ -83,7 +84,7 @@ export async function runRetention(
       await deleteAged(admin, account, plan, dryRun, result);
     } catch (err) {
       result.errors.push(
-        `${account.name ?? account.id}: ${err instanceof Error ? err.message : String(err)}`,
+        `${account.name ?? account.id}: ${errorMessage(err, String(err))}`,
       );
     }
   }

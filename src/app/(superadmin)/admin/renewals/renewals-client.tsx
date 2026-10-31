@@ -32,6 +32,7 @@ import {
 } from "@/lib/renewals/types";
 import { RenewDialog } from "./renew-dialog";
 import { SubscriptionForm } from "./subscription-form";
+import { errorMessage } from '@/lib/errors/message';
 
 // ============================================================
 // The screen the founder opens every morning.
@@ -156,7 +157,7 @@ export default function RenewalsClient() {
       setDeleteTarget(null);
       load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not delete the subscription");
+      toast.error(errorMessage(err, "Could not delete the subscription"));
     } finally {
       setDeleting(false);
     }

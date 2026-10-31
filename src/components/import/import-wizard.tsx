@@ -44,6 +44,7 @@ import { detectUnknownLookups, applyResolutions, rewriteRows } from "@/lib/impor
 import { loadExistingKeys, createImportJob, commitInChunks } from "@/lib/import/run";
 import { buildTemplateCsv, buildErrorCsv, downloadText } from "@/lib/import/error-report";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
+import { errorMessage } from '@/lib/errors/message';
 import type {
   ColumnMapping,
   ImportMode,
@@ -217,7 +218,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
       setResolveSel(defaults);
       setStep("preview");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not validate the file.");
+      toast.error(errorMessage(err, "Could not validate the file."));
     } finally {
       setBusy(false);
     }
@@ -249,7 +250,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
       for (const e of errors) toast.error(e);
       await runImport();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not apply your choices.");
+      toast.error(errorMessage(err, "Could not apply your choices."));
       setBusy(false);
     }
   }
@@ -331,7 +332,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
       setStep("result");
       if (res.imported > 0 || res.updated > 0) onImported?.();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Import failed.";
+      const msg = errorMessage(err, "Import failed.");
       toast.error(msg.includes("permission") ? "You do not have permission to import here." : msg);
     } finally {
       setBusy(false);
@@ -349,7 +350,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
       onImported?.();
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not undo the import.");
+      toast.error(errorMessage(err, "Could not undo the import."));
     } finally {
       setBusy(false);
     }

@@ -34,6 +34,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { errorMessage } from '@/lib/errors/message';
 import {
   getBroadcastStatus,
   getRecipientStatus,
@@ -179,7 +180,7 @@ export default function BroadcastDetailPage() {
         if (recsError) throw recsError;
         setRecipients(recs ?? []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load broadcast');
+        setError(errorMessage(err, 'Failed to load broadcast'));
       } finally {
         setLoading(false);
       }

@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { GST_STATES, gstStateCodeFromGstin, gstStateName } from "@/lib/gst/states";
 import type { InvoiceSettingsRow } from "@/lib/invoices/types";
+import { errorMessage } from '@/lib/errors/message';
 
 // ============================================================
 // OZZO's seller details, as printed on every invoice.
@@ -190,7 +191,7 @@ export default function SettingsForm() {
       setPreviewUrl(null);
       toast.success("Invoice settings saved");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save the invoice settings");
+      toast.error(errorMessage(err, "Could not save the invoice settings"));
     } finally {
       setSaving(false);
     }

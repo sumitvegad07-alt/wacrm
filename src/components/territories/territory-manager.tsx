@@ -46,6 +46,7 @@ import {
 } from "@/lib/territories/api";
 import { DEFAULT_TERRITORY_SETTINGS } from "@/lib/territories/settings";
 import type { Territory, TerritoryNode, TerritorySettings } from "@/lib/territories/types";
+import { errorMessage } from '@/lib/errors/message';
 
 type EditState =
   | { mode: "create"; presetLevel?: number; presetParentPath?: string[] }
@@ -141,7 +142,7 @@ export function TerritoryManager() {
       else toast.success(`Loaded India with ${(res.states ?? 0)} states/UTs and ${(res.districts ?? 0)} districts.`);
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Seeding failed");
+      toast.error(errorMessage(e, "Seeding failed"));
     } finally {
       setBusy(false);
     }
@@ -154,7 +155,7 @@ export function TerritoryManager() {
       const res = (await migrateContactGeo(accountId)) as { matched: number; unmatched: number };
       toast.success(`Migration complete — ${res.matched} matched, ${res.unmatched} flagged for review.`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Migration failed");
+      toast.error(errorMessage(e, "Migration failed"));
     } finally {
       setBusy(false);
     }
@@ -212,7 +213,7 @@ export function TerritoryManager() {
       toast.success(`Archived ${res.archived ?? 1} territor${(res.archived ?? 1) === 1 ? "y" : "ies"}.`);
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Archive failed");
+      toast.error(errorMessage(e, "Archive failed"));
     } finally {
       setBusy(false);
     }
@@ -246,7 +247,7 @@ export function TerritoryManager() {
       setConfirmDelete(null);
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Delete failed");
+      toast.error(errorMessage(e, "Delete failed"));
     } finally {
       setBusy(false);
     }

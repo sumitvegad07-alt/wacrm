@@ -33,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { errorMessage } from '@/lib/errors/message';
 
 /**
  * Flows list page.
@@ -170,7 +171,7 @@ export default function FlowsPage() {
       setCreateOpen(false);
       router.push(`/flows/${json.flow.id}`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Clone failed";
+      const msg = errorMessage(err, "Clone failed");
       toast.error(msg);
     } finally {
       setCreating(false);

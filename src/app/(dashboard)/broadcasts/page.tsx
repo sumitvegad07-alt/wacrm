@@ -15,6 +15,7 @@ import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
 import { REFERENCE_ROW_CAP } from '@/lib/table/reference-cap';
+import { errorMessage } from '@/lib/errors/message';
 
 /**
  * Poll cadence while any broadcast is sending. Kept modest so we don't
@@ -77,7 +78,7 @@ export default function BroadcastsPage() {
       if (fetchError) throw fetchError;
       setBroadcasts(data ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load broadcasts');
+      setError(errorMessage(err, 'Failed to load broadcasts'));
     } finally {
       setLoading(false);
     }

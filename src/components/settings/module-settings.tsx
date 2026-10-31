@@ -25,6 +25,7 @@ import {
 import { FENCE_RADII, normalizeGeoFencing } from "@/lib/location/geofence-config";
 import { McpWorkforceAccessCard } from "@/components/settings/mcp-workforce-access";
 import { DuplicatePreventionSettings } from "@/components/settings/duplicate-prevention-settings";
+import { errorMessage } from '@/lib/errors/message';
 import {
   readCustomerUniqueKeys,
   readLeadUniqueKeys,
@@ -512,7 +513,7 @@ export function ModuleSettingsPanel() {
     } catch (err) {
       setToastMsg({
         type: "error",
-        message: err instanceof Error ? err.message : "An error occurred.",
+        message: errorMessage(err, "An error occurred."),
       });
     } finally {
       setSaving(false);

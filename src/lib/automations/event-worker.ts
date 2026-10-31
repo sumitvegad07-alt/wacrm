@@ -41,6 +41,7 @@ import {
   type MessageProvider,
   type SendTemplateRequest,
 } from './providers'
+import { errorMessage } from '@/lib/errors/message';
 
 export const DEFAULT_STALE_EVENT_HOURS = 12
 const MAX_ATTEMPTS = 3
@@ -260,7 +261,7 @@ async function processEvent(
     await finish(db, event.id, 'done')
     return { ...base, status: 'done', sent, skippedRecipients, failedRecipients }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+    const message = errorMessage(err, String(err))
     const attempts = (event.attempts ?? 0) + 1
 
     if (attempts >= MAX_ATTEMPTS) {
@@ -363,7 +364,7 @@ async function deliver(args: DeliverArgs): Promise<'sent' | 'skipped' | 'failed'
     })
     return 'sent'
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+    const message = errorMessage(err, String(err))
     await updateDelivery(db, event.id, automationId, recipient.key, {
       status: 'failed',
       detail: message,

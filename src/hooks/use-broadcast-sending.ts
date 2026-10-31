@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Contact, MessageTemplate } from '@/types';
+import { errorMessage } from '@/lib/errors/message';
 
 export type CustomFieldOperator = 'is' | 'is_not' | 'contains';
 
@@ -539,7 +540,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
               .from('broadcast_recipients')
               .update({
                 status: 'failed',
-                error_message: err instanceof Error ? err.message : 'Unknown error',
+                error_message: errorMessage(err, 'Unknown error'),
               })
               .eq('id', recipient.id);
           }

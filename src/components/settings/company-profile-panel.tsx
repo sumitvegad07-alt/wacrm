@@ -17,6 +17,8 @@ import { getTerritoryRows, getAccountTerritorySettings } from '@/lib/territories
 import type { Territory, TerritorySettings } from '@/lib/territories/types';
 import { DEFAULT_TERRITORY_SETTINGS } from '@/lib/territories/settings';
 import { GST_STATES } from '@/lib/gst/states';
+import { errorMessage } from '@/lib/errors/message';
+import { ensureWritten } from '@/lib/errors/ensure-written';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -86,7 +88,14 @@ export function CompanyProfilePanel() {
 
   useEffect(() => {
     async function loadData() {
-      if (!accountId) return;
+      // The early return has to leave the spinner behind it. It used to sit
+      // above the try, so a tab whose session had died — no account id, ever —
+      // showed this panel spinning for good instead of saying anything.
+      if (!accountId) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
       try {
         // Fetch territory data alongside account settings
         const [acctResponse, rowsData, settingsData] = await Promise.all([
@@ -117,7 +126,7 @@ export function CompanyProfilePanel() {
         setData(loadedData);
       } catch (err) {
         console.error('Failed to load company profile:', err);
-        toast.error('Failed to load company profile');
+        toast.error(errorMessage(err, 'Failed to load company profile'));
       } finally {
         setLoading(false);
       }
@@ -184,11 +193,16 @@ export function CompanyProfilePanel() {
         nextLogoUrl = undefined;
       }
 
-      const { data: acct } = await supabase
+      // Re-read before merging. The error used to be ignored, so a failed read
+      // silently produced `{}` and the update below wiped every sibling key —
+      // territory_settings and order_settings among them.
+      const { data: acct, error: readError } = await supabase
         .from('accounts')
         .select('settings')
         .eq('id', accountId)
         .single();
+
+      if (readError) throw readError;
 
       const currentSettings = acct?.settings || {};
       const newSettings = {
@@ -196,13 +210,17 @@ export function CompanyProfilePanel() {
         company_profile: { ...data, logo_url: nextLogoUrl },
       };
 
-      const { error } = await supabase
+      // `.select('id')` is what makes this verifiable: without it PostgREST
+      // answers an update that RLS filtered out with 204 and no error, and the
+      // panel would announce success having written nothing.
+      const result = await supabase
         .from('accounts')
         .update({ settings: newSettings })
-        .eq('id', accountId);
+        .eq('id', accountId)
+        .select('id');
 
-      if (error) throw error;
-      
+      ensureWritten(result, 'company profile');
+
       setPendingLogo(null);
       setPreviewUrl(null);
       setRemoveLogo(false);
@@ -210,7 +228,7 @@ export function CompanyProfilePanel() {
       toast.success('Company profile updated');
     } catch (err: unknown) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : 'Failed to save company profile');
+      toast.error(errorMessage(err, 'Failed to save company profile'));
     } finally {
       setSaving(false);
     }

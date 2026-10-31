@@ -17,6 +17,7 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { SettingsPanel } from '@/components/settings/settings-layout';
+import { errorMessage } from '@/lib/errors/message';
 
 const MIN_PASSWORD = 8;
 
@@ -74,7 +75,7 @@ export function PasswordForm() {
       setConfirm('');
       toast.success('Password updated');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const msg = errorMessage(err, 'Unknown error');
       toast.error(msg);
     } finally {
       setSaving(false);

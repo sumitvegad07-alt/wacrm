@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { uploadAccountMedia, MEDIA_MAX_BYTES } from "@/lib/storage/upload-media";
 import { slugify, type BuilderNode } from "../shared";
 import { NextNodeRow, NodeKeySelect, TextRow } from "./fields";
+import { errorMessage } from '@/lib/errors/message';
 
 interface NodeConfigFormProps {
   node: BuilderNode;
@@ -914,7 +915,7 @@ function SendMediaForm({
         });
         toast.success("File uploaded.");
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Upload failed.";
+        const msg = errorMessage(err, "Upload failed.");
         toast.error(msg);
       } finally {
         setUploading(false);

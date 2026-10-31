@@ -53,6 +53,7 @@ import {
 import { unlinkNodeReferences } from "@/lib/flows/edges";
 import type { FlowNodeRow, FlowRow } from "@/lib/flows/types";
 import { NODE_META, slugify, type BuilderNode, type NodeType } from "./shared";
+import { errorMessage } from '@/lib/errors/message';
 
 // ============================================================
 // State shape
@@ -351,7 +352,7 @@ export function FlowEditorProvider({
       setDirty(false);
       toast.success("Saved.");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Save failed";
+      const msg = errorMessage(err, "Save failed");
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -391,7 +392,7 @@ export function FlowEditorProvider({
               : "Saved as draft.",
         );
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Status update failed";
+        const msg = errorMessage(err, "Status update failed");
         toast.error(msg);
       } finally {
         setActivating(false);
@@ -416,7 +417,7 @@ export function FlowEditorProvider({
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
       router.push("/flows");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Delete failed";
+      const msg = errorMessage(err, "Delete failed");
       toast.error(msg);
     }
   }, [initialFlow.id, router, state.name]);

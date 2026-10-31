@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { MediaUpload } from "./media-upload";
+import { errorMessage } from '@/lib/errors/message';
 
 const ACCEPTED = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -57,7 +58,7 @@ export function PhotoUpload({
       const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
       onChange(data.publicUrl);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error uploading image");
+      toast.error(errorMessage(err, "Error uploading image"));
     } finally {
       setUploading(false);
     }

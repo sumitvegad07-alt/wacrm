@@ -18,6 +18,7 @@ import { formatCurrency } from "@/lib/currency";
 import { BILLING_TERMS, TERM_LABEL, type BillingTerm } from "@/lib/plans/pricing";
 import { nextPeriod, periodEnd } from "@/lib/renewals/next-period";
 import type { PeriodRow, SubscriptionRow } from "@/lib/renewals/types";
+import { errorMessage } from '@/lib/errors/message';
 
 // ============================================================
 // Renewing one subscription.
@@ -118,7 +119,7 @@ export function RenewDialog({
       onRenewed();
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not renew the subscription");
+      toast.error(errorMessage(err, "Could not renew the subscription"));
     } finally {
       setSaving(false);
     }
