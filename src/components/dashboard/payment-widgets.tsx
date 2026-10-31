@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRefreshOnReturnKey } from "@/hooks/use-refresh-on-return";
 import { readOutstandingConfig } from "@/lib/payments/outstanding-config";
+import { accountTimezone } from "@/lib/dashboard/date-utils";
 import { MetricCard } from "./metric-card";
 import { SkeletonCard } from "./skeleton";
 import { DollarSign, AlertCircle, Clock, PieChart, BarChart } from "lucide-react";
@@ -24,16 +25,20 @@ import {
 } from "@/lib/dashboard/payment-queries";
 
 export function TodaysCollectionWidget() {
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, account } = useAuth();
   const [data, setData] = useState<number | null>(null);
-  
+
+  // "Today" is the ACCOUNT's day, not this browser's. The figure itself comes
+  // from the DB; this only steers the pre-migration fallback.
+  const timezone = accountTimezone(account?.settings);
+
   const returnKey = useRefreshOnReturnKey();
 
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
-    fetchTodaysCollection(db, accountId).then(setData);
-  }, [accountId, returnKey]);
+    fetchTodaysCollection(db, accountId, timezone).then(setData);
+  }, [accountId, timezone, returnKey]);
 
   if (data === null) return <SkeletonCard />;
 
@@ -47,16 +52,18 @@ export function TodaysCollectionWidget() {
 }
 
 export function MonthlyCollectionWidget() {
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, account } = useAuth();
   const [data, setData] = useState<{current: number, previous: number} | null>(null);
+
+  const timezone = accountTimezone(account?.settings);
 
   const returnKey = useRefreshOnReturnKey();
 
   useEffect(() => {
     if (!accountId) return;
     const db = createClient();
-    fetchMonthlyCollection(db, accountId).then(setData);
-  }, [accountId, returnKey]);
+    fetchMonthlyCollection(db, accountId, timezone).then(setData);
+  }, [accountId, timezone, returnKey]);
 
   if (!data) return <SkeletonCard />;
 

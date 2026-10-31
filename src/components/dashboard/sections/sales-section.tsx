@@ -13,6 +13,7 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { SkeletonCard } from "@/components/dashboard/skeleton";
 import { SectionHeading } from "./section-heading";
 import { loadSalesMetrics, type SalesMetrics } from "@/lib/dashboard/sales-queries";
+import { accountTimezone } from "@/lib/dashboard/date-utils";
 import { SfaAnalytics } from "./sfa-analytics";
 import {
   TodaysCollectionWidget,
@@ -33,9 +34,11 @@ import {
  * viewer's data scope; the payment widgets are account-level by design.
  */
 export function SalesSection() {
-  const { accountId, defaultCurrency, isModuleEnabled } = useAuth();
+  const { accountId, defaultCurrency, isModuleEnabled, account } = useAuth();
   const scope = useDataScope();
   const paymentOn = isModuleEnabled("payment");
+  // "Today" and "this month" are the ACCOUNT's, never the viewer's laptop clock.
+  const timezone = accountTimezone(account?.settings);
   const dispatchOn = isModuleEnabled("dispatch");
 
   const [metrics, setMetrics] = useState<SalesMetrics | null>(null);
@@ -50,7 +53,7 @@ export function SalesSection() {
     if (!accountId || !scope.ready) return;
     let alive = true;
     const db = createClient();
-    void loadSalesMetrics(db, accountId, scope)
+    void loadSalesMetrics(db, accountId, scope, timezone)
       .then((m) => {
         if (alive) setMetrics(m);
       })
@@ -58,7 +61,7 @@ export function SalesSection() {
     return () => {
       alive = false;
     };
-  }, [accountId, scope.ready, scope.key, returnKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accountId, scope.ready, scope.key, timezone, returnKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loading = metrics === null;
 

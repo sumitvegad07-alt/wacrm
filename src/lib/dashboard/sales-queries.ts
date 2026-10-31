@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { startOfLocalDay } from "./date-utils";
+import {
+  DEFAULT_ACCOUNT_TIMEZONE,
+  startOfAccountDay,
+  startOfAccountMonth,
+} from "./date-utils";
+import { callAggregateRpc, num } from "./aggregate-rpc";
 import type { DataScope } from "@/hooks/use-data-scope";
 
 // ------------------------------------------------------------
@@ -12,6 +17,14 @@ import type { DataScope } from "@/hooks/use-data-scope";
 // a DataScope we hard-filter it — a manager sees their team's orders, a
 // rep only their own — matching the Orders list. RLS is the real
 // boundary underneath; this is defense-in-depth + correct empty states.
+//
+// The totals are summed by `dashboard_sales_metrics` in the database. They
+// used to be summed here, over rows fetched with no range: PostgREST stops
+// at 1,000 and reports nothing, so a busy tenant's "Sales This Month" was
+// quietly short by however many orders came after the thousandth. The day and
+// month boundaries also used to come from the viewer's own laptop clock; they
+// now come from the account's timezone, which is the house rule and what the
+// reports already do. See aggregate-rpc.ts for why the old path is kept.
 // ------------------------------------------------------------
 
 type DB = SupabaseClient;
@@ -35,19 +48,67 @@ const EMPTY: SalesMetrics = {
   pendingDispatchCount: 0,
 };
 
+interface SalesMetricsRow {
+  orders_today_count: number | string | null;
+  orders_today_value: number | string | null;
+  orders_month_value: number | string | null;
+  pending_dispatch_count: number | string | null;
+}
+
+/**
+ * `timezone` is the account's IANA zone (read with `accountTimezone(account.settings)`).
+ * The RPC resolves the account's own boundaries itself and ignores it; it is
+ * used only by the pre-migration fallback below, so that path lands on the
+ * same instant the RPC would rather than disagreeing with it by 5.5 hours.
+ */
 export async function loadSalesMetrics(
   db: DB,
   accountId: string,
   scope?: DataScope,
+  timezone: string = DEFAULT_ACCOUNT_TIMEZONE,
 ): Promise<SalesMetrics> {
   if (!accountId) return { ...EMPTY };
 
-  const todayStart = startOfLocalDay().toISOString();
-  const monthStart = (() => {
-    const d = startOfLocalDay();
-    d.setDate(1);
-    return d.toISOString();
-  })();
+  // NULL means unrestricted. An empty visible set must stay an empty set —
+  // sending NULL there would widen a rep to the whole account.
+  const userIds = scope && !scope.unrestricted ? scope.userIds : null;
+
+  const rpc = await callAggregateRpc<SalesMetricsRow>(db, "dashboard_sales_metrics", {
+    p_account_id: accountId,
+    p_value_statuses: VALUE_STATUSES,
+    p_pending_dispatch_statuses: PENDING_DISPATCH_STATUSES,
+    p_user_ids: userIds,
+  });
+
+  if (rpc.ok) {
+    return {
+      ordersTodayCount: num(rpc.data.orders_today_count),
+      ordersTodayValue: num(rpc.data.orders_today_value),
+      ordersMonthValue: num(rpc.data.orders_month_value),
+      pendingDispatchCount: num(rpc.data.pending_dispatch_count),
+    };
+  }
+
+  return loadSalesMetricsLegacy(db, accountId, scope, timezone);
+}
+
+/**
+ * The original client-side implementation, kept as the fallback for the window
+ * between this deploying and the migration being applied.
+ *
+ * It truncates at 1,000 orders. That is not fixable from the client — there is
+ * no aggregate to ask for and paging every order of a busy account to add up
+ * four numbers would be slower than the tile is worth. The console warning in
+ * aggregate-rpc.ts says so out loud while this path is in use.
+ */
+async function loadSalesMetricsLegacy(
+  db: DB,
+  accountId: string,
+  scope: DataScope | undefined,
+  timezone: string,
+): Promise<SalesMetrics> {
+  const todayStart = startOfAccountDay(timezone).toISOString();
+  const monthStart = startOfAccountMonth(timezone).toISOString();
 
   const scoped = <T>(q: T): T => (scope ? scope.apply(q, "user_id") : q);
 
