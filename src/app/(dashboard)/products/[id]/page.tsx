@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -23,6 +24,9 @@ import { useAuth } from '@/hooks/use-auth';
 
 export default function ProductDetailsPage() {
   const { id } = useParams() as { id: string };
+
+  // Opening the record is what clears its highlight on the list.
+  useMarkRecordSeen("product", id);
   const router = useRouter();
   const supabase = createClient();
   const { account } = useAuth();

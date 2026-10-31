@@ -47,6 +47,8 @@ interface OrderQueryRow {
 
 interface OrderRow {
   id: string;
+  /** Needed to tell a newly entered order from an old one — see unseenModule below. */
+  created_at: string;
   order_number: string;
   date: string;
   total_amount: number;
@@ -166,7 +168,7 @@ export default function OrdersPage() {
         sb
           .from('orders')
           .select(
-            'id, order_number, date, total_amount, status, classification, user_id, contact_id, lead_id, customer_name, salesman_name, order_items(count)',
+            'id, created_at, order_number, date, total_amount, status, classification, user_id, contact_id, lead_id, customer_name, salesman_name, order_items(count)',
             { count: 'exact' },
           )
           .eq('account_id', accountId!),
@@ -506,6 +508,8 @@ export default function OrdersPage() {
         }}
         columns={visibleColumns}
         data={filtered}
+        unseenModule="order"
+        createdAtOf={(row) => row.created_at as string | undefined}
         tableView={tableView}
         isLoading={loading}
         rowKey={(o) => o.id}

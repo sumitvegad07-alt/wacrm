@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -51,6 +52,9 @@ const LOST_REASONS = [
 
 export default function DealDetailsPage() {
   const { id } = useParams() as { id: string };
+
+  // Opening the record is what clears its highlight on the list.
+  useMarkRecordSeen("deal", id);
   const router = useRouter();
   const supabase = createClient();
   const { user } = useAuth();

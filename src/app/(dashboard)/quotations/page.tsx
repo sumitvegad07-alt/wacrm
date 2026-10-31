@@ -495,6 +495,8 @@ export default function QuotationsPage() {
         }}
         columns={visibleColumns}
         data={filteredQuotations}
+        unseenModule="quotation"
+        createdAtOf={(quotation) => quotation.created_at as string | undefined}
         tableView={tableView}
         isLoading={loading}
         rowKey={(quotation) => quotation.id}

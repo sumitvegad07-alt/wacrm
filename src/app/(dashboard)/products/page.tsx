@@ -360,6 +360,8 @@ export default function ProductsPage() {
         fill
         columns={visibleColumns}
         data={filteredProducts}
+        unseenModule="product"
+        createdAtOf={(product) => product.created_at as string | undefined}
         tableView={tableView}
         isLoading={loading}
         rowKey={(product) => product.id}

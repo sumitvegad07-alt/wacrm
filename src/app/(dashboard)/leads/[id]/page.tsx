@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, use } from "react";
+import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -40,6 +41,9 @@ interface DealRow {
 
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
+
+  // Opening the record is what clears its highlight on the list.
+  useMarkRecordSeen("lead", resolvedParams.id);
   const router = useRouter();
   const supabase = createClient();
   const { account, user, canManageMembers } = useAuth();

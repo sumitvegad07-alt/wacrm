@@ -575,6 +575,8 @@ export default function TasksPage() {
         fill
         columns={visibleColumns}
         data={filteredTasks}
+        unseenModule="task"
+        createdAtOf={(task) => task.created_at as string | undefined}
         tableView={tableView}
         isLoading={loading}
         rowKey={(task) => task.id}

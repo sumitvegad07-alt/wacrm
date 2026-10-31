@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -43,6 +44,9 @@ type Tab = 'details' | 'tasks';
 
 export default function PaymentDetailPage() {
   const { id } = useParams() as { id: string };
+
+  // Opening the record is what clears its highlight on the list.
+  useMarkRecordSeen("payment", id);
   const router = useRouter();
   const supabase = createClient();
   const { defaultCurrency, hasPermission } = useAuth();

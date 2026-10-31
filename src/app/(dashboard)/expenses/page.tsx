@@ -562,6 +562,8 @@ export default function ExpensesPage() {
         fill
         columns={visibleColumns}
         data={filteredExpenses}
+        unseenModule="expense"
+        createdAtOf={(expense) => expense.created_at as string | undefined}
         actions={
           <Button size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/expenses/new')}>
             <Plus className="size-3 mr-1" /> New Expense

@@ -855,6 +855,8 @@ export default function PipelinesPage() {
               fill
               columns={visibleColumns}
               data={filteredDeals}
+        unseenModule="deal"
+        createdAtOf={(deal) => deal.created_at as string | undefined}
               tableView={tableView}
               rowHref={(deal) => `/deals/${deal.id}`}
               rowKey={(deal) => deal.id}

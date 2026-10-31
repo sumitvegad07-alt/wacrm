@@ -22,6 +22,7 @@ import { DataTableFilterRow } from "./data-table-filter-row";
 import { ManageColumnsDialog } from "./manage-columns-dialog";
 import { TableViewsBar } from "./table-views-bar";
 import { useDataExport } from "@/hooks/use-data-export";
+import { useUnseenRecords, type RecordModule } from "@/hooks/use-record-views";
 import type { TableViewApi } from "@/hooks/use-table-view";
 import { reconcileColumns } from "@/lib/table-views";
 import { TableSkeleton, EmptyState } from "@/components/shared";
@@ -59,6 +60,22 @@ interface DataTableProps<T> {
    * why it looked like "it only works the second time".
    */
   rowHref?: (row: T) => string | null | undefined;
+  /**
+   * Draw a row bolder and tinted until this viewer has opened it.
+   *
+   * Pass the list's module (`"order"`, `"contact"`, …) and how to read a row's
+   * creation time; the table looks up what this viewer has already opened and
+   * styles the rest. Leave either out and no row is ever highlighted.
+   *
+   * The table does the lookup rather than the page, for two reasons. The
+   * styling of "not read yet" has to be identical on all twenty-six lists, and
+   * the only way to guarantee that is for the caller to own the question and
+   * nothing else. And the table is the only thing that knows which rows are
+   * actually *on screen* — asking about `paginatedData` is twenty ids, where a
+   * page asking about its own filtered array could be a thousand.
+   */
+  unseenModule?: RecordModule;
+  createdAtOf?: (row: T) => string | null | undefined;
   selection?: {
     selectedIds: Set<string>;
     onSelectAll: (checked: boolean) => void;
@@ -132,6 +149,8 @@ export function DataTable<T>({
   rowKey,
   onRowClick,
   rowHref,
+  unseenModule,
+  createdAtOf,
   selection,
   actions,
   menuActions,
@@ -316,6 +335,18 @@ export function DataTable<T>({
   const paginatedData = useMemo(() => {
     return serverPagination ? safeData : safeData.slice(startIndex, endIndex);
   }, [safeData, startIndex, endIndex, serverPagination]);
+
+  /**
+   * The rows on this page this viewer has not opened yet. Asked about the rows
+   * on screen only, and above the `isMounted` early return, because a hook
+   * cannot be called conditionally.
+   */
+  const unseenRowKeys = useUnseenRecords({
+    module: unseenModule,
+    rows: paginatedData,
+    idOf: rowKey,
+    createdAtOf,
+  });
 
   if (!isMounted) return null; // Avoid hydration mismatch
 
@@ -577,6 +608,12 @@ export function DataTable<T>({
                   className={cn(
                     "h-8 transition-colors hover:bg-muted/50",
                     rowIsInteractive && "cursor-pointer",
+                    // Not opened by this viewer yet. Weight as well as tint, not
+                    // tint alone: colour is the first thing lost to a monochrome
+                    // print-out, a cheap monitor or colour-blindness, and the
+                    // row has to still read as new in all three. Listed before
+                    // the pending class so a click still overrides it.
+                    unseenRowKeys?.has(rowKey(row)) && "bg-primary/[0.06] font-semibold text-foreground",
                     // The click landed: say so immediately, and keep saying it
                     // until the next page is on screen.
                     pendingRowKey === rowKey(row) && "bg-primary/10 cursor-progress hover:bg-primary/10",

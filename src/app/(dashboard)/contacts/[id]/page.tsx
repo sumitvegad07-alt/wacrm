@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -26,6 +27,9 @@ import { shouldShowCustomerAssets } from "@/lib/service/assets/customer-panel";
 
 export default function ContactDetailsPage() {
   const { id } = useParams() as { id: string };
+
+  // Opening the record is what clears its highlight on the list.
+  useMarkRecordSeen("contact", id);
   const router = useRouter();
   const supabase = createClient();
   const { defaultCurrency, accountId, isModuleEnabled, hasPermission, hasFSM } = useAuth();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -30,6 +31,9 @@ function isOverdue(task: Task) {
 
 export default function TaskDetailsPage() {
   const { id } = useParams() as { id: string };
+
+  // Opening the record is what clears its highlight on the list.
+  useMarkRecordSeen("task", id);
   const router = useRouter();
   const supabase = createClient();
   const { accountId } = useAuth();

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { sanitizeRichText } from '@/lib/security/sanitize-html';
@@ -39,6 +40,9 @@ const STATUS_COLORS: Record<string, string> = {
 export default function QuotationViewPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const quotationId = resolvedParams.id;
+
+  // Opening the record is what clears its highlight on the list.
+  useMarkRecordSeen("quotation", quotationId);
   
   const supabase = createClient();
   const router = useRouter();

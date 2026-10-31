@@ -896,6 +896,8 @@ export default function ContactsPage() {
         }}
         columns={visibleColumns}
         data={filteredContacts}
+        unseenModule="contact"
+        createdAtOf={(contact) => contact.created_at as string | undefined}
         serverPagination={{ ...table.serverPagination, exportAll }}
         actions={
           <div className="flex items-center gap-2">

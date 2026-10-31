@@ -615,6 +615,8 @@ export default function LeadsPage() {
         }}
         columns={visibleColumns}
         data={filteredLeads}
+        unseenModule="lead"
+        createdAtOf={(lead) => lead.created_at as string | undefined}
         serverPagination={{ ...table.serverPagination, exportAll }}
         actions={
           <div className="flex items-center gap-2">

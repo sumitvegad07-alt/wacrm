@@ -29,6 +29,9 @@ import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 
 interface PaymentRow {
   id: string;
+  /** Already fetched by the select('*') below; declared so the unseen-row
+   *  highlight can tell a newly entered payment from an old one. */
+  created_at: string;
   payment_number: string;
   payment_date: string;
   amount: number;
@@ -402,6 +405,8 @@ export default function PaymentsPage() {
         }}
         columns={visibleColumns}
         data={filtered}
+        unseenModule="payment"
+        createdAtOf={(row) => row.created_at as string | undefined}
         tableView={tableView}
         isLoading={loading}
         rowKey={(p) => p.id}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, use } from "react";
+import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,9 @@ import { format } from "date-fns";
 
 export default function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
+
+  // Opening the record is what clears its highlight on the list.
+  useMarkRecordSeen("expense", resolvedParams.id);
   const router = useRouter();
   const supabase = createClient();
   const { accountId, profile, accountRole, user, isModuleEnabled } = useAuth();
