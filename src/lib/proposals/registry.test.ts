@@ -42,9 +42,11 @@ describe("SFA defaults", () => {
     // Pricing, Packages & Plans: SFA is 300 PUPM on the yearly term — which is
     // what the first client was quoted, so that was list price, not a discount.
     expect(sfa.listRatePerMonth).toBe(300);
-    expect(data.lineItems).toHaveLength(2);
-    expect(data.lineItems[0]).toMatchObject({ users: 5, rate: 300 });
-    expect(data.lineItems[1]).toMatchObject({ users: 1, rate: 300 });
+    // ONE row, carrying the whole team. The packs used to open with a field
+    // row and an admin row; a client reading the sheet only ever wanted the
+    // total number of users at one price.
+    expect(data.lineItems).toHaveLength(1);
+    expect(data.lineItems[0]).toMatchObject({ users: 6, rate: 300 });
   });
 
   test("totals follow from the catalog price", () => {

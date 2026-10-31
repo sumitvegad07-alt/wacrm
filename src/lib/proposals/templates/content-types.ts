@@ -38,8 +38,23 @@ export interface PlanContent {
    * The price-table rows a new proposal starts with. The rate is not here: it
    * comes from the plan catalog so the form always opens at list price and any
    * discount is a deliberate edit.
+   *
+   * ONE row since 31 October 2026, founder's call: the sheet used to open with
+   * a field row and an admin row, and a client reading it only ever wanted the
+   * total number of users at one price. Extra rows are still his to add.
    */
   seats: { label: string; subLabel: string; users: number }[];
+
+  /**
+   * How a price row is recognised as belonging to THIS plan.
+   *
+   * Matched as a prefix, not as the whole label, which is what lets the seat
+   * rows be renamed without stranding every proposal already saved: a row
+   * reading "OZZO CRM + SFA — Field Salesman" and one reading "OZZO CRM + SFA"
+   * are both recognised. Compound plans are tested before their parts, so
+   * "OZZO CRM" can never claim a CRM + SFA row.
+   */
+  seatLabelPrefix: string;
 
   /**
    * Starting values for the three industry-wording fields. Written for the

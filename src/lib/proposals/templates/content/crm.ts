@@ -32,9 +32,10 @@ export const CRM_CONTENT: PlanContent = {
   ],
 
   seats: [
-    { label: "OZZO CRM — Sales / Support User", subLabel: "Web + Android · full CRM toolkit", users: 5 },
-    { label: "OZZO CRM — Admin / Manager", subLabel: "Web dashboard · reports & rights", users: 1 },
+    { label: "OZZO CRM", subLabel: "Web + Android · full CRM toolkit", users: 6 },
   ],
+
+  seatLabelPrefix: "OZZO CRM",
 
   defaultVoice: {
     built:

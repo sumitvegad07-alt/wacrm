@@ -26,9 +26,10 @@ export const SFA_CONTENT: PlanContent = {
   ],
 
   seats: [
-    { label: "OZZO SFA — Field Salesman", subLabel: "Android app · full field toolkit", users: 5 },
-    { label: "OZZO SFA — Admin / Manager", subLabel: "Web dashboard · reports & approvals", users: 1 },
+    { label: "OZZO SFA", subLabel: "Android app + web dashboard · full field toolkit", users: 6 },
   ],
+
+  seatLabelPrefix: "OZZO SFA",
 
   defaultVoice: {
     built:

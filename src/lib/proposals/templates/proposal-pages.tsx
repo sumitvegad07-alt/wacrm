@@ -423,7 +423,7 @@ export function ProposalPages({
                 figures and never folded into them — a stated concession must
                 not be able to change the amount owed. One line per line. */}
             {offerLines.length > 0 ? (
-              <div className="offerbox">
+              <div className="offerbox hl">
                 <div className="offerh">Offer</div>
                 {offerLines.map((line, i) => (
                   <div key={i} className="offerl">

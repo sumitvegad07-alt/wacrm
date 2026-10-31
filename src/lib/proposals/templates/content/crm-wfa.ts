@@ -29,9 +29,10 @@ export const CRM_WFA_CONTENT: PlanContent = {
   ],
 
   seats: [
-    { label: "OZZO CRM + WFA — Field Staff", subLabel: "Android app · attendance, visits & customers", users: 5 },
-    { label: "OZZO CRM + WFA — Admin / Manager", subLabel: "Web dashboard · pipeline, live map & approvals", users: 1 },
+    { label: "OZZO CRM + WFA", subLabel: "Android app + web dashboard · pipeline, attendance & visits", users: 6 },
   ],
+
+  seatLabelPrefix: "OZZO CRM + WFA",
 
   defaultVoice: {
     built:

@@ -206,6 +206,14 @@
   .offerh{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;
     font-weight:700;margin-bottom:3px;}
   .offerl{font-size:11px;color:var(--fg);line-height:1.45;}
+  /* The Offer is the one block on this sheet the client is meant to notice, so
+     it is the one block that is not white. Green, not a new colour: the sheet
+     already says "you save ₹8,640" in exactly this green, so a concession and
+     a saving read as the same thing. How-to-pay stays plain — it is reference,
+     not an offer. */
+  .offerbox.hl{background:var(--emerald-soft);border-color:var(--emerald);}
+  .offerbox.hl .offerh{color:var(--emerald);}
+  .offerbox.hl .offerl{color:var(--ink);}
   .signbox{margin-top:11px;text-align:right;}
   /* Height-capped, width auto: a signature is photographed at whatever size the
      phone chose, and a 3000px-wide PNG would otherwise push the page over. */
@@ -231,11 +239,16 @@
 
   /* Three columns: six clauses stacked would not clear the price table and
      the comparison on the same sheet, and a term pushed off a fixed-height
-     page is a term the customer never agreed to. */
-  .terms{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 10px;}
-  .term{display:flex;gap:7px;border:1px solid var(--border);border-radius:11px;padding:8px 10px;background:var(--card);}
-  .term .n{flex:none;width:19px;height:19px;border-radius:6px;background:var(--primary-soft);color:var(--primary-700);
-    font-weight:800;font-size:10px;display:flex;align-items:center;justify-content:center;}
+     page is a term the customer never agreed to.
+     No cards since 31 October 2026, founder's call — a numbered list reads as
+     terms, six boxes read as a feature grid. Dropping the chrome also gives
+     the sheet height back, which the measured budget in totals.ts counts. */
+  .terms{display:grid;grid-template-columns:repeat(3,1fr);gap:7px 14px;}
+  .term{display:flex;gap:6px;}
+  .term .n{flex:none;color:var(--primary-700);font-weight:800;font-size:10px;line-height:1.5;}
+  /* "1." not "1": the numeral has no box to sit in any more, so the full
+     stop is what makes it read as a list rather than a stray digit. */
+  .term .n::after{content:".";}
   .term .c h4{font-size:10.5px;font-weight:700;color:var(--ink);margin-bottom:2px;}
   .term .c p{font-size:9.5px;color:var(--muted);line-height:1.38;}
   .term .c p b{color:var(--fg);}

@@ -211,23 +211,23 @@ describe("the page-2 budget", () => {
    * the noise, not the sheet.
    */
   const near = (actual: number, measured: number) =>
-    expect(Math.abs(actual - measured)).toBeLessThanOrEqual(5);
+    expect(Math.abs(actual - measured)).toBeLessThanOrEqual(3);
 
   test("reproduces the measured clearances for one billing period", () => {
-    near(priceSheetClearance(rows(3, 1), grid(false)), 109);
-    near(priceSheetClearance(rows(4, 1), grid(false)), 54);
-    near(priceSheetClearance(rows(5, 1), grid(false)), 0);
-    near(priceSheetClearance(rows(4, 2), grid(false)), -3);
-    near(priceSheetClearance(rows(3, 4), grid(false)), -19);
-    near(priceSheetClearance(rows(5, 3), grid(false)), -142);
+    near(priceSheetClearance(rows(3, 1), grid(false)), 145);
+    near(priceSheetClearance(rows(4, 1), grid(false)), 90);
+    near(priceSheetClearance(rows(5, 1), grid(false)), 36);
+    near(priceSheetClearance(rows(4, 2), grid(false)), 34);
+    near(priceSheetClearance(rows(3, 4), grid(false)), 17);
+    near(priceSheetClearance(rows(5, 3), grid(false)), -106);
   });
 
   test("reproduces the measured clearances with all three periods shown", () => {
-    near(priceSheetClearance(rows(3, 1), grid(true)), 46);
-    near(priceSheetClearance(rows(3, 2), grid(true)), 4);
-    near(priceSheetClearance(rows(4, 1), grid(true)), -8);
-    near(priceSheetClearance(rows(5, 2), grid(true)), -133);
-    near(priceSheetClearance(rows(5, 4), grid(true)), -275);
+    near(priceSheetClearance(rows(3, 1), grid(true)), 83);
+    near(priceSheetClearance(rows(3, 2), grid(true)), 40);
+    near(priceSheetClearance(rows(4, 1), grid(true)), 28);
+    near(priceSheetClearance(rows(5, 2), grid(true)), -97);
+    near(priceSheetClearance(rows(5, 4), grid(true)), -239);
   });
 
   // ----------------------------------------------------------------
@@ -241,15 +241,15 @@ describe("the page-2 budget", () => {
     near(bare - priceSheetClearance(rows(3, 1), grid(false)), 104);
   });
 
-  test("the signature block costs the measured 98px — nearly two rows", () => {
+  test("the signature block costs the measured 99px — nearly two rows", () => {
     const without = priceSheetClearance(rows(3, 1), grid(false));
     const withSig = priceSheetClearance(rows(3, 1), { ...grid(false), hasSignature: true });
 
-    near(without - withSig, 98);
-    // Four rows fit without a signature and do not fit with one. This is the
+    near(without - withSig, 99);
+    // Five rows fit without a signature and do not fit with one. This is the
     // whole reason the signature is an input rather than an assumption.
-    expect(isPricePageCrowded(rows(4, 1), grid(false))).toBe(false);
-    expect(isPricePageCrowded(rows(4, 1), { ...grid(false), hasSignature: true })).toBe(true);
+    expect(isPricePageCrowded(rows(5, 1), grid(false))).toBe(false);
+    expect(isPricePageCrowded(rows(5, 1), { ...grid(false), hasSignature: true })).toBe(true);
   });
 
   test("the Offer box costs 57px, then 16px a line", () => {
@@ -263,7 +263,8 @@ describe("the page-2 budget", () => {
 
   test("reproduces the fully loaded sheet measured end to end", () => {
     // Two rows, descriptions of 3 and 1 lines, both carrying dates, bank block
-    // printing, a two-line Offer, no signature. Measured: +31px.
+    // printing, a two-line Offer, no signature. Measured at +31px when the
+    // terms were still boxed; the plain list gives back 36px.
     const items: LineItem[] = [
       {
         label: "OZZO SFA — Field Salesman",
@@ -285,20 +286,19 @@ describe("the page-2 budget", () => {
       },
     ];
 
-    near(priceSheetClearance(items, { showAllTerms: false, hasBankBlock: true, offerLines: 2 }), 31);
+    near(priceSheetClearance(items, { showAllTerms: false, hasBankBlock: true, offerLines: 2 }), 70);
     expect(isPricePageCrowded(items, { showAllTerms: false, hasBankBlock: true, offerLines: 2 })).toBe(
       false,
     );
   });
 
-  test("at one description line the budget is what it always was", () => {
-    // Four rows on one period, three when all three are shown — unchanged, so
-    // no proposal written before rows had periods starts warning.
-    expect(isPricePageCrowded(rows(4, 1), grid(false))).toBe(false);
-    // Five rows measured at 0px — it touches the footer, so it is not "fits".
-    expect(isPricePageCrowded(rows(5, 1), grid(false))).toBe(true);
-    expect(isPricePageCrowded(rows(3, 1), grid(true))).toBe(false);
-    expect(isPricePageCrowded(rows(4, 1), grid(true))).toBe(true);
+  test("dropping the term cards bought a whole extra price row", () => {
+    // Five rows on one period and four with all three shown — one more each
+    // than the boxed terms allowed.
+    expect(isPricePageCrowded(rows(5, 1), grid(false))).toBe(false);
+    expect(isPricePageCrowded(rows(6, 1), grid(false))).toBe(true);
+    expect(isPricePageCrowded(rows(4, 1), grid(true))).toBe(false);
+    expect(isPricePageCrowded(rows(5, 1), grid(true))).toBe(true);
   });
 
   test("the reference proposal is comfortably within the page", () => {
@@ -307,10 +307,9 @@ describe("the page-2 budget", () => {
   });
 
   test("a long description costs the sheet rows", () => {
-    expect(isPricePageCrowded(rows(4, 1), grid(false))).toBe(false);
-    expect(isPricePageCrowded(rows(4, 2), grid(false))).toBe(true);
-    expect(isPricePageCrowded(rows(3, 3), grid(false))).toBe(false);
-    expect(isPricePageCrowded(rows(3, 4), grid(false))).toBe(true);
+    expect(isPricePageCrowded(rows(4, 3), grid(false))).toBe(true);
+    expect(isPricePageCrowded(rows(4, 2), grid(false))).toBe(false);
+    expect(isPricePageCrowded(rows(5, 2), grid(false))).toBe(true);
   });
 
   test("a row's printed dates cost a line of their own", () => {
@@ -320,8 +319,8 @@ describe("the page-2 budget", () => {
       periodEnd: "2027-07-31",
     }));
 
-    near(priceSheetClearance(rows(4, 1), grid(false)), 54);
-    near(priceSheetClearance(dated, grid(false)), -3);
+    near(priceSheetClearance(rows(4, 1), grid(false)), 90);
+    near(priceSheetClearance(dated, grid(false)), 34);
   });
 
   test("a row with no description at all is counted as one line, never zero", () => {

@@ -27,9 +27,10 @@ export const CRM_SFA_CONTENT: PlanContent = {
   ],
 
   seats: [
-    { label: "OZZO CRM + SFA — Field Salesman", subLabel: "Android app · full field toolkit", users: 5 },
-    { label: "OZZO CRM + SFA — Admin / Manager", subLabel: "Web dashboard · pipeline, reports & approvals", users: 1 },
+    { label: "OZZO CRM + SFA", subLabel: "Android app + web dashboard · pipeline, orders & collections", users: 6 },
   ],
+
+  seatLabelPrefix: "OZZO CRM + SFA",
 
   defaultVoice: {
     built:

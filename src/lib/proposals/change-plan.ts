@@ -18,6 +18,42 @@ import { isNewPlan } from "@/lib/plans/catalog";
 import type { LineItem, ProposalData } from "./types";
 import { getTemplate, listRatePerMonth } from "./registry";
 
+/**
+ * Plans in the order a row label must be tested against them.
+ *
+ * Compound plans first: "OZZO CRM" is a prefix of "OZZO CRM + SFA", so testing
+ * CRM early would claim every CRM + SFA row for the wrong plan.
+ */
+const PLAN_MATCH_ORDER = ["CRM_SFA", "CRM_WFA", "SFA", "WFA", "CRM"] as const;
+
+/** The plan a price row belongs to, or null when it is a row the founder added. */
+function planOfRow(label: string): string | null {
+  for (const candidate of PLAN_MATCH_ORDER) {
+    if (!isNewPlan(candidate)) continue;
+    const template = getTemplate(candidate);
+    const prefix = template?.content.seatLabelPrefix;
+    if (prefix && (label ?? "").startsWith(prefix)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * How many leading rows are the PLAN's own, rather than the founder's.
+ *
+ * Counted by label rather than assumed to be the first `seats.length` rows:
+ * the packs ship one seat row since 31 October 2026, and a proposal saved
+ * before that has two. Taking only the first would leave the second behind as
+ * a stale "— Admin / Manager" line on a document for a different plan.
+ */
+function planRowCount(lineItems: LineItem[]): number {
+  let n = 0;
+  for (const item of lineItems ?? []) {
+    if (planOfRow(item?.label ?? "") === null) break;
+    n += 1;
+  }
+  return n;
+}
+
 /** True when the wording is still exactly what the plan shipped with. */
 function isUntouchedVoice(data: ProposalData, plan: string): boolean {
   const template = getTemplate(plan);
@@ -42,21 +78,40 @@ export function changePlan(data: ProposalData, from: string, to: string): Propos
   const rate = listRatePerMonth(target.plan, asTerm(data.billingTerm));
   const seats = target.content.seats;
   const existing = data.lineItems ?? [];
+  const planRows = planRowCount(existing);
 
   // The new plan's seat rows take over the ones they replace, keeping the user
-  // counts. Rows the founder added beyond them (a training day, an extra
-  // licence tier) keep their own names and counts — only the plan's own rows
-  // are renamed.
-  const lineItems: LineItem[] = seats.map((seat, i) => ({
-    label: seat.label,
-    subLabel: seat.subLabel,
-    users: existing[i]?.users ?? seat.users,
-    rate,
-  }));
+  // counts, each row's own period and its dates. Rows the founder added beyond
+  // them (a training day, an extra licence tier) keep their own names and
+  // counts — only the plan's own rows are renamed.
+  const lineItems: LineItem[] = seats.map((seat, i) => {
+    const from = existing[i];
 
-  // Rows beyond the plan's seats are the founder's own (a training day, an
-  // extra tier). Their price is not plan-derived, so it is left as typed.
-  for (const extra of existing.slice(seats.length)) {
+    // Plan rows the target has no seat for are folded into the last seat
+    // rather than dropped: a proposal written when the packs shipped a field
+    // row and an admin row must not silently lose the admin seats.
+    const surplus =
+      i === seats.length - 1
+        ? existing
+            .slice(seats.length, planRows)
+            .reduce((sum, row) => sum + (Number(row?.users) || 0), 0)
+        : 0;
+
+    return {
+      label: seat.label,
+      subLabel: seat.subLabel,
+      users: (from?.users ?? seat.users) + surplus,
+      rate,
+      // The period is about the deal, not the plan, so it survives the switch.
+      ...(from?.months === undefined ? {} : { months: from.months }),
+      ...(from?.periodStart ? { periodStart: from.periodStart } : {}),
+      ...(from?.periodEnd ? { periodEnd: from.periodEnd } : {}),
+    };
+  });
+
+  // Rows beyond the plan's own are the founder's (a training day, an extra
+  // tier). Their price is not plan-derived, so they are left exactly as typed.
+  for (const extra of existing.slice(Math.max(seats.length, planRows))) {
     lineItems.push({ ...extra });
   }
 
@@ -105,18 +160,13 @@ export function changeTerm(data: ProposalData, to: BillingTerm): ProposalData {
  * The list rate for whichever plan this proposal is for, on a given term.
  *
  * The plan is not on the payload — it lives in its own column — so it is
- * recovered from the seat labels' template. Falling back to the raw rate means a
- * proposal whose plan cannot be identified is left exactly as typed rather than
- * re-priced on a guess.
+ * recovered from the first row's label. Matching is by PREFIX, so a proposal
+ * saved when the packs shipped two seat rows still resolves. Falling back to 0
+ * means a proposal whose plan cannot be identified is left exactly as typed
+ * rather than re-priced on a guess.
  */
 function listRateFor(data: ProposalData, term: BillingTerm): number {
-  const label = data.lineItems?.[0]?.label ?? "";
-  for (const candidate of ["CRM_SFA", "CRM_WFA", "SFA", "WFA", "CRM"]) {
-    if (!isNewPlan(candidate)) continue;
-    const template = getTemplate(candidate);
-    if (template && template.content.seats[0]?.label === label) {
-      return termRatePerMonth(template.plan, term);
-    }
-  }
-  return 0;
+  const plan = planOfRow(data.lineItems?.[0]?.label ?? "");
+  const template = plan ? getTemplate(plan) : undefined;
+  return template ? termRatePerMonth(template.plan, term) : 0;
 }

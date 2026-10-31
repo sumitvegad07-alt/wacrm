@@ -54,6 +54,9 @@ describe("changePlan", () => {
   });
 
   test("keeps the team size — that is about the client, not the plan", () => {
+    // Saved when the packs shipped a field row and an admin row. The packs now
+    // ship ONE row, so the two fold into it: 17 users, not 14 with 3 silently
+    // dropped on the floor.
     const before = sfaProposal({
       lineItems: [
         { label: "OZZO CRM + SFA — Field Salesman", subLabel: "x", users: 14, rate: 400 },
@@ -62,7 +65,36 @@ describe("changePlan", () => {
     });
     const after = changePlan(before, "CRM_SFA", "CRM");
 
-    expect(after.lineItems.map((i) => i.users)).toEqual([14, 3]);
+    expect(after.lineItems.map((i) => i.users)).toEqual([17]);
+  });
+
+  test("a one-row proposal keeps its user count exactly", () => {
+    const before = sfaProposal({
+      lineItems: [{ label: "OZZO CRM + SFA", subLabel: "x", users: 10, rate: 400 }],
+    });
+
+    expect(changePlan(before, "CRM_SFA", "CRM").lineItems.map((i) => i.users)).toEqual([10]);
+  });
+
+  test("a row's own period survives the switch — it is about the deal, not the plan", () => {
+    const before = sfaProposal({
+      lineItems: [
+        {
+          label: "OZZO CRM + SFA",
+          subLabel: "x",
+          users: 10,
+          rate: 400,
+          months: 9,
+          periodStart: "2026-11-01",
+          periodEnd: "2027-07-31",
+        },
+      ],
+    });
+    const after = changePlan(before, "CRM_SFA", "CRM");
+
+    expect(after.lineItems[0].months).toBe(9);
+    expect(after.lineItems[0].periodStart).toBe("2026-11-01");
+    expect(after.lineItems[0].periodEnd).toBe("2027-07-31");
   });
 
   test("keeps extra rows the founder added, re-priced but not renamed away", () => {
@@ -75,9 +107,11 @@ describe("changePlan", () => {
     });
     const after = changePlan(before, "CRM_SFA", "CRM");
 
-    expect(after.lineItems).toHaveLength(3);
-    expect(after.lineItems[2].label).toBe("Onsite training day");
-    expect(after.lineItems[2].users).toBe(2);
+    // Two plan rows fold into one; the training day is not a plan row, so it
+    // survives under its own name and count.
+    expect(after.lineItems).toHaveLength(2);
+    expect(after.lineItems[1].label).toBe("Onsite training day");
+    expect(after.lineItems[1].users).toBe(2);
   });
 
   test("leaves a founder-added row's own price alone", () => {
@@ -92,7 +126,7 @@ describe("changePlan", () => {
     });
     const after = changePlan(before, "CRM_SFA", "CRM");
 
-    expect(after.lineItems[2].rate).toBe(5000);
+    expect(after.lineItems[1].rate).toBe(5000);
     expect(after.lineItems[0].rate).toBe(100);
   });
 

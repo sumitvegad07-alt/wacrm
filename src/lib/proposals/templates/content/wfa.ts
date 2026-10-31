@@ -31,9 +31,10 @@ export const WFA_CONTENT: PlanContent = {
   ],
 
   seats: [
-    { label: "OZZO WFA — Field Staff", subLabel: "Android app · attendance, visits & expenses", users: 5 },
-    { label: "OZZO WFA — Admin / Manager", subLabel: "Web dashboard · live map & approvals", users: 1 },
+    { label: "OZZO WFA", subLabel: "Android app + web dashboard · attendance, visits & expenses", users: 6 },
   ],
+
+  seatLabelPrefix: "OZZO WFA",
 
   defaultVoice: {
     built:

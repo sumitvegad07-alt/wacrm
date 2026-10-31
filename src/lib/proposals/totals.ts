@@ -122,22 +122,25 @@ export function computeTotals(
  * footer out of the PDF. This is the arithmetic that warns the founder first.
  *
  * MEASURED, not estimated, in a browser at A4 (794 × 1123px) against the
- * fullest sheet the document can produce. Re-measured on 31 October 2026, when
- * rows gained their own period and a multi-line description. Clearance above
- * the page footer, in pixels, with the bank block printing and no Offer box:
+ * fullest sheet the document can produce. Re-measured on 31 October 2026 —
+ * first when rows gained their own period and a multi-line description, then
+ * again when the terms lost their cards for a plain numbered list, which gave
+ * the sheet 36px back and bought a whole extra price row. Clearance above the
+ * page footer, in pixels, with the bank block printing and no Offer box:
  *
  *     description lines per row    1      2      3      4
- *     3 rows, one period        +109    +66    +24    -19
- *     3 rows, all periods        +46     +4    -39    -81
- *     4 rows, one period         +54     -3    -59   -116
- *     4 rows, all periods         -8    -65   -121   -178
- *     5 rows, one period           0    -71   -142   -213
- *     5 rows, all periods        -63   -133   -204   -275
+ *     3 rows, one period        +145   +102    +60    +17
+ *     3 rows, all periods        +83    +40     -2    -45
+ *     4 rows, one period         +90    +34    -23    -80
+ *     4 rows, all periods        +28    -29    -85   -142
+ *     5 rows, one period         +36    -35   -106   -177
+ *     5 rows, all periods        -26    -97   -168   -239
  *
  * Then the blocks BELOW the price table, each measured by adding it to a sheet
  * and re-reading the clearance: the How-to-pay block costs 104px, the signature
- * block 98px, and the Offer box 57px for its heading and first line plus 16px a
- * line after that.
+ * block 99px, and the Offer box 57px for its heading and first line plus 16px a
+ * line after that. None of the three moved when the terms did — they sit above
+ * them, in the ladder's own column.
  *
  * Those three are the trap. They come from Invoice Settings and from the Offer
  * box, not from the price table, so a quotation that fitted yesterday clips
@@ -148,16 +151,16 @@ export function computeTotals(
  * table: a row costs 54.5px and every description line after the first 14.2px.
  * BASE_CLEARANCE is the bare sheet — three rows, one description line each, one
  * period, and none of the blocks below — which reproduces every cell above to
- * within 4px, all the browser's own rounding leaves on the table.
+ * within 1px, all the browser's own rounding leaves on the table.
  *
  * Anything added to page 2 has to be measured again, not reasoned about.
  */
-const BASE_CLEARANCE = 210;
+const BASE_CLEARANCE = 249;
 const ROW_COST = 54.5;
 const DESCRIPTION_LINE_COST = 14.2;
-const ALL_TERMS_COST = 63;
+const ALL_TERMS_COST = 62;
 const BANK_BLOCK_COST = 104;
-const SIGNATURE_COST = 98;
+const SIGNATURE_COST = 99;
 const OFFER_BOX_COST = 57;
 const OFFER_LINE_COST = 16;
 
@@ -167,9 +170,8 @@ const BASE_ROWS = 3;
 /**
  * Clearance below which the sheet counts as crowded, in pixels.
  *
- * Not zero. Five rows measured at exactly 0px — the last line of terms sitting
- * on the footer rather than under it — and a document that only just fits is
- * one font-metric away from clipping on a machine that is not this one.
+ * Not zero. A sheet that only just fits is one font-metric away from clipping
+ * on a machine that is not this one, and this page clips in silence.
  */
 const SAFE_MARGIN = 8;
 
