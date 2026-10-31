@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 // No static `import * as XLSX` here on purpose. SheetJS is ~430 KB and every
 // one of the fourteen report routes carried it in the chunk the browser has to
 // download and parse before the report can paint — for a library used only when
 // someone clicks Export → Excel. `handleExport` imports it at that click.
 import { type ReportDefinition, type ReportConfig, type TabConfig } from "@/lib/reports/types";
-import { executeReport, getDefaultReportView } from "@/app/actions/reports";
+import { executeReport, openReport } from "@/app/actions/reports";
+import { resolveSavedView, querySignature } from "@/lib/reports/open-view";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { 
@@ -179,51 +180,59 @@ export function ReportViewer({ config }: ReportViewerProps) {
   const [hydrated, setHydrated] = useState(false);
   const [defaultViewName, setDefaultViewName] = useState<string | null>(null);
 
+  /**
+   * The first page of rows, volunteered by `openReport` along with the saved
+   * view, keyed by the exact query that produced them.
+   *
+   * `fetchReport` consumes this instead of making its own request when the
+   * query it is about to run matches — which is the normal case, and removes a
+   * whole server round trip from opening a report. It is consumed once and
+   * never refilled: every later query goes over the wire as before.
+   */
+  const preloaded = useRef<{ signature: string; rows: Record<string, unknown>[] } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
 
     async function loadDefaultView() {
       try {
-        const saved = await getDefaultReportView(config.moduleName);
+        // The viewer's own opening layout, which the server needs in order to
+        // answer for a user who has saved no view. `reportState` still holds it
+        // here: nothing has changed it yet on this first pass.
+        const opened = await openReport(config.moduleName, {
+          dimensions: reportState.dimensions,
+          measures: reportState.measures,
+          filters: reportState.filters ?? {},
+          sortColumn: reportState.sortColumn ?? null,
+          sortDirection: reportState.sortDirection ?? "asc",
+          limit: LIMIT + 1,
+        });
         if (cancelled) return;
 
+        if (opened.ran && opened.rows) {
+          preloaded.current = {
+            signature: querySignature(opened.ran),
+            rows: opened.rows as Record<string, unknown>[],
+          };
+        }
+
+        const saved = opened.view;
         if (saved?.config) {
           const cfg = saved.config as Partial<ReportConfig>;
           setDefaultViewName(saved.name);
           setReportState((s) => {
-            // Never trust a stale saved layout to reference measures or dimensions
-            // that have since been removed from the module's config — drop unknown
-            // keys, and fall back to the built-in layout if nothing survives.
-            const dimensions = (cfg.dimensions ?? s.dimensions).filter((d) =>
-              config.dimensions.some((cd) => cd.key === d)
-            );
-            // …and never let a saved layout reinstate a measure the tab it
-            // restores is not allowed to use. Switching tabs resets the
-            // selection to that tab's defaults, so this path was the only way an
-            // order-level quantity or amount could still land on a product tab
-            // and overstate it (see orderReportConfig.ts). Same guard protects
-            // the quotation twins.
-            const restoredTab = config.tabConfigs?.find(
-              (t) => t.dimension === (cfg.dimensions?.[0] ?? s.dimensions[0])
-            );
-            const allowed = restoredTab?.availableMeasures;
-            const measures = (cfg.measures ?? s.measures).filter(
-              (m) =>
-                config.measures.some((cm) => cm.key === m) &&
-                (!allowed || allowed.includes(m))
-            );
+            // Same two guards as ever, now in one place so the server resolves a
+            // saved view exactly as this does — see lib/reports/open-view.ts for
+            // why each exists.
+            const resolved = resolveSavedView(config, cfg, {
+              dimensions: s.dimensions,
+              measures: s.measures,
+            });
             return {
               ...s,
               ...cfg,
-              dimensions: dimensions.length ? dimensions : s.dimensions,
-              // If nothing survived, fall back to the RESTORED tab's defaults
-              // rather than `s.measures` — those belong to the tab the report
-              // opens on, which may be a different grain entirely.
-              measures: measures.length
-                ? measures
-                : restoredTab
-                  ? getDefaultMeasures(restoredTab.key)
-                  : s.measures,
+              dimensions: resolved.dimensions,
+              measures: resolved.measures,
             };
           });
 
@@ -289,17 +298,40 @@ export function ReportViewer({ config }: ReportViewerProps) {
     try {
       setLoading(true);
       const offset = (page - 1) * LIMIT;
-      const result = await executeReport(
-        activeModule,
-        reportState.dimensions,
-        reportState.measures,
-        reportState.filters,
-        reportState.sortColumn,
-        reportState.sortDirection,
-        LIMIT + 1,
-        offset
-      );
-      
+
+      // Did `openReport` already answer this exact query? Only ever true for
+      // the first query after opening, and only when the layout it resolved
+      // server-side is the one this component settled on — which is why the
+      // rows are keyed by signature rather than simply taken on trust.
+      const wanted = querySignature({
+        module: activeModule,
+        dimensions: reportState.dimensions,
+        measures: reportState.measures,
+        filters: (reportState.filters ?? {}) as Record<string, unknown>,
+        sortColumn: reportState.sortColumn ?? null,
+        sortDirection: reportState.sortDirection ?? "asc",
+        limit: LIMIT + 1,
+        offset,
+      });
+      const ready = preloaded.current;
+      // Consumed either way: a miss means the layout moved, so those rows are
+      // for a query nobody is going to ask for again.
+      preloaded.current = null;
+
+      const result =
+        ready && ready.signature === wanted
+          ? ready.rows
+          : await executeReport(
+              activeModule,
+              reportState.dimensions,
+              reportState.measures,
+              reportState.filters,
+              reportState.sortColumn,
+              reportState.sortDirection,
+              LIMIT + 1,
+              offset
+            );
+
       if (result && result.length > LIMIT) {
         setHasMore(true);
         setData(result.slice(0, LIMIT));
