@@ -25,6 +25,9 @@ export { NO_UNSEEN, type RecordModule } from "@/lib/record-views/unseen";
  */
 const TABLE_MISSING = "PGRST205";
 
+/** Postgres' unique-violation code: two tabs raced to draw the same starting line. */
+const DUPLICATE_KEY = "23505";
+
 /**
  * The rows on this page the viewer has not opened yet, for a list to highlight.
  *
@@ -51,11 +54,12 @@ export function useUnseenRecords<T>({
   createdAtOf: ((row: T) => string | null | undefined) | undefined;
   enabled?: boolean;
 }): ReadonlySet<string> {
-  const { user } = useAuth();
+  const { user, accountId } = useAuth();
   const userId = user?.id ?? null;
   const on = Boolean(enabled && module && createdAtOf);
 
   const [seen, setSeen] = useState<ReadonlySet<string> | null>(null);
+  const baselineAt = useViewBaseline(on ? module : null, accountId, userId);
 
   const candidates = useMemo(() => {
     if (!on || !createdAtOf) return [];
@@ -63,11 +67,11 @@ export function useUnseenRecords<T>({
       id: idOf(row),
       createdAt: createdAtOf(row),
     }));
-    return candidateIds(shaped);
+    return candidateIds(shaped, { baselineAt });
     // idOf/createdAtOf are written inline at the call sites, so a new identity
     // every render; `rows` is the real input and the only sound dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, on]);
+  }, [rows, on, baselineAt]);
 
   // A stable dependency: the same page of rows must not re-query on every
   // render, and a changed page must.
@@ -104,14 +108,90 @@ export function useUnseenRecords<T>({
   }, [on, userId, module, candidateKey]);
 
   return useMemo(() => {
-    if (!seen || !createdAtOf) return NO_UNSEEN;
+    if (!seen || !createdAtOf || !baselineAt) return NO_UNSEEN;
     const shaped: RecordRow[] = rows.map((row) => ({
       id: idOf(row),
       createdAt: createdAtOf(row),
     }));
-    return unseenIds(shaped, seen);
+    return unseenIds(shaped, seen, { baselineAt });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, seen]);
+  }, [rows, seen, baselineAt]);
+}
+
+/**
+ * When this viewer first opened this list, creating the mark if this is that
+ * first time.
+ *
+ * Returns null until it is known, and `candidateIds` highlights nothing while
+ * it is null — which is the behaviour that matters here. Without a starting
+ * line, every record inside the thirty-day window that had never been opened
+ * qualified as new, so a 201-row Leads list highlighted all 201 rows. A list
+ * where everything is highlighted looks exactly like a list where nothing is.
+ *
+ * Written once and never moved. Moving it forward on each visit would be the
+ * per-screen high-water mark that was considered and rejected: one glance at a
+ * list would clear every row in it, including the ones that glance never read.
+ */
+function useViewBaseline(
+  module: RecordModule | null | undefined,
+  accountId: string | null | undefined,
+  userId: string | null,
+): string | null {
+  const [baselineAt, setBaselineAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!module || !userId || !accountId) {
+      setBaselineAt(null);
+      return;
+    }
+
+    let alive = true;
+    void (async () => {
+      const supabase = createClient();
+
+      const { data, error } = await supabase
+        .from("record_view_baselines")
+        .select("baseline_at")
+        .eq("module_name", module)
+        .maybeSingle();
+
+      if (!alive) return;
+      if (error) {
+        // Including "table not found" before the migration is run: no baseline,
+        // so nothing is highlighted and the lists look exactly as they did.
+        setBaselineAt(null);
+        return;
+      }
+
+      if (data?.baseline_at) {
+        setBaselineAt(String(data.baseline_at));
+        return;
+      }
+
+      // First time this user has opened this list. Everything already on it was
+      // there before they started, so the line is drawn now.
+      const now = new Date().toISOString();
+      const { error: insertError } = await supabase
+        .from("record_view_baselines")
+        .insert({
+          user_id: userId,
+          account_id: accountId,
+          module_name: module,
+          baseline_at: now,
+        });
+
+      if (!alive) return;
+      // A duplicate here means another tab won the race and wrote the same
+      // thing a moment earlier, which is fine — either way the line exists.
+      setBaselineAt(insertError && insertError.code !== DUPLICATE_KEY ? null : now);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [module, userId, accountId]);
+
+  return baselineAt;
 }
 
 /**

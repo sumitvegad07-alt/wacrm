@@ -1,10 +1,11 @@
 // ============================================================
 // Which rows on screen this viewer has not opened yet.
 //
-// Kept as pure functions, apart from the hook that calls them, because the two
-// rules worth getting right are both arithmetic: what counts as new enough to
-// mark, and what counts as not yet opened. Both are easy to get subtly wrong
-// and neither needs a database to test.
+// Kept as pure functions, apart from the hook that calls them, because the
+// rules worth getting right are all arithmetic: what counts as new enough to
+// mark, what counts as already there before you started looking, and what
+// counts as not yet opened. None of them needs a database to test, and the
+// second one was got wrong first time round — see `baselineAt`.
 // ============================================================
 
 /**
@@ -46,10 +47,29 @@ export interface RecordRow {
   createdAt: string | null | undefined;
 }
 
+export interface UnseenOptions {
+  now?: Date;
+  days?: number;
+  /**
+   * When this viewer first opened this list, from `record_view_baselines`.
+   *
+   * Nothing created at or before it is ever new to them. This is what stops the
+   * feature lighting up every row that already existed the day it is switched
+   * on — which is precisely what it did on a 201-row Leads list where every
+   * record was inside the window and none had been opened: all 201 highlighted,
+   * which looks exactly like none highlighted.
+   *
+   * Null or undefined means the baseline is not known yet, and nothing is new
+   * until it is. Failing closed here matters more than anywhere else in this
+   * file: the failure it prevents is the whole list going bold.
+   */
+  baselineAt?: string | null;
+}
+
 const DAY_MS = 86_400_000;
 
 /**
- * The ids young enough to be worth asking about.
+ * The ids young enough, and recent enough, to be worth asking about.
  *
  * This is what bounds the lookup: the list asks "which of *these* have I
  * opened?" about at most a page of rows, and about none at all on a page of
@@ -59,24 +79,36 @@ const DAY_MS = 86_400_000;
  */
 export function candidateIds(
   rows: readonly RecordRow[],
-  now: Date = new Date(),
-  days: number = NEW_FOR_DAYS,
+  options: UnseenOptions = {},
 ): string[] {
-  const cutoff = now.getTime() - days * DAY_MS;
+  const { now = new Date(), days = NEW_FOR_DAYS, baselineAt } = options;
+
+  // Not knowing where the viewer started is not a reason to call everything new.
+  if (!baselineAt) return [];
+  const baseline = Date.parse(baselineAt);
+  if (Number.isNaN(baseline)) return [];
+
+  const windowStart = now.getTime() - days * DAY_MS;
+  // Whichever is later: the viewer's starting line, or the age limit.
+  const cutoff = Math.max(windowStart, baseline);
+
   const out: string[] = [];
 
   for (const row of rows) {
     if (!row.id || !row.createdAt) continue;
     const created = Date.parse(row.createdAt);
     if (Number.isNaN(created)) continue;
-    if (created >= cutoff) out.push(row.id);
+    // Strictly after the cutoff: a record created at the same instant the
+    // viewer first looked was already on the screen they were looking at.
+    if (created > cutoff) out.push(row.id);
   }
 
   return out;
 }
 
 /**
- * Of the rows on screen, the ones to highlight: new enough, and not opened.
+ * Of the rows on screen, the ones to highlight: arrived after this viewer
+ * started looking, new enough, and not opened.
  *
  * `seen` is whatever came back from `record_views` for this viewer. An id in
  * `seen` that is not on screen is ignored, and an id on screen that is missing
@@ -87,12 +119,11 @@ export function candidateIds(
 export function unseenIds(
   rows: readonly RecordRow[],
   seen: ReadonlySet<string>,
-  now: Date = new Date(),
-  days: number = NEW_FOR_DAYS,
+  options: UnseenOptions = {},
 ): Set<string> {
   const out = new Set<string>();
 
-  for (const id of candidateIds(rows, now, days)) {
+  for (const id of candidateIds(rows, options)) {
     if (!seen.has(id)) out.add(id);
   }
 

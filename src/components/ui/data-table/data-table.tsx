@@ -608,12 +608,23 @@ export function DataTable<T>({
                   className={cn(
                     "h-8 transition-colors hover:bg-muted/50",
                     rowIsInteractive && "cursor-pointer",
-                    // Not opened by this viewer yet. Weight as well as tint, not
-                    // tint alone: colour is the first thing lost to a monochrome
-                    // print-out, a cheap monitor or colour-blindness, and the
-                    // row has to still read as new in all three. Listed before
-                    // the pending class so a click still overrides it.
-                    unseenRowKeys?.has(rowKey(row)) && "bg-primary/[0.06] font-semibold text-foreground",
+                    // Not opened by this viewer yet: a bar down the left edge, a
+                    // tint, and more weight.
+                    //
+                    // All three, because any one of them alone failed. The first
+                    // attempt was a 6% tint plus semibold, which is a reasonable
+                    // signal on white and is simply not there on this app's dark
+                    // theme — the founder's verdict on it was "no difference at
+                    // all". And weight alone is invisible in a column rendered
+                    // as a coloured link or a badge, which on these lists is
+                    // most of them. The bar is the part that survives both, and
+                    // it is a shape rather than a colour, so it also survives a
+                    // monochrome print-out and colour-blindness.
+                    //
+                    // Listed before the pending class so a click still overrides
+                    // it.
+                    unseenRowKeys?.has(rowKey(row)) &&
+                      "border-l-2 border-l-primary bg-primary/10 font-semibold text-foreground",
                     // The click landed: say so immediately, and keep saying it
                     // until the next page is on screen.
                     pendingRowKey === rowKey(row) && "bg-primary/10 cursor-progress hover:bg-primary/10",
