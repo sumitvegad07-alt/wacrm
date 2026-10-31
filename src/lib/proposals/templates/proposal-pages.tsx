@@ -18,7 +18,7 @@ import type { FeatureGroup } from "../plan-features";
 import type { PlanId } from "@/lib/plans/catalog";
 import { computeTotals } from "../totals";
 import { compareProposalTerms, listDiscount } from "../term-compare";
-import { TERM_LABEL, asTerm, renewalDate } from "@/lib/plans/pricing";
+import { TERM_LABEL, asTerm, renewalDate, termRatePerMonth } from "@/lib/plans/pricing";
 import { formatLongDate, inr } from "../format";
 import { RichText } from "./rich-text";
 import "./proposal.css";
@@ -57,6 +57,36 @@ function dateFromIso(iso: string): Date {
 
 function shortDate(date: Date): string {
   return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/**
+ * A row's description, split into the lines the founder typed.
+ *
+ * Blank lines are dropped so a stray Enter at the end of the box cannot open a
+ * gap inside a table row — the same rule the Offer box follows.
+ */
+function descLines(text: string | undefined): string[] {
+  return (text ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+/**
+ * "1 Nov 2026 — 31 Jul 2027" for a row that carries its own dates.
+ *
+ * Presentation only. The row's `months` is what multiplies, never the gap
+ * between these two dates, so a mistyped date can shift what the document SAYS
+ * the period is but never what it CHARGES. One date alone still prints: a row
+ * that only knows when it starts is worth saying.
+ */
+function rowPeriod(start: string | undefined, end: string | undefined): string {
+  const from = start ? shortDate(dateFromIso(start)) : "";
+  const to = end ? shortDate(dateFromIso(end)) : "";
+  if (from && to) return `${from} — ${to}`;
+  if (from) return `from ${from}`;
+  if (to) return `until ${to}`;
+  return "";
 }
 
 function Pfoot({ client, label, n }: { client: string; label: string; n: string }) {
@@ -176,19 +206,44 @@ export function ProposalPages({
 
   const discount = listDiscount({ plan, lineItems: data.lineItems ?? [], term });
 
+  // What one seat lists at on the quoted term. A row priced under it prints its
+  // list rate struck through beside the rate charged, so a discount is visible
+  // on the row where it was actually given.
+  const listRate = termRatePerMonth(plan, term);
+
   const allTerms = compareProposalTerms({
     plan,
     lineItems: data.lineItems ?? [],
     quotedTerm: term,
   });
-  const showAllTerms = !!data.showAllTerms;
-  const termRows = showAllTerms ? allTerms : allTerms.filter((r) => r.quoted);
+  // A quotation whose rows cover different periods cannot honestly be re-priced
+  // "the same deal on another term" — there is no single term to move it off.
+  // So the comparison table is dropped rather than printed with a figure the
+  // price table above it does not agree with.
+  const showAllTerms = !!data.showAllTerms && !t.mixedMonths;
+
+  /**
+   * The quoted row, forced to agree with the price table above it.
+   *
+   * compareProposalTerms re-prices every row onto one period, which is the
+   * right question for "the same deal on a longer term" but the WRONG answer
+   * for the row describing this quotation: rows covering nine months would be
+   * restated as twelve, and the sheet would print "you pay each time ₹24,480"
+   * directly under a total payable of ₹22,860. Taking the quoted row's figures
+   * from computeTotals makes that disagreement impossible rather than unlikely.
+   */
+  const termRows = (showAllTerms ? allTerms : allTerms.filter((r) => r.quoted)).map((row) =>
+    row.quoted ? { ...row, subtotal: t.subtotal, annualised: t.annualised } : row,
+  );
 
   const renews = renewalDate(dateFromIso(data.proposalDate), term);
 
   // Post-discount, because that is what the customer actually parts with each
   // working day — the figure the founder reads out on the phone.
-  const userMonths = t.usersTotal * t.months;
+  const userMonths = (data.lineItems ?? []).reduce(
+    (sum, item, i) => sum + (Number(item?.users) || 0) * (t.lineMonths[i] ?? t.months),
+    0,
+  );
   const perUserPerDay = userMonths ? Math.round((t.subtotal / (userMonths * 30)) * 10) / 10 : 0;
 
   /**
@@ -293,23 +348,39 @@ export function ProposalPages({
               <th>Item</th>
               <th className="r">Users</th>
               <th className="r">Rate / user / month</th>
-              <th className="r">Per user for the {noun}</th>
+              <th className="r">Months</th>
               <th className="r">Amount (₹)</th>
             </tr>
           </thead>
           <tbody>
-            {(data.lineItems ?? []).map((item, i) => (
-              <tr key={`${item.label}-${i}`}>
-                <td className="prod">
-                  <b>{item.label}</b>
-                  <span>{item.subLabel}</span>
-                </td>
-                <td className="r">{item.users}</td>
-                <td className="r">{inr(Number(item.rate) || 0)}</td>
-                <td className="r">{inr((Number(item.rate) || 0) * t.months)}</td>
-                <td className="r">{inr(t.lineAmounts[i] ?? 0)}</td>
-              </tr>
-            ))}
+            {(data.lineItems ?? []).map((item, i) => {
+              const rate = Number(item.rate) || 0;
+              const rowMonths = t.lineMonths[i] ?? t.months;
+              const below = listRate > 0 && rate > 0 && rate < listRate;
+              const span = rowPeriod(item.periodStart, item.periodEnd);
+
+              return (
+                <tr key={`${item.label}-${i}`}>
+                  <td className="prod">
+                    <b>{item.label}</b>
+                    {/* Typed as free text, printed as lines — plan, users, the
+                        period, a condition. Blank lines are dropped so a stray
+                        Enter cannot open a gap in the row. */}
+                    {descLines(item.subLabel).map((line, n) => (
+                      <span key={n}>{line}</span>
+                    ))}
+                    {span ? <span className="span">{span}</span> : null}
+                  </td>
+                  <td className="r">{item.users}</td>
+                  <td className="r">
+                    {below ? <s className="was">₹{inr(listRate)}</s> : null}
+                    {inr(rate)}
+                  </td>
+                  <td className="r">{rowMonths}</td>
+                  <td className="r">{inr(t.lineAmounts[i] ?? 0)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
@@ -416,9 +487,9 @@ export function ProposalPages({
           />
           <Tile label="Per user / day" value={`₹${perUserPerDay.toFixed(1)}`} sub="every working day" />
           <Tile
-            label="Total for one year"
+            label={t.mixedMonths ? "Full year at these rates" : "Total for one year"}
             value={`₹${inr(t.annualised)}`}
-            sub="paying this often"
+            sub={t.mixedMonths ? "if every row ran a full year" : "paying this often"}
           />
           <Tile label="Next payment due" value={shortDate(renews)} sub={`in ${t.months} months`} />
         </div>
@@ -433,7 +504,7 @@ export function ProposalPages({
                 <th>How often you pay</th>
                 <th className="r">Price / user / month</th>
                 <th className="r">You pay each time</th>
-                <th className="r">Total for one year</th>
+                <th className="r">{t.mixedMonths ? "Full year at these rates" : "Total for one year"}</th>
                 {showAllTerms && <th className="r">You save in a year</th>}
               </tr>
             </thead>

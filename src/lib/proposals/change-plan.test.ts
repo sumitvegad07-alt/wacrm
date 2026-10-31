@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { changePlan } from "./change-plan";
+import { changePlan, changeTerm } from "./change-plan";
 import { getTemplate } from "./registry";
 import type { ProposalData } from "./types";
 
@@ -154,5 +154,34 @@ describe("changePlan", () => {
     const before = sfaProposal();
 
     expect(changePlan(before, "CRM_SFA", "NOPE")).toEqual(before);
+  });
+});
+
+describe("changeTerm and per-row periods", () => {
+  test("switching term re-prices the rate but leaves a row's own months alone", () => {
+    const data = {
+      ...getTemplate("SFA")!.defaults("2026-10-31"),
+      billingTerm: "yearly" as const,
+      lineItems: [
+        { label: "OZZO SFA — Field Salesman", subLabel: "", users: 5, rate: 300, months: 9 },
+      ],
+    };
+
+    const moved = changeTerm(data, "quarterly");
+
+    // The rate follows the term — quarterly lists 40% above yearly.
+    expect(moved.lineItems[0].rate).toBe(420);
+    // The period was negotiated, not derived from the term, so it stays.
+    expect(moved.lineItems[0].months).toBe(9);
+  });
+
+  test("a row with no months of its own simply follows the new term", () => {
+    const data = {
+      ...getTemplate("SFA")!.defaults("2026-10-31"),
+      billingTerm: "yearly" as const,
+      lineItems: [{ label: "OZZO SFA — Field Salesman", subLabel: "", users: 5, rate: 300 }],
+    };
+
+    expect(changeTerm(data, "quarterly").lineItems[0].months).toBeUndefined();
   });
 });

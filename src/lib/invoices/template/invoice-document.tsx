@@ -62,6 +62,19 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * A charge's description, split into the lines that were typed.
+ *
+ * Blank lines are dropped so a stray Enter at the end of the box cannot open a
+ * gap inside a table row — the same rule the quotation's rows follow.
+ */
+function descriptionLines(text: string | undefined): string[] {
+  return (text ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 export function InvoiceDocument({ invoice }: { invoice: InvoiceRow }) {
   const gst = invoice.gst_enabled;
   const seller = invoice.data?.seller;
@@ -202,7 +215,11 @@ export function InvoiceDocument({ invoice }: { invoice: InvoiceRow }) {
               <td className="num">{i + 1}</td>
               <td>
                 <div style={{ fontWeight: 600 }}>{line.label}</div>
-                {line.description ? <div className="muted">{line.description}</div> : null}
+                {descriptionLines(line.description).map((text, n) => (
+                  <div key={n} className="muted">
+                    {text}
+                  </div>
+                ))}
               </td>
               {gst ? <td>{line.sac}</td> : null}
               <td className="num">{line.users}</td>

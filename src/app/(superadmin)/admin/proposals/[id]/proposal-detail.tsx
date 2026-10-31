@@ -7,6 +7,7 @@ import {
   Copy,
   FileDown,
   Pencil,
+  Receipt,
   Send,
   ThumbsDown,
   ThumbsUp,
@@ -154,6 +155,16 @@ export default function ProposalDetail({ id }: { id: string }) {
             <Pencil className="h-4 w-4 mr-1" />
             Edit
           </Button>
+          {/* One click to a filled-in invoice. It opens the invoice form with
+              this quotation's rows, rates and months already in it — nothing is
+              written, and no invoice number is used, until Save. */}
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/admin/invoices/new?from=${id}`)}
+          >
+            <Receipt className="h-4 w-4 mr-1" />
+            Convert to Invoice
+          </Button>
           <Button onClick={() => window.open(`/print/proposal/${id}`, "_blank")}>
             <FileDown className="h-4 w-4 mr-1" />
             Open PDF
@@ -248,29 +259,43 @@ export default function ProposalDetail({ id }: { id: string }) {
             <tr>
               <th className="pb-2 font-medium">Item</th>
               <th className="pb-2 font-medium text-right">Users</th>
-              <th className="pb-2 font-medium text-right">Rate / user / yr</th>
+              <th className="pb-2 font-medium text-right">Rate / user / month</th>
+              <th className="pb-2 font-medium text-right">Months</th>
               <th className="pb-2 font-medium text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
+            {/* The same shape the PDF prints: this screen is where the figures
+                are checked, so it may not describe the money differently. */}
             {(data.lineItems ?? []).map((item, i) => (
-              <tr key={i} className="border-t">
+              <tr key={i} className="border-t align-top">
                 <td className="py-2">
                   <div className="font-medium">{item.label}</div>
-                  <div className="text-xs text-muted-foreground">{item.subLabel}</div>
+                  {(item.subLabel ?? "")
+                    .split(/\r?\n/)
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .map((line, n) => (
+                      <div key={n} className="text-xs text-muted-foreground">
+                        {line}
+                      </div>
+                    ))}
                 </td>
                 <td className="py-2 text-right">{item.users}</td>
-                <td className="py-2 text-right">
-                  ₹{inr((Number(item.rate) || 0) * totals.months)}
-                </td>
+                <td className="py-2 text-right">₹{inr(Number(item.rate) || 0)}</td>
+                <td className="py-2 text-right">{totals.lineMonths[i] ?? totals.months}</td>
                 <td className="py-2 text-right">₹{inr(totals.lineAmounts[i] ?? 0)}</td>
               </tr>
             ))}
             <tr className="border-t">
               <td className="py-2 font-medium">
-                Subtotal · {TERM_LABEL[term].toLowerCase()} ({totals.months} months)
+                Subtotal ·{" "}
+                {totals.mixedMonths
+                  ? "mixed periods"
+                  : `${TERM_LABEL[term].toLowerCase()} (${totals.months} months)`}
               </td>
               <td className="py-2 text-right">{totals.usersTotal}</td>
+              <td />
               <td />
               <td className="py-2 text-right">₹{inr(totals.subtotal)}</td>
             </tr>
@@ -279,11 +304,13 @@ export default function ProposalDetail({ id }: { id: string }) {
                 <td className="py-1 text-muted-foreground">GST @ {data.gstRate}%</td>
                 <td />
                 <td />
+                <td />
                 <td className="py-1 text-right">₹{inr(totals.gstAmount)}</td>
               </tr>
             )}
             <tr className="border-t">
               <td className="py-2 font-semibold">Total payable</td>
+              <td />
               <td />
               <td />
               <td className="py-2 text-right font-semibold">₹{inr(totals.grandTotal)}</td>

@@ -121,12 +121,122 @@ describe("SFA proposal document", () => {
   });
 
   describe("page 2 — the money", () => {
-    test("prices each row per month and per term", () => {
+    test("prices each row per month, and prints the months it covers", () => {
       // 5 seats + 1 admin at ₹300/user/month on a 12-month term.
       expect(text).toContain("Rate / user / month");
-      expect(text).toContain("Per user for the year");
-      expect(text).toContain("3,600"); // 300 × 12
+      expect(text).toContain("Months");
+      expect(text).toContain("3,600"); // 1 × 300 × 12
       expect(text).toContain("18,000"); // 5 × 300 × 12
+    });
+
+    // ----------------------------------------------------------------
+    // Per-row periods. The case this exists for: users added partway through
+    // a subscription are charged for the months that actually remain.
+    // ----------------------------------------------------------------
+
+    test("a row charges its own months, not the billing term's", () => {
+      const t = renderText({
+        ...SHAAHI,
+        lineItems: [
+          { label: "OZZO SFA — Field Salesman", subLabel: "", users: 5, rate: 300, months: 12 },
+          { label: "OZZO SFA — 2 added users", subLabel: "", users: 2, rate: 270, months: 9 },
+        ],
+      });
+
+      expect(t).toContain("18,000"); // 5 × 300 × 12
+      expect(t).toContain("4,860"); // 2 × 270 × 9 — nine months, not twelve
+      expect(t).toContain("Total payable₹22,860");
+    });
+
+    test("a row priced under list prints the list rate struck through beside it", () => {
+      const t = renderText({
+        ...SHAAHI,
+        lineItems: [
+          { label: "OZZO SFA — 2 added users", subLabel: "", users: 2, rate: 270, months: 9 },
+        ],
+      });
+
+      // ₹300 is the SFA yearly list rate; ₹270 is what is charged.
+      expect(t).toContain("₹300270");
+      expect(t).toContain("off list");
+    });
+
+    test("a row's own dates print under the item name", () => {
+      const t = renderText({
+        ...SHAAHI,
+        lineItems: [
+          {
+            label: "OZZO SFA — 2 added users",
+            subLabel: "",
+            users: 2,
+            rate: 300,
+            months: 9,
+            periodStart: "2026-11-01",
+            periodEnd: "2027-07-31",
+          },
+        ],
+      });
+
+      expect(t).toContain("1 Nov 2026");
+      expect(t).toContain("31 Jul 2027");
+    });
+
+    test("every line of a row's description prints", () => {
+      const t = renderText({
+        ...SHAAHI,
+        lineItems: [
+          {
+            label: "KOOPS Subscription",
+            subLabel: "PLAN: SFA\nUSER: 5\nPERIOD: 1 NOV 2026 TO 31 MAY 2027",
+            users: 5,
+            rate: 300,
+          },
+        ],
+      });
+
+      expect(t).toContain("PLAN: SFA");
+      expect(t).toContain("USER: 5");
+      expect(t).toContain("PERIOD: 1 NOV 2026 TO 31 MAY 2027");
+    });
+
+    test("the billing-term row never contradicts the total payable", () => {
+      // The bug this pins: compareProposalTerms re-prices every row onto one
+      // period, so a nine-month row was restated as twelve and the sheet
+      // printed "you pay each time ₹24,480" under a total payable of ₹22,860.
+      const t = renderText({
+        ...SHAAHI,
+        lineItems: [
+          { label: "a", subLabel: "", users: 5, rate: 300, months: 12 },
+          { label: "b", subLabel: "", users: 2, rate: 270, months: 9 },
+        ],
+      });
+
+      expect(t).toContain("Total payable₹22,860");
+      // The quoted row charges what the table above it charges: yearly, 12
+      // months, ₹22,860 each time — not the ₹24,480 a re-pricing produces.
+      expect(t).toContain("Yearly · 12 months₹300₹22,860");
+
+      // ₹24,480 still appears, but only where it is true: the run-rate, and
+      // labelled as such rather than as what the client pays.
+      expect(t).toContain("Full year at these rates");
+      expect(t).not.toContain("Total for one year");
+    });
+
+    test("drops the three-term comparison when rows cover different periods", () => {
+      const mixed = {
+        ...SHAAHI,
+        showAllTerms: true,
+        lineItems: [
+          { label: "a", subLabel: "", users: 5, rate: 300, months: 12 },
+          { label: "b", subLabel: "", users: 2, rate: 300, months: 9 },
+        ],
+      };
+
+      expect(renderText(mixed)).not.toContain("on a longer term");
+      // The same proposal on ONE period still shows it.
+      expect(
+        renderText({ ...mixed, lineItems: mixed.lineItems.map((l) => ({ ...l, months: 12 })) }),
+      ).toContain("on a longer term");
     });
 
     test("the ladder totals what the rows add up to", () => {

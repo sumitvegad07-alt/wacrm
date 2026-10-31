@@ -24,7 +24,14 @@ import {
 } from "@/lib/proposals/registry";
 import { changePlan, changeTerm } from "@/lib/proposals/change-plan";
 import { featuresForPlan } from "@/lib/proposals/plan-features";
-import { computeTotals, isPricePageCrowded } from "@/lib/proposals/totals";
+import {
+  computeTotals,
+  isPricePageCrowded,
+  lineMonths,
+  offerLineCount,
+  priceSheetClearance,
+  type SheetContent,
+} from "@/lib/proposals/totals";
 import {
   BILLING_TERMS,
   MIN_USERS,
@@ -44,6 +51,34 @@ export default function ProposalForm({ id }: { id: string }) {
   const [dirty, setDirty] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  /**
+   * Whether the bank block and the signature will print on page 2.
+   *
+   * They come from Invoice Settings, not from this form, but they take 104px
+   * and 98px off the sheet — nearly two price rows between them. Without
+   * reading them, uploading a signature would silently start clipping
+   * quotations that fitted the day before, with no warning anywhere.
+   */
+  const [blocks, setBlocks] = useState<{ hasBankBlock: boolean; hasSignature: boolean }>({
+    hasBankBlock: false,
+    hasSignature: false,
+  });
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch("/api/admin/invoice-settings");
+      const payload = await res.json().catch(() => ({}));
+      // A settings row that cannot be read leaves both false: the warning then
+      // under-reports rather than crying wolf on every quotation.
+      if (!res.ok || !payload?.settings) return;
+      const row = payload.settings;
+      setBlocks({
+        hasBankBlock: !!(row.bank_name || row.bank_account_no || row.upi_id),
+        hasSignature: !!row.signature_url,
+      });
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -145,6 +180,13 @@ Your client details, team size and any rows you added ` +
 
   const allTermsShown = !!data?.showAllTerms;
 
+  /** Everything on page 2 that is not a price row, for the clipping guard. */
+  const sheet: SheetContent = {
+    showAllTerms: allTermsShown,
+    offerLines: offerLineCount(data?.offer),
+    ...blocks,
+  };
+
   const edit = (path: string, value: unknown) => {
     setData((prev) => (prev ? setByPath(prev, path, value) : prev));
     setDirty(true);
@@ -153,11 +195,23 @@ Your client details, team size and any rows you added ` +
   const editLine = (index: number, key: keyof LineItem, value: string) => {
     setData((prev) => {
       if (!prev) return prev;
-      const lineItems = prev.lineItems.map((item, i) =>
-        i === index
-          ? { ...item, [key]: key === "users" || key === "rate" ? Number(value) || 0 : value }
-          : item,
-      );
+      const lineItems = prev.lineItems.map((item, i) => {
+        if (i !== index) return item;
+        if (key === "users" || key === "rate") return { ...item, [key]: Number(value) || 0 };
+
+        // A blank Months box means "follow the billing term", which is the key
+        // being ABSENT — not zero. Storing 0 would silently make the row free,
+        // and a deliberate 0 (a free row) has to survive a reload, so the two
+        // cannot share a representation.
+        if (key === "months") {
+          const next = { ...item };
+          if (value === "") delete next.months;
+          else next.months = Math.max(0, Number(value) || 0);
+          return next;
+        }
+
+        return { ...item, [key]: value };
+      });
       return { ...prev, lineItems };
     });
     setDirty(true);
@@ -168,7 +222,13 @@ Your client details, team size and any rows you added ` +
       prev
         ? {
             ...prev,
-            lineItems: [...prev.lineItems, { label: "", subLabel: "", users: 1, rate: totals.headlineRate }],
+            // No `months`: a new row follows the billing term until the
+            // founder types a period of its own, so adding a row to an
+            // ordinary quotation needs no extra thought.
+            lineItems: [
+              ...prev.lineItems,
+              { label: "", subLabel: "", users: 1, rate: totals.headlineRate },
+            ],
           }
         : prev,
     );
@@ -309,16 +369,28 @@ Your client details, team size and any rows you added ` +
           <p className="text-xs text-muted-foreground mt-1">
             {allTermsShown ? (
               <>
-                Charging <b>{TERM_LABEL[term]}</b> — {TERM_MONTHS[term]} months per invoice. The PDF
-                shows all three periods with the saving on each.
+                Charging <b>{TERM_LABEL[term]}</b> — {TERM_MONTHS[term]} months, and the list rate
+                of ₹{inr(listRate)}/user/month, as the starting point for every row. The PDF shows
+                all three periods with the saving on each.
               </>
             ) : (
               <>
-                Charging <b>{TERM_LABEL[term]}</b> — {TERM_MONTHS[term]} months per invoice. The PDF
-                shows this period only.
+                Charging <b>{TERM_LABEL[term]}</b> — {TERM_MONTHS[term]} months, and the list rate
+                of ₹{inr(listRate)}/user/month, as the starting point for every row. The PDF shows
+                this period only.
               </>
-            )}
+            )}{" "}
+            Any row can set its own Months and its own rate.
           </p>
+
+          {totals.mixedMonths && (
+            <p className="text-xs text-violet-700 dark:text-violet-300 mt-2">
+              Rows cover different periods, so the PDF prints each row&rsquo;s own months instead of
+              one period for the whole quotation
+              {allTermsShown ? ", and the three-period comparison table is left out — the same deal on another term is not a question this quotation can answer" : ""}
+              .
+            </p>
+          )}
 
           {belowMinUsers && (
             <p className="text-xs text-amber-700 mt-2">
@@ -403,47 +475,107 @@ Your client details, team size and any rows you added ` +
         </div>
 
         <div className="space-y-2">
-          {data.lineItems.map((item, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 items-start">
-              <div className="col-span-5 space-y-1">
-                <Input
-                  placeholder="OZZO SFA — Field Salesman"
-                  value={item.label}
-                  onChange={(e) => editLine(i, "label", e.target.value)}
-                />
-                <Input
-                  placeholder="Android app · full field toolkit"
+          {data.lineItems.map((item, i) => {
+            const rowMonths = lineMonths(item, TERM_MONTHS[term]);
+            const belowList = listRate > 0 && item.rate > 0 && item.rate < listRate;
+
+            return (
+              <div key={i} className="rounded-md border border-border p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Input
+                    placeholder="OZZO SFA — Field Salesman"
+                    value={item.label}
+                    onChange={(e) => editLine(i, "label", e.target.value)}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeLine(i)}
+                    title="Remove row"
+                  >
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+
+                {/* One open box per row. Every line you type prints as its own
+                    line under the item name — plan, users, the period, a
+                    condition. Text only: it never touches the amount. */}
+                <Textarea
+                  rows={3}
                   className="text-xs"
+                  placeholder={"Android app · full field toolkit\nPERIOD: 1 Nov 2026 to 31 Jul 2027"}
                   value={item.subLabel}
                   onChange={(e) => editLine(i, "subLabel", e.target.value)}
                 />
+
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Users</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={item.users}
+                      onChange={(e) => editLine(i, "users", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Rate /user /month</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={item.rate}
+                      onChange={(e) => editLine(i, "rate", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Months</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder={String(TERM_MONTHS[term])}
+                      value={item.months ?? ""}
+                      onChange={(e) => editLine(i, "months", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">From</Label>
+                    <Input
+                      type="date"
+                      value={item.periodStart ?? ""}
+                      onChange={(e) => editLine(i, "periodStart", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">To</Label>
+                    <Input
+                      type="date"
+                      value={item.periodEnd ?? ""}
+                      onChange={(e) => editLine(i, "periodEnd", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Amount</Label>
+                    <div className="h-9 flex items-center justify-end text-sm font-medium">
+                      ₹{inr(totals.lineAmounts[i] ?? 0)}
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  {item.users} user{item.users === 1 ? "" : "s"} × ₹{inr(item.rate)} ×{" "}
+                  {rowMonths} month{rowMonths === 1 ? "" : "s"}
+                  {item.months === undefined ? " (following the term)" : ""}
+                  {belowList ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      {" "}
+                      · {Math.round(((listRate - item.rate) / listRate) * 100)}% below the{" "}
+                      {TERM_LABEL[term]} list rate of ₹{inr(listRate)}
+                    </span>
+                  ) : null}
+                </p>
               </div>
-              <div className="col-span-2">
-                <Input
-                  type="number"
-                  placeholder="Users"
-                  value={item.users}
-                  onChange={(e) => editLine(i, "users", e.target.value)}
-                />
-              </div>
-              <div className="col-span-2">
-                <Input
-                  type="number"
-                  placeholder="Rate / user / yr"
-                  value={item.rate}
-                  onChange={(e) => editLine(i, "rate", e.target.value)}
-                />
-              </div>
-              <div className="col-span-2 text-right pt-2 text-sm font-medium">
-                ₹{inr(totals.lineAmounts[i] ?? 0)}
-              </div>
-              <div className="col-span-1 pt-1">
-                <Button variant="ghost" size="sm" onClick={() => removeLine(i)} title="Remove row">
-                  <Trash2 className="h-4 w-4 text-red-500" />
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
 
           <Button variant="outline" size="sm" onClick={addLine}>
             <Plus className="h-4 w-4 mr-1" />
@@ -454,10 +586,12 @@ Your client details, team size and any rows you added ` +
               past this many rows it clips the tiles below the table out of the
               PDF without any error. Better a warning here than a truncated
               proposal in a client's inbox. */}
-          {isPricePageCrowded(data.lineItems.length, { showAllTerms: allTermsShown }) && (
+          {isPricePageCrowded(data.lineItems, sheet) && (
             <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm px-3 py-2">
-              This price table is too long for page 2. Check the PDF before sending — rows past the
-              bottom of the sheet are cut off, not carried to a new page.
+              This price table is too long for page 2 by about{" "}
+              {Math.abs(priceSheetClearance(data.lineItems, sheet))}px.
+              Check the PDF before sending — anything past the bottom of the sheet is cut off,
+              not carried to a new page. Shorten a description, or drop a row.
               {allTermsShown && " Showing one billing period instead of all three frees up a row."}
             </div>
           )}
@@ -508,11 +642,23 @@ Your client details, team size and any rows you added ` +
         <div className="rounded-md bg-muted/40 p-3 text-sm space-y-1">
           <Row label="Total users" value={String(totals.usersTotal)} />
           <Row label="Headline rate (price hero)" value={`₹${inr(totals.headlineRate)} / user / month`} />
+          {/* Meaningless once rows cover different periods — there is no single
+              "per user for the term" when one row runs nine months and another
+              twelve, so the line is dropped rather than printed wrong. */}
+          {!totals.mixedMonths && (
+            <Row
+              label={`Per user for the ${TERM_LABEL[term].toLowerCase()} term`}
+              value={`₹${inr(totals.headlineRate * totals.months)} / user / ${totals.months} months`}
+            />
+          )}
           <Row
-            label={`Per user for the ${TERM_LABEL[term].toLowerCase()} term`}
-            value={`₹${inr(totals.headlineRate * totals.months)} / user / ${totals.months} months`}
+            label={
+              totals.mixedMonths
+                ? "Subtotal per invoice (mixed periods)"
+                : `Subtotal per invoice (${totals.months} months)`
+            }
+            value={`₹${inr(totals.subtotal)}`}
           />
-          <Row label={`Subtotal per invoice (${totals.months} months)`} value={`₹${inr(totals.subtotal)}`} />
           <Row label="Annualised run-rate" value={`₹${inr(totals.annualised)}`} />
           <Row
             label={data.gstEnabled ? `GST @ ${data.gstRate}% (charged)` : `GST @ ${data.gstRate}% (shown as saving)`}
@@ -523,6 +669,16 @@ Your client details, team size and any rows you added ` +
             <span>₹{inr(totals.grandTotal)}</span>
           </div>
         </div>
+
+        {/* Said here because it is not obvious: these print on the quotation but
+            are not edited on it. They were being read as "missing". */}
+        <p className="text-xs text-muted-foreground">
+          Bank details and your signature print on the PDF and are filled in once, under{" "}
+          <a href="/admin/invoice-settings" className="underline" target="_blank" rel="noreferrer">
+            Invoice Settings
+          </a>
+          . Anything left blank there simply does not print.
+        </p>
       </section>
     </div>
   );

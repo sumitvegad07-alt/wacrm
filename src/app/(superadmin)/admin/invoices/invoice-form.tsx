@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { FileText, Loader2, Plus, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
 import { planLine } from "@/lib/invoices/denormalise";
 import { amountInWords, invoiceTotals, lineAmount } from "@/lib/invoices/totals";
 import { placeOfSupply } from "@/lib/invoices/tax";
+import type { InvoicePrefill } from "@/lib/invoices/from-proposal";
 import {
   DEFAULT_SAC,
   sellerFromSettings,
@@ -88,9 +89,16 @@ function isPlanId(value: string): value is PlanId {
 export default function InvoiceForm({
   mode,
   invoice,
+  prefill,
 }: {
   mode: "create" | "edit";
   invoice?: InvoiceRow;
+  /**
+   * A quotation carried onto this form. Nothing is saved until the founder
+   * presses Save, so a converted quotation that is then abandoned never takes
+   * an invoice number with it.
+   */
+  prefill?: InvoicePrefill;
 }) {
   const router = useRouter();
   const [settings, setSettings] = useState<InvoiceSettingsRow | null>(null);
@@ -100,34 +108,55 @@ export default function InvoiceForm({
 
   const today = isoDate(new Date());
 
-  const [series, setSeries] = useState<InvoiceSeries>(invoice?.series ?? "gst");
+  const startTerm = invoice?.billing_term ?? prefill?.billingTerm ?? "yearly";
+  const startPlan = invoice?.plan ?? prefill?.plan ?? "";
+
+  const [series, setSeries] = useState<InvoiceSeries>(
+    invoice?.series ?? prefill?.series ?? "gst",
+  );
   const [invoiceDate, setInvoiceDate] = useState(invoice?.invoice_date ?? today);
   const [accountId, setAccountId] = useState<string | null>(invoice?.account_id ?? null);
   const [customerId, setCustomerId] = useState(invoice?.customer_id ?? "");
-  const [plan, setPlan] = useState<PlanId>(
-    invoice && isPlanId(invoice.plan) ? invoice.plan : "CRM_SFA",
+  const [plan, setPlan] = useState<PlanId>(isPlanId(startPlan) ? startPlan : "CRM_SFA");
+  const [term, setTerm] = useState<BillingTerm>(startTerm);
+  const [periodStart, setPeriodStart] = useState(
+    invoice?.period_start ?? prefill?.periodStart ?? today,
   );
-  const [term, setTerm] = useState<BillingTerm>(invoice?.billing_term ?? "yearly");
-  const [periodStart, setPeriodStart] = useState(invoice?.period_start ?? today);
   const [periodEnd, setPeriodEnd] = useState(
-    invoice?.period_end ?? periodEndFor(today, invoice?.billing_term ?? "yearly"),
+    invoice?.period_end ??
+      prefill?.periodEnd ??
+      periodEndFor(invoice?.period_start ?? prefill?.periodStart ?? today, startTerm),
   );
-  const [gstRate, setGstRate] = useState(invoice?.gst_rate ?? DEFAULT_GST_RATE);
-  const [buyer, setBuyer] = useState<BuyerSnapshot>(invoice?.data?.buyer ?? BLANK_BUYER);
+  const [gstRate, setGstRate] = useState(
+    invoice?.gst_rate ?? (prefill?.gstRate || DEFAULT_GST_RATE),
+  );
+  const [buyer, setBuyer] = useState<BuyerSnapshot>(
+    invoice?.data?.buyer ?? prefill?.buyer ?? BLANK_BUYER,
+  );
   const [lines, setLines] = useState<InvoiceLine[]>(
-    invoice?.data?.lines ?? [planLine("CRM_SFA", 1, "yearly")],
+    invoice?.data?.lines ??
+      (prefill?.lines?.length ? prefill.lines : null) ?? [planLine("CRM_SFA", 1, "yearly")],
   );
   const [discountPct, setDiscountPct] = useState(invoice?.data?.discountPct ?? 0);
   const [discountAmount, setDiscountAmount] = useState(invoice?.data?.discountAmount ?? 0);
-  const [offer, setOffer] = useState(invoice?.data?.offer ?? "");
-  const [notes, setNotes] = useState(invoice?.data?.notes ?? "");
+  const [offer, setOffer] = useState(invoice?.data?.offer ?? prefill?.offer ?? "");
+  const [notes, setNotes] = useState(invoice?.data?.notes ?? prefill?.notes ?? "");
   const [terms, setTerms] = useState(invoice?.data?.terms ?? "");
 
   // Once the founder types an end date himself, a later term change must not
-  // overwrite it.
-  const endTouched = useRef(mode === "edit");
-  // Likewise the plan line's rate: he may have agreed something off list.
-  const rateTouched = useRef(mode === "edit");
+  // overwrite it. A quotation's dates count as typed: they were negotiated, and
+  // the term box must not quietly move a period the client has already seen.
+  const endTouched = useRef(mode === "edit" || !!prefill);
+  // Likewise the rates: a converted quotation's rates ARE the agreed rates, so
+  // nothing may re-price them back to list.
+  const rateTouched = useRef(mode === "edit" || !!prefill);
+  // And the subscription line's period and description. Without these,
+  // nudging the user count rebuilds that line from the plan and quietly puts
+  // its months back to the whole term — turning an invoice for the nine months
+  // remaining into an invoice for twelve — and overwrites whatever description
+  // was typed. Prefilled means already decided, so both start locked.
+  const monthsTouched = useRef(mode === "edit" || !!prefill);
+  const descriptionTouched = useRef(mode === "edit" || !!prefill);
 
   useEffect(() => {
     async function load() {
@@ -209,6 +238,11 @@ export default function InvoiceForm({
         ...fresh,
         label: rateTouched.current && current?.label ? current.label : fresh.label,
         rate: rateTouched.current && current ? current.rate : fresh.rate,
+        months: monthsTouched.current && current ? current.months : fresh.months,
+        description:
+          descriptionTouched.current && current?.description
+            ? current.description
+            : fresh.description,
       };
       return [kept, ...prev.slice(1)];
     });
@@ -358,6 +392,19 @@ export default function InvoiceForm({
           </Button>
         </div>
       </div>
+
+      {prefill?.fromRef ? (
+        <div className="flex gap-3 rounded-xl border border-violet-500/30 bg-violet-500/10 p-4 text-sm">
+          <FileText className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
+          <p>
+            Filled in from quotation <b>{prefill.fromRef}</b> — the same rows, rates and months.
+            {prefill.series === "gst"
+              ? " A quotation does not collect a GSTIN or a state, so check Billed to before you save: they decide the tax split."
+              : " This is a non-GST invoice, because the quotation did not charge GST."}{" "}
+            Nothing is saved, and no number is used, until you press Create Draft.
+          </p>
+        </div>
+      ) : null}
 
       {!settings?.firm_name ? (
         <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
@@ -627,7 +674,10 @@ export default function InvoiceForm({
                       type="number"
                       min={0}
                       value={line.months}
-                      onChange={(e) => updateLine(index, { months: Number(e.target.value) || 0 })}
+                      onChange={(e) => {
+                        if (index === 0) monthsTouched.current = true;
+                        updateLine(index, { months: Number(e.target.value) || 0 });
+                      }}
                     />
                   </div>
                   <div className="sm:col-span-2 space-y-1.5">
@@ -649,6 +699,22 @@ export default function InvoiceForm({
                   </div>
                   <div className="sm:col-span-1 text-right text-sm font-medium">
                     {formatCurrency(lineAmount(line))}
+                  </div>
+                  {/* One open box per charge. Every line you type prints as its
+                      own line under the item name — plan, users, the period, a
+                      condition. Text only: it never touches the amount. */}
+                  <div className="sm:col-span-12 space-y-1.5">
+                    <Label>Description</Label>
+                    <Textarea
+                      rows={3}
+                      className="text-xs"
+                      placeholder={"PLAN: SFA\nUSER: 5\nPERIOD: 1 Nov 2026 to 31 May 2027"}
+                      value={line.description}
+                      onChange={(e) => {
+                        if (index === 0) descriptionTouched.current = true;
+                        updateLine(index, { description: e.target.value });
+                      }}
+                    />
                   </div>
                   <div className="sm:col-span-1">
                     {index > 0 ? (

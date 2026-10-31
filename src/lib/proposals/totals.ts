@@ -7,9 +7,11 @@
 // page-6 bullet. Calculating them in one place is the whole reason this builder
 // exists — hand-editing is what leaves a proposal quoting two different prices.
 //
-// Since billing terms exist, a line's `rate` is per user per MONTH and the
-// amount is `users × rate × months in term`. The months come from the one
-// pricing engine in lib/plans/pricing.ts, never from a literal here.
+// A line's `rate` is per user per MONTH and the amount is
+// `users × rate × that line's own months`. The DEFAULT months come from the one
+// pricing engine in lib/plans/pricing.ts, never from a literal here; a line may
+// override it, which is how two users added mid-term are charged for the months
+// that actually remain.
 // ============================================================
 
 import { TERM_MONTHS, asTerm, type BillingTerm } from "@/lib/plans/pricing";
@@ -31,6 +33,24 @@ function round0(value: number): number {
   return Math.round(value);
 }
 
+/**
+ * The months a single row is charged for.
+ *
+ * `fallback` is the document's billing term in months. A row saved before
+ * per-row periods existed has no `months` key and reads as the term — which is
+ * exactly what every such quotation was charged on, so nothing reprices. A row
+ * explicitly set to 0 is honoured as 0 (a free line), because `??` only catches
+ * the missing key, not a deliberate zero.
+ */
+export function lineMonths(item: Pick<LineItem, "months"> | undefined, fallback: number): number {
+  // Typed as number, but this comes out of stored JSONB and out of a form
+  // input, so an empty string is a real possibility the types do not show.
+  const raw = item?.months as unknown;
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 export function computeTotals(
   lineItems: LineItem[],
   opts: { gstEnabled: boolean; gstRate: number; term?: BillingTerm },
@@ -41,9 +61,16 @@ export function computeTotals(
   const rows = (lineItems ?? []).map((item) => ({
     users: num(item?.users),
     rate: num(item?.rate),
+    months: lineMonths(item, months),
   }));
 
-  const lineAmounts = rows.map((r) => round2(r.users * r.rate * months));
+  const lineMonthsList = rows.map((r) => r.months);
+  // Rows carrying no users are ignored: an add-on priced but not taken must not
+  // make a single-period quotation describe itself as a mixed one.
+  const chargedMonths = rows.filter((r) => r.users > 0).map((r) => r.months);
+  const mixedMonths = new Set(chargedMonths).size > 1;
+
+  const lineAmounts = rows.map((r) => round2(r.users * r.rate * r.months));
   const usersTotal = rows.reduce((sum, r) => sum + r.users, 0);
   const subtotal = round2(lineAmounts.reduce((sum, amount) => sum + amount, 0));
 
@@ -66,48 +93,143 @@ export function computeTotals(
   // prints the subtotal, the GST and this, and the three have to add up.
   const grandTotal = round2(subtotal + (opts?.gstEnabled ? gstAmount : 0));
 
+  // Twelve months at the quoted rates, summed per row. Scaling the subtotal by
+  // `12 / months` stopped meaning anything once rows could cover different
+  // periods; for a quotation whose rows share one period the two agree exactly,
+  // which is why no stored proposal's forecast figure moves.
+  const annualised = round2(
+    rows.reduce((sum, r) => sum + round2(r.users * r.rate * 12), 0),
+  );
+
   return {
     usersTotal,
     months,
+    lineMonths: lineMonthsList,
+    mixedMonths,
     lineAmounts,
     subtotal,
     gstAmount,
     grandTotal,
     headlineRate,
     perUserPerMonth: Math.round(headlineRate),
-    annualised: round2(subtotal * (12 / months)),
+    annualised,
   };
 }
 
 /**
  * The Investment page is a fixed A4 sheet with `overflow:hidden`, so a long
  * price table does not paginate — it silently clips the terms and the page
- * footer out of the PDF.
+ * footer out of the PDF. This is the arithmetic that warns the founder first.
  *
- * The budget shrank when the document went to two pages on 5 October 2026: the
- * sheet now also carries the headline tiles, the term comparison and all six
- * terms & conditions, which the old terms page held on its own. GST no longer
- * costs rows — the money ladder took the totals out of the table — but showing
- * all three billing terms costs two comparison rows, which costs one price row.
+ * MEASURED, not estimated, in a browser at A4 (794 × 1123px) against the
+ * fullest sheet the document can produce. Re-measured on 31 October 2026, when
+ * rows gained their own period and a multi-line description. Clearance above
+ * the page footer, in pixels, with the bank block printing and no Offer box:
  *
- * MEASURED, not estimated, in a browser at A4 against the fullest sheet the
- * document can produce: CRM + SFA, GST on, a discount showing, two-line row
- * labels. Clearance above the page footer, in pixels:
+ *     description lines per row    1      2      3      4
+ *     3 rows, one period        +109    +66    +24    -19
+ *     3 rows, all periods        +46     +4    -39    -81
+ *     4 rows, one period         +54     -3    -59   -116
+ *     4 rows, all periods         -8    -65   -121   -178
+ *     5 rows, one period           0    -71   -142   -213
+ *     5 rows, all periods        -63   -133   -204   -275
  *
- *     rows         3     4     5
- *     one term  +114   +40   -34
- *     all terms  +40   -34  -108
+ * Then the blocks BELOW the price table, each measured by adding it to a sheet
+ * and re-reading the clearance: the How-to-pay block costs 104px, the signature
+ * block 98px, and the Offer box 57px for its heading and first line plus 16px a
+ * line after that.
  *
- * So four rows, or three when all three terms are shown. Re-measured after the
- * column headers were renamed on 5 October 2026 — two-line headers cost the
- * sheet 60px, which is most of a row. Anything added to page 2 has to be
- * measured again, not reasoned about.
+ * Those three are the trap. They come from Invoice Settings and from the Offer
+ * box, not from the price table, so a quotation that fitted yesterday clips
+ * today because a signature image was uploaded — 98px is nearly two rows. The
+ * estimate therefore takes them as inputs rather than assuming them away.
+ *
+ * The grid is linear, which is why a formula is safe here rather than a lookup
+ * table: a row costs 54.5px and every description line after the first 14.2px.
+ * BASE_CLEARANCE is the bare sheet — three rows, one description line each, one
+ * period, and none of the blocks below — which reproduces every cell above to
+ * within 4px, all the browser's own rounding leaves on the table.
+ *
+ * Anything added to page 2 has to be measured again, not reasoned about.
  */
-export const PRICE_TABLE_ROW_BUDGET = 4;
+const BASE_CLEARANCE = 210;
+const ROW_COST = 54.5;
+const DESCRIPTION_LINE_COST = 14.2;
+const ALL_TERMS_COST = 63;
+const BANK_BLOCK_COST = 104;
+const SIGNATURE_COST = 98;
+const OFFER_BOX_COST = 57;
+const OFFER_LINE_COST = 16;
 
-export function isPricePageCrowded(
-  lineItemCount: number,
-  opts: { showAllTerms: boolean },
-): boolean {
-  return lineItemCount > PRICE_TABLE_ROW_BUDGET - (opts.showAllTerms ? 1 : 0);
+/** The row count the measured grid is anchored on. */
+const BASE_ROWS = 3;
+
+/**
+ * Clearance below which the sheet counts as crowded, in pixels.
+ *
+ * Not zero. Five rows measured at exactly 0px — the last line of terms sitting
+ * on the footer rather than under it — and a document that only just fits is
+ * one font-metric away from clipping on a machine that is not this one.
+ */
+const SAFE_MARGIN = 8;
+
+/** Everything on page 2 that is not a price row. */
+export interface SheetContent {
+  showAllTerms: boolean;
+  /** Lines in the document-level Offer box. Zero when it is empty. */
+  offerLines?: number;
+  /** The How-to-pay block, which prints when Invoice Settings has bank details. */
+  hasBankBlock?: boolean;
+  /** The signature block, which prints when Invoice Settings has an image. */
+  hasSignature?: boolean;
+}
+
+/**
+ * Lines a row costs the sheet BEYOND its first.
+ *
+ * A row with no description at all is still counted as one line rather than
+ * zero: it genuinely saves height, but over-reporting the space left is how a
+ * proposal reaches a client with its terms cut off, so the error is taken in
+ * the direction that warns too early rather than too late.
+ */
+export function extraDescriptionLines(lineItems: LineItem[]): number {
+  return (lineItems ?? []).reduce((n, item) => {
+    const lines = (item?.subLabel ?? "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean).length;
+
+    // A row carrying its own dates prints them as one more line beneath.
+    const period = item?.periodStart || item?.periodEnd ? 1 : 0;
+
+    return n + Math.max(0, lines - 1) + period;
+  }, 0);
+}
+
+/** Pixels of clearance above the page-2 footer. Negative means it clips. */
+export function priceSheetClearance(lineItems: LineItem[], content: SheetContent): number {
+  const rows = (lineItems ?? []).length;
+  const offerLines = Math.max(0, Math.floor(Number(content?.offerLines) || 0));
+
+  return Math.round(
+    BASE_CLEARANCE -
+      ROW_COST * (rows - BASE_ROWS) -
+      DESCRIPTION_LINE_COST * extraDescriptionLines(lineItems) -
+      (content?.showAllTerms ? ALL_TERMS_COST : 0) -
+      (content?.hasBankBlock ? BANK_BLOCK_COST : 0) -
+      (content?.hasSignature ? SIGNATURE_COST : 0) -
+      (offerLines > 0 ? OFFER_BOX_COST + OFFER_LINE_COST * (offerLines - 1) : 0),
+  );
+}
+
+export function isPricePageCrowded(lineItems: LineItem[], content: SheetContent): boolean {
+  return priceSheetClearance(lineItems, content) < SAFE_MARGIN;
+}
+
+/** The Offer box, counted the way the document prints it: blank lines dropped. */
+export function offerLineCount(offer: string | undefined): number {
+  return (offer ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
 }

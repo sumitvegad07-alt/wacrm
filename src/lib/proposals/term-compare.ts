@@ -24,6 +24,7 @@ import {
 } from "@/lib/plans/pricing";
 import type { PlanId } from "@/lib/plans/catalog";
 import type { LineItem } from "./types";
+import { lineMonths } from "./totals";
 
 /** Blank inputs arrive from the form as "" or undefined; never print NaN. */
 function num(value: unknown): number {
@@ -149,6 +150,9 @@ export interface ListDiscount {
  * priced BELOW list contribute: a row the founder priced above list (a training
  * day, a premium tier) is counted at its own rate, so it neither creates a
  * discount nor cancels one given elsewhere.
+ *
+ * Each row is weighed over its own period, so a cheaper rate given on two users
+ * added for nine months shows up as nine months of discount, not twelve.
  */
 export function listDiscount(input: {
   plan: PlanId;
@@ -165,8 +169,12 @@ export function listDiscount(input: {
   for (const item of input.lineItems ?? []) {
     const users = num(item?.users);
     const rate = num(item?.rate);
-    listSubtotal += users * Math.max(rate, list) * months;
-    charged += users * rate * months;
+    // That row's OWN months, not the term's: a row covering the nine months
+    // left on a subscription must be compared against nine months of list
+    // price, or the ladder claims a discount the row never gave.
+    const rowMonths = lineMonths(item, months);
+    listSubtotal += users * Math.max(rate, list) * rowMonths;
+    charged += users * rate * rowMonths;
   }
 
   const discountAmount = round2(Math.max(0, listSubtotal - charged));

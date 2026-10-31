@@ -21,13 +21,35 @@ export interface LineItem {
   subLabel: string;
   users: number;
   /**
-   * Rate per user per MONTH, in rupees, at the proposal's billing-term rate.
+   * Rate per user per MONTH, in rupees. Whatever was negotiated for THIS row —
+   * never forced to the plan's list rate.
    *
    * Was per-year until terms existed. Per-month is the only basis that works
-   * across quarterly, half-yearly and yearly without the number changing
-   * meaning: the line amount is `users × rate × months in term`.
+   * across any period without the number changing meaning: the line amount is
+   * `users × rate × months`.
    */
   rate: number;
+  /**
+   * How many months THIS row is charged for.
+   *
+   * The whole reason the row exists separately from the document's billing
+   * term: two users added three months into a yearly subscription are charged
+   * for the nine months that remain, not for twelve. The term now only supplies
+   * the DEFAULT for a new row — it is no longer the law for every row.
+   *
+   * Optional, because this is a stored JSONB payload. A quotation written
+   * before per-row periods existed has no such key, and `lineMonths()` reads a
+   * missing one as the document's term — so every existing quotation prints
+   * exactly the figures it printed before.
+   */
+  months?: number;
+  /**
+   * Optional ISO dates (yyyy-mm-dd) for the span this row covers, printed under
+   * the item name. Presentation only: `months` is what multiplies, never the
+   * gap between these two, so a typed date can never silently move the money.
+   */
+  periodStart?: string;
+  periodEnd?: string;
 }
 
 /** The three sentences that would otherwise name the wrong industry. */
@@ -102,9 +124,24 @@ export interface ProposalData {
 
 export interface ProposalTotals {
   usersTotal: number;
-  /** Months covered by one invoice — 3, 6 or 12. */
+  /**
+   * The DEFAULT months, from the billing term — 3, 6 or 12.
+   *
+   * What a new row starts at and what the term-comparison table prices on. It
+   * is no longer what every row is multiplied by: see `lineMonths`.
+   */
   months: number;
-  /** Per line item, in the same order — `users × rate`. */
+  /** Months actually charged per row, in the same order as the rows. */
+  lineMonths: number[];
+  /**
+   * True when the rows do not all cover the same number of months.
+   *
+   * The document's wording turns on this: "per user for the year" is a lie the
+   * moment one row runs for nine months, so a mixed quotation prints each row's
+   * own period instead of one period for the sheet.
+   */
+  mixedMonths: boolean;
+  /** Per line item, in the same order — `users × rate × its own months`. */
   lineAmounts: number[];
   subtotal: number;
   /**
@@ -118,8 +155,13 @@ export interface ProposalTotals {
   /** Same as headlineRate now that rates are monthly. Kept for the templates. */
   perUserPerMonth: number;
   /**
-   * Net cost across twelve months on this term. What the forecast counts, and
-   * the only figure comparable between a quarterly and a yearly proposal.
+   * Net cost across twelve months at the quoted rates. What the forecast counts,
+   * and the only figure comparable between a quarterly and a yearly proposal.
+   *
+   * Summed per row as `users × rate × 12` rather than scaling the subtotal by
+   * `12 / months`, which stopped meaning anything once rows could cover
+   * different periods. For a quotation whose rows all share one period the two
+   * formulas agree exactly, so no stored proposal's forecast figure moves.
    */
   annualised: number;
 }
