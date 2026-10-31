@@ -262,18 +262,21 @@ describe("SFA proposal document", () => {
     });
 
     test("carries the terms and conditions", () => {
-      expect(text).toContain("Valid for 10 days from the date of issue (22 September 2026).");
+      // One numbered line per clause, each opening with its own subject.
       expect(text).toContain(
-        "100% advance — the year’s subscription is payable in full before onboarding begins.",
+        "Proposal validity — valid for 10 days from the date of issue (22 September 2026).",
       );
       expect(text).toContain(
-        "The field app is on Android; the admin dashboard runs in any web browser. No iOS (iPhone) app at this time.",
+        "Payment terms — 100% advance; the year’s subscription is payable in full before onboarding begins.",
       );
       expect(text).toContain(
-        "Includes software, server, maintenance, implementation, and training & support — nothing on this list is billed separately.",
+        "Platform availability — the field app is on Android and the admin dashboard runs in any web browser. There is no iOS (iPhone) app at this time.",
       );
       expect(text).toContain(
-        "Anything beyond this quotation carries extra charges. Please obtain a separate quote for customization before placing your order.",
+        "All-inclusive cost — software, server, maintenance, implementation, and training & support are included; nothing on this list is billed separately.",
+      );
+      expect(text).toContain(
+        "Customization — anything beyond this quotation carries extra charges. Please obtain a separate quote for customization before placing your order.",
       );
     });
   });
@@ -364,7 +367,7 @@ describe("SFA proposal document", () => {
 
     test("states in the terms that no GST is charged", () => {
       expect(text).toContain(
-        "No GST is charged. The amount payable is exactly ₹21,600 for the year, with nothing added on top.",
+        "Taxes — no GST is charged. The amount payable is exactly ₹21,600 for the year, with nothing added on top.",
       );
     });
   });

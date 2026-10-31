@@ -214,20 +214,20 @@ describe("the page-2 budget", () => {
     expect(Math.abs(actual - measured)).toBeLessThanOrEqual(3);
 
   test("reproduces the measured clearances for one billing period", () => {
-    near(priceSheetClearance(rows(3, 1), grid(false)), 145);
-    near(priceSheetClearance(rows(4, 1), grid(false)), 90);
-    near(priceSheetClearance(rows(5, 1), grid(false)), 36);
-    near(priceSheetClearance(rows(4, 2), grid(false)), 34);
-    near(priceSheetClearance(rows(3, 4), grid(false)), 17);
-    near(priceSheetClearance(rows(5, 3), grid(false)), -106);
+    near(priceSheetClearance(rows(2, 1), grid(false)), 206);
+    near(priceSheetClearance(rows(3, 1), grid(false)), 152);
+    near(priceSheetClearance(rows(4, 1), grid(false)), 98);
+    near(priceSheetClearance(rows(5, 1), grid(false)), 43);
+    near(priceSheetClearance(rows(4, 2), grid(false)), 41);
+    near(priceSheetClearance(rows(5, 3), grid(false)), -99);
   });
 
   test("reproduces the measured clearances with all three periods shown", () => {
-    near(priceSheetClearance(rows(3, 1), grid(true)), 83);
-    near(priceSheetClearance(rows(3, 2), grid(true)), 40);
-    near(priceSheetClearance(rows(4, 1), grid(true)), 28);
-    near(priceSheetClearance(rows(5, 2), grid(true)), -97);
-    near(priceSheetClearance(rows(5, 4), grid(true)), -239);
+    near(priceSheetClearance(rows(2, 3), grid(true)), 88);
+    near(priceSheetClearance(rows(3, 1), grid(true)), 90);
+    near(priceSheetClearance(rows(3, 3), grid(true)), 5);
+    near(priceSheetClearance(rows(4, 2), grid(true)), -21);
+    near(priceSheetClearance(rows(5, 3), grid(true)), -161);
   });
 
   // ----------------------------------------------------------------
@@ -236,9 +236,9 @@ describe("the page-2 budget", () => {
   // fitted yesterday can clip today because a signature was uploaded.
   // ----------------------------------------------------------------
 
-  test("the How-to-pay block costs the measured 104px", () => {
+  test("the How-to-pay block costs the measured 105px", () => {
     const bare = priceSheetClearance(rows(3, 1), { showAllTerms: false });
-    near(bare - priceSheetClearance(rows(3, 1), grid(false)), 104);
+    near(bare - priceSheetClearance(rows(3, 1), grid(false)), 105);
   });
 
   test("the signature block costs the measured 99px — nearly two rows", () => {
@@ -264,7 +264,7 @@ describe("the page-2 budget", () => {
   test("reproduces the fully loaded sheet measured end to end", () => {
     // Two rows, descriptions of 3 and 1 lines, both carrying dates, bank block
     // printing, a two-line Offer, no signature. Measured at +31px when the
-    // terms were still boxed; the plain list gives back 36px.
+    // terms were still boxed; the stacked list gives back 46px.
     const items: LineItem[] = [
       {
         label: "OZZO SFA — Field Salesman",
@@ -286,13 +286,13 @@ describe("the page-2 budget", () => {
       },
     ];
 
-    near(priceSheetClearance(items, { showAllTerms: false, hasBankBlock: true, offerLines: 2 }), 70);
+    near(priceSheetClearance(items, { showAllTerms: false, hasBankBlock: true, offerLines: 2 }), 77);
     expect(isPricePageCrowded(items, { showAllTerms: false, hasBankBlock: true, offerLines: 2 })).toBe(
       false,
     );
   });
 
-  test("dropping the term cards bought a whole extra price row", () => {
+  test("the terms list keeps five price rows on the sheet", () => {
     // Five rows on one period and four with all three shown — one more each
     // than the boxed terms allowed.
     expect(isPricePageCrowded(rows(5, 1), grid(false))).toBe(false);
@@ -319,8 +319,8 @@ describe("the page-2 budget", () => {
       periodEnd: "2027-07-31",
     }));
 
-    near(priceSheetClearance(rows(4, 1), grid(false)), 90);
-    near(priceSheetClearance(dated, grid(false)), 34);
+    near(priceSheetClearance(rows(4, 1), grid(false)), 98);
+    near(priceSheetClearance(dated, grid(false)), 41);
   });
 
   test("a row with no description at all is counted as one line, never zero", () => {

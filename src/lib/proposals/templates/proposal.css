@@ -206,14 +206,22 @@
   .offerh{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;
     font-weight:700;margin-bottom:3px;}
   .offerl{font-size:11px;color:var(--fg);line-height:1.45;}
-  /* The Offer is the one block on this sheet the client is meant to notice, so
-     it is the one block that is not white. Green, not a new colour: the sheet
-     already says "you save ₹8,640" in exactly this green, so a concession and
-     a saving read as the same thing. How-to-pay stays plain — it is reference,
-     not an offer. */
-  .offerbox.hl{background:var(--emerald-soft);border-color:var(--emerald);}
-  .offerbox.hl .offerh{color:var(--emerald);}
-  .offerbox.hl .offerl{color:var(--ink);}
+  /* Both blocks are FILLED, not tinted — founder's call, 31 October 2026: a
+     pastel wash read as decoration and he wants a prospect to land on these
+     two first. Violet for the Offer (the brand's own colour, and the one thing
+     on the sheet he is giving away), near-black for How-to-pay (reference the
+     client comes back to, authoritative rather than celebratory).
+
+     White text on a solid fill means these two DEPEND on background graphics
+     being on in Chrome's print dialog. That was already true of the cover, and
+     the print view says so above the Download button. */
+  .offerbox.hl{background:var(--primary);border-color:var(--primary-700);}
+  .offerbox.hl .offerh{color:#e9d8ff;}
+  .offerbox.hl .offerl{color:#ffffff;font-weight:600;}
+
+  .offerbox.pay{background:var(--ink);border-color:var(--ink);}
+  .offerbox.pay .offerh{color:#9b99ab;}
+  .offerbox.pay .offerl{color:#ffffff;}
   .signbox{margin-top:11px;text-align:right;}
   /* Height-capped, width auto: a signature is photographed at whatever size the
      phone chose, and a 3000px-wide PNG would otherwise push the page over. */
@@ -237,18 +245,17 @@
 
   /* ═════ PAGE 2 · TERMS ═════ */
 
-  /* Three columns: six clauses stacked would not clear the price table and
-     the comparison on the same sheet, and a term pushed off a fixed-height
-     page is a term the customer never agreed to.
-     No cards since 31 October 2026, founder's call — a numbered list reads as
-     terms, six boxes read as a feature grid. Dropping the chrome also gives
-     the sheet height back, which the measured budget in totals.ts counts. */
-  .terms{display:grid;grid-template-columns:repeat(3,1fr);gap:7px 14px;}
-  .term{display:flex;gap:6px;}
-  .term .n{flex:none;color:var(--primary-700);font-weight:800;font-size:10px;line-height:1.5;}
+  /* ONE column, one clause per line — founder's call, 31 October 2026. Three
+     bordered columns read as a feature grid; a prospect reads terms down the
+     page. Each clause now opens with its own subject in bold instead of a
+     separate heading, which is what keeps six of them on a fixed-height sheet.
+     The height this costs is measured, see the grid in lib/proposals/totals.ts. */
+  .terms{display:flex;flex-direction:column;gap:3px;}
+  .term{display:flex;gap:7px;align-items:baseline;}
+  .term .n{flex:none;width:11px;text-align:right;color:var(--primary-700);
+    font-weight:800;font-size:9.5px;}
   /* "1." not "1": the numeral has no box to sit in any more, so the full
      stop is what makes it read as a list rather than a stray digit. */
   .term .n::after{content:".";}
-  .term .c h4{font-size:10.5px;font-weight:700;color:var(--ink);margin-bottom:2px;}
-  .term .c p{font-size:9.5px;color:var(--muted);line-height:1.38;}
-  .term .c p b{color:var(--fg);}
+  .term p{font-size:9.8px;color:var(--muted);line-height:1.45;}
+  .term p b{color:var(--ink);font-weight:700;}

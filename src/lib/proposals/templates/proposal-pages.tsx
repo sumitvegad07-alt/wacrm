@@ -434,7 +434,7 @@ export function ProposalPages({
             ) : null}
 
             {hasBank ? (
-              <div className="offerbox">
+              <div className="offerbox pay">
                 <div className="offerh">How to pay</div>
                 {payee?.bankName ? (
                   <div className="offerl">Bank: {payee.bankName}</div>
@@ -537,73 +537,49 @@ export function ProposalPages({
         </div>
 
         <div className="blockhead">Terms & conditions — nothing hidden</div>
+        {/* One clause per line, numbered, stacked. Three bordered columns read
+            as a feature grid; a prospect reads terms down the page. Each clause
+            is its own sentence opening with what it is about, so the list can
+            be skimmed without the headings that used to carry that job. */}
         <div className="terms">
-          <div className="term">
-            <span className="n">1</span>
-            <div className="c">
-              <h4>Proposal validity</h4>
-              <p>
-                Valid for <b>{data.validDays} days</b> from the date of issue ({prettyDate}).
-              </p>
+          {[
+            <>
+              <b>Proposal validity</b> — valid for <b>{data.validDays} days</b> from the date of
+              issue ({prettyDate}).
+            </>,
+            <>
+              <b>Payment terms</b> — 100% advance; the {noun}’s subscription is payable in full
+              before onboarding begins.
+            </>,
+            <>
+              <b>Platform availability</b> — the field app is on Android and the admin dashboard
+              runs in any web browser. <b>There is no iOS (iPhone) app</b> at this time.
+            </>,
+            <>
+              <b>All-inclusive cost</b> — software, server, maintenance, implementation, and
+              training & support are included; nothing on this list is billed separately.
+            </>,
+            gst ? (
+              <>
+                <b>Taxes</b> — GST at {gstRate}% is charged as shown above. Total payable ₹
+                {inr(t.grandTotal)} for the {noun}, including ₹{inr(t.gstAmount)} of GST.
+              </>
+            ) : (
+              <>
+                <b>Taxes</b> — no GST is charged. The amount payable is exactly ₹
+                {inr(t.grandTotal)} for the {noun}, with nothing added on top.
+              </>
+            ),
+            <>
+              <b>Customization</b> — anything beyond this quotation carries extra charges. Please
+              obtain a separate quote for customization before placing your order.
+            </>,
+          ].map((body, i) => (
+            <div className="term" key={i}>
+              <span className="n">{i + 1}</span>
+              <p>{body}</p>
             </div>
-          </div>
-          <div className="term">
-            <span className="n">2</span>
-            <div className="c">
-              <h4>Payment terms</h4>
-              <p>
-                <b>100% advance</b> — the {noun}’s subscription is payable in full before
-                onboarding begins.
-              </p>
-            </div>
-          </div>
-          <div className="term">
-            <span className="n">3</span>
-            <div className="c">
-              <h4>Platform availability</h4>
-              <p>
-                The field app is on <b>Android</b>; the admin dashboard runs in any web browser.{" "}
-                <b>No iOS (iPhone) app</b> at this time.
-              </p>
-            </div>
-          </div>
-          <div className="term">
-            <span className="n">4</span>
-            <div className="c">
-              <h4>All-inclusive cost</h4>
-              <p>
-                Includes <b>software, server, maintenance, implementation, and training & support</b>
-                {" "}— nothing on this list is billed separately.
-              </p>
-            </div>
-          </div>
-          <div className="term">
-            <span className="n">5</span>
-            <div className="c">
-              <h4>Taxes</h4>
-              {gst ? (
-                <p>
-                  <b>GST at {gstRate}% is charged as shown above.</b> Total payable ₹
-                  {inr(t.grandTotal)} for the {noun}, including ₹{inr(t.gstAmount)} of GST.
-                </p>
-              ) : (
-                <p>
-                  <b>No GST</b> is charged. The amount payable is exactly ₹{inr(t.grandTotal)} for
-                  the {noun}, with nothing added on top.
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="term">
-            <span className="n">6</span>
-            <div className="c">
-              <h4>Customization</h4>
-              <p>
-                Anything beyond this quotation carries <b>extra charges</b>. Please obtain a
-                separate quote for customization before placing your order.
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
 
         <Pfoot client={full} label={content.footerLabel} n="02" />

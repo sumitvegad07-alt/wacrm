@@ -122,22 +122,25 @@ export function computeTotals(
  * footer out of the PDF. This is the arithmetic that warns the founder first.
  *
  * MEASURED, not estimated, in a browser at A4 (794 × 1123px) against the
- * fullest sheet the document can produce. Re-measured on 31 October 2026 —
- * first when rows gained their own period and a multi-line description, then
- * again when the terms lost their cards for a plain numbered list, which gave
- * the sheet 36px back and bought a whole extra price row. Clearance above the
- * page footer, in pixels, with the bank block printing and no Offer box:
+ * fullest sheet the document can produce. Re-measured on 31 October 2026 three
+ * times over: when rows gained their own period and a multi-line description,
+ * when the terms lost their cards, and again when they became one clause per
+ * line. The last change cost nothing — six stacked one-line clauses are a
+ * touch SHORTER than two rows of heading-plus-paragraph cards were. Clearance
+ * above the page footer, in pixels, with the bank block printing and no Offer:
  *
- *     description lines per row    1      2      3      4
- *     3 rows, one period        +145   +102    +60    +17
- *     3 rows, all periods        +83    +40     -2    -45
- *     4 rows, one period         +90    +34    -23    -80
- *     4 rows, all periods        +28    -29    -85   -142
- *     5 rows, one period         +36    -35   -106   -177
- *     5 rows, all periods        -26    -97   -168   -239
+ *     description lines per row    1      2      3
+ *     2 rows, one period        +206   +178   +150
+ *     2 rows, all periods       +144   +116    +88
+ *     3 rows, one period        +152   +110    +67
+ *     3 rows, all periods        +90    +47     +5
+ *     4 rows, one period         +98    +41    -16
+ *     4 rows, all periods        +35    -21    -78
+ *     5 rows, one period         +43    -28    -99
+ *     5 rows, all periods        -19    -90   -161
  *
  * Then the blocks BELOW the price table, each measured by adding it to a sheet
- * and re-reading the clearance: the How-to-pay block costs 104px, the signature
+ * and re-reading the clearance: the How-to-pay block costs 105px, the signature
  * block 99px, and the Offer box 57px for its heading and first line plus 16px a
  * line after that. None of the three moved when the terms did — they sit above
  * them, in the ladder's own column.
@@ -155,11 +158,11 @@ export function computeTotals(
  *
  * Anything added to page 2 has to be measured again, not reasoned about.
  */
-const BASE_CLEARANCE = 249;
+const BASE_CLEARANCE = 257;
 const ROW_COST = 54.5;
 const DESCRIPTION_LINE_COST = 14.2;
 const ALL_TERMS_COST = 62;
-const BANK_BLOCK_COST = 104;
+const BANK_BLOCK_COST = 105;
 const SIGNATURE_COST = 99;
 const OFFER_BOX_COST = 57;
 const OFFER_LINE_COST = 16;
