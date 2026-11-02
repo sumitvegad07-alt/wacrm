@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Copy, Check, X, FileText, Loader2, Send, FilePlus2, Pencil, ArrowUpRight } from 'lucide-react';
 import { PrintSizeMenu } from '@/components/print/print-size-menu';
-import Link from 'next/link';
+import { Link } from "@/components/ui/link";
 import { QuotationTimeline } from '@/components/quotations/quotation-timeline';
 import { Timeline } from '@/components/shared/timeline';
 import {

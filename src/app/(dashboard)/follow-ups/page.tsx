@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { isBefore, startOfToday } from "date-fns";
 import { DEFAULT_PERIOD, matchesPeriod, type TaskPeriod } from "@/lib/tasks/period-filter";
 import { assigneeLabel, myStatus, progressLabel } from "@/lib/tasks/assignees";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { PageLayout, PageHeader, useConfirm} from "@/components/shared";
 
 // Extend Task type for this component to include joined relations

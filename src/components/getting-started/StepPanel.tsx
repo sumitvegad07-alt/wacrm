@@ -2,7 +2,7 @@
 import type { EvaluatedStep, AnswerMap } from '@/lib/implementation/types';
 import { Button } from '@/components/ui/button';
 import { Play, MessageCircle, Copy, Smartphone, ClipboardCheck, MapPin, Loader2, Check } from 'lucide-react';
-import Link from 'next/link';
+import { Link } from "@/components/ui/link";
 import { toast } from 'sonner';
 import { ContentTabs } from './ContentTabs';
 import { STEP_TOURS } from '@/lib/tour/scripts';

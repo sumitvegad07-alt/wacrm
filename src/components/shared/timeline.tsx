@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { Link } from "@/components/ui/link";
 import { Calendar, CheckSquare, FileText, CheckCircle, XCircle, Copy, FilePlus2, Plus, MessageSquare, Phone, MapPin, CheckCircle2, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

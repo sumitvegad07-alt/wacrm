@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition, useEffect, useRef } from 'react';
-import Link from 'next/link';
+import { Link } from "@/components/ui/link";
 import { toast } from 'sonner';
 import { PartyPopper, ArrowRight } from 'lucide-react';
 import { saveAnswer, recheck, skipStep, markStepDone, toggleTask, requestHelp, acknowledgeMilestone, type LoadResult } from './actions';

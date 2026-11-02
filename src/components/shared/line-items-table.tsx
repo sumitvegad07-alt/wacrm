@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
 import {
   Table,
   TableBody,
@@ -74,7 +76,17 @@ export function LineItemsHead({
   );
 }
 
-/** A body row. Pass `onClick` to make it navigate, and it becomes clickable. */
+/**
+ * A body row. Pass `onClick` to make it navigate, and it becomes clickable.
+ *
+ * A click paints the row and keeps it painted, because every one of these rows opens
+ * another page — an order's dispatches, a lead's deals, a customer's orders — and the
+ * App Router shows nothing between the click and that page arriving. The top-of-app
+ * progress bar covers it too (`@/lib/navigation`), but this says WHICH line you opened.
+ * It is left painted deliberately: the page is about to be replaced, so there is nothing
+ * to reset it for, and a row that un-paints while you are still waiting reads as a
+ * failure.
+ */
 export function LineItemsRow({
   onClick,
   className,
@@ -84,24 +96,40 @@ export function LineItemsRow({
   className?: string;
   children?: ReactNode;
 }) {
+  const [opening, setOpening] = useState(false);
+  const activate = onClick
+    ? () => {
+        setOpening(true);
+        onClick();
+      }
+    : undefined;
+
   return (
     <TableRow
-      onClick={onClick}
+      onClick={activate}
+      aria-busy={opening || undefined}
       // A clickable row is also reachable from the keyboard. The raw <tr
       // onClick> blocks these pages replaced were mouse-only.
       role={onClick ? "link" : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={
-        onClick
+        activate
           ? (e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                onClick();
+                activate();
               }
             }
           : undefined
       }
-      className={cn(onClick && "cursor-pointer hover:bg-muted/40", className)}
+      className={cn(
+        onClick && "cursor-pointer hover:bg-muted/40",
+        // Restates its own hover, or the hover rule above wins and the row goes plain
+        // again under the pointer that just clicked it — the same trap that made the
+        // unopened-row highlight invisible.
+        opening && "bg-primary/15 hover:bg-primary/15 cursor-progress",
+        className,
+      )}
     >
       {children}
     </TableRow>

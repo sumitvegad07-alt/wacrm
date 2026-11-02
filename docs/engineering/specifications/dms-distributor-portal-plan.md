@@ -1,7 +1,29 @@
 # DMS / Distributor Portal — internal plan
 
-**Status:** PLAN ONLY. Nothing built. Founder decision 2026-11-02: build it as a
-**tenant customisation** for one new account, not as a product module.
+> ## PARKED — do not build from this
+>
+> **Founder ruling, 2026-11-02 (second pass):** *"Leave our internal DMS building plan
+> for now, we will make it a completely new product called DMS in future with some more
+> features as well."*
+>
+> So **DMS is not a module inside OZZO.** It becomes its own product, with a wider
+> feature set than anything below, and it gets its own plan when that is started.
+> Nothing in this document is scheduled and nothing should be built from it.
+>
+> It is kept because the groundwork in it is still true and still expensive to redo:
+> the identity model (§2.2), the beat-to-distributor mapping and its collision with the
+> one-route-per-customer rule (§2.3), the RLS shape (§2.5), the delivery data model
+> (§2.6), and the competitor feature gaps (§5). Start the product plan from here rather
+> than from a blank page.
+>
+> **Part A (configurable order statuses) is a different matter.** It is the one tenant's
+> customisation, it does not depend on the DMS, and §1 is a live plan for it.
+>
+> **The delivery boy moved into the existing mobile app**, not a browser — see the note
+> at the end of §2.6. The client-facing document already reflects that; §2.6's web
+> reasoning below is superseded.
+
+**Status:** PARKED for the portal, LIVE PLAN for Part A only.
 **Companion document:** `docs/clients/CUSTOMIZATION-PROPOSAL-dms-and-order-status.md`
 (the client-facing version — keep the two in step).
 
@@ -334,8 +356,25 @@ Two things to be honest about in the client document, and they already are:
   stop. The existing mobile app's offline queue is exactly the thing that solves this, and
   it is not available to a web portal.
 
-If either turns out to be a real requirement, the delivery boy belongs in the existing
-Android app behind a `delivery` role, not in the portal. That is a separate quote.
+**Superseded, 2026-11-02:** both turned out to be real requirements, and the founder's
+own conclusion was the right one — the delivery boy belongs in the **existing OZZO
+Android app behind a `delivery` role**, not in a browser.
+
+Worth recording why *one app with a role* beats *a second app for delivery boys*, since
+he asked:
+
+* OZZO SALES is **already public on the Play Store** (`com.wacrm.fieldforce`). A delivery
+  boy installs the normal app and a role-gated nav shows him only his deliveries — no
+  sideloading, no "install from unknown sources", no Play Protect warning, and automatic
+  updates. Distributing an APK over WhatsApp is a real cost paid by the least technical
+  user in the chain, and it is not a cost we have to pay.
+* A second app means a second codebase, a second build pipeline, a second release to
+  manage and a second copy of auth, offline sync, location and the RBAC registry — all of
+  which already exist and all of which would then drift.
+* The screens are role-gated, so no other tenant and no salesman ever sees them.
+
+If an off-store build is still wanted for some other reason, it is a **build flavour of
+the same codebase**, never a separate app.
 
 ### 2.7 Orders and payments in the portal (phase 5)
 

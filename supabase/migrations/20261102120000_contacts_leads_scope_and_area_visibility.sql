@@ -110,7 +110,8 @@ GRANT EXECUTE ON FUNCTION public.owner_scope_allows(uuid, uuid, text) TO authent
 COMMENT ON FUNCTION public.owner_scope_allows(uuid, uuid, text) IS
   'Row visibility for an owned record under the account data-scope model (own / team / all). '
   'Same *_scope keys as payment_scope_allows. Used by the contacts and leads SELECT policies so '
-  'a manager sees their reports' records at the data layer, not only in the UI.';
+  'a manager can see the records of the people who report to them at the data layer, '
+  'not only in the UI.';
 
 -- Customers: admins all; everyone else own + data scope + assigned areas.
 DROP POLICY IF EXISTS contacts_select ON public.contacts;

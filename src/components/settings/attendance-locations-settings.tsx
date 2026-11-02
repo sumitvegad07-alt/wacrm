@@ -19,7 +19,7 @@ import { SettingsPanel } from '@/components/settings/settings-layout';
 //     disagree about who is fenced.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { useAuth } from "@/hooks/use-auth";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";

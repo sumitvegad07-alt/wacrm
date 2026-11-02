@@ -23,8 +23,7 @@ import {
   defaultModuleSettings,
   isNewPlan,
 } from "@/lib/plans/catalog";
-import Link from "next/link";
-
+import { Link } from "@/components/ui/link";
 const TIMELINE_DOT: Record<string, string> = {
   account: "bg-primary",
   admin: "bg-amber-500",

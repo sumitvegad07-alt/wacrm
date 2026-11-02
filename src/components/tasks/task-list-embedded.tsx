@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, CalendarCheck, Phone, MapPin, FileText, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { TaskForm } from "@/components/tasks/task-form";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { cn } from "@/lib/utils";
 import { isBefore, startOfToday } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";

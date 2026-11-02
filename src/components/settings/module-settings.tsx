@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
 import { allowedModules } from "@/lib/plans/catalog";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { CheckCircle2, Layers, GripVertical, Trash2, Plus, Loader2, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {

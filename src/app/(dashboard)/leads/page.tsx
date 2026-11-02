@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { Plus, Search, Filter, Upload, MapPin, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
 import {
   PointMapDialog,

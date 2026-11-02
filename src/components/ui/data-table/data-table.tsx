@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useMemo, useRef, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "@/lib/navigation";
+import { useRouter, startNavigationProgress } from "@/lib/navigation";
 import { useTableToolbarSlot } from "@/components/layout/table-toolbar-slot";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, Download, ChevronLeft, ChevronRight, Menu, Printer } from "lucide-react";
+import { LayoutGrid, Download, ChevronLeft, ChevronRight, Loader2, Menu, Printer } from "lucide-react";
 import { stashListPayload } from "@/lib/print/list-payload";
 import {
   DropdownMenu,
@@ -404,6 +404,25 @@ export function DataTable<T>({
   };
 
   /**
+   * Warm the route the instant the finger or button goes down, not on the click.
+   *
+   * Between pointerdown and click there is the travel of a mouse button or a tap, which
+   * is 100ms or more, and on a row nobody hovered long enough to trigger `prefetchRow`
+   * that is the only head start there is. Free, and it dedupes against the hover warm-up.
+   */
+  const warmOnPress = (row: T) => {
+    if (!rowHref) return;
+    const href = rowHref(row);
+    if (!href || prefetched.current.has(href)) return;
+    prefetched.current.add(href);
+    try {
+      router.prefetch(href);
+    } catch {
+      // A prefetch is an optimisation; the click still works without it.
+    }
+  };
+
+  /**
    * Open a row. Inside `startNavigation` so React keeps the old page
    * interactive and tells us it is busy, which is what paints the row as
    * pending instead of leaving the screen looking inert.
@@ -412,6 +431,13 @@ export function DataTable<T>({
     const href = rowHref?.(row);
     if (href) {
       setPendingRowKey(rowKey(row));
+      // OUTSIDE the transition, and this order matters. A setState called from inside a
+      // transition callback is a transition update, so when the progress bar was fed
+      // through React state the announcement arrived WITH the finished navigation
+      // instead of at the start of it — the bar never appeared for a row click at all,
+      // which is why buttons felt fixed and rows did not. The store behind this call is
+      // external for the same reason; see components/layout/navigation-progress.tsx.
+      startNavigationProgress();
       startNavigation(() => router.push(href));
       return;
     }
@@ -640,6 +666,7 @@ export function DataTable<T>({
                   )}
                   onPointerEnter={() => prefetchRow(row)}
                   onPointerLeave={cancelPrefetch}
+                  onPointerDown={() => warmOnPress(row)}
                   onClick={() => activateRow(row)}
                 >
                   {selection && (
@@ -669,7 +696,19 @@ export function DataTable<T>({
                           and both disappear in a column rendered as a coloured link or a
                           badge, which on these lists is most of them. A dot is a thing
                           that is either there or not. */}
-                      {colIndex === 0 && unseenRowKeys?.has(rowKey(row)) && (
+                      {colIndex === 0 && pendingRowKey === rowKey(row) && (
+                        // The row you clicked, saying so. A tint on a 33px row is not
+                        // enough — the founder's words for a row click were "still
+                        // silent and taking long, long, long". A spinner on the row is
+                        // the only thing at the place the eye is already looking.
+                        <Loader2
+                          className="mr-1.5 inline size-3.5 shrink-0 animate-spin align-middle text-primary"
+                          aria-label="Opening"
+                        />
+                      )}
+                      {colIndex === 0 &&
+                        pendingRowKey !== rowKey(row) &&
+                        unseenRowKeys?.has(rowKey(row)) && (
                         <span
                           className="mr-1.5 inline-block size-1.5 shrink-0 rounded-full bg-primary align-middle"
                           title="You have not opened this yet"

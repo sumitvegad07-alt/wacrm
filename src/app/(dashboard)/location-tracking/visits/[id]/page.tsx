@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "@/lib/navigation";
 import { useParams } from "next/navigation";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/currency";
 import { haversineKm } from "@/lib/location/distance";

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useRouter } from "@/lib/navigation";
 import { useParams } from "next/navigation";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Deal, CustomField, Task, Contact, Conversation, PipelineStage, Profile } from "@/types";
 import { Button } from "@/components/ui/button";

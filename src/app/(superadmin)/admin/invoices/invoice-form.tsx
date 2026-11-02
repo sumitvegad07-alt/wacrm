@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "@/components/ui/link";
 import { useRouter } from "@/lib/navigation";
 import { FileText, Loader2, Plus, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -412,9 +413,9 @@ export default function InvoiceForm({
           <TriangleAlert className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
           <p>
             Your firm name is not set. Fill in{" "}
-            <a href="/admin/invoice-settings" className="underline">
+            <Link href="/admin/invoice-settings" className="underline">
               Invoice Settings
-            </a>{" "}
+            </Link>{" "}
             first, or the invoice will print without your details, GSTIN and bank account.
           </p>
         </div>

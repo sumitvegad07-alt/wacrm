@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "@/lib/navigation";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -146,54 +146,72 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         repassword: ""
       });
 
-      const { data: rolesData } = await supabase.from("employee_roles").select("*").order("name", { ascending: true });
-      if (rolesData) setRoles(rolesData as EmployeeRole[]);
+      // Everything else at once.
+      //
+      // This used to be EIGHT more `await`s one after another — roles, devices, holiday
+      // lists, managers, the custom-field seed, the fields, their values, the timeline —
+      // and not one of them needed any of the others. Against Mumbai each round trip is
+      // a few hundred milliseconds, so opening one employee cost nine trips end to end
+      // and spent most of three seconds doing nothing but waiting. The founder's words
+      // for it were "long, long, long". Now it is two: the employee row (which decides
+      // whether to redirect at all), then this.
+      //
+      // The custom-field pair stays sequential INSIDE the batch because the seed has to
+      // have run before the fields are read — but it runs alongside everything else
+      // rather than after it.
+      const [rolesRes, devRes, listRes, mgrRes, customRes, timelineRes] = await Promise.all([
+        supabase.from("employee_roles").select("*").order("name", { ascending: true }),
 
-      // employee_devices has neither `last_seen_at` nor `user_id` — ordering/filtering by them
-      // made BOTH the primary and the "legacy fallback" query 400, so this table always rendered
-      // empty even though device rows exist. Scope by profile_id and order by last_login.
-      const { data: devData, error: devErr } = await supabase
-        .from("employee_devices")
-        .select("*")
-        .eq("profile_id", employeeId)
-        .order("last_login", { ascending: false, nullsFirst: false });
-      if (devErr) console.error("[employee] failed to load devices:", devErr);
+        // employee_devices has neither `last_seen_at` nor `user_id` — ordering/filtering by them
+        // made BOTH the primary and the "legacy fallback" query 400, so this table always rendered
+        // empty even though device rows exist. Scope by profile_id and order by last_login.
+        supabase
+          .from("employee_devices")
+          .select("*")
+          .eq("profile_id", employeeId)
+          .order("last_login", { ascending: false, nullsFirst: false }),
 
-      const { data: listData } = await supabase
-        .from("holiday_lists")
-        .select("id, name, is_default")
-        .order("name");
-      setHolidayLists(listData ?? []);
-      setDevices((devData || []) as EmployeeDevice[]);
+        supabase.from("holiday_lists").select("id, name, is_default").order("name"),
 
-      // Manager options for the reporting hierarchy — everyone else in the account (never self, to
-      // keep a person from being their own manager; the DB also blocks cycles).
-      const { data: mgrData } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .neq("id", employeeId)
-        .order("full_name");
-      setManagers((mgrData ?? []) as { id: string; full_name: string }[]);
+        // Manager options for the reporting hierarchy — everyone else in the account (never self, to
+        // keep a person from being their own manager; the DB also blocks cycles).
+        supabase.from("profiles").select("id, full_name").neq("id", employeeId).order("full_name"),
 
-      if (accountId && user?.id) {
-        await ensureDefaultSectionsAndFields(accountId, "user", user.id, supabase);
-      }
+        (async () => {
+          if (accountId && user?.id) {
+            await ensureDefaultSectionsAndFields(accountId, "user", user.id, supabase);
+          }
+          const [fields, values] = await Promise.all([
+            supabase.from("custom_fields").select("*").eq("module_name", "user").order("created_at"),
+            supabase.from("user_custom_values").select("*").eq("user_id", employeeId),
+          ]);
+          return { fields: fields.data, values: values.data };
+        })(),
 
-      const { data: fieldsData } = await supabase.from("custom_fields").select("*").eq("module_name", "user").order("created_at");
-      if (fieldsData) setCustomFields(fieldsData);
+        supabase
+          .from("module_activities")
+          .select("*")
+          .eq("module_name", "user")
+          .eq("record_id", employeeId)
+          .order("created_at", { ascending: false }),
+      ]);
 
-      const { data: cvData } = await supabase.from("user_custom_values").select("*").eq("user_id", employeeId);
-      if (cvData) {
+      if (rolesRes.data) setRoles(rolesRes.data as EmployeeRole[]);
+      if (devRes.error) console.error("[employee] failed to load devices:", devRes.error);
+      setDevices((devRes.data || []) as EmployeeDevice[]);
+      setHolidayLists(listRes.data ?? []);
+      setManagers((mgrRes.data ?? []) as { id: string; full_name: string }[]);
+
+      if (customRes.fields) setCustomFields(customRes.fields);
+      if (customRes.values) {
         const vals: Record<string, string> = {};
-        cvData.forEach((row: any) => { vals[row.custom_field_id] = row.value; });
+        customRes.values.forEach((row: any) => { vals[row.custom_field_id] = row.value; });
         setCustomValues(vals);
       } else {
         setCustomValues({});
       }
 
-      // Fetch Timeline
-      const { data: timelineActs } = await supabase.from("module_activities").select("*").eq("module_name", "user").eq("record_id", employeeId).order("created_at", { ascending: false });
-      if (timelineActs) setActivities(timelineActs);
+      if (timelineRes.data) setActivities(timelineRes.data);
       
       // NOTE: no task query here. `tasks` has no module_name/record_id columns (it links to a
       // module via dedicated FKs: contact_id, lead_id, deal_id, order_id, ...) and has no

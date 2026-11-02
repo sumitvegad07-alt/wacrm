@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { AlertTriangle, ArrowLeft, UserRound } from "lucide-react";
 
 import { assetStatusLabel } from "@/lib/service/assets/list-view";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { MessageSquare, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 

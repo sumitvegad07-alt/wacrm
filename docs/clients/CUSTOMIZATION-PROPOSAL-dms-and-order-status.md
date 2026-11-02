@@ -20,9 +20,8 @@ Both will be built **for your account only**. They will not appear for any other
 customer, and no other customer's behaviour changes because of them. Your account carries
 its own settings; these features are switched on against your account and nobody else's.
 
-This document says exactly what you get, how each screen behaves, what is **not**
-included, and how long it takes. Please read section 7 — there are a few decisions we
-need from you before we start.
+This document says exactly what you get and how each screen behaves. Timelines and
+commercial terms are covered separately.
 
 ---
 
@@ -141,112 +140,43 @@ A distributor marks an order **In Transit** when it leaves their godown.
 
 ### 3.4 The delivery boy
 
-The delivery boy opens the **same portal on his phone's browser**. He signs in with his own
-login, created by the distributor.
+The delivery boy works in the **OZZO mobile app** — the same app your salesmen already
+use. He signs in with his own login and the app opens on his delivery list. He sees
+nothing else: no customers list, no orders, no reports. Only his deliveries.
 
 He sees:
 
-1. **His deliveries for today**, ordered **nearest first** from where he is standing. After
-   he finishes the first stop the list re-orders from his new position, so the next one is
+1. **His deliveries for today**, ordered **nearest first** from where he is standing.
+   After he finishes a stop the list re-orders from his new position, so the next one is
    always the closest remaining stop.
 2. **Every dealer under his distributor**, so he can look one up even when no delivery is
    assigned to it.
 
 At each stop he does one of two things:
 
-- **Delivered** — the order is marked done, with the date, time and his location.
+- **Delivered** — the order is marked done, with the date, time and his location. He can
+  attach a photo.
 - **Hold** — he picks a reason from the same list you manage in section 2.3, and the order
   goes to Hold. The distributor and you both see it immediately.
 
-Everything he does is visible to the distributor and to you, with the time and place it
-happened.
+Everything he does is visible to the distributor and to you, with the time and the place
+it happened.
 
-> **Please note:** nearest-first ordering needs the phone's location. A browser can read
-> location, but only while the page is open — it cannot track in the background and it does
-> not work without a signal. If you need background tracking or offline working for
-> delivery boys, that needs a mobile app, which is **not** part of this proposal. See
-> section 7.
+Because it is the app and not a web page, three things work that could not work in a
+browser:
+
+| | In the app | In a browser |
+|---|---|---|
+| Location while the screen is off or he is on a call | Yes | No |
+| Working with no signal, syncing later | Yes | No |
+| Staying signed in all day | Yes | Loses the session |
+
+A delivery boy spends his day in lifts, basements and godowns. Offline is not a
+nice-to-have for him; it is the difference between the app working and the app being
+abandoned by the second week.
 
 ### 3.5 What you see
 
 Everything. Every order, every dispatch, every delivery, every hold and every payment made
 in the DMS appears in your own OZZO account, in the same lists and reports you use today,
 with the distributor's name as a column you can filter on.
-
----
-
-## 4. What is **not** included
-
-Being plain about this now avoids a difficult conversation later.
-
-| Not included | Why, and what it would take |
-|--------------|-----------------------------|
-| A mobile **app** for the DMS | You asked for a web portal only. An app is separate work |
-| Background location tracking of delivery boys | Needs an app (see above) |
-| Offline working in the portal | Needs an app |
-| Distributor **stock** and auto-replenishment | Tracking what each distributor holds is a large module on its own. Tell us if you want it and we will quote it |
-| Distributor **claims** (damage, scheme, freight, rate difference) | Standard in large DMS products, and a module in its own right |
-| Accounting sync (Tally / Busy / Marg) | Quoted separately when you need it |
-| E-way bill or transporter integration | Not in scope |
-| A printed delivery challan book | The existing OZZO dispatch print is used |
-
----
-
-## 5. How it will be delivered
-
-| Phase | What lands | Working days |
-|-------|-----------|--------------|
-| **1. Order statuses** | In Transit, Hold, hold-reason master, per-role rights, reports | 12 |
-| **2. Distributor access** | Distributor logins, portal shell, beat-to-distributor mapping, switch-off and reassign | 8 |
-| **3. Dealer orders and dispatch** | Orders list, create dispatch, In Transit | 8 |
-| **4. Delivery** | Delivery boy logins, assignment, nearest-first list, Delivered / Hold with reason | 13 |
-| **5. Orders, payments and your oversight** | Order placement in the portal, sales and purchase orders, payments, your reports | 17 |
-| | **Total** | **58 working days — about 12 weeks** |
-
-Each phase is shown to you when it is finished. You can use phases 1 to 3 while 4 and 5
-are still being built.
-
----
-
-## 6. What we need from you
-
-- A short session with the person who will actually run the distributor portal.
-- Your starting list of hold reasons.
-- One real distributor and two or three real dealers to test with.
-- A decision on each point in section 7.
-
----
-
-## 7. Decisions we need before starting
-
-1. **Does the distributor hold stock in OZZO?** That is, do you want OZZO to know how much
-   of each product each distributor is holding, and to reduce it as they dispatch? This is
-   the single biggest question in this document — it roughly doubles phase 5.
-2. **Purchase orders.** Does the distributor raise a purchase order **on you** through the
-   portal, which you then approve and bill? Or do you push stock to them and the portal
-   only records what arrived?
-3. **Payments — how many ledgers?** Is it (a) dealer pays distributor, and (b) distributor
-   pays you — two separate accounts to keep? Or only one of those?
-4. **Can a dealer belong to two distributors?** Today a dealer belongs to one beat. If you
-   need the same dealer served by two distributors (say, different product ranges), say so
-   now — it changes how the mapping is built.
-5. **Delivery boy — browser or app?** Section 3.4 explains the limits of the browser.
-6. **Hold and dispatch.** When an order is on Hold, should it be blocked from being
-   dispatched at all, or only flagged?
-7. **Who releases a Hold?** Section 2.4 proposes Admin and Sales Manager. Confirm, or tell
-   us who.
-8. **Prices in the portal.** Should a distributor see the dealer's selling price, their own
-   buying price, or both?
-
----
-
-## 8. Commercial terms
-
-*(To be filled in: the one-time customisation charge, the monthly or annual charge for the
-DMS portal, the per-distributor-login charge if any, and the support terms.)*
-
----
-
-*This proposal is valid for 30 days from the date above. Anything agreed outside it —
-added screens, added reports, added integrations — is quoted separately before work
-starts.*

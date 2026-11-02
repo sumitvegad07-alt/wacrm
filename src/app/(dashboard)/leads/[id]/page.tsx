@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, use } from "react";
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useRouter } from "@/lib/navigation";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { NavButton } from "@/components/ui/nav-button";
@@ -159,12 +159,13 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     if (!account?.id) return;
-    (async () => {
-      const { data } = await supabase.from("accounts").select("settings").eq("id", account.id).single();
-      const os = data?.settings?.order_settings ?? {};
-      setHierarchy({ enabled: !!os.hierarchy_enabled, levels: Array.isArray(os.levels) ? os.levels : [] });
-    })();
-  }, [account?.id, supabase]);
+    // From the account in context rather than a fresh fetch: useAuth already holds
+    // accounts.settings, so re-reading it was a round trip to Mumbai per lead opened.
+    const os =
+      (account.settings as { order_settings?: { hierarchy_enabled?: boolean; levels?: unknown[] } } | null)
+        ?.order_settings ?? {};
+    setHierarchy({ enabled: !!os.hierarchy_enabled, levels: Array.isArray(os.levels) ? (os.levels as never[]) : [] });
+  }, [account?.id, account?.settings]);
 
   // Names for the deal table + owner display.
   const nameForUser = (id: string | null | undefined) => {

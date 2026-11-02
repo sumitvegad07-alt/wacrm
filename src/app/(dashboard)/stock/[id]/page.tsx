@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { Link } from "@/components/ui/link";
 import { useRouter } from "@/lib/navigation";
 import { useParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';

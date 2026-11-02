@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { useState } from "react";
 import { ArrowLeft, Upload, History, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";

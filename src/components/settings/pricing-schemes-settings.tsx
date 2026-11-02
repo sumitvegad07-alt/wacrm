@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useConfirm } from "@/components/shared";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Percent, ShieldCheck, Tag, Boxes, ListChecks } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";

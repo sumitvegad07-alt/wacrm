@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { Upload, Boxes, Users, Package, UserPlus, ShoppingCart, Banknote, CheckSquare, MapPin, Wrench, ListChecks } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getImportDescriptor } from "@/lib/import/registry";

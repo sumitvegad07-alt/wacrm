@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Camera, MapPin, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { PageLayout, PageHeader, PageLoader } from "@/components/shared";
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';

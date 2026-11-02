@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { useLinkStatus } from "next/link";
-import { useRouter, useNavigationProgress } from "@/lib/navigation";
+import { useRouter } from "@/lib/navigation";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -689,13 +689,10 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
    */
   const NavPending = () => {
     const { pending } = useLinkStatus();
-    const { start } = useNavigationProgress();
-    // A <Link> never goes through `@/lib/navigation`'s router, so the top-of-app
-    // progress bar would miss every sidebar click without this. One signal, every
-    // navigation, whichever control started it.
-    useEffect(() => {
-      if (pending) start();
-    }, [pending, start]);
+    // The top-of-app progress bar is fed by `@/components/ui/link`, which every Link in
+    // this app now goes through, so nothing to report here — this is only the spinner on
+    // the nav item itself, which says WHICH item you opened, not merely that something
+    // is opening.
     if (!pending) return null;
     return <InlineLoader className="shrink-0 text-current" aria-label="Opening…" />;
   };

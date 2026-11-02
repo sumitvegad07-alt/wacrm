@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "@/lib/navigation";
 import { usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import {
   Settings,
   LogOut,

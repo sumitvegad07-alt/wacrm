@@ -58,6 +58,16 @@ const CHECKS = [
       "top-of-app progress bar. Only src/lib/navigation itself may import the real one.",
   },
   {
+    key: "uninstrumentedLink",
+    label: "Link imported from next/link",
+    pattern: /import\s+Link\s+from\s*['"]next\/link['"]/g,
+    why:
+      "Import Link from @/components/ui/link. A bare <Link> shows nothing between the click " +
+      "and the next route arriving, so on a cold route against Mumbai it reads as dead exactly " +
+      "like a router.push button did. The wrapper is identical except that it feeds the " +
+      "top-of-app progress bar. Only src/components/ui/link.tsx may import the real one.",
+  },
+  {
     key: "routerPushOnClick",
     label: "onClick={() => router.push(...)} navigation buttons",
     pattern: /onClick=\{\(\)\s*=>\s*router\.push\(/g,

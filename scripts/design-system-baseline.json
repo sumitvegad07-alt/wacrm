@@ -2,7 +2,8 @@
   "recorded": "2026-11-02",
   "counts": {
     "uninstrumentedRouter": 0,
-    "routerPushOnClick": 30,
+    "uninstrumentedLink": 0,
+    "routerPushOnClick": 29,
     "rawButton": 215,
     "rawPaletteRed": 192,
     "rawPaletteBgRed": 123,

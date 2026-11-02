@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter as useNextRouter } from "next/navigation";
-import { useNavigationProgress } from "@/components/layout/navigation-progress";
+import { startNavigationProgress } from "@/components/layout/navigation-progress";
 
 /**
  * `useRouter`, with the app's navigation progress bar wired in.
@@ -23,29 +23,32 @@ import { useNavigationProgress } from "@/components/layout/navigation-progress";
  */
 export function useRouter(): ReturnType<typeof useNextRouter> {
   const router = useNextRouter();
-  const { start } = useNavigationProgress();
 
   return React.useMemo(() => {
     return {
       ...router,
       push: (...args: Parameters<typeof router.push>) => {
-        start();
+        startNavigationProgress();
         return router.push(...args);
       },
       replace: (...args: Parameters<typeof router.replace>) => {
-        start();
+        startNavigationProgress();
         return router.replace(...args);
       },
       back: () => {
-        start();
+        startNavigationProgress();
         return router.back();
       },
       forward: () => {
-        start();
+        startNavigationProgress();
         return router.forward();
       },
     };
-  }, [router, start]);
+  }, [router]);
 }
 
-export { useNavigationProgress } from "@/components/layout/navigation-progress";
+export {
+  useNavigationProgress,
+  startNavigationProgress,
+  stopNavigationProgress,
+} from "@/components/layout/navigation-progress";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { createClient } from "@/lib/supabase/client";
 import { monthlyRevenue } from "@/lib/admin/billing";
 import { PLAN_LABEL, type PlanId } from "@/lib/plans/catalog";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { format, isPast, isToday } from "date-fns";
 import { CheckCircle2, Circle, Clock, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";

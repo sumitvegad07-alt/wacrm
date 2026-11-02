@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Layers, GripVertical } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";

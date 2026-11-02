@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { CheckSquare, Calendar, FileText, CheckCircle, XCircle, Copy, FilePlus2, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { Link } from "@/components/ui/link";
 import { toast } from 'sonner';
 import { TaskForm } from '@/components/tasks/task-form';
 import { Button } from '@/components/ui/button';

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
 import { useRouter } from "@/lib/navigation";
 import { useParams } from "next/navigation";
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Contact, Tag, ContactNote, CustomField, Deal, Task, Conversation } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ export default function ContactDetailsPage() {
   useMarkRecordSeen("contact", id);
   const router = useRouter();
   const supabase = createClient();
-  const { defaultCurrency, accountId, isModuleEnabled, hasPermission, hasFSM } = useAuth();
+  const { defaultCurrency, accountId, account, isModuleEnabled, hasPermission, hasFSM } = useAuth();
   const paymentEnabled = isModuleEnabled('payment');
   
   const canViewFinancials = hasPermission(PERMISSIONS.CUSTOMERS.VIEW_FINANCIALS);
@@ -72,12 +72,16 @@ export default function ContactDetailsPage() {
     }
     setContact(contactData);
 
-    // Order hierarchy config (drives the Customer Level field visibility)
-    if (accountId) {
-      const { data: acct } = await supabase.from("accounts").select("settings").eq("id", accountId).single();
-      const os = acct?.settings?.order_settings;
-      setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? os.levels : [] });
-    }
+    // Order hierarchy config (drives the Customer Level field visibility).
+    //
+    // Read from the account already in context, NOT re-fetched. This was a whole extra
+    // round trip to Mumbai, and a BLOCKING one — it sat between the customer fetch and
+    // the parallel batch below, so it added its full latency to every single time
+    // anyone opened a customer. `useAuth` loads accounts.settings on the same row as
+    // module_settings when the shell mounts, so the answer is already here.
+    const os = (account?.settings as { order_settings?: { hierarchy_enabled?: boolean; levels?: unknown[] } } | null)
+      ?.order_settings;
+    setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? (os.levels as never[]) : [] });
 
     // 2. Fetch everything else in parallel
     const [
@@ -150,7 +154,7 @@ export default function ContactDetailsPage() {
     }
 
     setLoading(false);
-  }, [id, supabase, router]);
+  }, [id, supabase, router, account?.settings]);
 
   useEffect(() => {
     fetchAllData();

@@ -856,6 +856,10 @@ export default function PipelinesPage() {
               fill
               columns={visibleColumns}
               data={filteredDeals}
+              // The only DataTable in the app that was never told it was loading, so its
+              // list view showed an empty table rather than a skeleton while the deals
+              // were on their way.
+              isLoading={loading}
         unseenModule="deal"
         createdAtOf={(deal) => deal.created_at as string | undefined}
               tableView={tableView}

@@ -23,7 +23,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from "@/components/ui/link";
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
