@@ -38,8 +38,16 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { useConfirm } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import { normalizeTerritorySettings, leafLevel } from "@/lib/territories/settings";
+import {
+  DEFAULT_CUSTOM_REPEAT,
+  describeRepeat,
+  generateRepeatDates,
+  type CustomRepeat,
+  type RepeatFrequency,
+} from "@/lib/route/repeat-schedule";
 
 interface EmployeeRouteTabProps {
   employeeId: string;
@@ -71,7 +79,16 @@ interface RouteCustomerItem {
   route_id: string;
   contact_id: string;
   must_visit?: boolean;
+  /** NULL = a permanent stop. A date = this route visits them on that date only. */
+  one_time_date?: string | null;
   contacts?: any;
+}
+
+/** Where a customer already sits, for the Add Customers dialog. */
+interface ExistingRoute {
+  routeId: string;
+  routeName: string;
+  rowId: string;
 }
 
 interface RouteExecItem {
@@ -209,32 +226,39 @@ function getMonthGrid(year: number, month: number) {
   return days;
 }
 
-// Generate repeating dates across a month from startDateStr
-function generateRepeatDates(
-  startDateStr: string,
-  freq: "daily" | "weekly" | "10_days" | "15_days" | "monthly",
-  year: number,
-  month: number
-): string[] {
-  const dates: string[] = [];
-  const start = new Date(startDateStr);
-  const startDay = start.getDate();
-  const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+/** Monday-first, because a beat week starts on Monday, not Sunday. */
+const WEEKDAY_OPTIONS = [
+  { iso: 1, label: "Mon" },
+  { iso: 2, label: "Tue" },
+  { iso: 3, label: "Wed" },
+  { iso: 4, label: "Thu" },
+  { iso: 5, label: "Fri" },
+  { iso: 6, label: "Sat" },
+  { iso: 7, label: "Sun" },
+] as const;
 
-  let step = 1;
-  if (freq === "daily") step = 1;
-  else if (freq === "weekly") step = 7;
-  else if (freq === "10_days") step = 10;
-  else if (freq === "15_days") step = 15;
-  else if (freq === "monthly") return [startDateStr];
-
-  for (let day = startDay; day <= lastDayOfMonth; day += step) {
-    dates.push(formatDateStr(year, month, day));
+/**
+ * What to tell the user when adding a customer to a route fails.
+ *
+ * The one failure that actually happens is the one-customer-one-active-route rule, and
+ * Postgres reports it as `duplicate key value violates unique constraint
+ * "uq_route_customers_one_active_route"`. That sentence went straight to the screen.
+ * Anything the dialog did not already ask about is a genuine surprise, so its own
+ * message is kept — just never the constraint name.
+ */
+function addCustomerErrorMessage(err: unknown, who: string, routeName: string): string {
+  const raw = err instanceof Error ? err.message : String((err as { message?: string })?.message ?? "");
+  if (/uq_route_customers_one_active_route/.test(raw)) {
+    return `${who} is already on another route. Refresh and try again — they must be moved, not added twice.`;
   }
-  return dates;
+  if (/uq_route_customers_route_contact/.test(raw)) {
+    return `${who} is already on ${routeName}.`;
+  }
+  return raw || "Failed to add customer";
 }
 
 export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProps) {
+  const confirm = useConfirm();
   const [activeSubTab, setActiveSubTab] = useState<"calendar" | "table">("calendar");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const year = currentDate.getFullYear();
@@ -257,7 +281,23 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
   const [activeSheetTab, setActiveSheetTab] = useState<"overview" | "customers" | "planning" | "history">("customers");
 
   // Repeat route assignment state inside Customer screen
-  const [repeatFrequency, setRepeatFrequency] = useState<"daily" | "weekly" | "10_days" | "15_days" | "monthly">("weekly");
+  const [repeatFrequency, setRepeatFrequency] = useState<RepeatFrequency>("weekly");
+  const [customRepeat, setCustomRepeat] = useState<CustomRepeat>(DEFAULT_CUSTOM_REPEAT);
+  const daysInSelectedMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month]);
+  const toggleRepeatWeekday = (iso: number) =>
+    setCustomRepeat((prev) => ({
+      ...prev,
+      weekdays: prev.weekdays.includes(iso)
+        ? prev.weekdays.filter((d) => d !== iso)
+        : [...prev.weekdays, iso].sort((a, b) => a - b),
+    }));
+  const toggleRepeatMonthDate = (d: number) =>
+    setCustomRepeat((prev) => ({
+      ...prev,
+      monthDates: prev.monthDates.includes(d)
+        ? prev.monthDates.filter((x) => x !== d)
+        : [...prev.monthDates, d].sort((a, b) => a - b),
+    }));
   const [repeatApproved, setRepeatApproved] = useState(false);
 
   // Add Route to Date Modal state
@@ -271,6 +311,17 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
   // Add Customers Modal state (inside Route Management Screen)
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
+  /**
+   * Which OTHER route each searchable customer already belongs to.
+   *
+   * Without this the dialog offered a "+ Add" on a customer the database was always
+   * going to refuse — one customer belongs to one active route — and the refusal
+   * reached the screen as `duplicate key value violates unique constraint
+   * "uq_route_customers_one_active_route"`. Knowing the answer BEFORE the click is
+   * what lets the button say where they are and offer to move them instead.
+   */
+  const [contactRoutes, setContactRoutes] = useState<Map<string, ExistingRoute>>(new Map());
+  const [addingContactId, setAddingContactId] = useState<string | null>(null);
   const [contactSearch, setContactSearch] = useState("");
   const [availableContacts, setAvailableContacts] = useState<ContactItem[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
@@ -377,7 +428,7 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       try {
         const { data: rcRows, error } = await supabase
           .from("route_customers")
-          .select("id, sequence, route_id, contact_id, must_visit, contacts(id, name, company, address)")
+          .select("id, sequence, route_id, contact_id, must_visit, one_time_date, contacts(id, name, company, address)")
           .eq("route_id", routeId)
           .is("archived_at", null)
           .order("sequence", { ascending: true });
@@ -540,7 +591,15 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
   const handleRepeatSchedule = async () => {
     if (!selectedRoute) return;
     const baseDate = selectedRouteDate || new Date().toISOString().split("T")[0];
-    const targetDates = generateRepeatDates(baseDate, repeatFrequency, year, month);
+    const targetDates = generateRepeatDates(baseDate, repeatFrequency, year, month, customRepeat);
+    if (targetDates.length === 0) {
+      toast.info(
+        repeatFrequency === "custom"
+          ? "Nothing selected to repeat — pick weekdays, an interval, or dates in the month."
+          : "Nothing left to schedule in this month.",
+      );
+      return;
+    }
     try {
       let createdCount = 0;
       for (const dStr of targetDates) {
@@ -590,6 +649,22 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     items.sort((x, y) => x.name.localeCompare(y.name));
     return items;
   }, [routes, areas]);
+
+  /**
+   * "4 dates in November 2026", computed from exactly what Apply will do.
+   *
+   * Shown next to the controls because the custom options can select nothing at all —
+   * no weekday ticked, or dates that have all passed — and a button that silently does
+   * nothing is the complaint this whole batch is about.
+   */
+  const repeatPreview = useMemo(() => {
+    const baseDate = selectedRouteDate || new Date().toISOString().split("T")[0];
+    return describeRepeat(
+      generateRepeatDates(baseDate, repeatFrequency, year, month, customRepeat),
+      year,
+      month,
+    );
+  }, [selectedRouteDate, repeatFrequency, year, month, customRepeat]);
 
   // The territory area (if any) whose name matches the open route — enables the
   // one-click "add all customers from this area" action.
@@ -814,7 +889,32 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       }
 
       const { data } = await q;
-      setAvailableContacts((data ?? []) as ContactItem[]);
+      const rows = (data ?? []) as ContactItem[];
+      setAvailableContacts(rows);
+
+      // Which route each of these already belongs to. Permanent rows only: a one-time
+      // stop elsewhere does not take a customer away from their own route, so it is
+      // not what the dialog needs to warn about.
+      const ids = rows.map((c) => c.id);
+      if (ids.length) {
+        const { data: owned } = await supabase
+          .from("route_customers")
+          .select("id, contact_id, route_id, routes(name)")
+          .in("contact_id", ids)
+          .is("archived_at", null)
+          .is("one_time_date", null);
+        const map = new Map<string, ExistingRoute>();
+        ((owned ?? []) as any[]).forEach((row) => {
+          map.set(row.contact_id as string, {
+            routeId: row.route_id as string,
+            routeName: (row.routes?.name as string) ?? "another route",
+            rowId: row.id as string,
+          });
+        });
+        setContactRoutes(map);
+      } else {
+        setContactRoutes(new Map());
+      }
     } catch (err: any) {
       toast.error("Failed to load territory contacts");
     } finally {
@@ -828,23 +928,97 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
     }
   }, [addCustomerModalOpen, fetchAvailableContacts]);
 
-  // Add contact to route
+  /**
+   * Add a customer to the selected route.
+   *
+   * A customer already on another route is not an error to report — it is a question
+   * to ask. Two of them, in the founder's own words (2026-11-02): first whether to add
+   * them here at all, then whether to keep them here always or for one visit only.
+   *
+   *   always    → a real move. Their row on the old route goes, this one stays.
+   *   one time  → this route visits them on the chosen date and their own route is
+   *               left untouched (route_customers.one_time_date, migration
+   *               20261102130000).
+   *
+   * Nothing here lets a raw Postgres constraint message reach the screen.
+   */
   const handleAddCustomerToRoute = async (contactId: string) => {
     if (!selectedRoute) return;
+    const existing = contactRoutes.get(contactId);
+    const contact = availableContacts.find((c) => c.id === contactId);
+    const who = contact?.company || contact?.name || "This customer";
+
+    let oneTimeOnly = false;
+
+    if (existing && existing.routeId !== selectedRoute.id) {
+      const proceed = await confirm({
+        title: "This customer is on another route",
+        description: `${who} does not belong to "${selectedRoute.name}" — they are currently on "${existing.routeName}". Do you still want to add them to "${selectedRoute.name}"?`,
+        confirmLabel: "Yes, add them",
+        cancelLabel: "No, leave it",
+      });
+      if (!proceed) return;
+
+      const keepAlways = await confirm({
+        title: "Keep them on this route always?",
+        description: `Yes — ${who} moves to "${selectedRoute.name}" permanently and is removed from "${existing.routeName}". No — this route visits them once, on ${selectedRouteDate || "the selected date"}, and they stay on "${existing.routeName}".`,
+        confirmLabel: "Yes, always",
+        cancelLabel: "No, one time only",
+      });
+      oneTimeOnly = !keepAlways;
+    }
+
+    // A one-time stop needs a date to be one-time ON.
+    const oneTimeDate = oneTimeOnly ? selectedRouteDate || new Date().toISOString().split("T")[0] : null;
+
+    setAddingContactId(contactId);
     try {
+      // A permanent move has to free the single active-route slot first, or the insert
+      // below is refused by uq_route_customers_one_active_route.
+      if (existing && existing.routeId !== selectedRoute.id && !oneTimeOnly) {
+        const { error: delError } = await supabase
+          .from("route_customers")
+          .delete()
+          .eq("id", existing.rowId);
+        if (delError) throw delError;
+      }
+
       const nextSeq = routeCustomers.length + 1;
       const { error } = await supabase.from("route_customers").insert({
         account_id: accountId,
         route_id: selectedRoute.id,
         contact_id: contactId,
         sequence: nextSeq,
+        one_time_date: oneTimeDate,
       });
 
       if (error) throw error;
-      toast.success("Customer added to route");
+
+      toast.success(
+        oneTimeDate
+          ? `${who} added to ${selectedRoute.name} for ${oneTimeDate} only`
+          : existing
+            ? `${who} moved to ${selectedRoute.name}`
+            : "Customer added to route",
+      );
+
+      // The dialog's "already on" map is now stale for this customer.
+      setContactRoutes((prev) => {
+        const next = new Map(prev);
+        if (oneTimeDate) return next; // their home route is unchanged
+        next.set(contactId, {
+          routeId: selectedRoute.id,
+          routeName: selectedRoute.name,
+          rowId: "",
+        });
+        return next;
+      });
+
       fetchRouteCustomers(selectedRoute.id);
     } catch (err: any) {
-      toast.error(err.message || "Failed to add customer");
+      toast.error(addCustomerErrorMessage(err, who, selectedRoute.name));
+    } finally {
+      setAddingContactId(null);
     }
   };
 
@@ -864,11 +1038,36 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
         .eq("account_id", accountId)
         .eq("territory_id", match.id);
       const already = new Set(routeCustomers.map((rc) => rc.contact_id));
-      const ids = (cids ?? []).map((c: { id: string }) => c.id).filter((id: string) => !already.has(id));
-      if (!ids.length) {
+      const candidates = (cids ?? [])
+        .map((c: { id: string }) => c.id)
+        .filter((id: string) => !already.has(id));
+      if (!candidates.length) {
         toast.info("No new customers to add from this area.");
         return;
       }
+
+      // Anyone already on a DIFFERENT active route cannot be bulk-added — the database
+      // allows one active route per customer, and a bulk insert that includes one of
+      // them fails as a whole, taking every other customer in the batch down with it.
+      // They are reported and skipped; moving a customer is a per-customer decision
+      // (see handleAddCustomerToRoute), not something to do to a hundred rows at once.
+      const { data: taken } = await supabase
+        .from("route_customers")
+        .select("contact_id")
+        .in("contact_id", candidates)
+        .is("archived_at", null)
+        .is("one_time_date", null)
+        .neq("route_id", selectedRoute.id);
+      const onAnotherRoute = new Set(((taken ?? []) as { contact_id: string }[]).map((r) => r.contact_id));
+      const ids = candidates.filter((id: string) => !onAnotherRoute.has(id));
+
+      if (!ids.length) {
+        toast.info(
+          `Every customer in ${match.name} is already on another route. Add them one at a time to move them.`,
+        );
+        return;
+      }
+
       const base = routeCustomers.length;
       const rows = ids.map((cid: string, i: number) => ({
         account_id: accountId,
@@ -878,7 +1077,11 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
       }));
       const { error } = await supabase.from("route_customers").insert(rows);
       if (error) throw error;
-      toast.success(`Added ${ids.length} customer${ids.length === 1 ? "" : "s"} from ${match.name}`);
+      const skipped = onAnotherRoute.size;
+      toast.success(
+        `Added ${ids.length} customer${ids.length === 1 ? "" : "s"} from ${match.name}` +
+          (skipped ? ` — ${skipped} skipped, already on another route` : ""),
+      );
       fetchRouteCustomers(selectedRoute.id);
     } catch (err: any) {
       toast.error(err.message || "Failed to add area customers");
@@ -1707,6 +1910,10 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                     <p className="text-xs text-muted-foreground">
                       Select interval starting {selectedRouteDate || new Date().toISOString().split("T")[0]} to auto-schedule across the month.
                     </p>
+                    {/* What the button is about to do, counted before it is pressed — the
+                        custom options can easily select nothing, and silence on an empty
+                        selection reads as a broken button. */}
+                    <p className="text-xs font-semibold text-purple-400 mt-0.5">{repeatPreview}</p>
                   </div>
                 </div>
 
@@ -1717,8 +1924,9 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                         { key: "daily", label: "Daily" },
                         { key: "weekly", label: "Weekly" },
                         { key: "10_days", label: "Every 10 Days" },
-                        { key: "15_days", label: "Every 15 Days" },
+                        { key: "14_days", label: "Every 14 Days" },
                         { key: "monthly", label: "Monthly" },
+                        { key: "custom", label: "Custom" },
                       ] as const
                     ).map((f) => (
                       <button
@@ -1758,6 +1966,105 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                     Apply Repeat Schedule
                   </Button>
                 </div>
+
+                {/* Custom repeat — the three shapes the founder asked for (2026-11-02):
+                    pick weekdays, every N days, or pick dates in the month. Only one is
+                    in force at a time, so the mode is a radio, not three stacked filters. */}
+                {repeatFrequency === "custom" && (
+                  <div className="w-full space-y-3 rounded-lg border border-purple-500/30 bg-card/60 p-3">
+                    <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-card p-1 w-fit">
+                      {(
+                        [
+                          { key: "weekdays", label: "Pick weekdays" },
+                          { key: "interval", label: "Every N days" },
+                          { key: "month_dates", label: "Pick dates in month" },
+                        ] as const
+                      ).map((m) => (
+                        <button
+                          key={m.key}
+                          type="button"
+                          onClick={() => setCustomRepeat((prev) => ({ ...prev, mode: m.key }))}
+                          className={cn(
+                            "rounded-md px-3 py-1 text-xs font-bold transition-colors",
+                            customRepeat.mode === m.key
+                              ? "bg-purple-600 text-white shadow-sm"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {customRepeat.mode === "weekdays" && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {WEEKDAY_OPTIONS.map((d) => {
+                          const on = customRepeat.weekdays.includes(d.iso);
+                          return (
+                            <button
+                              key={d.iso}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => toggleRepeatWeekday(d.iso)}
+                              className={cn(
+                                "h-control-sm w-11 rounded-md border text-xs font-bold transition-colors",
+                                on
+                                  ? "border-purple-500 bg-purple-600 text-white"
+                                  : "border-border bg-card text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              {d.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {customRepeat.mode === "interval" && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-muted-foreground">Repeat every</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={60}
+                          value={customRepeat.intervalDays}
+                          onChange={(e) =>
+                            setCustomRepeat((prev) => ({
+                              ...prev,
+                              intervalDays: Number(e.target.value),
+                            }))
+                          }
+                          className="h-control-sm w-20 text-sm font-semibold"
+                        />
+                        <span className="text-xs font-semibold text-muted-foreground">days</span>
+                      </div>
+                    )}
+
+                    {customRepeat.mode === "month_dates" && (
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from({ length: daysInSelectedMonth }, (_, i) => i + 1).map((d) => {
+                          const on = customRepeat.monthDates.includes(d);
+                          return (
+                            <button
+                              key={d}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => toggleRepeatMonthDate(d)}
+                              className={cn(
+                                "size-7 rounded-md border text-micro font-bold tabular-nums transition-colors",
+                                on
+                                  ? "border-purple-500 bg-purple-600 text-white"
+                                  : "border-border bg-card text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              {d}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               )}
 
@@ -1873,7 +2180,18 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
 
                               {/* Customer Details */}
                               <div className="min-w-0 flex-1">
-                                <p className="text-base font-bold text-foreground truncate">{contactName}</p>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <p className="text-base font-bold text-foreground truncate">{contactName}</p>
+                                  {rc.one_time_date && (
+                                    <Badge
+                                      variant="outline"
+                                      className="shrink-0 border-amber-500/40 text-amber-500 text-micro font-bold uppercase"
+                                      title={`Visited by this route on ${rc.one_time_date} only — this customer belongs to another route`}
+                                    >
+                                      One time · {rc.one_time_date}
+                                    </Badge>
+                                  )}
+                                </div>
                                 <p className="text-sm text-muted-foreground truncate mt-0.5">{address}</p>
                               </div>
                             </div>
@@ -2084,6 +2402,14 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
               ) : (
                 availableContacts.map((c) => {
                   const alreadyAdded = routeCustomers.some((rc) => rc.contact_id === c.id);
+                  const existing = contactRoutes.get(c.id);
+                  // On another route: say which one, and offer to move rather than
+                  // offering an "+ Add" the database is going to refuse.
+                  const elsewhere =
+                    !alreadyAdded && existing && existing.routeId !== selectedRoute?.id
+                      ? existing
+                      : null;
+                  const busy = addingContactId === c.id;
                   const nameStr = c.company || c.name || "Unnamed Contact";
                   const addrStr = c.address || c.name || "No address";
                   return (
@@ -2091,15 +2417,28 @@ export function EmployeeRouteTab({ employeeId, accountId }: EmployeeRouteTabProp
                       <div className="min-w-0 flex-1 mr-3">
                         <p className="text-sm font-bold truncate">{nameStr}</p>
                         <p className="text-xs text-muted-foreground truncate">{addrStr}</p>
+                        {elsewhere && (
+                          <p className="mt-0.5 text-xs font-semibold text-amber-500 truncate">
+                            On: {elsewhere.routeName}
+                          </p>
+                        )}
                       </div>
                       <Button
                         size="sm"
-                        variant={alreadyAdded ? "outline" : "default"}
-                        disabled={alreadyAdded}
+                        variant={alreadyAdded ? "outline" : elsewhere ? "secondary" : "default"}
+                        disabled={alreadyAdded || busy}
                         onClick={() => handleAddCustomerToRoute(c.id)}
                         className="h-8 shrink-0 text-xs font-semibold"
                       >
-                        {alreadyAdded ? "Added" : "+ Add"}
+                        {busy ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : alreadyAdded ? (
+                          "Added"
+                        ) : elsewhere ? (
+                          "Move here"
+                        ) : (
+                          "+ Add"
+                        )}
                       </Button>
                     </div>
                   );

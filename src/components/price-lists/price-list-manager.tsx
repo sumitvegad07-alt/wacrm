@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Plus, Pencil, Trash2, RotateCcw, ListChecks, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";

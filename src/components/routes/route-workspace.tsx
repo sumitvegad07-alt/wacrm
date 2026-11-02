@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { useConfirm } from "@/components/shared";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useRoute,

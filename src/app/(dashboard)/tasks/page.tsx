@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { toast } from 'sonner';
@@ -23,6 +24,7 @@ function isOverdue(task: any) {
 }
 
 import { Button } from '@/components/ui/button';
+import { NavButton } from "@/components/ui/nav-button";
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -509,9 +511,9 @@ export default function TasksPage() {
             <Button variant="outline" onClick={() => setImportOpen(true)} className="border-border text-muted-foreground hover:bg-muted">
               <Upload className="size-4 mr-2" /> Import
             </Button>
-            <Button onClick={() => router.push('/tasks/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <NavButton href='/tasks/new' className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <Plus className="size-4 mr-2" /> New Task
-            </Button>
+            </NavButton>
           </>
         }
       />

@@ -1,7 +1,9 @@
 {
-  "recorded": "2026-10-27",
+  "recorded": "2026-11-02",
   "counts": {
-    "rawButton": 212,
+    "uninstrumentedRouter": 0,
+    "routerPushOnClick": 30,
+    "rawButton": 215,
     "rawPaletteRed": 192,
     "rawPaletteBgRed": 123,
     "arbitraryFontSize": 301,

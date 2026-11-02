@@ -1,6 +1,7 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useParams } from "next/navigation";
 import { SchemeForm } from "@/components/schemes/scheme-form";
 
 export default function EditSchemePage() {

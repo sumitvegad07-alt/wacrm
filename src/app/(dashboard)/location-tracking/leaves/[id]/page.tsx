@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useParams } from "next/navigation";
 import { format } from "date-fns";
 import { CheckCircle, Edit2, Loader2, Paperclip, XCircle } from "lucide-react";
 import { toast } from "sonner";

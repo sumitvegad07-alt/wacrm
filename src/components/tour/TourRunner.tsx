@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { usePathname } from "next/navigation";
 import { driver, type Driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
 import './tour-theme.css';

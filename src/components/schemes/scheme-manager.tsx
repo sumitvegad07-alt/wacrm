@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { toast } from "sonner";
 import { Loader2, Plus, Pencil, Trash2, RotateCcw, Tag, Power, PowerOff, MoreHorizontal, Copy } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -186,9 +187,9 @@ export function SchemeManager() {
         subtitle="Promotions the salesman is offered at order entry — quantity slabs, free goods and order-value discounts."
         actions={
           canEditSettings ? (
-            <Button onClick={() => router.push("/schemes/new")}>
+            <NavButton href="/schemes/new">
               <Plus className="h-4 w-4 mr-1" /> New scheme
-            </Button>
+            </NavButton>
           ) : null
         }
       />

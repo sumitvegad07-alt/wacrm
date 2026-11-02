@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { AlertTriangle, ArrowLeft, Loader2, Play, Trash2 } from "lucide-react";
 import { RETENTION_RULES } from "@/lib/retention/policy";
 import type { RetentionResult } from "@/lib/retention/run";

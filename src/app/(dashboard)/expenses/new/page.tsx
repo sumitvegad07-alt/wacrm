@@ -1,8 +1,7 @@
 "use client";
 
 import { ExpenseForm } from "@/components/expenses/expense-form";
-import { useRouter } from "next/navigation";
-
+import { useRouter } from "@/lib/navigation";
 export default function NewExpensePage() {
   const router = useRouter();
 

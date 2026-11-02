@@ -22,7 +22,7 @@
  * /flows/[id]/runs) — those don't belong in the hook.
  */
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import {
   ArrowLeft,
   CircleDot,

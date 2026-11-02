@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { format } from "date-fns";
 import { Plus, Settings } from "lucide-react";
 import { toast } from "sonner";

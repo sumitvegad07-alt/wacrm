@@ -12,7 +12,7 @@
 // - High performance for 500+ salesmen / 1000+ routes via visible month memoization & sheet virtualization.
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import {
   DndContext,
   PointerSensor,

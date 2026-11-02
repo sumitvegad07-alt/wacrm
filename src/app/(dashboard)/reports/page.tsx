@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { gatePasses, gateForPath } from "@/lib/plans/surface-gates";
 import type { ProductLine } from "@/lib/plans/catalog";

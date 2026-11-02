@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { ArrowLeft, Save, Loader2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";

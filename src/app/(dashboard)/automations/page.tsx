@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation";
 import { toast } from "sonner"
 import {
   Zap,
@@ -22,6 +22,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useCan } from "@/hooks/use-can"
 import type { Automation } from "@/types"
 import { Button } from "@/components/ui/button"
+import { NavButton } from "@/components/ui/nav-button";
 import { GatedButton } from "@/components/ui/gated-button"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -172,21 +173,21 @@ export default function AutomationsPage() {
               separate entry point from the WhatsApp-trigger builder: they are a
               different shape — one event, one message — and merging them into
               the multi-step branching builder would make both harder to use. */}
-          <GatedButton
+          <NavButton
             canAct={!isFreeTierAndLimitReached}
             gateReason="create multiple automations. You are allowed 1 free automation on your current plan."
-            onClick={() => router.push("/automations/module/new")}
+            href="/automations/module/new"
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
             Add Automation
-          </GatedButton>
-          <Button
+          </NavButton>
+          <NavButton
             variant="outline"
-            onClick={() => router.push("/automations/new")}
+            href="/automations/new"
           >
             WhatsApp workflow
-          </Button>
+          </NavButton>
         </div>
       </div>
 

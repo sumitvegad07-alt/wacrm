@@ -118,7 +118,10 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
         .from('route_customers')
         .select('route_id')
         .in('route_id', pageIds)
-        .is('archived_at', null);
+        .is('archived_at', null)
+        // "12 customers" means the route's own members, not a customer parked here for
+        // a single day (route_customers.one_time_date, migration 20261102130000).
+        .is('one_time_date', null);
       if (rcErr) throw mapPostgrestError(rcErr);
       const counts = new Map<string, number>();
       (rc ?? []).forEach((r: { route_id: string }) => counts.set(r.route_id, (counts.get(r.route_id) ?? 0) + 1));
@@ -175,7 +178,10 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
         .from('route_customers')
         .select('route_id')
         .in('route_id', pageIds)
-        .is('archived_at', null);
+        .is('archived_at', null)
+        // "12 customers" means the route's own members, not a customer parked here for
+        // a single day (route_customers.one_time_date, migration 20261102130000).
+        .is('one_time_date', null);
       if (rcErr) throw mapPostgrestError(rcErr);
       const counts = new Map<string, number>();
       (rc ?? []).forEach((r: { route_id: string }) => counts.set(r.route_id, (counts.get(r.route_id) ?? 0) + 1));
@@ -262,7 +268,7 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
       const { data, error } = await supabase
         .from('route_customers')
         .select(
-          'id, account_id, route_id, contact_id, sequence, must_visit, archived_at, created_at, updated_at, ' +
+          'id, account_id, route_id, contact_id, sequence, must_visit, one_time_date, archived_at, created_at, updated_at, ' +
             'contacts ( company, name, latitude, longitude, address, territory_id, needs_territory_review )'
         )
         .eq('route_id', routeId)
@@ -279,6 +285,7 @@ export function createRouteSdk(supabase: SupabaseClient, opts: RouteSdkOptions =
           contact_id: row.contact_id as string,
           sequence: row.sequence as number,
           must_visit: Boolean(row.must_visit),
+          one_time_date: (row.one_time_date as string | null) ?? null,
           archived_at: (row.archived_at as string | null) ?? null,
           created_at: row.created_at as string,
           updated_at: row.updated_at as string,

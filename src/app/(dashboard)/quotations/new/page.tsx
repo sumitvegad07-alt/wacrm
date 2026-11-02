@@ -1,8 +1,7 @@
 "use client";
 
 import { QuotationForm } from "@/components/quotations/quotation-form";
-import { useRouter } from "next/navigation";
-
+import { useRouter } from "@/lib/navigation";
 export default function NewQuotationPage() {
   const router = useRouter();
 

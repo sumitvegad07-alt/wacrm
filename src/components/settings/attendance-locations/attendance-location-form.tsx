@@ -10,7 +10,7 @@
 // means nothing until the admin sees the circle miss the factory gate.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/use-auth";
 import { FormActions, FormPageShell, FormSection, FormField, FORM_GRID_PAGE } from "@/components/shared";

@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { NavButton } from "@/components/ui/nav-button";
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -452,14 +454,14 @@ export default function QuotationsPage() {
                 Seed Dummy
               </Button>
             )}
-            <Button
+            <NavButton
               data-tour="quotation-add"
               className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={() => router.push('/quotations/new')}
+              href='/quotations/new'
             >
               <Plus className="size-4" />
               New Quotation
-            </Button>
+            </NavButton>
           </>
         }
       />

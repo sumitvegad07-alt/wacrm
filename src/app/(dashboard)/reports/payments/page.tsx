@@ -13,7 +13,7 @@ import { ColumnDef } from "@/components/ui/data-table/data-table-types";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, WalletCards, Users } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { formatCurrency } from "@/lib/currency";
 import { Badge } from "@/components/ui/badge";
 import { ReportViewer } from "@/components/reports/report-viewer";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { ArrowLeft, Eye, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 

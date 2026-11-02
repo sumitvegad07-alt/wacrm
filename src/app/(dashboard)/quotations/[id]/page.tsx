@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
-import { useRouter } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { sanitizeRichText } from '@/lib/security/sanitize-html';
 import { toast } from 'sonner';

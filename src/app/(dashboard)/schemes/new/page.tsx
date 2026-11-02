@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { SchemeForm } from "@/components/schemes/scheme-form";
 
 export default function NewSchemePage() {

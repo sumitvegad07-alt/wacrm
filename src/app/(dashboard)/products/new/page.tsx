@@ -1,7 +1,7 @@
 "use client";
 
 import { ProductForm } from "@/components/products/product-form";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 

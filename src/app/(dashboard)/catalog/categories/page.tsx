@@ -4,7 +4,8 @@
 // module tables: pinned Action column, Status filter defaulting to Active,
 // soft-delete), plus the category-level naming config kept above the table.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";

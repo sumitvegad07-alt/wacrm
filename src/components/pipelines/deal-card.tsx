@@ -3,8 +3,7 @@
 import type { Deal, PipelineStage } from "@/types";
 import { Calendar, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
-import { useRouter } from "next/navigation";
-
+import { useRouter } from "@/lib/navigation";
 interface DealCardProps {
   deal: Deal;
   stage: PipelineStage | null;

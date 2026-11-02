@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Product, CustomField } from '@/types';
@@ -10,6 +11,7 @@ import { formatCurrency } from '@/lib/currency';
 import { useAuth } from '@/hooks/use-auth';
 
 import { Button } from '@/components/ui/button';
+import { NavButton } from "@/components/ui/nav-button";
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -369,14 +371,14 @@ export default function ProductsPage() {
         serverPagination={{ ...table.serverPagination, exportAll }}
         actions={
           canCreateProducts ? (
-            <Button
+            <NavButton
               data-tour="product-add"
-              onClick={() => router.push('/products/new')}
+              href='/products/new'
               size="sm"
               className="h-7 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium px-2.5"
             >
               <Plus className="size-3.5 mr-1" /> New Product
-            </Button>
+            </NavButton>
           ) : null
         }
         menuActions={

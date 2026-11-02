@@ -21,13 +21,15 @@ import {
   reactivatedMessage,
 } from "@/lib/table/bulk-activation";
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 import { useAuth } from "@/hooks/use-auth";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { LeadForm } from "@/components/leads/lead-form";
 import { ImportWizard } from "@/components/import/import-wizard";
 import { DataTable } from "@/components/ui/data-table/data-table";
@@ -623,9 +625,9 @@ export default function LeadsPage() {
             <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => setImportOpen(true)}>
               <Upload className="size-3 mr-1" /> Import Leads
             </Button>
-            <Button data-tour="lead-add" size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/leads/new')}>
+            <NavButton data-tour="lead-add" size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" href='/leads/new'>
               <Plus className="size-3 mr-1" /> Add Lead
-            </Button>
+            </NavButton>
           </div>
         }
         tableView={tableView}

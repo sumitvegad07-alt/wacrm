@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, Lock, Package } from "lucide-react";
 

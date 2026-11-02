@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { NavButton } from "@/components/ui/nav-button";
 import { Search, Plus, TrendingUp, Pencil, CheckCircle2, XCircle, Ban, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
@@ -453,14 +455,14 @@ export default function OrdersPage() {
         actions={
           <>
             {(isAdmin || isOwner) && (
-              <Button variant="outline" className="gap-2" onClick={() => router.push('/orders/sync-health')}>
+              <NavButton variant="outline" className="gap-2" href='/orders/sync-health'>
                 <TrendingUp className="size-4" /> Sync Health
-              </Button>
+              </NavButton>
             )}
             {canCreateOrder && (
-              <Button data-tour="order-add" onClick={() => router.push('/orders/new')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
+              <NavButton data-tour="order-add" href='/orders/new' className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Plus className="size-4" /> Create Order
-              </Button>
+              </NavButton>
             )}
           </>
         }

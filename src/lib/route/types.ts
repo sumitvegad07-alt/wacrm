@@ -93,6 +93,12 @@ export interface RouteCustomer {
    * every route that existed before the feature, which renders no badge at all.
    */
   must_visit: boolean;
+  /**
+   * NULL = a permanent member of this route. A date = this route visits them on that
+   * date only, without taking them off the route they really belong to (migration
+   * 20261102130000). Day reads must drop a one-time row on any other date.
+   */
+  one_time_date: string | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;

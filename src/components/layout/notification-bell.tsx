@@ -6,7 +6,7 @@
 // Server-sent push is a mobile concern; on web this bell IS the delivery surface.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { Bell, CheckCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 

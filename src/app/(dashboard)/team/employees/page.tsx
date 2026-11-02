@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissionGate } from "@/hooks/use-permission-gate";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -495,10 +496,10 @@ export default function EmployeesPage() {
         title="Employees"
         subtitle="Manage your team, credentials, and device access."
         actions={
-          <Button data-tour="employee-add" onClick={() => router.push('/team/employees/new')} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+          <NavButton data-tour="employee-add" href='/team/employees/new' className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <UserPlus className="w-4 h-4 mr-2" />
             Add Employee
-          </Button>
+          </NavButton>
         }
       />
 

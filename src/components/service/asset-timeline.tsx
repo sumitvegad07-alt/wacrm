@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { AlertTriangle } from "lucide-react";
 
 import type { AssetActivity } from "@/lib/service/assets/activity";

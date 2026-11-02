@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { PrintSizeMenu } from "@/components/print/print-size-menu";

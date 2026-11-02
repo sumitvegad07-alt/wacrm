@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, Pencil, Copy, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import { useAuth } from "@/hooks/use-auth";
 import { Timeline } from "@/components/shared/timeline";
 import { StatusBadge } from "@/components/shared";
@@ -129,9 +131,9 @@ export default function SchemeDetailPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 bg-card border border-border p-4 rounded-lg">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/schemes")} className="text-muted-foreground hover:text-foreground">
+          <NavButton variant="ghost" size="icon" href="/schemes" className="text-muted-foreground hover:text-foreground">
             <ChevronLeft className="size-5" />
-          </Button>
+          </NavButton>
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center size-10 rounded-lg bg-primary/10 text-primary">
               <Tag className="size-5" />
@@ -146,12 +148,12 @@ export default function SchemeDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => router.push(`/schemes/new?from=${scheme.id}`)} className="gap-2">
+          <NavButton variant="outline" href={`/schemes/new?from=${scheme.id}`} className="gap-2">
             <Copy className="size-4" /> Duplicate
-          </Button>
-          <Button onClick={() => router.push(`/schemes/${scheme.id}/edit`)} className="gap-2">
+          </NavButton>
+          <NavButton href={`/schemes/${scheme.id}/edit`} className="gap-2">
             <Pencil className="size-4" /> Edit
-          </Button>
+          </NavButton>
         </div>
       </div>
 

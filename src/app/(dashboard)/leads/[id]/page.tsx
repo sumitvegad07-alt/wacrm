@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CollaboratorsSelect } from "@/components/ui/collaborators-select";
@@ -308,9 +309,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             </Button>
           )}
           {(lead.whatsapp || lead.phone) && (
-            <Button onClick={() => router.push(`/inbox?phone=${lead.whatsapp || lead.phone}`)} variant="outline" className="gap-2"><MessageSquare className="size-4" /> Message</Button>
+            <NavButton href={`/inbox?phone=${lead.whatsapp || lead.phone}`} variant="outline" className="gap-2"><MessageSquare className="size-4" /> Message</NavButton>
           )}
-          <Button onClick={() => router.push(`/leads/${lead.id}/edit`)} variant="secondary" className="gap-2"><Pencil className="size-4" /> Edit</Button>
+          <NavButton href={`/leads/${lead.id}/edit`} variant="secondary" className="gap-2"><Pencil className="size-4" /> Edit</NavButton>
         </>
       }
     >

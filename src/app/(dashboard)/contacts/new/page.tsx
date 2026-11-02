@@ -1,8 +1,7 @@
 "use client";
 
 import { ContactForm } from "@/components/contacts/contact-form";
-import { useRouter } from "next/navigation";
-
+import { useRouter } from "@/lib/navigation";
 export default function NewContactPage() {
   const router = useRouter();
 

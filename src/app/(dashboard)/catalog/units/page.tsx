@@ -3,7 +3,8 @@
 // Catalog → Unit. Table view of units of measure, matching the other module
 // tables (pinned Action column, Status filter defaulting to Active, soft-delete).
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";

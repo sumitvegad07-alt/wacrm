@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { NavButton } from "@/components/ui/nav-button";
 import { Plus, CheckCircle2, XCircle, Ban, Loader2, Edit } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
@@ -367,9 +369,9 @@ export default function PaymentsPage() {
         actions={
           <>
             {canCreatePayment && (
-              <Button onClick={() => router.push('/payments/new')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
+              <NavButton href='/payments/new' className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Plus className="size-4" /> New Payment
-              </Button>
+              </NavButton>
             )}
           </>
         }

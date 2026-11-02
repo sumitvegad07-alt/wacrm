@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { Megaphone, Upload, X, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";

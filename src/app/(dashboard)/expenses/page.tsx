@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { Plus, Search, Filter, CheckCircle, XCircle, RotateCcw, FileText, Download, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -565,9 +567,9 @@ export default function ExpensesPage() {
         unseenModule="expense"
         createdAtOf={(expense) => expense.created_at as string | undefined}
         actions={
-          <Button size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => router.push('/expenses/new')}>
+          <NavButton size="sm" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground" href='/expenses/new'>
             <Plus className="size-3 mr-1" /> New Expense
-          </Button>
+          </NavButton>
         }
         tableView={tableView}
         isLoading={loading}

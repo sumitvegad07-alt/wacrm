@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { useRouter, useNavigationProgress } from "@/lib/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth, type ModuleSettings } from "@/hooks/use-auth";
@@ -688,6 +689,13 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
    */
   const NavPending = () => {
     const { pending } = useLinkStatus();
+    const { start } = useNavigationProgress();
+    // A <Link> never goes through `@/lib/navigation`'s router, so the top-of-app
+    // progress bar would miss every sidebar click without this. One signal, every
+    // navigation, whichever control started it.
+    useEffect(() => {
+      if (pending) start();
+    }, [pending, start]);
     if (!pending) return null;
     return <InlineLoader className="shrink-0 text-current" aria-label="Opening…" />;
   };

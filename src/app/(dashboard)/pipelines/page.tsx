@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Pipeline, PipelineStage, Deal, CustomField } from "@/types";
 import { PipelineSettings } from "@/components/pipelines/pipeline-settings";

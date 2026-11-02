@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -41,6 +42,7 @@ import { warrantyState } from "@/lib/service/settings";
 import type { AssetStatus } from "@/lib/service/types";
 
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -295,9 +297,9 @@ export function AssetList({
 
   // ── Pieces ───────────────────────────────────────────────────────────────────
   const addButton = canCreate ? (
-    <Button size="sm" className="h-8 gap-1 text-xs" onClick={() => router.push("/service/assets/new")}>
+    <NavButton size="sm" className="h-8 gap-1 text-xs" href="/service/assets/new">
       <Plus className="size-3.5" /> Add Asset
-    </Button>
+    </NavButton>
   ) : null;
   // Also gated on the module actually being registered in the import framework.
   // Phase 1 Task 11 adds the `customer_assets` descriptor; until then ImportWizard

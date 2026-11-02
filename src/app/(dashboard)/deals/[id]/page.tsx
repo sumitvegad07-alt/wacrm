@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Deal, CustomField, Task, Contact, Conversation, PipelineStage, Profile } from "@/types";
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, CheckSquare, MessageSquare, Briefcase, FileText, Loader2, Pencil, Check, X, Users, ShoppingBag, ArrowRight, ExternalLink, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -488,15 +490,15 @@ export default function DealDetailsPage() {
           ) : null}
 
           {deal.contact && (
-            <Button onClick={() => router.push(`/inbox?phone=${(deal.contact as any)?.phone}`)} variant="outline" className="gap-2">
+            <NavButton href={`/inbox?phone=${(deal.contact as any)?.phone}`} variant="outline" className="gap-2">
               <MessageSquare className="size-4" />
               Message Customer
-            </Button>
+            </NavButton>
           )}
-          <Button onClick={() => router.push(`/deals/${deal.id}/edit`)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+          <NavButton href={`/deals/${deal.id}/edit`} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
             <Pencil className="size-4" />
             Edit Deal
-          </Button>
+          </NavButton>
         </>
       }
     >

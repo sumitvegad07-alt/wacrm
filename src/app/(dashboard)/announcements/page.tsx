@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { format } from "date-fns";
 import { Plus, Eye, EyeOff, Search, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";

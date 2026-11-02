@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, Suspense } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { AppQueryProvider } from "@/components/providers/query-provider";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -19,6 +20,10 @@ import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcut
 import { TableFilterNavReset } from "@/components/layout/table-filter-nav-reset";
 import { TableToolbarSlotProvider } from "@/components/layout/table-toolbar-slot";
 import { ConfirmProvider } from "@/components/shared/confirm-provider";
+import {
+  NavigationProgressBar,
+  NavigationProgressProvider,
+} from "@/components/layout/navigation-progress";
 import { BackToGettingStarted } from "@/components/getting-started/BackToGettingStarted";
 import { TourRunner } from "@/components/tour/TourRunner";
 import { isRouteRestricted } from "@/lib/plans/surface-gates";
@@ -331,6 +336,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <AppQueryProvider>
       <AuthProvider>
+        {/* Outermost of the lot, because EVERY navigation in the app reports into
+            it — including the ones that happen while DashboardShellInner is in one
+            of its early-return states. It is what makes a click on any control
+            visibly do something before the next page has arrived; see
+            components/layout/navigation-progress.tsx. */}
+        <NavigationProgressProvider>
+        <NavigationProgressBar />
         {/* Out here rather than inside DashboardShellInner: that component
             early-returns for its loading and error states, which would unmount
             the watcher and lose the pathname it is comparing against. */}
@@ -349,6 +361,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <DashboardShellInner>{children}</DashboardShellInner>
           </ConfirmProvider>
         </TableToolbarSlotProvider>
+        </NavigationProgressProvider>
       </AuthProvider>
     </AppQueryProvider>
   );

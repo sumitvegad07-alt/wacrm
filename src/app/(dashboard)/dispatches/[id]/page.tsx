@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { NavButton } from "@/components/ui/nav-button";
 import { Loader2, Pencil, Phone, Mail, User as UserIcon, Truck } from 'lucide-react';
 import { PrintSizeMenu } from '@/components/print/print-size-menu';
 import { useAuth } from '@/hooks/use-auth';
@@ -122,9 +124,9 @@ export default function DispatchDetailPage() {
       actions={
         <>
           {canEdit && (
-            <Button size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm" onClick={() => router.push(`/dispatches/${id}/edit`)}>
+            <NavButton size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm" href={`/dispatches/${id}/edit`}>
               <Pencil className="size-4" /> Edit
-            </Button>
+            </NavButton>
           )}
           <PrintSizeMenu href={`/print/dispatch/${id}`} />
         </>

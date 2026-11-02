@@ -43,7 +43,7 @@ import {
   type ReactNode,
 } from "react";
 import { useConfirm } from "@/components/shared";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { toast } from "sonner";
 
 import {

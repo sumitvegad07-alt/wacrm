@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { matchesColumnFilters } from '@/lib/table/match-filters';
-import { useRouter } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { Broadcast } from '@/types';
 import { Button } from '@/components/ui/button';
+import { NavButton } from "@/components/ui/nav-button";
 import { PageLayout, PageHeader, StatusBadge } from '@/components/shared';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
@@ -266,15 +267,15 @@ export default function BroadcastsPage() {
         title="Broadcasts"
         subtitle="Send bulk messages to your contacts using approved templates."
         actions={
-          <GatedButton
+          <NavButton
             canAct={canCreate}
             gateReason="create broadcasts"
-            onClick={() => router.push('/broadcasts/new')}
+            href='/broadcasts/new'
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
             New Broadcast
-          </GatedButton>
+          </NavButton>
         }
       />
 
@@ -285,15 +286,15 @@ export default function BroadcastsPage() {
           <p className="mt-1 text-xs text-muted-foreground">
             Create your first broadcast to reach your contacts at scale.
           </p>
-          <GatedButton
+          <NavButton
             canAct={canCreate}
             gateReason="create broadcasts"
-            onClick={() => router.push('/broadcasts/new')}
+            href='/broadcasts/new'
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
             New Broadcast
-          </GatedButton>
+          </NavButton>
         </div>
       ) : (
         <DataTable

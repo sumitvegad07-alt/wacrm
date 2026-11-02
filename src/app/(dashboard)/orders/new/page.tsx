@@ -1,8 +1,7 @@
 "use client";
 
 import { OrderForm } from "@/components/orders/order-form";
-import { useRouter } from "next/navigation";
-
+import { useRouter } from "@/lib/navigation";
 export default function NewOrderPage() {
   const router = useRouter();
 

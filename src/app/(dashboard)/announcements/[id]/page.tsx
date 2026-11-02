@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { sanitizeRichText } from "@/lib/security/sanitize-html";
 import { PageLayout, PageHeader } from "@/components/shared";
 import { Loader2, ArrowLeft, Link as LinkIcon, Paperclip, Calendar, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 
@@ -73,9 +75,9 @@ export default function AnnouncementDetailsPage() {
         <div className="flex h-[400px] flex-col items-center justify-center space-y-2">
           <p className="text-xl font-semibold">Announcement not found</p>
           <p className="text-sm text-muted-foreground">The announcement may have been deleted.</p>
-          <Button variant="outline" onClick={() => router.push("/announcements")} className="mt-4">
+          <NavButton variant="outline" href="/announcements" className="mt-4">
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Announcements
-          </Button>
+          </NavButton>
         </div>
       </PageLayout>
     );
@@ -90,12 +92,12 @@ export default function AnnouncementDetailsPage() {
         title={data.title}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => router.push("/announcements")}>
+            <NavButton variant="outline" href="/announcements">
               <ArrowLeft className="mr-2 h-4 w-4" /> Back
-            </Button>
-            <Button onClick={() => router.push(`/announcements/${id}/edit`)}>
+            </NavButton>
+            <NavButton href={`/announcements/${id}/edit`}>
               <Pencil className="mr-2 h-4 w-4" /> Edit
-            </Button>
+            </NavButton>
           </div>
         }
       >

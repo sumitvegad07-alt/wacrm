@@ -1,7 +1,8 @@
 'use client';
 
 import { Suspense, useState, useEffect, type ReactNode } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from '@/hooks/use-auth';
 import { PageLoader } from '@/components/shared';
 import { PasswordForm } from '@/components/settings/password-form';

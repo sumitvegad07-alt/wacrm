@@ -12,7 +12,7 @@ import { RouteWorkspace } from "./route-workspace";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, XCircle, ExternalLink } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { toast } from "sonner";
 
 export function ApprovalPreviewSheet({

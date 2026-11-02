@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { useTableToolbarSlot } from "@/components/layout/table-toolbar-slot";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -622,10 +622,18 @@ export function DataTable<T>({
                     // it is a shape rather than a colour, so it also survives a
                     // monochrome print-out and colour-blindness.
                     //
+                    // The tint has to beat the row's own hover colour too. Both
+                    // this row and TableRow itself set `hover:bg-muted/50`, and a
+                    // hover variant is a different class group from a base one, so
+                    // tailwind-merge keeps both and the later rule wins: the moment
+                    // the pointer was over a highlighted row the tint vanished —
+                    // which is every row anyone is actually looking at. `hover:` is
+                    // restated here for that reason.
+                    //
                     // Listed before the pending class so a click still overrides
                     // it.
                     unseenRowKeys?.has(rowKey(row)) &&
-                      "border-l-2 border-l-primary bg-primary/10 font-semibold text-foreground",
+                      "border-l-4 border-l-primary bg-primary/15 hover:bg-primary/20 font-semibold text-foreground",
                     // The click landed: say so immediately, and keep saying it
                     // until the next page is on screen.
                     pendingRowKey === rowKey(row) && "bg-primary/10 cursor-progress hover:bg-primary/10",
@@ -654,8 +662,20 @@ export function DataTable<T>({
                       {actionsColumn.render ? actionsColumn.render(row) : null}
                     </TableCell>
                   )}
-                  {visibleColumns.map(col => (
+                  {visibleColumns.map((col, colIndex) => (
                     <TableCell key={col.id} className={cn("py-0.5", col.cellClassName)}>
+                      {/* A "New" dot in the first column, because colour and weight are
+                          not enough on their own. A tint reads as "selected" at a glance
+                          and both disappear in a column rendered as a coloured link or a
+                          badge, which on these lists is most of them. A dot is a thing
+                          that is either there or not. */}
+                      {colIndex === 0 && unseenRowKeys?.has(rowKey(row)) && (
+                        <span
+                          className="mr-1.5 inline-block size-1.5 shrink-0 rounded-full bg-primary align-middle"
+                          title="You have not opened this yet"
+                          aria-label="Unopened"
+                        />
+                      )}
                       {col.render ? col.render(row) : (row as any)[col.id] || "-"}
                     </TableCell>
                   ))}

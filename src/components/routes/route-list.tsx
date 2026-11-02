@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { matchesColumnFilters } from "@/lib/table/match-filters";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useRoutes } from "@/hooks/route/use-routes";
 import {
@@ -13,6 +13,7 @@ import {
 import { ROUTE_PERMISSIONS, type RouteStatus, type RouteError } from "@/lib/route";
 import { RouteStatusPill } from "./route-status-pill";
 import { Button } from "@/components/ui/button";
+import { NavButton } from "@/components/ui/nav-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -346,9 +347,9 @@ export function RouteList({ hideHeader, onSelectRoute }: RouteListProps = {}) {
           subtitle="Build and assign beats from your territory customers."
           actions={
             canAdd ? (
-              <Button onClick={() => router.push("/routes/new")} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
+              <NavButton href="/routes/new" className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Plus className="h-4 w-4" /> New Route
-              </Button>
+              </NavButton>
             ) : undefined
           }
         />

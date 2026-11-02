@@ -1,8 +1,7 @@
 "use client";
 
 import { LeadForm } from "@/components/leads/lead-form";
-import { useRouter } from "next/navigation";
-
+import { useRouter } from "@/lib/navigation";
 export default function NewLeadPage() {
   const router = useRouter();
 

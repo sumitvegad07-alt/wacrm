@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { LogOut, Menu, ArrowLeft, KeyRound, Keyboard, Search, PanelLeftOpen } from "lucide-react";
 import { useAppShortcuts } from "@/components/layout/keyboard-shortcuts-provider";

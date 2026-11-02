@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { NavButton } from "@/components/ui/nav-button";
 import { Search, Plus, Truck } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { DataTable } from '@/components/ui/data-table/data-table';
@@ -177,9 +179,9 @@ export default function DispatchesPage() {
         subtitle="Shipments recorded against your approved orders."
         actions={
           canCreate ? (
-            <Button onClick={() => router.push('/dispatches/new')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
+            <NavButton href='/dispatches/new' className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
               <Plus className="size-4" /> Create Dispatch
-            </Button>
+            </NavButton>
           ) : undefined
         }
       />

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation";
 import { toast } from "sonner"
 import {
   ArrowLeft,

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';

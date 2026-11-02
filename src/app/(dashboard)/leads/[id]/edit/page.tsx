@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LeadForm } from "@/components/leads/lead-form";
 import { Loader2 } from "lucide-react";

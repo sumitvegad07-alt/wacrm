@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { QuotationForm } from '@/components/quotations/quotation-form';
 import { Loader2 } from 'lucide-react';

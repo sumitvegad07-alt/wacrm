@@ -48,6 +48,25 @@ const EXEMPT = [
  */
 const CHECKS = [
   {
+    key: "uninstrumentedRouter",
+    label: "useRouter imported from next/navigation",
+    pattern: /import\s*\{[^}]*useRouter[^}]*\}\s*from\s*['"]next\/navigation['"]/g,
+    why:
+      "Import useRouter from @/lib/navigation. Next's own router pushes silently: nothing on " +
+      "screen changes until the next route arrives, which is what made 73 buttons in this app " +
+      "read as dead clicks twice over. The wrapper is identical except that it feeds the " +
+      "top-of-app progress bar. Only src/lib/navigation itself may import the real one.",
+  },
+  {
+    key: "routerPushOnClick",
+    label: "onClick={() => router.push(...)} navigation buttons",
+    pattern: /onClick=\{\(\)\s*=>\s*router\.push\(/g,
+    why:
+      "Use <NavButton href=...> from @/components/ui/nav-button. A button that pushes in an " +
+      "onClick prefetches nothing, so the whole route is fetched only after the click, and it " +
+      "shows no pending state while that happens.",
+  },
+  {
     key: "rawButton",
     label: "raw <button> elements",
     pattern: /<button[\s>]/g,

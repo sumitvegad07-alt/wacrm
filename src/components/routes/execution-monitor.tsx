@@ -6,7 +6,7 @@
 // tiles, per-page stop tallies.
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useExecutions, useExecutionSummary, useExecutionStops } from "@/hooks/route/use-routes";
 import type { ExecutionStatus, RouteExecutionRow, StopStatus } from "@/lib/route";

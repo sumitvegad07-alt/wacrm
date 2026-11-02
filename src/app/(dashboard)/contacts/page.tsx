@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from "@/lib/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from '@/lib/supabase/client';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ import { useCan } from '@/hooks/use-can';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { GatedButton } from '@/components/ui/gated-button';
+import { NavButton } from '@/components/ui/nav-button';
 import { DataTable } from '@/components/ui/data-table/data-table';
 import { useTableView } from '@/hooks/use-table-view';
 import { useServerTable } from '@/hooks/use-server-table';
@@ -413,18 +415,23 @@ export default function ContactsPage() {
     }
   }, [searchParams, router]);
 
-  function openAddForm() {
-    router.push('/contacts/new');
-  }
-
+  /**
+   * Open the edit form, then fetch — not the other way round.
+   *
+   * This used to await the customer's tags BEFORE setting `formOpen`, so pressing Edit
+   * did nothing at all for one full round trip to Mumbai and the button read as dead.
+   * The form opens on the click and the tags arrive into it a moment later; it renders
+   * perfectly well with none, which is exactly what it does for a brand-new customer.
+   */
   async function openEditForm(contact: Contact) {
+    setEditContact(contact);
+    setEditContactTags([]);
+    setFormOpen(true);
     const { data } = await supabase
       .from('contact_tags')
       .select('*')
       .eq('contact_id', contact.id);
-    setEditContact(contact);
     setEditContactTags(data ?? []);
-    setFormOpen(true);
   }
 
   function confirmDelete(contact: Contact) {
@@ -904,9 +911,9 @@ export default function ContactsPage() {
             <GatedButton data-tour="customer-import" variant="outline" size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="h-7 text-xs px-2.5">
               <Upload className="size-3 mr-1" /> Import
             </GatedButton>
-            <GatedButton data-tour="customer-add" size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={openAddForm} className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground">
+            <NavButton data-tour="customer-add" size="sm" canAct={canEdit} gateReason="add or import contacts" href="/contacts/new" className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground">
               <Plus className="size-3 mr-1" /> Add Customer
-            </GatedButton>
+            </NavButton>
           </div>
         }
         tableView={tableView}

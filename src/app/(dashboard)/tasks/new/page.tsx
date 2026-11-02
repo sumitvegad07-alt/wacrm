@@ -1,8 +1,7 @@
 "use client";
 
 import { TaskForm } from "@/components/tasks/task-form";
-import { useRouter } from "next/navigation";
-
+import { useRouter } from "@/lib/navigation";
 export default function NewTaskPage() {
   const router = useRouter();
 

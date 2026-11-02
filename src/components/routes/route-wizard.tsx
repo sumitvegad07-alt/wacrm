@@ -7,7 +7,7 @@
 // (see route-management-ui-review.md D1 note) — not this screen's concern.
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useSaveRoute,
