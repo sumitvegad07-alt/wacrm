@@ -152,6 +152,11 @@ export const PERMISSIONS = {
     MANAGE_CREDIT: 'manage_customer_credit',
     VIEW_OPENING_BALANCE: 'view_opening_balance',
     EDIT_OPENING_BALANCE: 'edit_opening_balance',
+    // Setting Buyer / Yet to Buy by hand. The value is normally maintained from
+    // order history; an override locks the row, so it is a right of its own
+    // rather than part of ordinary customer editing. Releasing a lock stays
+    // admin-only and has no right.
+    MANAGE_BUYING_STATUS: 'manage_buying_status',
   },
 
   // Credit Control — removed 2026-08-30: `override_credit_limit` was a dormant per-role right.

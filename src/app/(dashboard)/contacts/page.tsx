@@ -71,6 +71,12 @@ import {
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 import { coverageWalk, indexTerritories } from '@/lib/territories/coverage';
+import {
+  BUYING_STATUS_OPTIONS,
+  buyingStatusLabel,
+  isBuyingStatusEnabled,
+  normalizeBuyingStatus,
+} from '@/lib/customers/buying-status';
 
 interface ContactWithData extends Contact {
   tags?: Tag[];
@@ -90,7 +96,11 @@ export default function ContactsPage() {
   const searchParams = useSearchParams();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
-  const { accountId, isModuleEnabled, hasPermission, defaultCurrency, hasSFA } = useAuth();
+  const { accountId, isModuleEnabled, hasPermission, defaultCurrency, hasSFA, account } = useAuth();
+  // Off until an admin asks for it in Organisation Settings. The column is
+  // maintained underneath either way, so the day it is switched on the answer
+  // is already right rather than starting from "nobody has ever bought".
+  const buyingStatusOn = isBuyingStatusEnabled(account?.settings);
   const territoryEnabled = isModuleEnabled('territory');
 
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string; color?: string }[] }>({ enabled: false, levels: [] });
@@ -295,6 +305,9 @@ export default function ContactsPage() {
 
       const want = filters.status as string[] | undefined;
       if (Array.isArray(want) && want.length === 1) q = q.eq('is_active', want[0] === 'active');
+
+      // Buying Status. A plain value match: the column holds one of two values.
+      q = applyInFilter(q, 'buying_status', filters.buying_status);
 
       // The columns Manage Column offers for the rest of the stored fields.
 
@@ -572,6 +585,29 @@ export default function ContactsPage() {
         );
       }
     },
+    // Buying Status sits beside Status on purpose: the pair reads "is this
+    // record live?" then "has this customer ever bought?". Only present once
+    // the admin switches the module on, so no existing list changes shape.
+    ...(buyingStatusOn
+      ? [{
+          id: "buying_status",
+          label: "Buying Status",
+          type: "select" as const,
+          visibleByDefault: true,
+          options: BUYING_STATUS_OPTIONS,
+          render: (contact: ContactWithData) => {
+            const status = normalizeBuyingStatus(contact.buying_status);
+            const buyer = status === 'buyer';
+            return (
+              <Badge className={buyer
+                ? 'bg-sky-600 text-white shadow-sm border-transparent text-micro px-1.5 font-semibold'
+                : 'bg-amber-500/15 text-amber-700 dark:text-amber-500 border-border text-micro px-1.5 font-semibold'}>
+                {buyingStatusLabel(status)}
+              </Badge>
+            );
+          },
+        } satisfies ColumnDef<ContactWithData>]
+      : []),
     {
       id: "phone",
       label: "Phone",

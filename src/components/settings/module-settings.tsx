@@ -294,6 +294,7 @@ export function ModuleSettingsPanel() {
   const [hsnEnabled, setHsnEnabled] = useState(false);
   // Multi Unit: base + conversion units per product; pricing/stock in base units.
   const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
+  const [buyingStatusEnabled, setBuyingStatusEnabled] = useState(false);
   const [amountDiscountBasis, setAmountDiscountBasis] = useState<'entered' | 'base'>('entered');
   // Which field must be unique to block duplicates on save (per module).
   const [productUniqueKey, setProductUniqueKey] = useState<'name' | 'code'>('name');
@@ -354,6 +355,7 @@ export function ModuleSettingsPanel() {
         setGstEnabled(!!s.gst_enabled);
         setHsnEnabled(!!s.hsn_enabled);
         setMultiUnitEnabled(!!s.extra_settings?.multi_unit_enabled);
+        setBuyingStatusEnabled(s.extra_settings?.buying_status_enabled === true);
         setProductUniqueKey(s.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
         setCustomerUniqueKeys(readCustomerUniqueKeys(s));
         setLeadUniqueKeys(readLeadUniqueKeys(s));
@@ -558,6 +560,7 @@ export function ModuleSettingsPanel() {
         extra_settings: {
           ...(baseSettings?.extra_settings || {}),
           multi_unit_enabled: multiUnitEnabled,
+          buying_status_enabled: buyingStatusEnabled,
           product_unique_key: productUniqueKey,
           customer_unique_keys: customerUniqueKeys,
           lead_unique_keys: leadUniqueKeys,
@@ -797,6 +800,14 @@ export function ModuleSettingsPanel() {
                   </div>
                 </FeatureRow>
               )}
+
+              <FeatureRow
+                label="Show Buying Status on customers"
+                description="Adds a second status — Buyer / Yet to Buy — alongside Active / Inactive. It answers “has this customer ever ordered?”, which Active / Inactive does not: a dealer who has never ordered is a current customer the rep is visiting BECAUSE he has not ordered yet. Worked out from order history; an order that was Cancelled or Rejected does not count."
+                enabled={buyingStatusEnabled}
+                onChange={setBuyingStatusEnabled}
+                disabled={!canEditSettings}
+              />
 
               <DuplicatePreventionSettings
                 productUniqueKey={productUniqueKey}

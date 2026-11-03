@@ -13,6 +13,12 @@ import { Phone, Mail, Building2, Calendar, CheckSquare, MessageSquare, Briefcase
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  BUYING_STATUS_OPTIONS,
+  buyingStatusLabel,
+  isBuyingStatusEnabled,
+  normalizeBuyingStatus,
+} from '@/lib/customers/buying-status';
 import { ContactForm } from "@/components/contacts/contact-form";
 import { Timeline } from "@/components/shared/timeline";
 import {
@@ -23,6 +29,7 @@ import {
 } from "@/components/shared/detail-page-layout";
 import { CustomerFinancialCard } from "@/components/payments/customer-financial-card";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
+import { errorMessage } from '@/lib/errors/message';
 import { CustomerAssetsPanel } from "@/components/service/customer-assets-panel";
 import { shouldShowCustomerAssets } from "@/lib/service/assets/customer-panel";
 
@@ -33,7 +40,11 @@ export default function ContactDetailsPage() {
   useMarkRecordSeen("contact", id);
   const router = useRouter();
   const supabase = createClient();
-  const { defaultCurrency, accountId, account, isModuleEnabled, hasPermission, hasFSM } = useAuth();
+  const { defaultCurrency, accountId, account, isModuleEnabled, hasPermission, hasFSM, profile } = useAuth();
+  // Setting Buyer / Yet to Buy by hand locks the row, so it is its own right.
+  // Releasing that lock stays admin-only, which is why isAdmin is separate.
+  const isAdmin = profile?.account_role === 'admin' || profile?.account_role === 'owner';
+  const canSetBuyingStatus = isAdmin || hasPermission(PERMISSIONS.CUSTOMERS.MANAGE_BUYING_STATUS);
   const paymentEnabled = isModuleEnabled('payment');
   
   const canViewFinancials = hasPermission(PERMISSIONS.CUSTOMERS.VIEW_FINANCIALS);
@@ -272,6 +283,79 @@ export default function ContactDetailsPage() {
               <DetailItem label="Contact Person" value={contact.name} />
               <DetailItem label="Phone Number" value={contact.phone} />
               <DetailItem label="Email" value={contact.email} />
+              {isBuyingStatusEnabled(account?.settings) && (
+                <>
+                  <DetailItem label="Buying Status">
+                    {canSetBuyingStatus ? (
+                      <select
+                        value={normalizeBuyingStatus(contact.buying_status)}
+                        onChange={async (e) => {
+                          const next = e.target.value;
+                          const previous = contact.buying_status;
+                          setContact({ ...contact, buying_status: next, buying_status_locked: true } as any);
+                          const { error } = await supabase.rpc('set_buying_status', {
+                            p_contact_id: id,
+                            p_status: next,
+                          });
+                          if (error) {
+                            setContact({ ...contact, buying_status: previous } as any);
+                            toast.error(errorMessage(error, 'Could not set Buying Status'));
+                          } else {
+                            toast.success('Buying Status set by hand. It will no longer follow order history.');
+                          }
+                        }}
+                        className="text-body bg-muted border border-border rounded-md px-2 py-1.5 font-medium w-full"
+                      >
+                        {BUYING_STATUS_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="font-medium">
+                        {buyingStatusLabel(contact.buying_status)}
+                      </span>
+                    )}
+                  </DetailItem>
+                  <DetailItem
+                    label="First Order"
+                    value={
+                      contact.first_order_at
+                        ? new Date(contact.first_order_at).toLocaleDateString()
+                        : 'Never ordered'
+                    }
+                  />
+                  {contact.buying_status_locked && (
+                    <DetailItem label="Set by hand" span={2}>
+                      <span className="text-caption text-muted-foreground">
+                        {'Set by hand'}
+                        {contact.buying_status_set_at
+                          ? ` on ${new Date(contact.buying_status_set_at).toLocaleDateString()}`
+                          : ''}
+                        {'. It no longer follows order history'}
+                        {isAdmin ? '' : '.'}
+                      </span>
+                      {isAdmin && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="ml-1 h-auto p-0 text-caption"
+                          onClick={async () => {
+                            const { error } = await supabase.rpc('clear_buying_status_lock', { p_contact_id: id });
+                            if (error) toast.error(errorMessage(error, 'Could not release the lock'));
+                            else {
+                              toast.success('Released. Buying Status follows order history again.');
+                              router.refresh();
+                            }
+                          }}
+                        >
+                          — let it follow order history again
+                        </Button>
+                      )}
+                    </DetailItem>
+                  )}
+                </>
+              )}
               {hierarchy.enabled && (
                 <DetailItem label="Customer Level">
                   <select

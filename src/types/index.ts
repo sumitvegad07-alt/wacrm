@@ -121,6 +121,17 @@ export interface Contact {
   /** Distribution-chain level (1 = top), used for order primary/secondary
    *  classification when the account enables order hierarchy. */
   hierarchy_level?: number | null;
+  /** Buying Status (migration 20261103140000) — 'buyer' | 'yet_to_buy'. A
+   *  DIFFERENT question from `is_active`: this asks whether the customer has
+   *  ever placed an order that was not Cancelled or Rejected. Maintained from
+   *  order history unless `buying_status_locked`, which a human override sets. */
+  buying_status?: 'buyer' | 'yet_to_buy' | null;
+  buying_status_locked?: boolean | null;
+  /** profiles.id of whoever set the status by hand. */
+  buying_status_set_by?: string | null;
+  buying_status_set_at?: string | null;
+  /** Date of the earliest order that counts. Only the date part is meaningful. */
+  first_order_at?: string | null;
   opening_balance?: number | null;
   credit_limit?: number | null;
   credit_days?: number | null;
