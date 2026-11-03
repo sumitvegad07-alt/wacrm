@@ -78,6 +78,7 @@ import {
   isBuyingStatusEnabled,
   normalizeBuyingStatus,
 } from '@/lib/customers/buying-status';
+import { readMappingMode } from '@/lib/customers/mapping';
 
 interface ContactWithData extends Contact {
   tags?: Tag[];
@@ -102,6 +103,8 @@ export default function ContactsPage() {
   // maintained underneath either way, so the day it is switched on the answer
   // is already right rather than starting from "nobody has ever bought".
   const buyingStatusOn = isBuyingStatusEnabled(account?.settings);
+  // off | manual | beat. Decides whether the Supplied By column exists at all.
+  const mappingMode = readMappingMode(account?.settings);
   const territoryEnabled = isModuleEnabled('territory');
 
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string; color?: string }[] }>({ enabled: false, levels: [] });
@@ -155,6 +158,32 @@ export default function ContactsPage() {
     coveredTerritoryIds: [],
     tagsMap: {},
   });
+
+  /**
+   * The suppliers actually in use, so the Supplied By filter offers names
+   * rather than raw ids. Only asked for once a mapping mode is chosen, and a
+   * read error (most likely: 20261103160000 not applied yet) leaves the list
+   * empty, which hides the filter's options rather than breaking the screen.
+   */
+  const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: string }[]>([]);
+  useEffect(() => {
+    if (!accountId || mappingMode === 'off') {
+      setSupplierOptions([]);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const { data, error } = await supabase.rpc('customer_suppliers', { p_account_id: accountId });
+      if (!alive) return;
+      setSupplierOptions(
+        error ? [] : ((data ?? []) as { id: string; label: string }[]).map((r) => ({
+          label: r.label,
+          value: r.id,
+        })),
+      );
+    })();
+    return () => { alive = false; };
+  }, [accountId, supabase, mappingMode]);
 
   useEffect(() => {
     let alive = true;
@@ -266,7 +295,12 @@ export default function ContactsPage() {
    */
   const buildQuery = useCallback<ServerTableQuery<Record<string, unknown>>>(
     (sb, { search, filters, from, to }) => {
-      let q = sb.from('contacts').select('*', { count: 'exact' });
+      // The supplier is embedded rather than fetched separately: one query for
+      // the page either way, and a second round trip to Mumbai per page is
+      // exactly what the list screens were cleaned up to stop doing.
+      let q = sb
+        .from('contacts')
+        .select('*, parent:parent_id(id, company, name)', { count: 'exact' });
 
       if (search) q = q.ilike('search_text', `%${search.toLowerCase()}%`);
 
@@ -309,6 +343,7 @@ export default function ContactsPage() {
 
       // Buying Status. A plain value match: the column holds one of two values.
       q = applyInFilter(q, 'buying_status', filters.buying_status);
+      q = applyInFilter(q, 'parent_id', filters.supplied_by);
 
       // The columns Manage Column offers for the rest of the stored fields.
 
@@ -607,6 +642,23 @@ export default function ContactsPage() {
                 {buyingStatusLabel(status)}
               </Badge>
             );
+          },
+        } satisfies ColumnDef<ContactWithData>]
+      : []),
+    // Supplied By. Only present once the admin has chosen a mapping mode, so
+    // no existing list changes shape.
+    ...(mappingMode !== 'off'
+      ? [{
+          id: "supplied_by",
+          label: "Supplied By",
+          type: "select" as const,
+          options: supplierOptions,
+          render: (contact: ContactWithData) => {
+            const parent = (contact as { parent?: { company?: string | null; name?: string | null } | null }).parent;
+            const label = parent?.company || parent?.name;
+            return label
+              ? <span>{label}</span>
+              : <span className="text-muted-foreground">Direct</span>;
           },
         } satisfies ColumnDef<ContactWithData>]
       : []),

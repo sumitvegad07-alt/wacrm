@@ -23,6 +23,7 @@ import {
   requiresReason,
   type BuyingStatus,
 } from '@/lib/customers/buying-status';
+import { readMappingMode } from '@/lib/customers/mapping';
 import { ContactForm } from "@/components/contacts/contact-form";
 import { Timeline } from "@/components/shared/timeline";
 import {
@@ -54,6 +55,52 @@ export default function ContactDetailsPage() {
   // blacklist without one.
   const [blacklistDraft, setBlacklistDraft] = useState<string | null>(null);
   const [savingBuyingStatus, setSavingBuyingStatus] = useState(false);
+  // Customer mapping: who supplies this one, and how many it supplies.
+  const mappingMode = readMappingMode(account?.settings);
+  const [supplier, setSupplier] = useState<{ id: string; label: string } | null>(null);
+  const [servesCount, setServesCount] = useState<number | null>(null);
+  const [supplierBeat, setSupplierBeat] = useState<string | null>(null);
+  useEffect(() => {
+    if (!id || mappingMode === 'off') {
+      setSupplier(null);
+      setServesCount(null);
+      setSupplierBeat(null);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from('contacts')
+        .select('parent_id, parent:parent_id(id, company, name)')
+        .eq('id', id)
+        .maybeSingle();
+      if (!alive) return;
+      const parent = (data as { parent?: { id: string; company: string | null; name: string | null } | null } | null)?.parent;
+      setSupplier(parent ? { id: parent.id, label: parent.company || parent.name || 'Unnamed' } : null);
+
+      // How many customers this one supplies — the other direction.
+      const { count } = await supabase
+        .from('contacts')
+        .select('id', { count: 'exact', head: true })
+        .eq('parent_id', id);
+      if (alive) setServesCount(count ?? 0);
+
+      // In beat mode, say WHICH beat decided it, so the read-only value is
+      // explainable without hunting through Routes.
+      if (mappingMode === 'beat') {
+        const { data: rc } = await supabase
+          .from('route_customers')
+          .select('route:route_id(name)')
+          .eq('contact_id', id)
+          .is('archived_at', null)
+          .is('one_time_date', null)
+          .maybeSingle();
+        const name = (rc as { route?: { name?: string } | null } | null)?.route?.name ?? null;
+        if (alive) setSupplierBeat(name);
+      }
+    })();
+    return () => { alive = false; };
+  }, [id, supabase, mappingMode]);
 
   /**
    * Write a hand-set Buying Status. The RPC is the only way in: it records the
@@ -335,6 +382,39 @@ export default function ContactDetailsPage() {
               <DetailItem label="Contact Person" value={contact.name} />
               <DetailItem label="Phone Number" value={contact.phone} />
               <DetailItem label="Email" value={contact.email} />
+              {mappingMode !== 'off' && (
+                <>
+                  <DetailItem label="Supplied By">
+                    {supplier ? (
+                      <Link
+                        href={`/contacts/${supplier.id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {supplier.label}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">Direct — no supplier recorded</span>
+                    )}
+                    {mappingMode === 'beat' && (
+                      <p className="mt-0.5 text-caption text-muted-foreground">
+                        {supplierBeat
+                          ? `From the beat: ${supplierBeat}`
+                          : 'Not on a beat with a supplier yet'}
+                      </p>
+                    )}
+                  </DetailItem>
+                  {servesCount != null && servesCount > 0 && (
+                    <DetailItem label="Supplies">
+                      <Link
+                        href={`/contacts?supplied_by=${id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {servesCount} customer{servesCount === 1 ? '' : 's'}
+                      </Link>
+                    </DetailItem>
+                  )}
+                </>
+              )}
               {isBuyingStatusEnabled(account?.settings) && (
                 <>
                   <DetailItem label="Buying Status">

@@ -4,6 +4,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { codePlaceholder } from '@/lib/codes/auto-codes';
+import { eligibleParents, readMappingMode, type MappingMode } from '@/lib/customers/mapping';
+
+/** Just enough of a customer to offer them as a supplier. */
+type ParentCandidate = { id: string; company: string | null; name: string | null; hierarchy_level: number | null };
 import { getCurrencySymbol } from '@/lib/currency';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { toast } from 'sonner';
@@ -147,6 +151,11 @@ export function ContactForm({
   // Order-hierarchy config drives the Customer Level field's visibility.
   const [hierarchy, setHierarchy] = useState<{ enabled: boolean; levels: { position: number; name: string }[] }>({ enabled: false, levels: [] });
   const [hierarchyLevel, setHierarchyLevel] = useState<number | null>(null);
+  // Customer mapping: who supplies this customer. In manual mode a human picks
+  // it here; in beat mode the database owns it and this box is read-only.
+  const [mappingMode, setMappingMode] = useState<MappingMode>('off');
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [parentCandidates, setParentCandidates] = useState<ParentCandidate[]>([]);
 
   // Assignment Mode config
   const [assignmentMode, setAssignmentMode] = useState<'area' | 'direct'>('area');
@@ -239,6 +248,7 @@ export function ContactForm({
       setCreditDays((contact as any)?.credit_days != null ? String((contact as any).credit_days) : '');
       setOpeningBalance((contact as any)?.opening_balance != null ? String((contact as any).opening_balance) : '');
       setHierarchyLevel(contact?.hierarchy_level ?? null);
+      setParentId((contact as { parent_id?: string | null })?.parent_id ?? null);
       setPriceListId((contact as any)?.price_list_id ?? null);
       setEmployeeId(contact?.employee_id ?? '');
       setCollaboratorIds(
@@ -282,6 +292,19 @@ export function ContactForm({
     setAssignmentMode(acctRes.data?.settings?.assignment_mode || 'area');
     setUniqueKeys(readCustomerUniqueKeys(acctRes.data?.settings));
     setProfiles((profRes.data || []) as Profile[]);
+    // Customer mapping. Only fetched when the account has chosen a mode, so a
+    // tenant with mapping off pays nothing for it.
+    const mode = readMappingMode(acctRes.data?.settings);
+    setMappingMode(mode);
+    if (mode !== 'off') {
+      const { data: cands } = await supabase
+        .from('contacts')
+        .select('id, company, name, hierarchy_level')
+        .eq('account_id', accountId)
+        .neq('is_active', false)
+        .order('company');
+      setParentCandidates((cands ?? []) as ParentCandidate[]);
+    }
     // Price Lists (v5) are an SFA-line feature; only load them there.
     if (hasSFA) {
       const { data: pls } = await supabase
@@ -449,6 +472,9 @@ export function ContactForm({
         latitude: latitude.trim() !== '' ? parseFloat(latitude) : null,
         longitude: longitude.trim() !== '' ? parseFloat(longitude) : null,
         hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
+        // Beat mode: the trigger owns parent_id, so the form must not write it
+        // or it would fight the beat on every save.
+        ...(mappingMode === 'manual' ? { parent_id: parentId } : {}),
         ...(hasSFA ? { price_list_id: priceListId } : {}),
         employee_id: assignmentMode === 'direct' ? (employeeId || null) : null,
       collaborator_ids: collaboratorIds,
@@ -709,6 +735,47 @@ export function ContactForm({
               return undefined;
             }}
           />
+
+          {mappingMode !== 'off' && (
+            <FormSection title="Supplier">
+              {mappingMode === 'manual' ? (
+                <div className="space-y-1">
+                  <SearchableSelect
+                    value={parentId ?? ''}
+                    onChange={(v) => setParentId(v || null)}
+                    options={eligibleParents(parentCandidates, {
+                      id: contact?.id,
+                      hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
+                    }).map((c) => ({
+                      label: c.company || c.name || 'Unnamed',
+                      value: c.id,
+                    }))}
+                    placeholder="Supplied by..."
+                  />
+                  <p className="text-caption text-muted-foreground">
+                    Which customer supplies this one. Only customers above this one in the
+                    hierarchy can be chosen{hierarchy.enabled ? '' : '; set Customer Level to narrow the list'}.
+                    Leave it empty for a customer you supply directly.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-body font-medium">
+                    {parentId
+                      ? (parentCandidates.find((c) => c.id === parentId)?.company
+                          ?? parentCandidates.find((c) => c.id === parentId)?.name
+                          ?? 'Set from the beat')
+                      : 'Not on a beat with a supplier yet'}
+                  </p>
+                  <p className="text-caption text-muted-foreground">
+                    Taken from this customer&apos;s beat. To change it, change the beat&apos;s
+                    supplier on the Routes screen, or switch Customer mapping to &ldquo;Set on
+                    each customer&rdquo; in Organisation Settings.
+                  </p>
+                </div>
+              )}
+            </FormSection>
+          )}
 
           {showTerritoryCascade && (
             <div data-tour="customer-territory">

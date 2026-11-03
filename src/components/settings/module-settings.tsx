@@ -26,6 +26,8 @@ import { FENCE_RADII, normalizeGeoFencing } from "@/lib/location/geofence-config
 import { McpWorkforceAccessCard } from "@/components/settings/mcp-workforce-access";
 import { DuplicatePreventionSettings } from "@/components/settings/duplicate-prevention-settings";
 import { AutoCodesSettings } from "@/components/settings/auto-codes-settings";
+import { CustomerMappingSettings } from "@/components/settings/customer-mapping-settings";
+import { readMappingMode, type MappingMode } from "@/lib/customers/mapping";
 import {
   CODE_KINDS,
   CODE_KIND_META,
@@ -324,6 +326,11 @@ export function ModuleSettingsPanel() {
   const [codeLastUsed, setCodeLastUsed] = useState<Partial<Record<CodeKind, number>>>({});
   const [codeBlanks, setCodeBlanks] = useState<Partial<Record<CodeKind, number>>>({});
   const [backfillKind, setBackfillKind] = useState<CodeKind | null>(null);
+  // Customer mapping. `mappingWouldChange` comes from the re-map dry run, so
+  // the button can say how many customers it will touch before it writes.
+  const [mappingMode, setMappingMode] = useState<MappingMode>('off');
+  const [mappingWouldChange, setMappingWouldChange] = useState<number | null>(null);
+  const [remapping, setRemapping] = useState(false);
   const [originalSettings, setOriginalSettings] = useState<any>({});
 
   // Tracking interval + shift timings. Times are stored as 24h "HH:MM" strings so there is no
@@ -360,6 +367,7 @@ export function ModuleSettingsPanel() {
         setCustomerUniqueKeys(readCustomerUniqueKeys(s));
         setLeadUniqueKeys(readLeadUniqueKeys(s));
         setCodeSettings(readCodeSettings(s));
+        setMappingMode(readMappingMode(s));
         setAmountDiscountBasis(os.amount_discount_basis === 'base' ? 'base' : 'entered');
 
         const gf = normalizeGeoFencing(s.geo_fencing);
@@ -486,6 +494,56 @@ export function ModuleSettingsPanel() {
     }
   }, [accountId, supabase]);
 
+  /**
+   * How many customers the beat rule would re-map. Only asked for in beat
+   * mode, and tolerant of a read error (most likely: 20261103160000 has not
+   * been applied yet), which hides the count rather than showing a wrong zero.
+   */
+  useEffect(() => {
+    if (!accountId || mappingMode !== 'beat') {
+      setMappingWouldChange(null);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase.rpc('resync_account_beat_parents', {
+        p_account_id: accountId,
+        p_dry_run: true,
+      });
+      if (active) {
+        setMappingWouldChange(
+          error ? null : Number((data as { would_change?: number } | null)?.would_change ?? 0),
+        );
+      }
+    })();
+    return () => { active = false; };
+  }, [accountId, supabase, mappingMode]);
+
+  /** Apply the beat rule to every customer in the account. */
+  const handleRemapFromBeats = useCallback(async () => {
+    if (!accountId) return;
+    setRemapping(true);
+    try {
+      const { data, error } = await supabase.rpc('resync_account_beat_parents', {
+        p_account_id: accountId,
+        p_dry_run: false,
+      });
+      if (error) throw error;
+      const changed = Number((data as { changed?: number } | null)?.changed ?? 0);
+      setMappingWouldChange(0);
+      setToastMsg({
+        type: 'success',
+        message: changed === 0
+          ? 'Every customer already matched their beat.'
+          : `Re-mapped ${changed} customer${changed === 1 ? '' : 's'} from their beats.`,
+      });
+    } catch (err) {
+      setToastMsg({ type: 'error', message: errorMessage(err, 'Could not re-map customers.') });
+    } finally {
+      setRemapping(false);
+    }
+  }, [accountId, supabase]);
+
   const handleModuleToggle = (key: keyof ModuleSettings, value: boolean) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
   };
@@ -561,6 +619,7 @@ export function ModuleSettingsPanel() {
           ...(baseSettings?.extra_settings || {}),
           multi_unit_enabled: multiUnitEnabled,
           buying_status_enabled: buyingStatusEnabled,
+          customer_mapping_mode: mappingMode,
           product_unique_key: productUniqueKey,
           customer_unique_keys: customerUniqueKeys,
           lead_unique_keys: leadUniqueKeys,
@@ -807,6 +866,15 @@ export function ModuleSettingsPanel() {
                 enabled={buyingStatusEnabled}
                 onChange={setBuyingStatusEnabled}
                 disabled={!canEditSettings}
+              />
+
+              <CustomerMappingSettings
+                value={mappingMode}
+                wouldChange={mappingWouldChange}
+                remapping={remapping}
+                disabled={!canEditSettings}
+                onChange={setMappingMode}
+                onRemap={handleRemapFromBeats}
               />
 
               <DuplicatePreventionSettings

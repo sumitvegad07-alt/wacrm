@@ -23,6 +23,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase/client";
+import { readMappingMode } from "@/lib/customers/mapping";
 
 export function RouteEditSheet({
   route,
@@ -43,6 +46,53 @@ export function RouteEditSheet({
   const [description, setDescription] = useState(route.description ?? "");
   const [assigneeId, setAssigneeId] = useState(route.primary_assignee_id ?? "");
 
+  /**
+   * Which customer supplies this beat, in beat mapping mode.
+   *
+   * Saved straight to route_parent_customers rather than through the route RPC:
+   * it is not a field of the route, it is who stocks the shops on it, and the
+   * route's own version check has nothing to say about it. Every customer
+   * permanently on the beat then inherits it by trigger.
+   */
+  const { accountId: authAccountId, account } = useAuth();
+  const supabase = createClient();
+  const beatMapping = readMappingMode(account?.settings) === "beat";
+  const [supplierId, setSupplierId] = useState("");
+  const [savedSupplierId, setSavedSupplierId] = useState("");
+  const [supplierChoices, setSupplierChoices] = useState<{ id: string; label: string }[]>([]);
+
+  useEffect(() => {
+    if (!open || !beatMapping || !authAccountId) return;
+    let alive = true;
+    void (async () => {
+      const [{ data: current }, { data: choices }] = await Promise.all([
+        supabase
+          .from("route_parent_customers")
+          .select("parent_id")
+          .eq("route_id", route.id)
+          .maybeSingle(),
+        supabase
+          .from("contacts")
+          .select("id, company, name, hierarchy_level")
+          .eq("account_id", authAccountId)
+          .neq("is_active", false)
+          .order("hierarchy_level", { ascending: true, nullsFirst: false })
+          .order("company"),
+      ]);
+      if (!alive) return;
+      const found = (current as { parent_id?: string } | null)?.parent_id ?? "";
+      setSupplierId(found);
+      setSavedSupplierId(found);
+      setSupplierChoices(
+        ((choices ?? []) as { id: string; company: string | null; name: string | null }[]).map((c) => ({
+          id: c.id,
+          label: c.company || c.name || "Unnamed",
+        })),
+      );
+    })();
+    return () => { alive = false; };
+  }, [open, beatMapping, authAccountId, route.id, supabase]);
+
   // Re-seed the form whenever a new route is opened.
   useEffect(() => {
     if (open) {
@@ -55,7 +105,8 @@ export function RouteEditSheet({
   const dirty =
     name !== route.name ||
     description !== (route.description ?? "") ||
-    assigneeId !== (route.primary_assignee_id ?? "");
+    assigneeId !== (route.primary_assignee_id ?? "") ||
+    (beatMapping && supplierId !== savedSupplierId);
 
   const requestClose = async (next: boolean) => {
     if (!next && dirty && !(await confirm({ title: "Discard unsaved changes?", description: "The edits you made to this route are lost.", confirmLabel: "Discard", variant: "warning" }))) return;
@@ -72,6 +123,22 @@ export function RouteEditSheet({
         primaryAssigneeId: assigneeId || null,
         expectedVersion: route.version,
       });
+      if (beatMapping && supplierId !== savedSupplierId && authAccountId) {
+        // Clearing it removes the row, which re-maps the beat's customers to
+        // no supplier rather than leaving a stale one behind.
+        const { error } = supplierId
+          ? await supabase.from("route_parent_customers").upsert(
+              { account_id: authAccountId, route_id: route.id, parent_id: supplierId },
+              { onConflict: "route_id" },
+            )
+          : await supabase.from("route_parent_customers").delete().eq("route_id", route.id);
+        if (error) {
+          toast.error("Route saved, but the supplier could not be set.");
+          onOpenChange(false);
+          return;
+        }
+        setSavedSupplierId(supplierId);
+      }
       toast.success("Route updated");
       onOpenChange(false);
     } catch (e) {
@@ -121,6 +188,26 @@ export function RouteEditSheet({
               ))}
             </select>
           </div>
+          {beatMapping && (
+            <div>
+              <Label htmlFor="route-supplier">Supplied by</Label>
+              <select
+                id="route-supplier"
+                value={supplierId}
+                onChange={(e) => setSupplierId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="">No supplier</option>
+                {supplierChoices.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-caption text-muted-foreground">
+                Every customer permanently on this beat takes this supplier. A customer visited
+                here on a one-time stop keeps the supplier of the beat they belong to.
+              </p>
+            </div>
+          )}
         </div>
 
         <SheetFooter>

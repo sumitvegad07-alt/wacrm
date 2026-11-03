@@ -42,6 +42,8 @@ import { detectMapping, unmappedRequiredFields } from "@/lib/import/mapping";
 import { buildMappedRows, validateRows, buildCommitRows } from "@/lib/import/validate";
 import { detectUnknownLookups, applyResolutions, rewriteRows } from "@/lib/import/resolve-lookups";
 import { loadExistingKeys, createImportJob, commitInChunks } from "@/lib/import/run";
+import { describeParentResolve, resolveImportedParents } from "@/lib/import/resolve-parents";
+import { canEditParentByHand } from "@/lib/customers/mapping";
 import { buildTemplateCsv, buildErrorCsv, downloadText } from "@/lib/import/error-report";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
 import { errorMessage } from '@/lib/errors/message';
@@ -75,6 +77,8 @@ interface ResultState {
   invalidCount: number;
   undoable: boolean;
   errors: { row: number; message: string }[];
+  /** Customer mapping outcome, when a `parent_code` column was imported. */
+  parentNote?: string | null;
 }
 
 const CONFIDENCE_STYLE: Record<string, string> = {
@@ -86,7 +90,7 @@ const CONFIDENCE_STYLE: Record<string, string> = {
 
 export function ImportWizard({ open, onOpenChange, module, onImported }: Props) {
   const supabase = useMemo(() => createClient(), []);
-  const { accountId, user, hasPermission, isModuleEnabled } = useAuth();
+  const { accountId, user, hasPermission, isModuleEnabled, account } = useAuth();
   const baseDescriptor = getImportDescriptor(module);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -326,9 +330,33 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
         setProgress(Math.round((done / total) * 100)),
       );
 
+      /**
+       * Customer mapping: resolve any `parent_code` into contacts.parent_id.
+       *
+       * A second pass rather than part of import_commit — see
+       * resolve-parents.ts for why. Skipped in beat mapping mode, where the
+       * database owns parent_id from the beat and an imported value would just
+       * be overwritten; and never allowed to fail the import, since the rows
+       * themselves are already safely in.
+       */
+      let parentNote: string | null = null;
+      if (
+        descriptor.targetTable === "contacts" &&
+        canEditParentByHand(account?.settings) &&
+        accountId
+      ) {
+        try {
+          parentNote = describeParentResolve(
+            await resolveImportedParents(supabase, accountId, rows as Record<string, unknown>[]),
+          );
+        } catch (e) {
+          parentNote = `Suppliers could not be mapped: ${errorMessage(e, "unknown error")}`;
+        }
+      }
+
       // Undoable only if the run actually created rows and the target supports it.
       const undoable = descriptor.undoable && res.imported > 0;
-      setResult({ jobId, ...res, invalidCount: summary.invalid, undoable });
+      setResult({ jobId, ...res, invalidCount: summary.invalid, undoable, parentNote });
       setStep("result");
       if (res.imported > 0 || res.updated > 0) onImported?.();
     } catch (err) {
@@ -785,6 +813,12 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                     <ResultStat n={result.failed + result.invalidCount} label="failed/invalid" tone="bad" />
                   )}
                 </div>
+                {result.parentNote && (
+                  <p className="mt-2 text-caption text-muted-foreground">
+                    <span className="font-medium text-foreground">Suppliers:</span>{" "}
+                    {result.parentNote}
+                  </p>
+                )}
               </div>
 
               {result.failed > 0 && result.errors.length > 0 && (

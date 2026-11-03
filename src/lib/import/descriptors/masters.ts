@@ -66,6 +66,10 @@ export const contactsDescriptor: ImportDescriptor = {
   fieldsModule: "contact",
   customValuesTable: "contact_custom_values",
   customValuesFk: "contact_id",
+  // parent_code is NOT a contacts column: it names the supplying customer by
+  // their Customer Code, and is resolved into contacts.parent_id after the
+  // commit (src/lib/import/resolve-parents.ts). Listed here so the mapping
+  // screen offers it and validation accepts it.
   systemColumns: ["name", "customer_code", "phone", "email", "company", "whatsapp", "address", "area", "city", "state", "country", "pincode"],
   territoryReplacesKeys: ["country", "state", "city", "area"],
   lookups: [
@@ -76,6 +80,9 @@ export const contactsDescriptor: ImportDescriptor = {
       synonyms: ["phone", "mobile", "number", "contactnumber"], examples: ["+919876543210", "+919812345678", ""] },
     { key: "territory", label: "Territory", type: "text", maxLength: 100,
       synonyms: ["territory", "zone", "beat", "salesarea", "region"], examples: ["Gujarat", "", ""] },
+    { key: "parent_code", label: "Supplier Code", type: "text", maxLength: 50,
+      synonyms: ["parentcode", "parent", "supplier", "suppliercode", "distributor", "distributorcode", "parentid"],
+      examples: ["CUST-0001", "", ""] },
     { key: "latitude", label: "Latitude", type: "latlng", synonyms: ["latitude", "lat"], examples: ["", "", ""] },
     { key: "longitude", label: "Longitude", type: "latlng", synonyms: ["longitude", "lng", "long"], examples: ["", "", ""] },
     { key: "credit_limit", label: "Credit Limit", type: "number", synonyms: ["creditlimit"], examples: ["", "", ""] },
