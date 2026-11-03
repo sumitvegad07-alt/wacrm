@@ -25,6 +25,15 @@ import {
 import { FENCE_RADII, normalizeGeoFencing } from "@/lib/location/geofence-config";
 import { McpWorkforceAccessCard } from "@/components/settings/mcp-workforce-access";
 import { DuplicatePreventionSettings } from "@/components/settings/duplicate-prevention-settings";
+import { AutoCodesSettings } from "@/components/settings/auto-codes-settings";
+import {
+  CODE_KINDS,
+  CODE_KIND_META,
+  DEFAULT_CODE_SETTINGS,
+  readCodeSettings,
+  type CodeKind,
+  type CodeSettings,
+} from "@/lib/codes/auto-codes";
 import { errorMessage } from '@/lib/errors/message';
 import {
   readCustomerUniqueKeys,
@@ -306,6 +315,14 @@ export function ModuleSettingsPanel() {
   const [geoEnforceCheckOut, setGeoEnforceCheckOut] = useState(false);
   const [geoRadius, setGeoRadius] = useState<number>(50);
   const [levels, setLevels] = useState<HierarchyLevel[]>([]);
+  // Automatic codes. `lastUsed` comes from account_sequences so the "Next code"
+  // line tells the truth on an account that has already minted codes, and
+  // `blanks` comes from the backfill's own dry run so the number on the button
+  // is counted exactly the way the backfill will count it.
+  const [codeSettings, setCodeSettings] = useState<CodeSettings>(DEFAULT_CODE_SETTINGS);
+  const [codeLastUsed, setCodeLastUsed] = useState<Partial<Record<CodeKind, number>>>({});
+  const [codeBlanks, setCodeBlanks] = useState<Partial<Record<CodeKind, number>>>({});
+  const [backfillKind, setBackfillKind] = useState<CodeKind | null>(null);
   const [originalSettings, setOriginalSettings] = useState<any>({});
 
   // Tracking interval + shift timings. Times are stored as 24h "HH:MM" strings so there is no
@@ -340,6 +357,7 @@ export function ModuleSettingsPanel() {
         setProductUniqueKey(s.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
         setCustomerUniqueKeys(readCustomerUniqueKeys(s));
         setLeadUniqueKeys(readLeadUniqueKeys(s));
+        setCodeSettings(readCodeSettings(s));
         setAmountDiscountBasis(os.amount_discount_basis === 'base' ? 'base' : 'entered');
 
         const gf = normalizeGeoFencing(s.geo_fencing);
@@ -389,6 +407,82 @@ export function ModuleSettingsPanel() {
     })();
     return () => { active = false; };
   }, [accountId, supabase, geoAttendanceEnabled]);
+
+  /**
+   * Counters and blank counts for the Automatic codes card.
+   *
+   * Re-read whenever a record type is switched on, so the "157 records have no
+   * Customer Code" line and its button appear without a reload — the same
+   * reason the attendance-location count above is keyed on its own switch.
+   *
+   * A read error (most likely: 20261103130000 has not been applied yet) leaves
+   * both unknown, which hides the counts rather than showing a wrong zero.
+   */
+  const enabledCodeKinds = CODE_KINDS.filter((k) => codeSettings[k].enabled).join(',');
+  useEffect(() => {
+    if (!accountId) return;
+    const kinds = enabledCodeKinds ? (enabledCodeKinds.split(',') as CodeKind[]) : [];
+    if (kinds.length === 0) {
+      setCodeLastUsed({});
+      setCodeBlanks({});
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data: seqRow } = await supabase
+        .from('account_sequences')
+        .select('customer_code_seq, employee_code_seq, product_code_seq')
+        .eq('account_id', accountId)
+        .maybeSingle();
+      if (active && seqRow) {
+        const row = seqRow as Record<string, number | null>;
+        setCodeLastUsed({
+          customer: row.customer_code_seq ?? 0,
+          employee: row.employee_code_seq ?? 0,
+          product: row.product_code_seq ?? 0,
+        });
+      }
+
+      const counts: Partial<Record<CodeKind, number>> = {};
+      for (const kind of kinds) {
+        const { data, error } = await supabase.rpc('backfill_generated_codes', {
+          p_account_id: accountId,
+          p_kind: kind,
+          p_dry_run: true,
+        });
+        if (!error && data) counts[kind] = Number((data as { pending?: number }).pending ?? 0);
+      }
+      if (active) setCodeBlanks(counts);
+    })();
+    return () => { active = false; };
+  }, [accountId, supabase, enabledCodeKinds]);
+
+  /** Give every record of one type that has no code a code. */
+  const handleBackfillCodes = useCallback(async (kind: CodeKind) => {
+    if (!accountId) return;
+    setBackfillKind(kind);
+    try {
+      const { data, error } = await supabase.rpc('backfill_generated_codes', {
+        p_account_id: accountId,
+        p_kind: kind,
+        p_dry_run: false,
+      });
+      if (error) throw error;
+      const result = (data || {}) as { filled?: number; first?: string; last?: string };
+      const filled = Number(result.filled ?? 0);
+      setCodeBlanks((prev) => ({ ...prev, [kind]: 0 }));
+      setToastMsg({
+        type: 'success',
+        message: filled === 0
+          ? `No ${CODE_KIND_META[kind].label.toLowerCase()} records needed a code.`
+          : `Gave a code to ${filled} ${CODE_KIND_META[kind].label.toLowerCase()} record${filled === 1 ? '' : 's'} (${result.first} to ${result.last}).`,
+      });
+    } catch (err) {
+      setToastMsg({ type: 'error', message: errorMessage(err, 'Could not fill in the codes.') });
+    } finally {
+      setBackfillKind(null);
+    }
+  }, [accountId, supabase]);
 
   const handleModuleToggle = (key: keyof ModuleSettings, value: boolean) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -457,6 +551,10 @@ export function ModuleSettingsPanel() {
           levels: cleanLevels,
           amount_discount_basis: amountDiscountBasis,
         },
+        // Automatic codes. Written as a whole object: every record type's rule
+        // is held in state, so a partial merge could only ever resurrect a
+        // stale rule an admin had just turned off.
+        code_settings: codeSettings,
         extra_settings: {
           ...(baseSettings?.extra_settings || {}),
           multi_unit_enabled: multiUnitEnabled,
@@ -710,6 +808,18 @@ export function ModuleSettingsPanel() {
                   setCustomerUniqueKeys(next.customerKeys);
                   setLeadUniqueKeys(next.leadKeys);
                 }}
+              />
+
+              {/* Sits next to duplicate prevention on purpose: both answer
+                  "what makes this record's code acceptable?". */}
+              <AutoCodesSettings
+                value={codeSettings}
+                lastUsed={codeLastUsed}
+                blanks={codeBlanks}
+                busyKind={backfillKind}
+                disabled={!canEditSettings}
+                onChange={setCodeSettings}
+                onBackfill={handleBackfillCodes}
               />
 
               <FeatureRow

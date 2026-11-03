@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { codePlaceholder } from '@/lib/codes/auto-codes';
 import { getCurrencySymbol } from '@/lib/currency';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { toast } from 'sonner';
@@ -79,7 +80,7 @@ export function ContactForm({
   onViewExisting,
 }: ContactFormProps) {
   const supabase = createClient();
-  const { accountId, user, isModuleEnabled, hasPermission, defaultCurrency, hasSFA } = useAuth();
+  const { accountId, user, isModuleEnabled, hasPermission, defaultCurrency, hasSFA, account } = useAuth();
   // These three fields decide what a customer owes, so the database refuses to change
   // them without the matching permission. Mirror that here rather than letting someone
   // fill in a value that will be rejected on save.
@@ -543,6 +544,9 @@ export function ContactForm({
             accountId={accountId}
             moduleName="contact"
             fieldGridClassName={fieldGrid}
+            // Says "Auto (CUST-0318)" in the Customer Code box when the account
+            // has automatic codes on, and nothing at all when it has not.
+            placeholders={{ customer_code: codePlaceholder(account?.settings, 'customer') }}
             customFields={renderedCustomFields}
             customValues={customValues}
             onChange={(fieldId, val) =>

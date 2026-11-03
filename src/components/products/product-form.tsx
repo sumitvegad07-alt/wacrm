@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { codePlaceholder } from '@/lib/codes/auto-codes';
 import { toast } from 'sonner';
 import type { Product, CustomField, ProductCategory, ProductUnit } from '@/types';
 import { CustomFieldInput } from '@/components/ui/custom-field-input';
@@ -56,7 +57,7 @@ export function ProductForm({
   onSaved,
 }: ProductFormProps) {
   const supabase = createClient();
-  const { accountId, user, isModuleEnabled } = useAuth();
+  const { accountId, user, isModuleEnabled, account } = useAuth();
   const isEdit = !!product;
   const stockEnabled = isModuleEnabled('stock');
 
@@ -537,6 +538,9 @@ export function ProductForm({
               accountId={accountId}
               moduleName="product"
               fieldGridClassName={fieldGrid}
+              // Says "Auto (SKU-0043)" in the Product Code box when the account
+              // has automatic codes on, and nothing at all when it has not.
+              placeholders={{ sku: codePlaceholder(account?.settings, 'product') }}
               customFields={customFields}
               customValues={customValues}
               onChange={(fieldId, val) =>

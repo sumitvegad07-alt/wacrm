@@ -10,6 +10,7 @@ import { UserPlus, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { codePlaceholder } from '@/lib/codes/auto-codes';
 import { CustomFieldsSectionRenderer } from "@/components/custom-fields/custom-fields-section-renderer";
 import { ensureDefaultSectionsAndFields } from "@/lib/custom-fields";
 import {
@@ -29,7 +30,7 @@ export default function NewEmployeePage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const { accountId, user } = useAuth();
+  const { accountId, user, account } = useAuth();
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [creating, setCreating] = useState(false);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -232,8 +233,12 @@ export default function NewEmployeePage() {
       );
     }
 
+    // With automatic codes on, the Employee Code box says what will be filled
+    // in if it is left empty rather than a generic "Enter Employee Code...".
+    const autoCode = key === 'employee_code' ? codePlaceholder(account?.settings, 'employee') : '';
+
     return (
-      <Input type={field.field_type === 'email' ? 'email' : 'text'} value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} placeholder={`Enter ${field.field_name}...`} />
+      <Input type={field.field_type === 'email' ? 'email' : 'text'} value={form[key] as string} onChange={e => setForm({...form, [key]: e.target.value})} placeholder={autoCode || `Enter ${field.field_name}...`} />
     );
   };
 

@@ -17,9 +17,15 @@ interface CustomFieldInputProps {
   field: CustomField;
   value: string;
   onChange: (val: string) => void;
+  /**
+   * Overrides the generic "Enter <field>..." prompt. Used by the automatic
+   * codes module to say what will be filled in if the box is left empty, e.g.
+   * "Auto (CUST-0318)", so nobody wonders whether a blank is allowed.
+   */
+  placeholder?: string;
 }
 
-export function CustomFieldInput({ field, value, onChange }: CustomFieldInputProps) {
+export function CustomFieldInput({ field, value, onChange, placeholder }: CustomFieldInputProps) {
   const [uploading, setUploading] = useState(false);
   const [dynamicOptions, setDynamicOptions] = useState<{label: string, value: string}[]>([]);
   const [loadingDynamic, setLoadingDynamic] = useState(false);
@@ -221,7 +227,7 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
       <Textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={`Enter ${field.field_name}...`}
+        placeholder={placeholder || `Enter ${field.field_name}...`}
       />
     );
   }
@@ -237,7 +243,7 @@ export function CustomFieldInput({ field, value, onChange }: CustomFieldInputPro
       type={inputType}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      placeholder={`Enter ${field.field_name}...`}
+      placeholder={placeholder || `Enter ${field.field_name}...`}
     />
   );
 }

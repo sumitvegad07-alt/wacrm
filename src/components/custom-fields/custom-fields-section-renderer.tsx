@@ -20,6 +20,11 @@ interface CustomFieldsSectionRendererProps {
   onChange: (fieldId: string, value: any) => void;
   formData?: Record<string, any>;
   onFormDataChange?: (key: string, value: any) => void;
+  /**
+   * Per-system-field placeholder, keyed by system_key. The automatic codes
+   * module uses it to show the code a blank box will be filled with.
+   */
+  placeholders?: Record<string, string>;
   renderCustomSystemField?: (field: CustomField) => React.ReactNode | null | undefined;
   isEditing?: boolean;
   /**
@@ -59,6 +64,7 @@ export function CustomFieldsSectionRenderer({
   onChange,
   formData,
   onFormDataChange,
+  placeholders,
   renderCustomSystemField,
   isEditing = true,
   fieldGridClassName = DEFAULT_FIELD_GRID,
@@ -200,6 +206,9 @@ export function CustomFieldsSectionRenderer({
                         field={field}
                         value={value}
                         onChange={handleChange}
+                        placeholder={
+                          field.system_key ? placeholders?.[field.system_key] : undefined
+                        }
                       />
                     )}
                   </FormField>
