@@ -61,9 +61,16 @@ function SignupPageInner() {
 
     setLoading(true);
 
-    const emailRedirectTo = inviteToken
-      ? `${window.location.origin}/join/${encodeURIComponent(inviteToken)}`
-      : undefined;
+    // Where the "confirm your email" link has to bring the user back to.
+    // Leave this out and Supabase builds the link from the project's Site
+    // URL instead — which was still a developer's `localhost:3000`, so every
+    // new user who clicked it got "This site can't be reached" (fixed 3 Nov
+    // 2026). `/auth/callback` trades the one-time code in the link for a
+    // real session before handing the user on.
+    const next = inviteToken
+      ? `/join/${encodeURIComponent(inviteToken)}`
+      : "/dashboard";
+    const emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -79,7 +86,7 @@ function SignupPageInner() {
           // module_settings. Omitted → trigger defaults to CRM.
           ...(plan ? { plan } : {}),
         },
-        ...(emailRedirectTo ? { emailRedirectTo } : {}),
+        emailRedirectTo,
       },
     });
 

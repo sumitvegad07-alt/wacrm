@@ -45,6 +45,11 @@ function LoginPageInner() {
   // renewed. Without this the user was returned to a blank sign-in form with
   // no idea why they had been thrown out mid-edit.
   const sessionExpired = searchParams.get("expired") === "1";
+  // How an e-mailed link ended up here instead of where it was going. Set by
+  // /auth/callback: "verified" — the address is confirmed but the link was
+  // opened in a different browser, so there was no session to hand over;
+  // "expired" — used already or too old; "invalid" — nothing usable in it.
+  const linkOutcome = searchParams.get("link");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -120,6 +125,19 @@ function LoginPageInner() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            {linkOutcome === "verified" && !error && (
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">
+                Your email address is confirmed. Sign in below to continue.
+              </div>
+            )}
+
+            {(linkOutcome === "expired" || linkOutcome === "invalid") && !error && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
+                That link no longer works — it had already been used, or it was too
+                old. Sign in below, or ask for a new link.
+              </div>
+            )}
+
             {sessionExpired && !error && (
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
                 Your sign-in had expired, so we signed you out. Please sign in again — anything
