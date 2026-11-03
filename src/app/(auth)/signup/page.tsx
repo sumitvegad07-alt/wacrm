@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { MessageSquare, CheckCircle, UsersRound } from "lucide-react";
 import { isNewPlan, PLAN_LABEL } from "@/lib/plans/catalog";
+import { emailRedirectUrl } from "@/lib/auth/email-redirect";
 
 export default function SignupPage() {
   return (
@@ -67,10 +68,7 @@ function SignupPageInner() {
     // new user who clicked it got "This site can't be reached" (fixed 3 Nov
     // 2026). `/auth/callback` trades the one-time code in the link for a
     // real session before handing the user on.
-    const next = inviteToken
-      ? `/join/${encodeURIComponent(inviteToken)}`
-      : "/dashboard";
-    const emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+    const emailRedirectTo = emailRedirectUrl(window.location.origin, inviteToken);
 
     const { data, error } = await supabase.auth.signUp({
       email,

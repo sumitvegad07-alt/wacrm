@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { emailRedirectUrl } from "@/lib/auth/email-redirect";
 import { Link } from "@/components/ui/link";
 import { Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -56,11 +57,49 @@ function LoginPageInner() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Sign-in was refused only because the address was never confirmed. That is
+  // not the user's fault here — their first link may well have been one of the
+  // broken localhost ones — so it has to come with a way out, not just a no.
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
+  const [resendError, setResendError] = useState<string | null>(null);
   const supabase = createClient();
+
+  // A dead link and an unconfirmed address both end the same way: the user
+  // needs a new mail, and nobody can send it to them but us.
+  const canResend =
+    needsConfirmation || linkOutcome === "expired" || linkOutcome === "invalid";
+
+  const handleResend = async () => {
+    setResendError(null);
+
+    if (!email) {
+      setResendError("Enter your email address above first.");
+      return;
+    }
+
+    setResendState("sending");
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: emailRedirectUrl(window.location.origin, inviteToken) },
+    });
+
+    if (error) {
+      setResendError(error.message);
+      setResendState("idle");
+      return;
+    }
+
+    setResendState("sent");
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNeedsConfirmation(false);
+    setResendError(null);
+    setResendState("idle");
     setLoading(true);
 
     const { error } = await supabase.auth.signInWithPassword({
@@ -69,7 +108,14 @@ function LoginPageInner() {
     });
 
     if (error) {
-      setError(error.message);
+      // Supabase words this one for developers ("Email not confirmed"), which
+      // tells the user nothing about what to do next. Swap it for the block
+      // below, which explains it and offers a new link.
+      const unconfirmed =
+        (error as { code?: string }).code === "email_not_confirmed" ||
+        /email not confirmed/i.test(error.message);
+      setNeedsConfirmation(unconfirmed);
+      setError(unconfirmed ? null : error.message);
       setLoading(false);
       return;
     }
@@ -131,10 +177,34 @@ function LoginPageInner() {
               </div>
             )}
 
-            {(linkOutcome === "expired" || linkOutcome === "invalid") && !error && (
+            {canResend && !error && (
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
-                That link no longer works — it had already been used, or it was too
-                old. Sign in below, or ask for a new link.
+                {resendState === "sent" ? (
+                  <p>
+                    A new confirmation link is on its way to {email}. Open it on this
+                    device if you can, and check the spam folder if it is slow.
+                  </p>
+                ) : (
+                  <>
+                    <p>
+                      {needsConfirmation
+                        ? "This email address has not been confirmed yet, so you cannot sign in with it."
+                        : "That link no longer works — it had already been used, or it was too old."}
+                    </p>
+                    {resendError && <p className="mt-1">{resendError}</p>}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleResend}
+                      disabled={resendState === "sending"}
+                      className="mt-3 w-full border-border text-foreground hover:bg-muted"
+                    >
+                      {resendState === "sending"
+                        ? "Sending..."
+                        : "Email me a new confirmation link"}
+                    </Button>
+                  </>
+                )}
               </div>
             )}
 
