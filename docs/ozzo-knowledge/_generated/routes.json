@@ -1,0 +1,2664 @@
+{
+  "generatedAt": "2026-10-27",
+  "counts": {
+    "routes": 171,
+    "byArea": {
+      "public": 1,
+      "superadmin": 29,
+      "dashboard": 126,
+      "auth": 3,
+      "join": 1,
+      "print": 11
+    },
+    "gated": 85,
+    "orphans": 118,
+    "navItems": 93,
+    "navGroups": 10,
+    "settingsSections": 24
+  },
+  "routes": [
+    {
+      "pathname": "/",
+      "area": "public",
+      "file": "src/app/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/access-control",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/access-control/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/announcements",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/announcements/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/audit",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/audit/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/billing",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/billing/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/calculator",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/calculator/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/companies",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/companies/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/companies/[id]",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/companies/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/data",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/data/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/digest",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/digest/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/forecast",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/forecast/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/health",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/health/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/invoice-settings",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/invoice-settings/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/invoices",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/invoices/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/invoices/[id]",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/invoices/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/invoices/[id]/edit",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/invoices/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/invoices/new",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/invoices/new/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/proposals",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/proposals/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/proposals/[id]",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/proposals/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/proposals/[id]/edit",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/proposals/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/recovery",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/recovery/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/renewals",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/renewals/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/retention",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/retention/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/revenue/discover",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/revenue/discover/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/revenue/outreach",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/revenue/outreach/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/settings",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/settings/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/sync",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/sync/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/users",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/users/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/admin/view-as",
+      "area": "superadmin",
+      "file": "src/app/(superadmin)/admin/view-as/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/announcements",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/announcements/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Announcement",
+          "group": null,
+          "permission": null,
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/announcements/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/announcements/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/announcements/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/announcements/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/announcements/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/announcements/new/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/automations",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/automations/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/automations",
+      "nav": [
+        {
+          "label": "Automations",
+          "group": "WhatsApp",
+          "permission": null,
+          "viewRight": "view_whatsapp_automations",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/automations/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/automations/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/automations",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/automations/[id]/logs",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/automations/[id]/logs/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/automations",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/automations/module/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/automations/module/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/automations",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/automations/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/automations/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/automations",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/broadcasts",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/broadcasts/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/broadcasts",
+      "nav": [
+        {
+          "label": "Broadcasts",
+          "group": "WhatsApp",
+          "permission": null,
+          "viewRight": "view_whatsapp_broadcasts",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/broadcasts/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/broadcasts/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/broadcasts",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/broadcasts/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/broadcasts/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/broadcasts",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/catalog/categories",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/catalog/categories/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "anyLine": [
+          "crm",
+          "sfa"
+        ]
+      },
+      "routeGateVia": "/catalog",
+      "nav": [
+        {
+          "label": "Category",
+          "group": "Catalog",
+          "permission": null,
+          "viewRight": "view_products",
+          "gate": {
+            "anyLine": [
+              "crm",
+              "sfa"
+            ]
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/catalog/units",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/catalog/units/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "anyLine": [
+          "crm",
+          "sfa"
+        ]
+      },
+      "routeGateVia": "/catalog",
+      "nav": [
+        {
+          "label": "Unit",
+          "group": "Catalog",
+          "permission": null,
+          "viewRight": "view_products",
+          "gate": {
+            "anyLine": [
+              "crm",
+              "sfa"
+            ]
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/company-profile",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/company-profile/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Company Profile",
+          "group": null,
+          "permission": "manage_company_profile",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/contacts",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/contacts/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Customer",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_contacts",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/contacts/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/contacts/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/contacts/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/contacts/new/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/custom-fields",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/custom-fields/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/custom-fields/[module]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/custom-fields/[module]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/dashboard",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/dashboard/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Dashboard",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_dashboard",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/deals",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/deals/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/deals",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/deals/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/deals/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/deals",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/deals/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/deals/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/deals",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/deals/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/deals/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/deals",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/dispatches",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/dispatches/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "dispatch"
+      },
+      "routeGateVia": "/dispatches",
+      "nav": [
+        {
+          "label": "Dispatch",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "sfa",
+            "configModule": "dispatch"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/dispatches/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/dispatches/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "dispatch"
+      },
+      "routeGateVia": "/dispatches",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/dispatches/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/dispatches/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "dispatch"
+      },
+      "routeGateVia": "/dispatches",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/dispatches/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/dispatches/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "dispatch"
+      },
+      "routeGateVia": "/dispatches",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/expenses",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/expenses/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa",
+        "configModule": "expense"
+      },
+      "routeGateVia": "/expenses",
+      "nav": [
+        {
+          "label": "Expense",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_expenses",
+          "gate": {
+            "line": "wfa",
+            "configModule": "expense"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/expenses/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/expenses/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "wfa",
+        "configModule": "expense"
+      },
+      "routeGateVia": "/expenses",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/expenses/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/expenses/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa",
+        "configModule": "expense"
+      },
+      "routeGateVia": "/expenses",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/field-staff",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/field-staff/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/flows",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/flows/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/flows",
+      "nav": [
+        {
+          "label": "Flows",
+          "group": "WhatsApp",
+          "permission": null,
+          "viewRight": "view_whatsapp_flows",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/flows/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/flows/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/flows",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/flows/[id]/runs",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/flows/[id]/runs/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/flows",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/follow-ups",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/follow-ups/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "My Activity",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_activities",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/forgot-password",
+      "area": "auth",
+      "file": "src/app/(auth)/forgot-password/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/getting-started",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/getting-started/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Getting Started",
+          "group": null,
+          "permission": "view_implementation",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/getting-started/welcome",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/getting-started/welcome/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/import",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/import/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "All imports",
+          "group": "Import",
+          "permission": "import_data",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/import/[module]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/import/[module]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/inbox",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/inbox/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/inbox",
+      "nav": [
+        {
+          "label": "Inbox",
+          "group": "WhatsApp",
+          "permission": null,
+          "viewRight": "view_whatsapp",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/join/[token]",
+      "area": "join",
+      "file": "src/app/join/[token]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/leads",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/leads/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/leads",
+      "nav": [
+        {
+          "label": "Lead",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_leads",
+          "gate": {
+            "line": "crm"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/leads/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/leads/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/leads",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/leads/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/leads/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/leads",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/leads/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/leads/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/leads",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/location-tracking/all-locations",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/all-locations/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/location-tracking",
+      "nav": [
+        {
+          "label": "All Locations",
+          "group": "Location Tracking",
+          "permission": "view_live_feed",
+          "viewRight": "view_location_tracking",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/location-tracking/attendance",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/attendance/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": "/location-tracking/attendance",
+      "nav": [
+        {
+          "label": "User Attendance",
+          "group": "Location Tracking",
+          "permission": "view_attendance",
+          "viewRight": "view_location_tracking",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/location-tracking/dashboard",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/dashboard/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/location-tracking",
+      "nav": [
+        {
+          "label": "Live Feed",
+          "group": "Location Tracking",
+          "permission": "view_live_feed",
+          "viewRight": "view_location_tracking",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/location-tracking/executions",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/executions/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "route"
+      },
+      "routeGateVia": "/location-tracking/executions",
+      "nav": [
+        {
+          "label": "Route Monitor",
+          "group": "Location Tracking",
+          "permission": null,
+          "viewRight": "view_location_tracking",
+          "gate": {
+            "line": "sfa",
+            "configModule": "route"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/location-tracking/health",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/health/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/location-tracking",
+      "nav": [
+        {
+          "label": "Tracking Health",
+          "group": "Location Tracking",
+          "permission": "view_tracking_health",
+          "viewRight": "view_location_tracking",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/location-tracking/health/[userId]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/health/[userId]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/location-tracking",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/location-tracking/leaves",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/leaves/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": "/location-tracking/leaves",
+      "nav": [
+        {
+          "label": "Leaves",
+          "group": "Location Tracking",
+          "permission": null,
+          "viewRight": "view_location_tracking",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/location-tracking/leaves/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/leaves/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": "/location-tracking/leaves",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/location-tracking/overview",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/overview/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/location-tracking",
+      "nav": [
+        {
+          "label": "Overview",
+          "group": "Location Tracking",
+          "permission": null,
+          "viewRight": "view_location_tracking",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/location-tracking/track-report",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/track-report/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/location-tracking",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/location-tracking/visits",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/visits/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/location-tracking",
+      "nav": [
+        {
+          "label": "Customer Visits",
+          "group": "Location Tracking",
+          "permission": null,
+          "viewRight": "view_location_tracking",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/location-tracking/visits/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/location-tracking/visits/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/location-tracking",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/login",
+      "area": "auth",
+      "file": "src/app/(auth)/login/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/orders",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/orders/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/orders",
+      "nav": [
+        {
+          "label": "Order",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "sfa"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/orders/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/orders/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/orders",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/orders/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/orders/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/orders",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/orders/sync-health",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/orders/sync-health/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/orders",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/payments",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/payments/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "payment"
+      },
+      "routeGateVia": "/payments",
+      "nav": [
+        {
+          "label": "Payment",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_payments",
+          "gate": {
+            "line": "sfa",
+            "configModule": "payment"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/payments/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/payments/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "payment"
+      },
+      "routeGateVia": "/payments",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/payments/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/payments/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "payment"
+      },
+      "routeGateVia": "/payments",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/pending-dispatch",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/pending-dispatch/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "pending_dispatch"
+      },
+      "routeGateVia": "/pending-dispatch",
+      "nav": [
+        {
+          "label": "Pending Dispatch",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "sfa",
+            "configModule": "pending_dispatch"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/pipelines",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/pipelines/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/pipelines",
+      "nav": [
+        {
+          "label": "Deal",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_deals",
+          "gate": {
+            "line": "crm"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/price-lists",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/price-lists/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/price-lists",
+      "nav": [
+        {
+          "label": "Price List",
+          "group": "Catalog",
+          "permission": null,
+          "viewRight": "view_products",
+          "gate": {
+            "line": "sfa"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/print/dispatch/[id]",
+      "area": "print",
+      "file": "src/app/print/dispatch/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/expense/[id]",
+      "area": "print",
+      "file": "src/app/print/expense/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/invoice/[id]",
+      "area": "print",
+      "file": "src/app/print/invoice/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/leave/[id]",
+      "area": "print",
+      "file": "src/app/print/leave/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/list",
+      "area": "print",
+      "file": "src/app/print/list/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/order/[id]",
+      "area": "print",
+      "file": "src/app/print/order/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/payment/[id]",
+      "area": "print",
+      "file": "src/app/print/payment/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/proposal/[id]",
+      "area": "print",
+      "file": "src/app/print/proposal/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/quotation/[id]",
+      "area": "print",
+      "file": "src/app/print/quotation/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/quote",
+      "area": "print",
+      "file": "src/app/print/quote/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/print/report",
+      "area": "print",
+      "file": "src/app/print/report/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/products",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/products/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "anyLine": [
+          "crm",
+          "sfa"
+        ]
+      },
+      "routeGateVia": "/products",
+      "nav": [
+        {
+          "label": "Product",
+          "group": "Catalog",
+          "permission": null,
+          "viewRight": "view_products",
+          "gate": {
+            "anyLine": [
+              "crm",
+              "sfa"
+            ]
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/products/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/products/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "anyLine": [
+          "crm",
+          "sfa"
+        ]
+      },
+      "routeGateVia": "/products",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/products/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/products/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "anyLine": [
+          "crm",
+          "sfa"
+        ]
+      },
+      "routeGateVia": "/products",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/quotations",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/quotations/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "quotation"
+      },
+      "routeGateVia": "/quotations",
+      "nav": [
+        {
+          "label": "Quotation",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "crm",
+            "configModule": "quotation"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/quotations/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/quotations/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "quotation"
+      },
+      "routeGateVia": "/quotations",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/quotations/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/quotations/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "quotation"
+      },
+      "routeGateVia": "/quotations",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/quotations/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/quotations/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "quotation"
+      },
+      "routeGateVia": "/quotations",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/reports",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/reports/ageing",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/ageing/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/reports/ageing",
+      "nav": [
+        {
+          "label": "Ageing Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "sfa"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/deals",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/deals/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/reports/deals",
+      "nav": [
+        {
+          "label": "Deal Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_deals",
+          "gate": {
+            "line": "crm"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/dsr",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/dsr/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/reports/dsr",
+      "nav": [
+        {
+          "label": "DSR",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_location_tracking",
+          "gate": {
+            "line": "wfa"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/expenses",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/expenses/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa",
+        "configModule": "expense"
+      },
+      "routeGateVia": "/reports/expenses",
+      "nav": [
+        {
+          "label": "Expense Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_expenses",
+          "gate": {
+            "line": "wfa",
+            "configModule": "expense"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/leads",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/leads/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm"
+      },
+      "routeGateVia": "/reports/leads",
+      "nav": [
+        {
+          "label": "Lead Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_leads",
+          "gate": {
+            "line": "crm"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/orders",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/orders/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/reports/orders",
+      "nav": [
+        {
+          "label": "Order Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "sfa"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/payments",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/payments/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "payment"
+      },
+      "routeGateVia": "/reports/payments",
+      "nav": [
+        {
+          "label": "Payment Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_payment_reports",
+          "gate": {
+            "line": "sfa",
+            "configModule": "payment"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/quotations",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/quotations/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "quotation"
+      },
+      "routeGateVia": "/reports/quotations",
+      "nav": [
+        {
+          "label": "Quotation Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "crm",
+            "configModule": "quotation"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/sales",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/sales/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/reports/sales",
+      "nav": [
+        {
+          "label": "Sales Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "sfa"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/stock",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/stock/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "stock"
+      },
+      "routeGateVia": "/reports/stock",
+      "nav": [
+        {
+          "label": "Stock Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_products",
+          "gate": {
+            "line": "sfa",
+            "configModule": "stock"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/summary/outstanding",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/summary/outstanding/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/reports/summary",
+      "nav": [
+        {
+          "label": "Customer Outstanding",
+          "group": "Summary Report",
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "sfa"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/summary/products",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/summary/products/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa"
+      },
+      "routeGateVia": "/reports/summary",
+      "nav": [
+        {
+          "label": "Product Summary",
+          "group": "Summary Report",
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "sfa"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/tasks",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/tasks/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Task Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_activities",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/reports/visits",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/reports/visits/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "wfa"
+      },
+      "routeGateVia": "/reports/visits",
+      "nav": [
+        {
+          "label": "Visit Reports",
+          "group": "Report",
+          "permission": null,
+          "viewRight": "view_location_tracking",
+          "gate": {
+            "line": "wfa"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/routes",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/routes/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "route"
+      },
+      "routeGateVia": "/routes",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/routes/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/routes/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "route"
+      },
+      "routeGateVia": "/routes",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/routes/approvals",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/routes/approvals/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "route"
+      },
+      "routeGateVia": "/routes",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/routes/executions",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/routes/executions/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "route"
+      },
+      "routeGateVia": "/routes",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/routes/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/routes/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "route"
+      },
+      "routeGateVia": "/routes",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/routes/planner",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/routes/planner/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "route"
+      },
+      "routeGateVia": "/routes",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/schemes",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/schemes/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "scheme"
+      },
+      "routeGateVia": "/schemes",
+      "nav": [
+        {
+          "label": "Scheme",
+          "group": "Catalog",
+          "permission": null,
+          "viewRight": "view_orders",
+          "gate": {
+            "line": "sfa",
+            "configModule": "scheme"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/schemes/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/schemes/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "scheme"
+      },
+      "routeGateVia": "/schemes",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/schemes/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/schemes/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "scheme"
+      },
+      "routeGateVia": "/schemes",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/schemes/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/schemes/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "scheme"
+      },
+      "routeGateVia": "/schemes",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/service/assets",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/service/assets/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "fsm"
+      },
+      "routeGateVia": "/service",
+      "nav": [
+        {
+          "label": "Assets",
+          "group": "Service",
+          "permission": "PERMISSIONS.SERVICE_ASSETS.VIEW",
+          "viewRight": null,
+          "gate": {
+            "line": "fsm"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/service/assets/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/service/assets/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "fsm"
+      },
+      "routeGateVia": "/service",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/service/assets/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/service/assets/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "fsm"
+      },
+      "routeGateVia": "/service",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/service/assets/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/service/assets/new/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "fsm"
+      },
+      "routeGateVia": "/service",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/settings",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/settings/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Templates",
+          "group": "WhatsApp",
+          "permission": null,
+          "viewRight": "view_whatsapp_templates",
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Knowledge base",
+          "group": "WhatsApp",
+          "permission": null,
+          "viewRight": "view_ai_assistant",
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Catalogue Settings",
+          "group": "Catalog",
+          "permission": "edit_tax_slabs",
+          "viewRight": null,
+          "gate": {
+            "anyLine": [
+              "crm",
+              "sfa"
+            ]
+          },
+          "conditional": false
+        },
+        {
+          "label": "Organization Settings",
+          "group": "Settings",
+          "permission": "manage_org_settings",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Appearance",
+          "group": "Settings",
+          "permission": null,
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Notifications",
+          "group": "Settings",
+          "permission": null,
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Whatsapp",
+          "group": "Settings",
+          "permission": "manage_whatsapp_settings",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Tags",
+          "group": "Settings",
+          "permission": "manage_tags",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Template",
+          "group": "Settings",
+          "permission": "edit_document_templates",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Deals",
+          "group": "Settings",
+          "permission": "edit_pipelines",
+          "viewRight": null,
+          "gate": {
+            "line": "crm"
+          },
+          "conditional": false
+        },
+        {
+          "label": "Leads Settings",
+          "group": "Settings",
+          "permission": "edit_lead_sources",
+          "viewRight": null,
+          "gate": {
+            "line": "crm"
+          },
+          "conditional": false
+        },
+        {
+          "label": "Task Settings",
+          "group": "Settings",
+          "permission": "edit_task_types",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Expense Settings",
+          "group": "Settings",
+          "permission": "edit_expense_types",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Leave Settings",
+          "group": "Settings",
+          "permission": "edit_leave_types",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Payment Settings",
+          "group": "Settings",
+          "permission": "edit_payment_types",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Territory Master",
+          "group": "Settings",
+          "permission": "edit_territories",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        },
+        {
+          "label": "Attendance Locations",
+          "group": "Settings",
+          "permission": "edit_attendance_locations",
+          "viewRight": null,
+          "gate": {
+            "line": "wfa"
+          },
+          "conditional": false
+        },
+        {
+          "label": "API Keys & Webhooks",
+          "group": "Settings",
+          "permission": "manage_api_keys",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/settings/attendance-locations/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/settings/attendance-locations/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/settings/attendance-locations/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/settings/attendance-locations/new/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/settings/document-templates",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/settings/document-templates/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/settings/document-templates/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/settings/document-templates/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/settings/document-templates/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/settings/document-templates/new/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/settings/templates",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/settings/templates/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/settings/templates/[id]/edit",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/settings/templates/[id]/edit/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/settings/templates/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/settings/templates/new/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/signup",
+      "area": "auth",
+      "file": "src/app/(auth)/signup/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/stock",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/stock/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "stock"
+      },
+      "routeGateVia": "/stock",
+      "nav": [
+        {
+          "label": "Stock",
+          "group": null,
+          "permission": null,
+          "viewRight": "view_products",
+          "gate": {
+            "line": "sfa",
+            "configModule": "stock"
+          },
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/stock/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/stock/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": {
+        "line": "sfa",
+        "configModule": "stock"
+      },
+      "routeGateVia": "/stock",
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/subscription",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/subscription/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Subscription",
+          "group": null,
+          "permission": "billing",
+          "viewRight": null,
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/tasks",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/tasks/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/tasks/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/tasks/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/tasks/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/tasks/new/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/team",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/team/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/team/employees",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/team/employees/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Employees",
+          "group": "Employees",
+          "permission": null,
+          "viewRight": "view_team_management",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/team/employees/[id]",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/team/employees/[id]/page.tsx",
+      "dynamic": true,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/team/employees/new",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/team/employees/new/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/team/roles",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/team/roles/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [
+        {
+          "label": "Employee Roles",
+          "group": "Employees",
+          "permission": null,
+          "viewRight": "view_team_management",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    },
+    {
+      "pathname": "/territories",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/territories/page.tsx",
+      "dynamic": false,
+      "routeGate": null,
+      "routeGateVia": null,
+      "nav": [],
+      "orphan": true
+    },
+    {
+      "pathname": "/whatsapp/dashboard",
+      "area": "dashboard",
+      "file": "src/app/(dashboard)/whatsapp/dashboard/page.tsx",
+      "dynamic": false,
+      "routeGate": {
+        "line": "crm",
+        "configModule": "whatsapp"
+      },
+      "routeGateVia": "/whatsapp",
+      "nav": [
+        {
+          "label": "Dashboard",
+          "group": "WhatsApp",
+          "permission": null,
+          "viewRight": "view_whatsapp",
+          "gate": null,
+          "conditional": false
+        }
+      ],
+      "orphan": false
+    }
+  ]
+}

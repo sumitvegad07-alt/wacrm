@@ -11,19 +11,25 @@
 > Nothing in this document is scheduled and nothing should be built from it.
 >
 > It is kept because the groundwork in it is still true and still expensive to redo:
-> the identity model (§2.2), the beat-to-distributor mapping and its collision with the
-> one-route-per-customer rule (§2.3), the RLS shape (§2.5), the delivery data model
-> (§2.6), and the competitor feature gaps (§5). Start the product plan from here rather
-> than from a blank page.
+> the identity model (§2.2), the beat-to-distributor mapping (§2.3), the RLS shape
+> (§2.5), the delivery data model (§2.6), and the competitor feature gaps (§5). Start the
+> product plan from here rather than from a blank page.
 >
-> **Part A (configurable order statuses) is a different matter.** It is the one tenant's
-> customisation, it does not depend on the DMS, and §1 is a live plan for it.
+> **Parts A and B are a different matter.** Configurable order statuses (§1) and Buying
+> Status (§1b) are this one tenant's customisations, neither depends on the DMS, and both
+> are live plans.
+>
+> **§2.3 is worth reading even though the portal is parked.** It records that `contacts`
+> has no dealer-to-distributor link at all — `hierarchy_level` is a number that classifies
+> an order as primary or secondary, nothing more — so beat-based mapping disturbs nothing,
+> and the one-route-per-customer collision I flagged was not real.
 >
 > **The delivery boy moved into the existing mobile app**, not a browser — see the note
 > at the end of §2.6. The client-facing document already reflects that; §2.6's web
 > reasoning below is superseded.
 
-**Status:** PARKED for the portal, LIVE PLAN for Part A only.
+**Status:** PARKED for the portal (§2). LIVE PLANS for Part A (§1, order statuses) and
+Part B (§1b, Buying Status).
 **Companion document:** `docs/clients/CUSTOMIZATION-PROPOSAL-dms-and-order-status.md`
 (the client-facing version — keep the two in step).
 
@@ -179,7 +185,102 @@ and in `enforce_order_status_transition()` at the database, modelled on the exis
 
 ---
 
-## 2. Part B — the distributor portal
+## 1b. Part B — Buying Status (has this customer ever ordered?)
+
+**Founder ruling, 2026-11-03.** A third tenant customisation, independent of the portal and
+of the statuses. Client-facing version: §3 of the proposal.
+
+### 1b.1 Why it is NOT a custom field
+
+He asked directly, and the honest answer is that a custom field cannot do the job:
+
+* **A custom field is a value a human types.** To make it update itself you need a trigger
+  writing into `contact_custom_values` — which is code either way, and code writing into a
+  field the admin can rename, deactivate or delete is a fault waiting to happen. The
+  predefined-field lock exists for exactly this class of problem and would have to be
+  extended to cover it.
+* **It has to be a first-class column to be useful.** Filterable and sortable on the
+  Customers list, present in Manage Column, available to the report engine, readable by the
+  mobile list without a join. A real column gets all of that for nothing; a custom field
+  gets some of it, slowly.
+* **The manual override needs a second stored fact** — "a human decided this" — so the
+  automatic rule knows to stop. Two custom fields kept in step by a trigger is strictly
+  worse than two columns.
+
+So: columns and a trigger, gated per account.
+
+### 1b.2 Schema
+
+```sql
+alter table public.contacts
+  add column if not exists buying_status text not null default 'yet_to_buy'
+    check (buying_status in ('buyer', 'yet_to_buy')),
+  -- A human has set this by hand, so the trigger must leave it alone. Cleared by the
+  -- admin to hand the customer back to the automatic rule.
+  add column if not exists buying_status_locked boolean not null default false,
+  add column if not exists buying_status_set_by uuid null references profiles(id),
+  add column if not exists buying_status_set_at timestamptz null,
+  -- When they first bought. Makes "Buyers opened this month" a number, not a guess.
+  add column if not exists first_order_at timestamptz null;
+
+create index if not exists contacts_buying_status_idx
+  on public.contacts (account_id, buying_status);
+```
+
+### 1b.3 The rule
+
+One trigger on `orders`, AFTER INSERT / UPDATE OF status / DELETE:
+
+```
+a customer is a Buyer  <=>  they have at least one order whose status is not
+                            Cancelled and not Rejected
+```
+
+* **INSERT** of a first countable order → `buyer`, `first_order_at = the order's date`.
+* **UPDATE** to Cancelled/Rejected → recount; if nothing countable is left → back to
+  `yet_to_buy`, `first_order_at = null`.
+* **DELETE** → same recount.
+* Every branch skips the row when `buying_status_locked` is true.
+
+Recount, not a counter column: a counter drifts the first time anything writes to `orders`
+outside the trigger's assumptions, and this table is written by imports, the offline queue
+and the demo seeder as well as by the order form.
+
+**Cancelled/Rejected not counting is a decision, not a reading of the brief.** He said "has
+not placed a one single order in lifetime". An order that was cancelled was still *placed*.
+I have taken the commercially useful reading — a cancelled order did not make them a buyer —
+and flagged it in the open questions. Changing it is one line.
+
+### 1b.4 Manual override
+
+`buying_status_locked` is set by the UI, never by the trigger. The right is
+`manage_buying_status`, granted to admin and (per the founder) to the sales rep. The detail
+page shows *Set by Ramesh on 3 November*; an admin can clear the lock, which re-runs the
+rule for that one customer.
+
+### 1b.5 Gating and backfill
+
+`accounts.module_settings.buying_status`, default **false**. The columns exist for everyone
+— they are cheap and nullable in effect — but no other tenant sees the column on a list, a
+filter, the form or a report. The trigger is unconditional and harmless: it maintains a
+value nobody reads.
+
+The migration backfills every account from existing order history in one statement, so the
+feature is correct on day one rather than only for new business.
+
+### 1b.6 Work — 5 days
+
+| Task | Days |
+|------|------|
+| Migration: columns, index, trigger, backfill | 1 |
+| Customers list column + filter + Manage Column + export | 1 |
+| Customer form and detail: value, manual set, lock, who/when | 1 |
+| Mobile list badge + filter | 1 |
+| Report-engine dimension + "Buyers opened" measure, tests | 1 |
+
+---
+
+## 2. Part C — the distributor portal
 
 ### 2.1 Shape
 
@@ -227,31 +328,99 @@ create table public.distributor_beats (
 );
 ```
 
-### 2.3 The mapping question, and its collision with route_customers
+### 2.3 Mapping — RESOLVED, and there is nothing to disturb
 
-The founder wants dealers mapped to distributors **through beats**. The direct consequence,
-already flagged to him on 2026-11-02:
+**2026-11-03. The founder's worry here rests on a misunderstanding of our own schema, and
+correcting it removes the whole problem.** His words: *"we already have customer hierarchy
+to assign dealers to distributors like mapping them... I have a strong feeling that the
+existing workflow should not be disturbed."*
 
-`route_customers` carries `uq_route_customers_one_active_route` — **one customer belongs to
-one active route**. If a dealer must sit on a salesman's beat *and* a distributor's beat,
-that index forbids it.
+Checked against the live schema. **`contacts` has no `parent_id` and no dealer-to-
+distributor link of any kind.** The columns are: account_id, address, area, avatar_url,
+city, client_created_at, collaborator_ids, company, country, created_at, credit_days,
+credit_limit, custom_values, customer_code, email, employee_id, gst_number,
+**hierarchy_level**, id, is_active, latitude, longitude, name, needs_territory_review,
+opening_balance, outstanding_balance, outstanding_updated_at, phone, phone_normalized,
+pincode, price_list_id, search_text, state, territory_id, territory_name, updated_at,
+user_id, whatsapp.
 
-Three options, in order of preference:
+`hierarchy_level` is a **number**, not a link. Migration 077 shows the only thing it does:
 
-1. **Reuse the salesman's beat** (recommended). A distributor is assigned the *same* beats
-   the salesmen already work. Nothing new is needed, the mapping is automatic, and the
-   dealer is on exactly one route. This is almost certainly what the founder means when he
-   says "we will use beats".
-2. **A second kind of beat** — `routes.purpose in ('sales','distribution')` and make the
-   unique index partial on purpose. Clean, but doubles the beat maintenance burden on the
-   admin.
-3. **Relax the rule entirely.** Rejected. It exists because a rep's day must be
-   unambiguous.
+```
+hierarchy off          -> order classification 'direct'
+level 1 (top)          -> 'primary'
+any level below top    -> 'secondary'
+level not set          -> 'direct'
+```
 
-**This is open question #4 to the founder.** Build nothing here until it is answered, since
-option 2 changes the migration.
+So today the hierarchy answers **"what kind of customer is this?"** — which decides whether
+their order counts as primary or secondary sales. It has never answered **"which
+distributor serves this dealer?"**, and nothing else in OZZO does either.
 
-Dealer resolution, whichever option wins:
+**There is therefore no existing mapping to disturb.** This is not a replacement, it is the
+first answer to a question the product could not answer. `hierarchy_level` keeps doing
+exactly what it does, untouched, for every tenant including this one.
+
+#### The collision I flagged on 2026-11-02 also disappears
+
+I warned that `uq_route_customers_one_active_route` — one customer, one active route —
+would forbid a dealer sitting on a salesman's beat *and* a distributor's beat.
+
+It only forbids that if they are two different beats. **They are not.** The same beat does
+both jobs: the salesman walks it to take orders, the distributor supplies it. One beat, one
+`route_customers` row, no second kind of route, no change to the unique index, no extra
+maintenance for the admin. Option 2 from the earlier draft (a `routes.purpose` column) is
+**dropped** — it was solving a problem that does not exist.
+
+#### The model
+
+```sql
+-- A distributor IS a customer whose hierarchy_level = 1. No separate entity.
+create table public.distributor_beats (
+  account_id     uuid not null references accounts(id) on delete cascade,
+  distributor_id uuid not null references contacts(id) on delete cascade,
+  route_id       uuid not null references routes(id)   on delete cascade,
+  primary key (distributor_id, route_id)
+);
+
+-- A beat has ONE distributor; a distributor has many beats. Without this an order
+-- could belong to two distributors and the portal would show it twice.
+create unique index if not exists distributor_beats_one_per_route
+  on public.distributor_beats (route_id);
+```
+
+`distributors` as a table (§2.2) is **withdrawn**. A distributor is a contact, which is how
+this client already records them, and it means price lists, credit limits, outstanding and
+every report keep working on them with no special case.
+
+#### Set where customers are set, not in Settings
+
+Founder ruling 2026-11-03: *"we don't want to go to settings and create distributors... we
+will provide fields for create ID & Password in Customer Creation form only."*
+
+So the customer form grows one block, shown **only** when the tenant flag is on **and**
+`hierarchy_level = 1`:
+
+| Field | Stored |
+|-------|--------|
+| Portal login ID | `contacts.portal_login_id` |
+| Password | sets/updates the Supabase auth user |
+| Beats served | `distributor_beats` rows |
+| Portal access | `contacts.portal_access` |
+
+And on a dealer (`hierarchy_level > 1`), one read-only line — **Supplied by: <name>** —
+resolved live from their beat. Nothing to type, nothing to keep in step.
+
+Identity still works as §2.2 describes (a `profiles` row with `portal_role`), it is simply
+created from the customer form rather than from a Settings screen, and
+`profiles.distributor_id` points at the **contact**.
+
+#### Gating
+
+`accounts.module_settings.dms`, default false. Every other tenant sees no login block, no
+beats field and no "Supplied by" line, and `distributor_beats` stays empty for them.
+
+Dealer resolution:
 
 ```sql
 create or replace function public.distributor_dealer_ids(p_distributor_id uuid)
@@ -391,7 +560,7 @@ company-to-distributor billing, secondary is distributor-to-dealer movement, and
 between them is how you detect a distributor stuffing his godown to hit a target. We cannot
 report on it at all unless question #1 is yes. Worth pushing the client on.
 
-### 2.8 Work breakdown — 46 days (excluding Part A)
+### 2.8 Work breakdown — 46 days (excluding Parts A and B)
 
 | Phase | Task | Days |
 |-------|------|------|
@@ -435,11 +604,21 @@ written without 1, 2 and 4.
 1. Distributor stock in OZZO? (±15 days)
 2. Purchase order raised by the distributor, or pushed by us?
 3. One payment ledger or two?
-4. Can a dealer sit on a salesman beat **and** a distributor beat? (See 2.3)
-5. Delivery boy: browser or app?
+4. ~~Can a dealer sit on a salesman beat **and** a distributor beat?~~ **ANSWERED
+   2026-11-03** — the question was wrong. It is the same beat doing two jobs, there is no
+   existing dealer-to-distributor link to disturb, and the unique index is untouched.
+   See 2.3.
+5. ~~Delivery boy: browser or app?~~ **ANSWERED 2026-11-02** — the existing mobile app,
+   behind a `delivery` role. Not a browser and not a second app. See 2.6.
 6. Hold blocks dispatch, or only flags it?
 7. Who may release a Hold?
 8. Which prices does a distributor see?
+9. **Buying Status: does a Cancelled or Rejected order make someone a Buyer?** I have
+   assumed **no** — the order was placed but it did not happen. One line either way.
+   See 1b.3.
+10. **Buying Status: may a sales rep change it, or admin only?** The founder said "admin
+    and sales Rep.", so the right is granted to both; confirm the rep may also *release*
+    the manual lock, or whether that is admin-only.
 
 ---
 
