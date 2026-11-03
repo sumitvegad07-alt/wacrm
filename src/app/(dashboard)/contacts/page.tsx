@@ -70,6 +70,7 @@ import {
 } from '@/lib/table/bulk-activation';
 import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
+import { coverageWalk, indexTerritories } from '@/lib/territories/coverage';
 
 interface ContactWithData extends Contact {
   tags?: Tag[];
@@ -176,22 +177,11 @@ export default function ContactsPage() {
         if (a.territory_id && nm) (areaNamesByTerritory[a.territory_id] ||= []).push(nm);
       });
 
-      // An assignment on a parent territory (a State) covers customers tagged to
-      // its children (a City/Area), so walk up to the first assigned ancestor.
-      const territoryParent: Record<string, string | null> = {};
-      (allTerritories || []).forEach((t: { id: string; parent_id: string | null }) => {
-        territoryParent[t.id] = t.parent_id ?? null;
-      });
-      const areaEmployeesFor = (territoryId: string | null | undefined): string[] => {
-        let cur = territoryId ?? null;
-        let guard = 0;
-        while (cur && guard < 8) {
-          if (areaNamesByTerritory[cur]?.length) return areaNamesByTerritory[cur];
-          cur = territoryParent[cur] ?? null;
-          guard += 1;
-        }
-        return [];
-      };
+      // An assignment above the customer covers it by walking up; an assignment
+      // BELOW it covers it too, which is what makes Area optional on the
+      // customer. See src/lib/territories/coverage.ts for why, and its tests.
+      const territoryIndex = indexTerritories(allTerritories || []);
+      const areaEmployeesFor = coverageWalk(territoryIndex, areaNamesByTerritory);
 
       const tagsMap: Record<string, Tag> = {};
       tagsData?.forEach((t: Tag) => {
@@ -199,24 +189,14 @@ export default function ContactsPage() {
       });
 
       /**
-       * The same walk the column does, but by id rather than by name, and
-       * evaluated over every territory once so the filter can ask the
-       * database a plain question.
+       * The same walk, by id rather than by name, evaluated over every
+       * territory once so the filter can ask the database a plain question.
        */
       const areaIdsByTerritory: Record<string, string[]> = {};
       (areaData || []).forEach((a: { employee_id: string; territory_id: string }) => {
         if (a.territory_id) (areaIdsByTerritory[a.territory_id] ||= []).push(a.employee_id);
       });
-      const areaEmployeeIdsFor = (territoryId: string | null): string[] => {
-        let cur = territoryId;
-        let guard = 0;
-        while (cur && guard < 8) {
-          if (areaIdsByTerritory[cur]?.length) return areaIdsByTerritory[cur];
-          cur = territoryParent[cur] ?? null;
-          guard += 1;
-        }
-        return [];
-      };
+      const areaEmployeeIdsFor = coverageWalk(territoryIndex, areaIdsByTerritory);
 
       const resolvedByTerritory = new Map<string, string[]>();
       (allTerritories || []).forEach((t: { id: string }) => {
