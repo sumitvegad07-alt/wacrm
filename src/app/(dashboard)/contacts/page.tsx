@@ -72,6 +72,7 @@ import { PERMISSIONS } from '@/lib/auth/permissions-registry';
 import { extraColumns, type ExtraColumnSpec } from '@/lib/table/extra-columns';
 import { coverageWalk, indexTerritories } from '@/lib/territories/coverage';
 import {
+  BUYING_STATUS_BADGE,
   BUYING_STATUS_OPTIONS,
   buyingStatusLabel,
   isBuyingStatusEnabled,
@@ -597,11 +598,12 @@ export default function ContactsPage() {
           options: BUYING_STATUS_OPTIONS,
           render: (contact: ContactWithData) => {
             const status = normalizeBuyingStatus(contact.buying_status);
-            const buyer = status === 'buyer';
             return (
-              <Badge className={buyer
-                ? 'bg-sky-600 text-white shadow-sm border-transparent text-micro px-1.5 font-semibold'
-                : 'bg-amber-500/15 text-amber-700 dark:text-amber-500 border-border text-micro px-1.5 font-semibold'}>
+              <Badge
+                className={`${BUYING_STATUS_BADGE[status]} text-micro px-1.5 font-semibold`}
+                // A blacklist always says why, so show it without a click.
+                title={status === 'blacklist' ? (contact.buying_status_reason ?? undefined) : undefined}
+              >
                 {buyingStatusLabel(status)}
               </Badge>
             );

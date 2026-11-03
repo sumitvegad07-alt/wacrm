@@ -19,12 +19,13 @@
  * it, because the lock and the who/when have to be recorded in the same breath.
  */
 
-export const BUYING_STATUSES = ['buyer', 'yet_to_buy'] as const;
+export const BUYING_STATUSES = ['buyer', 'yet_to_buy', 'blacklist'] as const;
 export type BuyingStatus = (typeof BUYING_STATUSES)[number];
 
 export const BUYING_STATUS_LABELS: Record<BuyingStatus, string> = {
   buyer: 'Buyer',
   yet_to_buy: 'Yet to Buy',
+  blacklist: 'Blacklisted',
 };
 
 /** For a select filter, in the order a user would think of them. */
@@ -33,14 +34,48 @@ export const BUYING_STATUS_OPTIONS = BUYING_STATUSES.map((value) => ({
   label: BUYING_STATUS_LABELS[value],
 }));
 
-/** Anything unexpected reads as "yet to buy", which is the safe claim. */
+/**
+ * Anything unexpected reads as "yet to buy", which is the safe claim: saying
+ * somebody has bought when the data does not say so would stop a rep calling
+ * on a shop that never ordered.
+ *
+ * Blacklist is never inferred — only an exact match counts, because it is a
+ * human judgement and guessing it would cut off a trading customer.
+ */
 export function normalizeBuyingStatus(raw: unknown): BuyingStatus {
-  return raw === 'buyer' ? 'buyer' : 'yet_to_buy';
+  if (raw === 'buyer') return 'buyer';
+  if (raw === 'blacklist') return 'blacklist';
+  return 'yet_to_buy';
+}
+
+/**
+ * A blacklist must say why. Enforced in the database too
+ * (contacts_blacklist_needs_reason, migration 20261103150000) — "mandatory"
+ * written only into a form is a promise the mobile app, the importer and any
+ * future API caller get to break.
+ */
+export function requiresReason(status: BuyingStatus): boolean {
+  return status === 'blacklist';
+}
+
+/** Whitespace is not a reason. Mirrors the CHECK constraint exactly. */
+export function hasValidReason(reason: string | null | undefined): boolean {
+  return (reason ?? '').trim().length > 0;
 }
 
 export function buyingStatusLabel(raw: unknown): string {
   return BUYING_STATUS_LABELS[normalizeBuyingStatus(raw)];
 }
+
+/**
+ * Badge colours. Blacklisted is the only one that should stop someone in their
+ * tracks, so it is the only destructive-coloured badge of the three.
+ */
+export const BUYING_STATUS_BADGE: Record<BuyingStatus, string> = {
+  buyer: 'bg-sky-600 text-white shadow-sm border-transparent',
+  yet_to_buy: 'bg-amber-500/15 text-amber-700 dark:text-amber-500 border-border',
+  blacklist: 'bg-destructive text-destructive-foreground shadow-sm border-transparent',
+};
 
 /**
  * Off until an admin switches it on in Organisation Settings. Until then no

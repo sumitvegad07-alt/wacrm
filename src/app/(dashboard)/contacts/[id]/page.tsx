@@ -8,6 +8,7 @@ import { Link } from "@/components/ui/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Contact, Tag, ContactNote, CustomField, Deal, Task, Conversation } from "@/types";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Phone, Mail, Building2, Calendar, CheckSquare, MessageSquare, Briefcase, FileText, Loader2, Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -16,8 +17,11 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   BUYING_STATUS_OPTIONS,
   buyingStatusLabel,
+  hasValidReason,
   isBuyingStatusEnabled,
   normalizeBuyingStatus,
+  requiresReason,
+  type BuyingStatus,
 } from '@/lib/customers/buying-status';
 import { ContactForm } from "@/components/contacts/contact-form";
 import { Timeline } from "@/components/shared/timeline";
@@ -45,6 +49,54 @@ export default function ContactDetailsPage() {
   // Releasing that lock stays admin-only, which is why isAdmin is separate.
   const isAdmin = profile?.account_role === 'admin' || profile?.account_role === 'owner';
   const canSetBuyingStatus = isAdmin || hasPermission(PERMISSIONS.CUSTOMERS.MANAGE_BUYING_STATUS);
+  // Non-null while the admin is typing a blacklist reason. The status is not
+  // written until the reason is in, because the database will not accept a
+  // blacklist without one.
+  const [blacklistDraft, setBlacklistDraft] = useState<string | null>(null);
+  const [savingBuyingStatus, setSavingBuyingStatus] = useState(false);
+
+  /**
+   * Write a hand-set Buying Status. The RPC is the only way in: it records the
+   * lock and who/when in the same breath, and it is where the mandatory
+   * blacklist reason is checked before the CHECK constraint can fire with a
+   * constraint name instead of a sentence.
+   */
+  const applyBuyingStatus = async (next: BuyingStatus, reason: string | null) => {
+    if (requiresReason(next) && !hasValidReason(reason)) {
+      toast.error('Give a reason for blacklisting this customer.');
+      return;
+    }
+    setSavingBuyingStatus(true);
+    const previous = { status: contact?.buying_status, reason: contact?.buying_status_reason };
+    setContact((c) => (c ? ({
+      ...c,
+      buying_status: next,
+      buying_status_reason: requiresReason(next) ? (reason ?? '').trim() : null,
+      buying_status_locked: true,
+    }) : c));
+    const { error } = await supabase.rpc('set_buying_status', {
+      p_contact_id: id,
+      p_status: next,
+      p_reason: requiresReason(next) ? (reason ?? '').trim() : null,
+    });
+    setSavingBuyingStatus(false);
+    if (error) {
+      setContact((c) => (c ? ({
+        ...c,
+        buying_status: previous.status,
+        buying_status_reason: previous.reason,
+      }) : c));
+      toast.error(errorMessage(error, 'Could not set Buying Status'));
+      return;
+    }
+    setBlacklistDraft(null);
+    toast.success(
+      next === 'blacklist'
+        ? 'Customer blacklisted. Order history will not change this.'
+        : 'Buying Status set by hand. It will no longer follow order history.',
+    );
+  };
+
   const paymentEnabled = isModuleEnabled('payment');
   
   const canViewFinancials = hasPermission(PERMISSIONS.CUSTOMERS.VIEW_FINANCIALS);
@@ -288,21 +340,18 @@ export default function ContactDetailsPage() {
                   <DetailItem label="Buying Status">
                     {canSetBuyingStatus ? (
                       <select
-                        value={normalizeBuyingStatus(contact.buying_status)}
-                        onChange={async (e) => {
-                          const next = e.target.value;
-                          const previous = contact.buying_status;
-                          setContact({ ...contact, buying_status: next, buying_status_locked: true } as any);
-                          const { error } = await supabase.rpc('set_buying_status', {
-                            p_contact_id: id,
-                            p_status: next,
-                          });
-                          if (error) {
-                            setContact({ ...contact, buying_status: previous } as any);
-                            toast.error(errorMessage(error, 'Could not set Buying Status'));
-                          } else {
-                            toast.success('Buying Status set by hand. It will no longer follow order history.');
+                        value={blacklistDraft !== null ? 'blacklist' : normalizeBuyingStatus(contact.buying_status)}
+                        onChange={(e) => {
+                          const next = e.target.value as BuyingStatus;
+                          // Blacklisting asks for the reason FIRST rather than
+                          // firing and failing: the reason is mandatory in the
+                          // database, so a save that skips it can only bounce.
+                          if (requiresReason(next)) {
+                            setBlacklistDraft(contact.buying_status_reason ?? '');
+                            return;
                           }
+                          setBlacklistDraft(null);
+                          void applyBuyingStatus(next, null);
                         }}
                         className="text-body bg-muted border border-border rounded-md px-2 py-1.5 font-medium w-full"
                       >
@@ -316,6 +365,51 @@ export default function ContactDetailsPage() {
                       </span>
                     )}
                   </DetailItem>
+
+                  {/* The reason is mandatory, so it is asked for in the open
+                      rather than behind a confirm dialog that can be dismissed. */}
+                  {blacklistDraft !== null && (
+                    <DetailItem label="Why is this customer blacklisted?" span={2}>
+                      <Textarea
+                        autoFocus
+                        rows={2}
+                        value={blacklistDraft}
+                        placeholder="e.g. Cheque bounced twice, 90 days overdue"
+                        onChange={(e) => setBlacklistDraft(e.target.value)}
+                      />
+                      <div className="mt-2 flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={!hasValidReason(blacklistDraft) || savingBuyingStatus}
+                          onClick={() => void applyBuyingStatus('blacklist', blacklistDraft)}
+                        >
+                          {savingBuyingStatus ? 'Saving…' : 'Blacklist this customer'}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={savingBuyingStatus}
+                          onClick={() => setBlacklistDraft(null)}
+                        >
+                          Cancel
+                        </Button>
+                        {!hasValidReason(blacklistDraft) && (
+                          <span className="text-caption text-muted-foreground">
+                            A reason is required.
+                          </span>
+                        )}
+                      </div>
+                    </DetailItem>
+                  )}
+
+                  {contact.buying_status === 'blacklist' && contact.buying_status_reason && (
+                    <DetailItem label="Blacklisted because" span={2}>
+                      <span className="text-body">{contact.buying_status_reason}</span>
+                    </DetailItem>
+                  )}
+
                   <DetailItem
                     label="First Order"
                     value={
@@ -332,9 +426,14 @@ export default function ContactDetailsPage() {
                           ? ` on ${new Date(contact.buying_status_set_at).toLocaleDateString()}`
                           : ''}
                         {'. It no longer follows order history'}
-                        {isAdmin ? '' : '.'}
+                        {isAdmin && contact.buying_status !== 'blacklist' ? '' : '.'}
+                        {contact.buying_status === 'blacklist' &&
+                          ' Set the status to Buyer or Yet to Buy to undo the blacklist — releasing the lock would let order history undo it by itself.'}
                       </span>
-                      {isAdmin && (
+                      {/* Not offered while blacklisted: the database refuses it,
+                          and obeying it would unblacklist somebody as a side
+                          effect of the next invoice. */}
+                      {isAdmin && contact.buying_status !== 'blacklist' && (
                         <Button
                           type="button"
                           variant="link"

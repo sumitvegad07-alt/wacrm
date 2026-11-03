@@ -125,7 +125,11 @@ export interface Contact {
    *  DIFFERENT question from `is_active`: this asks whether the customer has
    *  ever placed an order that was not Cancelled or Rejected. Maintained from
    *  order history unless `buying_status_locked`, which a human override sets. */
-  buying_status?: 'buyer' | 'yet_to_buy' | null;
+  buying_status?: 'buyer' | 'yet_to_buy' | 'blacklist' | null;
+  /** Why the customer was blacklisted. Required while the status is
+   *  'blacklist' — enforced by contacts_blacklist_needs_reason, not just the
+   *  form — and cleared automatically when the status moves away from it. */
+  buying_status_reason?: string | null;
   buying_status_locked?: boolean | null;
   /** profiles.id of whoever set the status by hand. */
   buying_status_set_by?: string | null;
