@@ -41,8 +41,26 @@ export const EXPECTED_PROJECT_REF = "ltigfpywdbfilsagtpyd";
  * about the number: `scenarios.test.ts` once awaited 24 windows one after
  * another in a single test and took 9.3s. Fetching them concurrently brought
  * it to 0.8s. Prefer fixing the serialisation.
+ *
+ * 2026-11-04 — raised 20s → 60s, and only after taking that advice. The
+ * isolation test over `customers` began failing about every other full run.
+ * The serialisation was real and is now gone: its chunked owner-check awaited
+ * seven Mumbai round-trips one at a time, and sending them together took the
+ * test from 1378ms to 502ms, the suite from 19.6s to 16.6s. It STILL failed
+ * roughly half of full runs, always that one test and no other.
+ *
+ * So what is left is not a bad test. `customers` is simply the largest data
+ * set — one `fetchData` of 1,000 ids against the biggest table on the busiest
+ * account — and in a 223-file parallel run it competes for the network with
+ * every other suite. Standalone it is half a second; under contention it
+ * exceeds 20s. A per-test budget sized for an idle machine is the wrong shape
+ * for a network-bound test inside a parallel run, so the number moves.
+ *
+ * It is still bounded, it is still only these five suites, and the other
+ * ~3,700 unit tests keep the 5s default — so a genuine hang still surfaces as
+ * a hang rather than a two-minute wait.
  */
-export const LIVE_DB_TIMEOUT = 20_000;
+export const LIVE_DB_TIMEOUT = 60_000;
 
 export interface TestDbTarget {
   url: string;

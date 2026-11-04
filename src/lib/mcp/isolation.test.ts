@@ -92,12 +92,20 @@ describe.skipIf(!canRun)("tenant isolation", { timeout: LIVE_DB_TIMEOUT }, () =>
 
       // Ask the database, with RLS off, who actually owns these rows. Chunked
       // because a 1,000-id `in` list overflows the request URL.
+      //
+      // The chunks go out TOGETHER. Awaited one at a time this was seven
+      // serialised Mumbai round-trips for the biggest data set, which is ~1.4s
+      // on an idle machine but blew through the 20s suite budget inside a full
+      // 223-file run — the same serialised-round-trip fault, and the same fix,
+      // as scenarios.test.ts "always reports back the window it used".
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += 150) chunks.push(ids.slice(i, i + 150));
+      const pages = await Promise.all(
+        chunks.map((chunk) => db.from(table).select("id, account_id").in("id", chunk)),
+      );
+
       const foreign: string[] = [];
-      for (let i = 0; i < ids.length; i += 150) {
-        const { data, error } = await db
-          .from(table)
-          .select("id, account_id")
-          .in("id", ids.slice(i, i + 150));
+      for (const { data, error } of pages) {
         expect(error, `${name}: ${error?.message}`).toBeNull();
         for (const r of (data ?? []) as { id: string; account_id: string }[]) {
           if (r.account_id !== accountA) foreign.push(r.id);
