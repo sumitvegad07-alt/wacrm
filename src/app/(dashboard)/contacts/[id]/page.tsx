@@ -60,6 +60,14 @@ export default function ContactDetailsPage() {
   const [supplier, setSupplier] = useState<{ id: string; label: string } | null>(null);
   const [servesCount, setServesCount] = useState<number | null>(null);
   const [supplierBeat, setSupplierBeat] = useState<string | null>(null);
+  /**
+   * Bumped after a save. The supplier is fetched by the effect below, keyed on
+   * the customer id — which does not change when the customer is edited — so
+   * saving a supplier left this block still reading "Direct — no supplier
+   * recorded" until the page was reloaded by hand. Reloading the contact is
+   * not enough: the supplier is a separate query with its own state.
+   */
+  const [supplierReloadKey, setSupplierReloadKey] = useState(0);
   useEffect(() => {
     if (!id || mappingMode === 'off') {
       setSupplier(null);
@@ -100,7 +108,7 @@ export default function ContactDetailsPage() {
       }
     })();
     return () => { alive = false; };
-  }, [id, supabase, mappingMode]);
+  }, [id, supabase, mappingMode, supplierReloadKey]);
 
   /**
    * Write a hand-set Buying Status. The RPC is the only way in: it records the
@@ -268,6 +276,15 @@ export default function ContactDetailsPage() {
 
   useEffect(() => {
     fetchAllData();
+  }, [fetchAllData]);
+
+  /**
+   * What a save or a manual refresh calls. Kept separate from `fetchAllData`
+   * so the mount effect above does not fetch the supplier twice.
+   */
+  const refreshAll = useCallback(() => {
+    void fetchAllData();
+    setSupplierReloadKey((k) => k + 1);
   }, [fetchAllData]);
 
   if (loading) {
@@ -665,7 +682,7 @@ export default function ContactDetailsPage() {
             tasks={tasks} 
             notes={notes}
             activities={activities} 
-            onRefresh={fetchAllData}
+            onRefresh={refreshAll}
             canViewPaymentHistory={canViewPaymentHistory}
           />
         </div>
@@ -675,7 +692,7 @@ export default function ContactDetailsPage() {
         open={editOpen}
         onOpenChange={setEditOpen}
         contact={contact}
-        onSaved={fetchAllData}
+        onSaved={refreshAll}
       />
     </DetailPageLayout>
   );
