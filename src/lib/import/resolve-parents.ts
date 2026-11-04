@@ -192,3 +192,168 @@ export function describeParentResolve(r: ParentResolveResult): string | null {
   }
   return parts.join('; ') + '.';
 }
+
+/**
+ * `customer_level` on a customer import — "this one is a Dealer".
+ *
+ * A second pass for the same reason as `parent_code` above: `import_commit`
+ * writes an explicit column list for contacts and `hierarchy_level` is not in
+ * it, so importing a level would mean editing that ~260-line function whose
+ * live body has diverged from the repo. The client already holds the rows.
+ *
+ * MUST RUN BEFORE resolveImportedParents. `trg_enforce_customer_parent`
+ * refuses a supplier who is not above the customer, and it compares the two
+ * `hierarchy_level`s — so a file that sets both would have its suppliers
+ * rejected if the levels were not in place first.
+ *
+ * Accepts the level NAME as configured ("Dealer") or its number ("3"), because
+ * both are things a person reasonably types, and the name is the only one they
+ * can see anywhere in the product.
+ */
+
+export interface LevelResolveResult {
+  /** Customers given a level. */
+  mapped: number;
+  /** Values that matched no configured level. */
+  unknownLevels: string[];
+  /** Rows whose own customer could not be found to update. */
+  unmatchedChild: string[];
+  /** Updates the database refused, with its reason. */
+  refused: { code: string; reason: string }[];
+}
+
+/** Level name or number → position. Names win; a bare number must be a real level. */
+export function buildLevelIndex(
+  levels: readonly { position: number; name?: string | null }[],
+): Map<string, number> {
+  const index = new Map<string, number>();
+  for (const l of levels) {
+    const name = (l.name ?? '').trim().toLowerCase();
+    if (name) index.set(name, l.position);
+    index.set(String(l.position), l.position);
+  }
+  return index;
+}
+
+export async function resolveImportedLevels(
+  supabase: SupabaseClient,
+  accountId: string,
+  rows: readonly ParentImportRow[],
+  levels: readonly { position: number; name?: string | null }[],
+): Promise<LevelResolveResult> {
+  const result: LevelResolveResult = {
+    mapped: 0,
+    unknownLevels: [],
+    unmatchedChild: [],
+    refused: [],
+  };
+
+  const withLevel = rows.filter((r) => text(r, 'customer_level') !== '');
+  if (withLevel.length === 0 || levels.length === 0) return result;
+
+  const index = buildLevelIndex(levels);
+  const codes = [...new Set(withLevel.map((r) => text(r, 'customer_code')).filter(Boolean))];
+  const phones = [...new Set(withLevel.map((r) => digits(text(r, 'phone'))).filter(Boolean))];
+
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('id, customer_code, phone_normalized')
+    .eq('account_id', accountId)
+    .or(
+      [
+        codes.length ? `customer_code.in.(${codes.map((c) => `"${c}"`).join(',')})` : null,
+        phones.length ? `phone_normalized.in.(${phones.join(',')})` : null,
+      ]
+        .filter(Boolean)
+        .join(','),
+    );
+  if (error) throw error;
+
+  const byCode = new Map<string, string>();
+  const byPhone = new Map<string, string>();
+  for (const row of (data ?? []) as {
+    id: string;
+    customer_code: string | null;
+    phone_normalized: string | null;
+  }[]) {
+    if (row.customer_code) byCode.set(row.customer_code.trim().toLowerCase(), row.id);
+    if (row.phone_normalized) byPhone.set(row.phone_normalized, row.id);
+  }
+
+  // Grouped by level so each level costs one update, not one per customer.
+  const idsByLevel = new Map<number, string[]>();
+  for (const row of withLevel) {
+    const raw = text(row, 'customer_level');
+    const position = index.get(raw.toLowerCase());
+    if (position == null) {
+      result.unknownLevels.push(raw);
+      continue;
+    }
+    const ownCode = text(row, 'customer_code');
+    const childId =
+      (ownCode ? byCode.get(ownCode.toLowerCase()) : undefined) ??
+      byPhone.get(digits(text(row, 'phone')));
+    if (!childId) {
+      result.unmatchedChild.push(ownCode || text(row, 'phone') || '(unidentified row)');
+      continue;
+    }
+    const list = idsByLevel.get(position) ?? [];
+    list.push(childId);
+    idsByLevel.set(position, list);
+  }
+
+  for (const [position, ids] of idsByLevel) {
+    const { error: updateError, count } = await supabase
+      .from('contacts')
+      .update({ hierarchy_level: position }, { count: 'exact' })
+      .eq('account_id', accountId)
+      .in('id', ids);
+    if (updateError) {
+      // One refusal must not lose the rest of the batch with it.
+      for (const id of ids) {
+        const { error: oneError } = await supabase
+          .from('contacts')
+          .update({ hierarchy_level: position })
+          .eq('account_id', accountId)
+          .eq('id', id);
+        if (oneError) result.refused.push({ code: id, reason: oneError.message });
+        else result.mapped += 1;
+      }
+      continue;
+    }
+    result.mapped += count ?? ids.length;
+  }
+
+  return result;
+}
+
+/** One line for the import summary, or null when there was nothing to say. */
+export function describeLevelResolve(r: LevelResolveResult): string | null {
+  if (
+    r.mapped === 0 &&
+    r.unknownLevels.length === 0 &&
+    r.unmatchedChild.length === 0 &&
+    r.refused.length === 0
+  ) {
+    return null;
+  }
+  const parts: string[] = [];
+  if (r.mapped > 0) {
+    parts.push(`${r.mapped} customer${r.mapped === 1 ? '' : 's'} given a level`);
+  }
+  const unknown = new Set(r.unknownLevels);
+  if (unknown.size > 0) {
+    parts.push(
+      `${unknown.size} level name${unknown.size === 1 ? '' : 's'} not recognised (${[...unknown]
+        .slice(0, 3)
+        .join(', ')}${unknown.size > 3 ? '…' : ''})`,
+    );
+  }
+  if (r.unmatchedChild.length > 0) {
+    parts.push(`${r.unmatchedChild.length} row(s) could not be matched back to a customer`);
+  }
+  if (r.refused.length > 0) {
+    parts.push(`${r.refused.length} refused (${r.refused[0].reason})`);
+  }
+  return parts.join('; ') + '.';
+}

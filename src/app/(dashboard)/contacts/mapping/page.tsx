@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MapPin, Users } from "lucide-react";
+import { MapPin, Upload, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageLayout, PageHeader, PageLoader, TableSkeleton } from "@/components/shared";
@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { NavButton } from "@/components/ui/nav-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ImportWizard } from "@/components/import/import-wizard";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { errorMessage } from "@/lib/errors/message";
@@ -52,6 +53,7 @@ type CustomerRow = {
   territory_id: string | null;
   parent_id: string | null;
   parent_locked: boolean | null;
+  is_active: boolean | null;
 };
 
 type TerritoryRow = { id: string; name: string; level: number; parent_id: string | null };
@@ -105,6 +107,9 @@ export default function CustomerMappingPage() {
 
   const [areaQuery, setAreaQuery] = useState("");
   const [custQuery, setCustQuery] = useState("");
+  const [custFilter, setCustFilter] = useState<"all" | "no_level" | "no_parent">("all");
+  const [bulkParent, setBulkParent] = useState<string>("");
+  const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLevel, setBulkLevel] = useState<string>("");
 
@@ -175,12 +180,12 @@ export default function CustomerMappingPage() {
         // project where the migration has not been applied.
         const custWithLock = pageAll<CustomerRow>(
           "contacts",
-          "id, company, name, hierarchy_level, territory_id, parent_id, parent_locked",
+          "id, company, name, hierarchy_level, territory_id, parent_id, parent_locked, is_active",
         ).catch(async () => {
           if (active) setMigrationMissing(true);
           return pageAll<CustomerRow>(
             "contacts",
-            "id, company, name, hierarchy_level, territory_id, parent_id",
+            "id, company, name, hierarchy_level, territory_id, parent_id, is_active",
           );
         });
 
@@ -197,7 +202,10 @@ export default function CustomerMappingPage() {
           supabase.rpc("secondary_sales_setup_status", { p_account_id: accountId }),
         ]);
         if (!active) return;
-        setCustomers(cust);
+        // Deactivated customers are excluded, matching
+        // secondary_sales_setup_status — otherwise the table listed 39 rows
+        // while the badge above it said 38, which just looks broken.
+        setCustomers(cust.filter((c) => c.is_active !== false));
         setTerritories(terr);
         setChannel(chan);
         setSetup(status.error ? null : readSetupStatus(status.data));
@@ -281,6 +289,27 @@ export default function CustomerMappingPage() {
     }
   }
 
+  async function setManyParents(ids: string[], parentId: string | null) {
+    if (ids.length === 0) return;
+    setSaving(true);
+    try {
+      const patch =
+        mode === "area"
+          ? { parent_id: parentId, parent_locked: parentId != null }
+          : { parent_id: parentId };
+      const { error } = await supabase.from("contacts").update(patch).in("id", ids);
+      if (error) throw error;
+      refreshAll();
+      setSelected(new Set());
+      setBulkParent("");
+      toast.success(`Supplier set on ${ids.length} customer${ids.length === 1 ? "" : "s"}.`);
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not set the supplier."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function setCustomerParent(id: string, parentId: string | null) {
     setSaving(true);
     try {
@@ -336,12 +365,44 @@ export default function CustomerMappingPage() {
       .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
   }, [territories, territoryById, areaQuery, customersPerTerritory, holderLevels, channelMap]);
 
+  const needsLevel = useMemo(
+    () => customers.filter((c) => c.hierarchy_level == null),
+    [customers],
+  );
+  const needsParent = useMemo(
+    () => customers.filter((c) => c.hierarchy_level != null && c.hierarchy_level > 1 && !c.parent_id),
+    [customers],
+  );
+
   const custRows = useMemo(() => {
     const q = custQuery.trim().toLowerCase();
-    return customers
+    const base =
+      custFilter === "no_level" ? needsLevel : custFilter === "no_parent" ? needsParent : customers;
+    return base
       .filter((c) => (q ? labelOf(c).toLowerCase().includes(q) : true))
       .sort((a, b) => (a.hierarchy_level ?? 99) - (b.hierarchy_level ?? 99) || labelOf(a).localeCompare(labelOf(b)));
-  }, [customers, custQuery]);
+  }, [customers, custQuery, custFilter, needsLevel, needsParent]);
+
+  /**
+   * Suppliers offered for a bulk change.
+   *
+   * Only when every selected customer sits at the SAME level, because "who may
+   * supply this one" is answered by their level and a mixed selection has no
+   * single answer. Offering a list that is wrong for half the selection would
+   * just produce refusals from the database.
+   */
+  const bulkSupplierOptions = useMemo(() => {
+    const picked = [...selected].map((id) => customerById.get(id)).filter(Boolean) as CustomerRow[];
+    if (picked.length === 0) return null;
+    const levels = new Set(picked.map((c) => c.hierarchy_level));
+    if (levels.size !== 1) return null;
+    const level = picked[0].hierarchy_level;
+    if (level == null || level <= 1) return null;
+    return customers
+      .filter((c) => c.hierarchy_level != null && c.hierarchy_level < level)
+      .filter((c) => !selected.has(c.id))
+      .sort((a, b) => labelOf(a).localeCompare(labelOf(b)));
+  }, [selected, customerById, customers]);
 
   if (profileLoading) {
     return (
@@ -531,13 +592,56 @@ export default function CustomerMappingPage() {
 
           {/* ── Customers ────────────────────────────────────── */}
           <TabsContent value="customers" className="space-y-3">
+            {/* What to do, in the order it has to be done. Levels first: a
+                customer with no level has no rule for who may supply them, so
+                the supplier box stays closed until one is set. */}
+            <div className="rounded-lg border border-border bg-muted/40 p-3">
+              <p className="text-caption text-muted-foreground">
+                <strong>1.</strong> Give every customer a level.{" "}
+                <strong>2.</strong> Say who supplies them. Tick several rows to set either in one
+                go, or use the filters to work through only what is missing.
+              </p>
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <Input
                 value={custQuery}
                 onChange={(e) => setCustQuery(e.target.value)}
                 placeholder="Search customers…"
-                className="max-w-sm"
+                className="max-w-xs"
               />
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ["all", `All ${customers.length}`],
+                  ["no_level", `Needs a level ${needsLevel.length}`],
+                  ["no_parent", `Needs a supplier ${needsParent.length}`],
+                ] as const).map(([key, label]) => (
+                  <Button
+                    key={key}
+                    type="button"
+                    size="sm"
+                    variant={custFilter === key ? "default" : "outline"}
+                    onClick={() => {
+                      setCustFilter(key);
+                      setSelected(new Set());
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setImportOpen(true)}
+                className="ml-auto"
+              >
+                <Upload className="mr-1 size-3.5" /> Import levels &amp; suppliers
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
               {selected.size > 0 && (
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-1.5">
                   <span className="text-caption text-muted-foreground">
@@ -564,6 +668,34 @@ export default function CustomerMappingPage() {
                   >
                     Apply
                   </Button>
+                  {bulkSupplierOptions && bulkSupplierOptions.length > 0 && (
+                    <>
+                      <select
+                        value={bulkParent}
+                        onChange={(e) => setBulkParent(e.target.value)}
+                        className="rounded-md border border-border bg-background px-2 py-1 text-body"
+                      >
+                        <option value="">Set supplier to…</option>
+                        {bulkSupplierOptions.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {labelOf(o)}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        size="sm"
+                        disabled={!bulkParent || saving}
+                        onClick={() => void setManyParents([...selected], bulkParent || null)}
+                      >
+                        Apply
+                      </Button>
+                    </>
+                  )}
+                  {selected.size > 0 && bulkSupplierOptions === null && (
+                    <span className="text-caption text-muted-foreground">
+                      Pick customers that are all at the same level to set their supplier together.
+                    </span>
+                  )}
                   <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
                     Clear
                   </Button>
@@ -717,6 +849,16 @@ export default function CustomerMappingPage() {
           </TabsContent>
         </Tabs>
       )}
+
+      {/* The ordinary customer importer. A file carrying Customer Level and
+          Supplier Code updates existing customers by their code or phone, which
+          is the only practical way to map hundreds of them. */}
+      <ImportWizard
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        module="contacts"
+        onImported={refreshAll}
+      />
     </PageLayout>
   );
 }

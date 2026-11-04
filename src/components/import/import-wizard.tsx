@@ -42,7 +42,12 @@ import { detectMapping, unmappedRequiredFields } from "@/lib/import/mapping";
 import { buildMappedRows, validateRows, buildCommitRows } from "@/lib/import/validate";
 import { detectUnknownLookups, applyResolutions, rewriteRows } from "@/lib/import/resolve-lookups";
 import { loadExistingKeys, createImportJob, commitInChunks } from "@/lib/import/run";
-import { describeParentResolve, resolveImportedParents } from "@/lib/import/resolve-parents";
+import {
+  describeLevelResolve,
+  describeParentResolve,
+  resolveImportedLevels,
+  resolveImportedParents,
+} from "@/lib/import/resolve-parents";
 import { canEditParentByHand } from "@/lib/customers/mapping";
 import { buildTemplateCsv, buildErrorCsv, downloadText } from "@/lib/import/error-report";
 import { PERMISSIONS } from "@/lib/auth/permissions-registry";
@@ -79,6 +84,7 @@ interface ResultState {
   errors: { row: number; message: string }[];
   /** Customer mapping outcome, when a `parent_code` column was imported. */
   parentNote?: string | null;
+  levelNote?: string | null;
 }
 
 const CONFIDENCE_STYLE: Record<string, string> = {
@@ -340,6 +346,31 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
        * themselves are already safely in.
        */
       let parentNote: string | null = null;
+      let levelNote: string | null = null;
+      // Levels FIRST, then suppliers. trg_enforce_customer_parent compares the
+      // two hierarchy_levels, so a file that sets both would have its suppliers
+      // refused if the levels were not already in place.
+      if (descriptor.targetTable === "contacts" && accountId) {
+        const orderSettings = (account?.settings as
+          | { order_settings?: { hierarchy_enabled?: boolean; levels?: { position: number; name?: string }[] } }
+          | null
+          | undefined)?.order_settings;
+        if (orderSettings?.hierarchy_enabled && Array.isArray(orderSettings.levels)) {
+          try {
+            levelNote = describeLevelResolve(
+              await resolveImportedLevels(
+                supabase,
+                accountId,
+                rows as Record<string, unknown>[],
+                orderSettings.levels,
+              ),
+            );
+          } catch (e) {
+            levelNote = `Customer levels could not be set: ${errorMessage(e, "unknown error")}`;
+          }
+        }
+      }
+
       if (
         descriptor.targetTable === "contacts" &&
         canEditParentByHand(account?.settings) &&
@@ -356,7 +387,7 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
 
       // Undoable only if the run actually created rows and the target supports it.
       const undoable = descriptor.undoable && res.imported > 0;
-      setResult({ jobId, ...res, invalidCount: summary.invalid, undoable, parentNote });
+      setResult({ jobId, ...res, invalidCount: summary.invalid, undoable, parentNote, levelNote });
       setStep("result");
       if (res.imported > 0 || res.updated > 0) onImported?.();
     } catch (err) {
@@ -813,6 +844,12 @@ export function ImportWizard({ open, onOpenChange, module, onImported }: Props) 
                     <ResultStat n={result.failed + result.invalidCount} label="failed/invalid" tone="bad" />
                   )}
                 </div>
+                {result.levelNote && (
+                  <p className="mt-2 text-caption text-muted-foreground">
+                    <span className="font-medium text-foreground">Customer levels:</span>{" "}
+                    {result.levelNote}
+                  </p>
+                )}
                 {result.parentNote && (
                   <p className="mt-2 text-caption text-muted-foreground">
                     <span className="font-medium text-foreground">Suppliers:</span>{" "}

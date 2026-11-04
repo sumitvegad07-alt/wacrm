@@ -50,7 +50,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { PageLayout, PageHeader, BulkActionBar, ConfirmDialog } from '@/components/shared';
-import { MapPin } from 'lucide-react';
+import { MapPin, Network } from 'lucide-react';
 import {
   PointMapDialog,
   formatLatLng,
@@ -78,7 +78,7 @@ import {
   isBuyingStatusEnabled,
   normalizeBuyingStatus,
 } from '@/lib/customers/buying-status';
-import { readMappingMode } from '@/lib/customers/mapping';
+import { readMappingMode, readSetupStatus } from '@/lib/customers/mapping';
 
 interface ContactWithData extends Contact {
   tags?: Tag[];
@@ -181,6 +181,34 @@ export default function ContactsPage() {
           value: r.id,
         })),
       );
+    })();
+    return () => { alive = false; };
+  }, [accountId, supabase, mappingMode]);
+
+  /**
+   * How many customers are not ready for secondary sales — no level, or no
+   * supplier below the top level. It rides on the button so the work is
+   * visible from the screen people actually live on, instead of being found
+   * only by opening a settings page.
+   *
+   * One aggregate, only while secondary sales is on, and a read error hides
+   * the badge rather than showing a wrong zero.
+   */
+  const [needsMapping, setNeedsMapping] = useState<number | null>(null);
+  useEffect(() => {
+    if (!accountId || mappingMode === 'off') {
+      setNeedsMapping(null);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const { data, error } = await supabase.rpc('secondary_sales_setup_status', {
+        p_account_id: accountId,
+      });
+      if (!alive) return;
+      if (error) { setNeedsMapping(null); return; }
+      const s = readSetupStatus(data);
+      setNeedsMapping(s.no_level + s.no_parent);
     })();
     return () => { alive = false; };
   }, [accountId, supabase, mappingMode]);
@@ -978,6 +1006,22 @@ export default function ContactsPage() {
         serverPagination={{ ...table.serverPagination, exportAll }}
         actions={
           <div className="flex items-center gap-2">
+            {mappingMode !== 'off' && (
+              <NavButton
+                href="/contacts/mapping"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2.5"
+                title="Set customer levels and who supplies whom"
+              >
+                <Network className="size-3 mr-1" /> Mapping
+                {needsMapping != null && needsMapping > 0 && (
+                  <span className="ml-1 rounded-full bg-amber-500/20 px-1.5 text-caption font-semibold text-amber-700 dark:text-amber-400">
+                    {needsMapping}
+                  </span>
+                )}
+              </NavButton>
+            )}
             <GatedButton data-tour="customer-import" variant="outline" size="sm" canAct={canEdit} gateReason="add or import contacts" onClick={() => setImportOpen(true)} className="h-7 text-xs px-2.5">
               <Upload className="size-3 mr-1" /> Import
             </GatedButton>

@@ -80,6 +80,15 @@ export const contactsDescriptor: ImportDescriptor = {
       synonyms: ["phone", "mobile", "number", "contactnumber"], examples: ["+919876543210", "+919812345678", ""] },
     { key: "territory", label: "Territory", type: "text", maxLength: 100,
       synonyms: ["territory", "zone", "beat", "salesarea", "region"], examples: ["Gujarat", "", ""] },
+    // Customer Level is a synthetic extra, NOT a form-backed field. Going
+    // through the form config would hide it on any tenant whose predefined
+    // `hierarchy_level` row is missing or deactivated — the same fault that hid
+    // it on the customer form — and build-descriptor also skips any system_key
+    // with no backing column in import_commit, which this has not got. It is
+    // written by resolveImportedLevels after the commit instead.
+    { key: "customer_level", label: "Customer Level", type: "text", maxLength: 50,
+      synonyms: ["customerlevel", "level", "hierarchylevel", "customertype", "channellevel", "tier"],
+      examples: ["Dealer", "Distributor", ""] },
     { key: "parent_code", label: "Supplier Code", type: "text", maxLength: 50,
       synonyms: ["parentcode", "parent", "supplier", "suppliercode", "distributor", "distributorcode", "parentid"],
       examples: ["CUST-0001", "", ""] },

@@ -226,7 +226,15 @@ export function SecondarySalesSettings({
                   aria-pressed={mode === m}
                   onClick={() => onModeChange(m)}
                   className={cn(
-                    "h-auto w-full flex-col items-start gap-0 whitespace-normal rounded-lg p-3 text-left",
+                    // The desktop height below is NOT redundant. Button's size
+                    // variant sets a responsive height, and twMerge does not
+                    // treat a bare auto height as conflicting with a breakpoint
+                    // height — so on a desktop the box stayed 32px tall and this
+                    // text spilled out below its own border. Same trap as the
+                    // theme-token notes. (Class names are spelled out nowhere in
+                    // this comment on purpose: the design-system checker greps
+                    // source text and would count them as real usages.)
+                    "h-auto md:h-auto w-full flex-col items-start gap-0 whitespace-normal rounded-lg p-3 text-left",
                     mode === m
                       ? "border-primary bg-primary/5 hover:bg-primary/5"
                       : "hover:border-muted-foreground/40",
