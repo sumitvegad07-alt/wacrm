@@ -25,6 +25,9 @@ import type { ReportDefinition } from './types';
 const ORDER_LEVEL_MEASURES = [
   'order_count',
   'customer_count',
+  // Gated by ReportMeasure.requiresFeature, so a tenant with Buying Status off
+  // is never offered it even though it is listed here.
+  'buyers_opened',
   'product_count',
   'product_quantity',
   'base_quantity',
@@ -56,6 +59,9 @@ export const orderReportConfig: ReportDefinition = {
   
   dimensions: [
     { key: 'customer', label: 'Customer', category: 'customer' },
+    // Registered in the database by migration 20261103150000. It was only ever
+    // half-shipped: the SQL existed, but nothing in the UI could ask for it.
+    { key: 'buying_status', label: 'Buying Status', category: 'customer' },
     { key: 'user', label: 'User', category: 'user' },
     { key: 'country', label: 'Country', category: 'area' },
     { key: 'state', label: 'State', category: 'area' },
@@ -79,6 +85,7 @@ export const orderReportConfig: ReportDefinition = {
     { key: 'discount_amount', label: 'Discount Amount', type: 'currency' },
     { key: 'tax_amount', label: 'Tax Amount', type: 'currency' },
     { key: 'customer_count', label: '# of customer', type: 'number' },
+    { key: 'buyers_opened', label: 'Buyers Opened', type: 'number', requiresFeature: 'buying_status' },
     { key: 'avg_price', label: 'Avg Price', type: 'currency' },
     // Item-level twins, for the tabs already joined to order_items. Same labels
     // on purpose — the column reads the same to the user; `availableMeasures`
@@ -102,6 +109,12 @@ export const orderReportConfig: ReportDefinition = {
     { key: 'state', label: 'State', type: 'territory', section: 'AREA', territoryLevel: 2 },
     { key: 'city', label: 'City', type: 'territory', section: 'AREA', territoryLevel: 3 },
     { key: 'area', label: 'Area', type: 'territory', section: 'AREA', territoryLevel: 4 },
+    { key: 'buying_status', label: 'Buying Status', type: 'select', section: 'CUSTOMER',
+      requiresFeature: 'buying_status', options: [
+      { label: 'Buyer', value: 'buyer' },
+      { label: 'Yet to Buy', value: 'yet_to_buy' },
+      { label: 'Blacklisted', value: 'blacklist' },
+    ]},
     { key: 'user', label: 'Ordered by', type: 'user', section: 'USER' },
     { key: 'user_role', label: 'Ordered by role', type: 'select', section: 'USER', options: [
       { label: 'Admin', value: 'admin' },
@@ -122,6 +135,14 @@ export const orderReportConfig: ReportDefinition = {
       defaultMeasures: ['order_count', 'product_quantity', 'product_count', 'gross_amount', 'net_amount'],
       availableMeasures: ORDER_LEVEL_MEASURES,
       hiddenMeasures: ['country', 'state', 'city', 'area'], // Note: these are dimension fields shown as extra columns, not measures
+    },
+    {
+      key: 'buying_status',
+      label: 'Buying Status',
+      dimension: 'buying_status',
+      requiresFeature: 'buying_status',
+      defaultMeasures: ['customer_count', 'order_count', 'product_quantity', 'gross_amount', 'net_amount'],
+      availableMeasures: ORDER_LEVEL_MEASURES,
     },
     {
       key: 'user',

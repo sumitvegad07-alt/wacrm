@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { isBuyingStatusEnabled } from "@/lib/customers/buying-status";
 import { format, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, startOfQuarter, endOfQuarter, startOfDay, endOfDay, subMonths, subQuarters, subYears } from "date-fns";
 import { X, Filter as FilterIcon, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,7 @@ export function ReportFilterDrawer({
   );
 
   const [customerHierarchyEnabled, setCustomerHierarchyEnabled] = useState(false);
+  const [buyingStatusOn, setBuyingStatusOn] = useState(false);
   const [productLevelsCount, setProductLevelsCount] = useState<number | null>(null);
   const [territoryLevels, setTerritoryLevels] = useState<TerritoryLevel[] | null>(null);
   // Account-configurable task activity types (accounts.settings.task_types).
@@ -140,6 +142,7 @@ export function ReportFilterDrawer({
           setProductLevelsCount(s.product_settings?.levels_count ?? 1);
           setTerritoryLevels((s.territory_settings?.levels as TerritoryLevel[]) ?? null);
           setTaskTypes(Array.isArray(s.task_types) ? (s.task_types as string[]) : null);
+          setBuyingStatusOn(isBuyingStatusEnabled(s));
         }
         setSettingsLoaded(true);
       } catch (err) {
@@ -184,7 +187,10 @@ export function ReportFilterDrawer({
       if (!customerHierarchyEnabled) return false;
     }
 
-    // 2. Product Category & Sub-Category
+    // 2. An opt-in module's filter stays hidden until the module is on.
+    if (filterDef.requiresFeature === 'buying_status' && !buyingStatusOn) return false;
+
+    // 3. Product Category & Sub-Category
     if (filterDef.key === 'product_category' && (productLevelsCount === null || productLevelsCount < 1)) {
       return false;
     }

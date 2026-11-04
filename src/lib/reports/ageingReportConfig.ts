@@ -45,6 +45,7 @@ export const ageingReportConfig: ReportDefinition = {
   dimensions: [
     { key: 'customer', label: 'Customer', category: 'customer' },
     { key: 'customer_type', label: 'Customer Type', category: 'customer' },
+    { key: 'buying_status', label: 'Buying Status', category: 'customer' },
     { key: 'last_order_date', label: 'Last Order Date', category: 'time' },
     { key: 'user', label: 'User', category: 'user' },
     { key: 'area', label: 'Area', category: 'area' },
@@ -72,6 +73,12 @@ export const ageingReportConfig: ReportDefinition = {
     // Reads as "no order in this window" — see the file header.
     { key: 'date_range', label: 'Period', type: 'date_range', section: 'PERIOD' },
     { key: 'customer', label: 'Customer', type: 'customer', section: 'CUSTOMER' },
+    { key: 'buying_status', label: 'Buying Status', type: 'select', section: 'CUSTOMER',
+      requiresFeature: 'buying_status', options: [
+      { label: 'Buyer', value: 'buyer' },
+      { label: 'Yet to Buy', value: 'yet_to_buy' },
+      { label: 'Blacklisted', value: 'blacklist' },
+    ]},
     { key: 'country', label: 'Country', type: 'territory', section: 'AREA', territoryLevel: 1 },
     { key: 'state', label: 'State', type: 'territory', section: 'AREA', territoryLevel: 2 },
     { key: 'city', label: 'City', type: 'territory', section: 'AREA', territoryLevel: 3 },
@@ -99,6 +106,14 @@ export const ageingReportConfig: ReportDefinition = {
       dimension: 'customer',
       // One row per customer, so the age columns are that customer's own figures.
       extraDimensions: ['last_order_date'],
+      defaultMeasures: [...DORMANCY_COLUMNS],
+      availableMeasures: [...CUSTOMER_MEASURES],
+    },
+    {
+      key: 'buying_status',
+      label: 'Buying Status',
+      dimension: 'buying_status',
+      requiresFeature: 'buying_status',
       defaultMeasures: [...DORMANCY_COLUMNS],
       availableMeasures: [...CUSTOMER_MEASURES],
     },

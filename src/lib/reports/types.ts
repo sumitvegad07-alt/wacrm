@@ -52,6 +52,9 @@ export interface ReportMeasure {
    *  behaviour automatically (§5e); this is for the non-percent cases. */
   additive?: boolean;
   requiredModule?: keyof ModuleSettings | string;
+  /** Same gate as TabConfig.requiresFeature: hide the measure entirely until
+   *  the account switches the module on. */
+  requiresFeature?: 'buying_status';
 }
 
 export interface ReportFilterDef {
@@ -86,6 +89,8 @@ export interface ReportFilterDef {
    *  'name' because most of these columns store the label as free text; use 'id'
    *  where the record stores a foreign key (e.g. a deal's pipeline). */
   lookupValueColumn?: 'name' | 'id';
+  /** Same gate as TabConfig.requiresFeature. */
+  requiresFeature?: 'buying_status';
 }
 
 export interface TabConfig {
@@ -105,6 +110,11 @@ export interface TabConfig {
    *  Omit to offer every measure (the default for all other reports). */
   availableMeasures?: string[];
   requiresProductSettings?: 'category' | 'subcategory'; // Show only if product category/subcategory enabled
+  /** Show only while an opt-in module is switched on for the account. Buying
+   *  Status registers a dimension and a measure in the database, but a tenant
+   *  that has not switched the module on must not be offered either — the
+   *  module is meant to be invisible until an admin turns it on. */
+  requiresFeature?: 'buying_status';
   /** Execute this tab against a different registry module than the report's own.
    *  Tabs normally only change the dimension, because every tab of a report reads
    *  the same base table. Ageing breaks that: it lists master records that have

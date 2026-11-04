@@ -38,6 +38,7 @@ import { ReportDefaultViewDialog } from "./report-default-view-dialog";
 import { ActiveFilterSummary } from "./ActiveFilterSummary";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
+import { isBuyingStatusEnabled } from "@/lib/customers/buying-status";
 
 interface ReportViewerProps {
   config: ReportDefinition;
@@ -56,6 +57,10 @@ export function ReportViewer({ config }: ReportViewerProps) {
   
   // Product settings state (to control category/subcategory tab visibility)
   const [productLevelsCount, setProductLevelsCount] = useState<number>(0);
+  // Buying Status is opt-in. Its dimension and measure are registered in the
+  // database for every tenant, so the gate has to be here or a tenant that has
+  // never switched the module on would be offered both.
+  const [buyingStatusOn, setBuyingStatusOn] = useState(false);
 
   // Fetch product settings on mount
   useEffect(() => {
@@ -70,6 +75,7 @@ export function ReportViewer({ config }: ReportViewerProps) {
       if (data?.settings?.product_settings) {
         setProductLevelsCount(data.settings.product_settings.levels_count || 0);
       }
+      setBuyingStatusOn(isBuyingStatusEnabled(data?.settings));
     }
     fetchProductSettings();
   }, [accountId]);
@@ -84,9 +90,12 @@ export function ReportViewer({ config }: ReportViewerProps) {
       if (tab.requiresProductSettings === 'subcategory') {
         return productLevelsCount >= 2;
       }
+      if (tab.requiresFeature === 'buying_status') {
+        return buyingStatusOn;
+      }
       return true;
     });
-  }, [config.tabConfigs, productLevelsCount]);
+  }, [config.tabConfigs, productLevelsCount, buyingStatusOn]);
 
   // Active tab key
   // The report's own first tab, not a hardcoded 'customer' — the Lead report has
@@ -526,9 +535,14 @@ export function ReportViewer({ config }: ReportViewerProps) {
   // (e.g. two "Quantity" columns computed differently); only one is valid per tab.
   const manageableMeasures = useMemo(() => {
     const allowed = config.tabConfigs?.find(t => t.key === activeTab)?.availableMeasures;
-    if (!allowed) return config.measures;
-    return config.measures.filter(m => allowed.includes(m.key));
-  }, [config.measures, config.tabConfigs, activeTab]);
+    // A measure behind an opt-in module is hidden until that module is on,
+    // whatever the tab allows.
+    const gated = config.measures.filter(
+      (m) => m.requiresFeature !== 'buying_status' || buyingStatusOn,
+    );
+    if (!allowed) return gated;
+    return gated.filter(m => allowed.includes(m.key));
+  }, [config.measures, config.tabConfigs, activeTab, buyingStatusOn]);
 
   // Get the period label for display
   const periodLabel = PERIOD_PRESETS.find(p => p.value === reportState.period)?.label ?? 'This Month';
