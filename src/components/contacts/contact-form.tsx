@@ -4,7 +4,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { codePlaceholder } from '@/lib/codes/auto-codes';
-import { eligibleParents, readMappingMode, type MappingMode } from '@/lib/customers/mapping';
+import {
+  canEditParentByHand,
+  eligibleParents,
+  readMappingMode,
+  type MappingMode,
+} from '@/lib/customers/mapping';
 
 /** Just enough of a customer to offer them as a supplier. */
 type ParentCandidate = { id: string; company: string | null; name: string | null; hierarchy_level: number | null };
@@ -28,6 +33,14 @@ import { CustomFieldInput } from '@/components/ui/custom-field-input';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import {
+  BUYING_STATUS_OPTIONS,
+  hasValidReason,
+  isBuyingStatusEnabled,
+  normalizeBuyingStatus,
+  requiresReason,
+  type BuyingStatus,
+} from '@/lib/customers/buying-status';
+import {
   findExistingContact,
   isExactMatch,
   isUniqueViolation,
@@ -44,6 +57,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Users } from 'lucide-react';
 import { errorMessage } from '@/lib/errors/message';
@@ -155,6 +169,13 @@ export function ContactForm({
   // it here; in beat mode the database owns it and this box is read-only.
   const [mappingMode, setMappingMode] = useState<MappingMode>('off');
   const [parentId, setParentId] = useState<string | null>(null);
+  // Buying Status. `originalBuyingStatus` is kept so the save only calls
+  // set_buying_status when a human actually changed it — writing it on every
+  // save would LOCK the row, and the lock stops order history from ever
+  // updating the status again.
+  const [buyingStatus, setBuyingStatus] = useState<BuyingStatus>('yet_to_buy');
+  const [buyingStatusReason, setBuyingStatusReason] = useState('');
+  const [originalBuyingStatus, setOriginalBuyingStatus] = useState<BuyingStatus>('yet_to_buy');
   const [parentCandidates, setParentCandidates] = useState<ParentCandidate[]>([]);
 
   // Assignment Mode config
@@ -174,6 +195,7 @@ export function ContactForm({
   // territory is mandatory. Read the AUTHORITATIVE setting (territory_settings via
   // getAccountTerritorySettings), not the stale top-level settings.assignment_mode.
   const isAreaWise = territorySettings.assignment_mode !== 'direct';
+  const buyingStatusOn = isBuyingStatusEnabled(account?.settings);
 
   // When Territory Master is enabled, the flat country/state/city/area system
   // fields are replaced by the Territory picker — hide them from the shared
@@ -183,6 +205,20 @@ export function ContactForm({
     let fields = showTerritoryCascade
       ? customFields.filter((f) => !(f.system_key && GEO_SYSTEM_KEYS.includes(f.system_key)))
       : customFields;
+
+    // Customer Level is drawn by hand in the Sales channel section below, so it
+    // is dropped here or it would appear twice.
+    //
+    // The founder, 2026-11-04: Customer Level "is not visible when we edit the
+    // customer". It reached this form only as a row in `custom_fields`, and the
+    // section renderer drops any field with is_active === false — so a
+    // predefined row deactivated on a tenant before predefined fields were
+    // locked stays invisible forever, with no way for an admin to get it back.
+    // Drawing it directly makes it independent of that row, the same way
+    // "Supplied By", "Also Assigned To" and "Assign Employee" already are. The
+    // row itself is left alone so Manage Column and Field Settings are
+    // unchanged.
+    fields = fields.filter((f) => f.system_key !== 'hierarchy_level');
 
     fields = [
       ...fields,
@@ -249,6 +285,14 @@ export function ContactForm({
       setOpeningBalance((contact as any)?.opening_balance != null ? String((contact as any).opening_balance) : '');
       setHierarchyLevel(contact?.hierarchy_level ?? null);
       setParentId((contact as { parent_id?: string | null })?.parent_id ?? null);
+      {
+        const bs = normalizeBuyingStatus((contact as { buying_status?: unknown })?.buying_status);
+        setBuyingStatus(bs);
+        setOriginalBuyingStatus(bs);
+        setBuyingStatusReason(
+          (contact as { buying_status_reason?: string | null })?.buying_status_reason ?? '',
+        );
+      }
       setPriceListId((contact as any)?.price_list_id ?? null);
       setEmployeeId(contact?.employee_id ?? '');
       setCollaboratorIds(
@@ -400,7 +444,19 @@ export function ContactForm({
       return;
     }
     if (hierarchy.enabled && hierarchyLevel == null) {
-      toast.error('Customer Level is required when sales hierarchy is enabled');
+      toast.error('Customer Level is required when secondary sales is enabled');
+      return;
+    }
+    // Checked here rather than letting the save bounce: the reason is mandatory
+    // in the database (contacts_blacklist_needs_reason), so a save without one
+    // can only fail, and it would fail after the rest of the form was written.
+    if (
+      buyingStatusOn && isEdit
+      && buyingStatus !== originalBuyingStatus
+      && requiresReason(buyingStatus)
+      && !hasValidReason(buyingStatusReason)
+    ) {
+      toast.error('Give a reason for blacklisting this customer.');
       return;
     }
 
@@ -475,6 +531,13 @@ export function ContactForm({
         // Beat mode: the trigger owns parent_id, so the form must not write it
         // or it would fight the beat on every save.
         ...(mappingMode === 'manual' ? { parent_id: parentId } : {}),
+        // Area mode: the trigger works the supplier out from the area, so a
+        // value typed here is an OVERRIDE and has to be locked or the next area
+        // change silently undoes it. Clearing the box unlocks and hands the
+        // customer back to the area rule.
+        ...(mappingMode === 'area'
+          ? { parent_id: parentId, parent_locked: parentId != null }
+          : {}),
         ...(hasSFA ? { price_list_id: priceListId } : {}),
         employee_id: assignmentMode === 'direct' ? (employeeId || null) : null,
       collaborator_ids: collaboratorIds,
@@ -534,6 +597,29 @@ export function ContactForm({
       }
 
       await Promise.all(parallel);
+
+      // Buying Status goes through its own RPC, never the UPDATE above: the
+      // status, the lock and who set it when have to be recorded in one breath,
+      // and only set_buying_status is allowed to write the column.
+      //
+      // Called ONLY when a human actually changed it. Writing it on every save
+      // would lock the row, and a locked row stops following order history — so
+      // simply editing a customer's phone number would freeze their Buying
+      // Status forever.
+      if (buyingStatusOn && isEdit && buyingStatus !== originalBuyingStatus) {
+        const { error: bsError } = await supabase.rpc('set_buying_status', {
+          p_contact_id: contactId,
+          p_status: buyingStatus,
+          p_reason: requiresReason(buyingStatus) ? buyingStatusReason.trim() : null,
+        });
+        // The rest of the customer is already saved, so this reports itself
+        // rather than pretending the whole save failed.
+        if (bsError) {
+          toast.error(errorMessage(bsError, 'Customer saved, but Buying Status did not change'));
+        } else {
+          setOriginalBuyingStatus(buyingStatus);
+        }
+      }
 
       toast.success(isEdit ? 'Customer updated' : 'Customer created');
       onOpenChange(false);
@@ -653,23 +739,6 @@ export function ContactForm({
                   </div>
                 );
               }
-              if (fld.system_key === 'hierarchy_level') {
-                if (!hierarchy.enabled) return null;
-                return (
-                  <select
-                    value={hierarchyLevel ?? ''}
-                    onChange={(e) => setHierarchyLevel(e.target.value === '' ? null : parseInt(e.target.value))}
-                    className="w-full h-9 rounded-md bg-muted border border-border text-foreground text-sm px-3"
-                  >
-                    <option value="">Not set</option>
-                    {hierarchy.levels.map((lvl) => (
-                      <option key={lvl.position} value={lvl.position}>
-                        {lvl.name}
-                      </option>
-                    ))}
-                  </select>
-                );
-              }
               if (fld.system_key === 'whatsapp') {
                 if (!isModuleEnabled('whatsapp')) return null;
                 fld.is_required = true;
@@ -736,44 +805,134 @@ export function ContactForm({
             }}
           />
 
-          {mappingMode !== 'off' && (
-            <FormSection title="Supplier">
-              {mappingMode === 'manual' ? (
-                <div className="space-y-1">
-                  <SearchableSelect
-                    value={parentId ?? ''}
-                    onChange={(v) => setParentId(v || null)}
-                    options={eligibleParents(parentCandidates, {
-                      id: contact?.id,
-                      hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
-                    }).map((c) => ({
-                      label: c.company || c.name || 'Unnamed',
-                      value: c.id,
-                    }))}
-                    placeholder="Supplied by..."
-                  />
-                  <p className="text-caption text-muted-foreground">
-                    Which customer supplies this one. Only customers above this one in the
-                    hierarchy can be chosen{hierarchy.enabled ? '' : '; set Customer Level to narrow the list'}.
-                    Leave it empty for a customer you supply directly.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <p className="text-body font-medium">
-                    {parentId
-                      ? (parentCandidates.find((c) => c.id === parentId)?.company
-                          ?? parentCandidates.find((c) => c.id === parentId)?.name
-                          ?? 'Set from the beat')
-                      : 'Not on a beat with a supplier yet'}
-                  </p>
-                  <p className="text-caption text-muted-foreground">
-                    Taken from this customer&apos;s beat. To change it, change the beat&apos;s
-                    supplier on the Routes screen, or switch Customer mapping to &ldquo;Set on
-                    each customer&rdquo; in Organisation Settings.
-                  </p>
-                </div>
-              )}
+          {/* ── Sales channel ───────────────────────────────────
+              Customer Level, who supplies this customer, and Buying Status, in
+              one place. All three were reported by the founder on 2026-11-04 as
+              being editable on the customer's VIEW page and missing from this
+              form — "it must be editable in edit view only, but it's not
+              visible when we edit the customer". The view page now shows them
+              read-only and this is where they are set.
+
+              None of them goes through the custom-fields renderer, so none can
+              be hidden by a stale `custom_fields` row. */}
+          {(hierarchy.enabled || mappingMode !== 'off' || buyingStatusOn) && (
+            <FormSection title="Sales channel">
+              <div className="space-y-4">
+                {hierarchy.enabled && (
+                  <div className="space-y-1">
+                    <Label htmlFor="cf-hierarchy-level">Customer Level *</Label>
+                    <select
+                      id="cf-hierarchy-level"
+                      value={hierarchyLevel ?? ''}
+                      onChange={(e) =>
+                        setHierarchyLevel(e.target.value ? parseInt(e.target.value, 10) : null)
+                      }
+                      className="h-control w-full rounded-md border border-border bg-background px-3 text-body"
+                    >
+                      <option value="">Select level...</option>
+                      {hierarchy.levels.map((lvl) => (
+                        <option key={lvl.position} value={lvl.position}>
+                          {lvl.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-caption text-muted-foreground">
+                      What kind of customer this is. An order from{' '}
+                      {hierarchy.levels[0]?.name
+                        ? <strong>{hierarchy.levels[0].name}</strong>
+                        : 'your top level'}{' '}
+                      is a primary sale; everyone below is secondary.
+                    </p>
+                  </div>
+                )}
+
+                {mappingMode !== 'off' && (
+                  <div className="space-y-1">
+                    <Label>Supplied By</Label>
+                    {canEditParentByHand(account?.settings) ? (
+                      <>
+                        <SearchableSelect
+                          value={parentId ?? ''}
+                          onChange={(v) => setParentId(v || null)}
+                          options={eligibleParents(parentCandidates, {
+                            id: contact?.id,
+                            hierarchy_level: hierarchy.enabled ? hierarchyLevel : null,
+                          }).map((c) => ({
+                            label: c.company || c.name || 'Unnamed',
+                            value: c.id,
+                          }))}
+                          placeholder="Supplied by..."
+                        />
+                        <p className="text-caption text-muted-foreground">
+                          Which customer supplies this one. Only customers above this one in the
+                          hierarchy can be chosen
+                          {hierarchy.enabled ? '' : '; set Customer Level to narrow the list'}.
+                          {mappingMode === 'area'
+                            ? ' Your account works this out from the customer’s area — picking somebody here overrides that for this customer only, and keeps overriding it until you clear the box.'
+                            : ' Leave it empty for a customer you supply directly.'}
+                        </p>
+                      </>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="text-body font-medium">
+                          {parentId
+                            ? (parentCandidates.find((c) => c.id === parentId)?.company
+                                ?? parentCandidates.find((c) => c.id === parentId)?.name
+                                ?? 'Set from the beat')
+                            : 'Not on a beat with a supplier yet'}
+                        </p>
+                        <p className="text-caption text-muted-foreground">
+                          Taken from this customer&apos;s beat. To change it, change the
+                          beat&apos;s supplier on the Routes screen, or switch mapping to
+                          &ldquo;By area&rdquo; in Organisation Settings.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Only when editing. A brand-new customer has no orders, so the
+                    database would say "Yet to Buy" anyway — and setting it here
+                    would LOCK that guess, stopping the first real order from
+                    ever updating it. */}
+                {buyingStatusOn && isEdit && (
+                  <div className="space-y-1">
+                    <Label htmlFor="cf-buying-status">Buying Status</Label>
+                    <select
+                      id="cf-buying-status"
+                      value={buyingStatus}
+                      onChange={(e) => setBuyingStatus(e.target.value as BuyingStatus)}
+                      className="h-control w-full rounded-md border border-border bg-background px-3 text-body"
+                    >
+                      {BUYING_STATUS_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    {requiresReason(buyingStatus) ? (
+                      <div className="space-y-1 pt-1">
+                        <Label htmlFor="cf-blacklist-reason">
+                          Why is this customer blacklisted? *
+                        </Label>
+                        <Textarea
+                          id="cf-blacklist-reason"
+                          rows={2}
+                          value={buyingStatusReason}
+                          placeholder="e.g. Cheque bounced twice, 90 days overdue"
+                          onChange={(e) => setBuyingStatusReason(e.target.value)}
+                        />
+                        <p className="text-caption text-muted-foreground">
+                          A reason is required — the database refuses a blacklist without one.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-caption text-muted-foreground">
+                        Normally worked out from order history. Choosing it here fixes it by hand
+                        and stops it following orders.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </FormSection>
           )}
 

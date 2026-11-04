@@ -1,5 +1,5 @@
 {
-  "recorded": "2026-11-02",
+  "recorded": "2026-11-04",
   "counts": {
     "uninstrumentedRouter": 0,
     "uninstrumentedLink": 0,
@@ -8,10 +8,10 @@
     "rawPaletteRed": 192,
     "rawPaletteBgRed": 123,
     "arbitraryFontSize": 301,
-    "hardcodedControlHeight": 464,
+    "hardcodedControlHeight": 459,
     "inlineGridCols": 347,
     "adHocCardSurface": 18,
-    "rawTableFiles": 14,
-    "adHocSpinnerFiles": 133
+    "rawTableFiles": 15,
+    "adHocSpinnerFiles": 132
   }
 }
