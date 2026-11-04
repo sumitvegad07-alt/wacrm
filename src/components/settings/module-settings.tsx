@@ -26,8 +26,16 @@ import { FENCE_RADII, normalizeGeoFencing } from "@/lib/location/geofence-config
 import { McpWorkforceAccessCard } from "@/components/settings/mcp-workforce-access";
 import { DuplicatePreventionSettings } from "@/components/settings/duplicate-prevention-settings";
 import { AutoCodesSettings } from "@/components/settings/auto-codes-settings";
-import { CustomerMappingSettings } from "@/components/settings/customer-mapping-settings";
-import { readMappingMode, type MappingMode } from "@/lib/customers/mapping";
+import { SecondarySalesSettings } from "@/components/settings/secondary-sales-settings";
+import { KoopsOptionToggle, KoopsRadioToggle } from "@/components/settings/koops-controls";
+import {
+  levelsProblem,
+  readMappingMode,
+  readSetupStatus,
+  remapRpcFor,
+  type MappingMode,
+  type SecondarySalesSetup,
+} from "@/lib/customers/mapping";
 import {
   CODE_KINDS,
   CODE_KIND_META,
@@ -75,121 +83,6 @@ const MODULE_TOGGLES: { key: keyof ModuleSettings; label: string }[] = [
   { key: "route", label: "Can set routes for User" },
 ];
 
-// ── Koops Screenshot Radio Button Toggle (No / Yes) ─────────────
-function KoopsRadioToggle({
-  enabled,
-  onChange,
-  disabled,
-}: {
-  enabled: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-5">
-      <label
-        onClick={() => !disabled && onChange(false)}
-        className={cn(
-          "flex items-center gap-2 cursor-pointer select-none text-xs font-medium",
-          disabled && "opacity-50 cursor-not-allowed"
-        )}
-      >
-        <span
-          className={cn(
-            "flex h-4 w-4 items-center justify-center rounded-full border transition-colors",
-            !enabled
-              ? "border-primary bg-primary/10"
-              : "border-muted-foreground/40 bg-background"
-          )}
-        >
-          {!enabled && <span className="h-2 w-2 rounded-full bg-primary" />}
-        </span>
-        <span
-          className={cn(
-            !enabled ? "text-foreground font-semibold" : "text-muted-foreground"
-          )}
-        >
-          No
-        </span>
-      </label>
-
-      <label
-        onClick={() => !disabled && onChange(true)}
-        className={cn(
-          "flex items-center gap-2 cursor-pointer select-none text-xs font-medium",
-          disabled && "opacity-50 cursor-not-allowed"
-        )}
-      >
-        <span
-          className={cn(
-            "flex h-4 w-4 items-center justify-center rounded-full border transition-colors",
-            enabled
-              ? "border-primary bg-primary/10"
-              : "border-muted-foreground/40 bg-background"
-          )}
-        >
-          {enabled && <span className="h-2 w-2 rounded-full bg-primary" />}
-        </span>
-        <span
-          className={cn(
-            enabled ? "text-foreground font-semibold" : "text-muted-foreground"
-          )}
-        >
-          Yes
-        </span>
-      </label>
-    </div>
-  );
-}
-
-// ── Koops Multi-Option Toggle ─────────────
-function KoopsOptionToggle<T extends string>({
-  options,
-  value,
-  onChange,
-  disabled,
-}: {
-  options: { label: string; value: T }[];
-  value: T;
-  onChange: (v: T) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-6 mt-2">
-      {options.map((opt) => {
-        const isSelected = value === opt.value;
-        return (
-          <label
-            key={opt.value}
-            onClick={() => !disabled && onChange(opt.value)}
-            className={cn(
-              "flex items-center gap-2 cursor-pointer select-none text-xs font-medium",
-              disabled && "opacity-50 cursor-not-allowed"
-            )}
-          >
-            <span
-              className={cn(
-                "flex h-4 w-4 items-center justify-center rounded-full border transition-colors shrink-0",
-                isSelected
-                  ? "border-primary bg-primary/10"
-                  : "border-muted-foreground/40 bg-background"
-              )}
-            >
-              {isSelected && <span className="h-2 w-2 rounded-full bg-primary" />}
-            </span>
-            <span
-              className={cn(
-                isSelected ? "text-foreground font-semibold" : "text-muted-foreground"
-              )}
-            >
-              {opt.label}
-            </span>
-          </label>
-        );
-      })}
-    </div>
-  );
-}
 
 // ── Feature row: master toggle on the left, its extra options on the right ──
 // Used for settings that reveal more controls once enabled (Multi Unit,
@@ -330,6 +223,11 @@ export function ModuleSettingsPanel() {
   // the button can say how many customers it will touch before it writes.
   const [mappingMode, setMappingMode] = useState<MappingMode>('off');
   const [mappingWouldChange, setMappingWouldChange] = useState<number | null>(null);
+  // Whether secondary sales is really configured, not merely switched on: a
+  // customer with no level classifies as `direct` and one with no supplier has
+  // no channel, so a tenant can switch this on, see nothing change and conclude
+  // the feature is broken.
+  const [setupStatus, setSetupStatus] = useState<SecondarySalesSetup | null>(null);
   const [remapping, setRemapping] = useState(false);
   const [originalSettings, setOriginalSettings] = useState<any>({});
 
@@ -495,18 +393,22 @@ export function ModuleSettingsPanel() {
   }, [accountId, supabase]);
 
   /**
-   * How many customers the beat rule would re-map. Only asked for in beat
-   * mode, and tolerant of a read error (most likely: 20261103160000 has not
-   * been applied yet), which hides the count rather than showing a wrong zero.
+   * How many customers the mapping rule would re-map, and whether secondary
+   * sales is really configured.
+   *
+   * Both are tolerant of a read error — most likely the migration has not been
+   * applied to this project yet — and hide themselves rather than showing a
+   * wrong zero, which would read as "nothing to do".
    */
   useEffect(() => {
-    if (!accountId || mappingMode !== 'beat') {
+    const rpc = remapRpcFor(mappingMode);
+    if (!accountId || !rpc) {
       setMappingWouldChange(null);
       return;
     }
     let active = true;
     (async () => {
-      const { data, error } = await supabase.rpc('resync_account_beat_parents', {
+      const { data, error } = await supabase.rpc(rpc, {
         p_account_id: accountId,
         p_dry_run: true,
       });
@@ -519,30 +421,53 @@ export function ModuleSettingsPanel() {
     return () => { active = false; };
   }, [accountId, supabase, mappingMode]);
 
-  /** Apply the beat rule to every customer in the account. */
-  const handleRemapFromBeats = useCallback(async () => {
-    if (!accountId) return;
+  // Only fetched while secondary sales is switched on, so a tenant who does not
+  // use it pays nothing for the counts.
+  useEffect(() => {
+    if (!accountId || !hierarchyEnabled) {
+      setSetupStatus(null);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase.rpc('secondary_sales_setup_status', {
+        p_account_id: accountId,
+      });
+      if (active) setSetupStatus(error ? null : readSetupStatus(data));
+    })();
+    return () => { active = false; };
+  }, [accountId, supabase, hierarchyEnabled, mappingMode]);
+
+  /** Apply the current mapping rule to every customer in the account. */
+  const handleRemapParents = useCallback(async () => {
+    const rpc = remapRpcFor(mappingMode);
+    if (!accountId || !rpc) return;
+    const source = mappingMode === 'area' ? 'areas' : 'beats';
     setRemapping(true);
     try {
-      const { data, error } = await supabase.rpc('resync_account_beat_parents', {
+      const { data, error } = await supabase.rpc(rpc, {
         p_account_id: accountId,
         p_dry_run: false,
       });
       if (error) throw error;
       const changed = Number((data as { changed?: number } | null)?.changed ?? 0);
       setMappingWouldChange(0);
+      const { data: status } = await supabase.rpc('secondary_sales_setup_status', {
+        p_account_id: accountId,
+      });
+      if (status) setSetupStatus(readSetupStatus(status));
       setToastMsg({
         type: 'success',
         message: changed === 0
-          ? 'Every customer already matched their beat.'
-          : `Re-mapped ${changed} customer${changed === 1 ? '' : 's'} from their beats.`,
+          ? `Every customer already matched their ${source === 'areas' ? 'area' : 'beat'}.`
+          : `Re-mapped ${changed} customer${changed === 1 ? '' : 's'} from their ${source}.`,
       });
     } catch (err) {
       setToastMsg({ type: 'error', message: errorMessage(err, 'Could not re-map customers.') });
     } finally {
       setRemapping(false);
     }
-  }, [accountId, supabase]);
+  }, [accountId, supabase, mappingMode]);
 
   const handleModuleToggle = (key: keyof ModuleSettings, value: boolean) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -553,6 +478,14 @@ export function ModuleSettingsPanel() {
   );
 
   const handleSave = useCallback(async () => {
+    // Refused before anything is written, rather than saved and then quietly
+    // useless: secondary sales with one level classifies every order as
+    // primary, so the switch would be on and change nothing.
+    const levelsIssue = levelsProblem(hierarchyEnabled, levels);
+    if (levelsIssue) {
+      setToastMsg({ type: 'error', message: levelsIssue });
+      return;
+    }
     setSaving(true);
     setToastMsg(null);
     try {
@@ -878,13 +811,27 @@ export function ModuleSettingsPanel() {
                 disabled={!canEditSettings}
               />
 
-              <CustomerMappingSettings
-                value={mappingMode}
+              {/* Secondary sales, in one card: the switch, the levels, the
+                  mapping method and a way into the Mapping screen. It replaces
+                  two separate settings in two separate screens — the founder:
+                  "those 2 settings ... force users to perform two separate
+                  tasks for one action". Everything it writes was already saved
+                  atomically by handleSave below, so only the UI moved. */}
+              <SecondarySalesSettings
+                enabled={hierarchyEnabled}
+                onEnabledChange={setHierarchyEnabled}
+                levels={levels}
+                onLevelName={updateLevel}
+                onLevelColor={updateLevelColor}
+                onAddLevel={addLevel}
+                onRemoveLevel={removeLevel}
+                mode={mappingMode}
+                onModeChange={setMappingMode}
                 wouldChange={mappingWouldChange}
                 remapping={remapping}
+                onRemap={handleRemapParents}
+                setup={setupStatus}
                 disabled={!canEditSettings}
-                onChange={setMappingMode}
-                onRemap={handleRemapFromBeats}
               />
 
               <DuplicatePreventionSettings
@@ -910,55 +857,6 @@ export function ModuleSettingsPanel() {
                 onChange={setCodeSettings}
                 onBackfill={handleBackfillCodes}
               />
-
-              <FeatureRow
-                label="Enable customer hierarchy"
-                description="Off: every order is a simple direct order. On: orders are classified primary/secondary from the customer's level."
-                enabled={hierarchyEnabled}
-                onChange={setHierarchyEnabled}
-                disabled={!canEditSettings}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Layers className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-sm font-medium">Levels (Level 1 = top of chain)</p>
-                </div>
-                <div className="space-y-2">
-                  {levels.map((lvl, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-muted/30 p-1 pr-2 border border-border rounded-md">
-                      <div className="p-2 text-muted-foreground/50"><GripVertical className="size-4" /></div>
-                      <span className="text-xs text-muted-foreground w-14">Level {i + 1}</span>
-                      <Input
-                        type="color"
-                        value={lvl.color || LEVEL_COLORS[i % LEVEL_COLORS.length]}
-                        onChange={(e) => updateLevelColor(i, e.target.value)}
-                        disabled={!canEditSettings}
-                        className="h-8 w-10 p-1 shrink-0 bg-transparent border-0"
-                        title="Badge color"
-                      />
-                      <Input
-                        value={lvl.name}
-                        onChange={(e) => updateLevel(i, e.target.value)}
-                        placeholder="e.g. Super Stockist"
-                        disabled={!canEditSettings}
-                        className="h-8 flex-1 bg-background"
-                      />
-                      {canEditSettings && (
-                        <Button variant="ghost" size="sm" onClick={() => removeLevel(i)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
-                          <Trash2 className="size-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {canEditSettings && levels.length < 5 && (
-                  <Button variant="outline" size="sm" onClick={addLevel} className="mt-2 text-xs h-8">
-                    <Plus className="size-3 mr-1" /> Add level
-                  </Button>
-                )}
-                <p className="text-xs text-muted-foreground mt-2">
-                  Orders from a Level 1 customer are tagged Primary; all others Secondary.
-                </p>
-              </FeatureRow>
 
               <FeatureRow
                 label="Enable Geo-Fencing"
