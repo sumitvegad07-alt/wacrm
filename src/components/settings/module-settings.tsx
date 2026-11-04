@@ -678,7 +678,12 @@ export function ModuleSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, productUniqueKey, customerUniqueKeys, leadUniqueKeys, amountDiscountBasis, geoFencingEnabled, geoVisitEnabled, geoAttendanceEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, refreshProfile, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
+    // Every piece of state this handler reads has to be listed, or the closure
+    // keeps the value from an earlier render and Save writes that instead —
+    // reporting success while the admin's choice is thrown away. Buying Status,
+    // Customer mapping and Automatic codes all shipped broken this way on
+    // 3 Nov 2026. module-settings.deps.test.ts now fails the build on it.
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, buyingStatusEnabled, mappingMode, codeSettings, productUniqueKey, customerUniqueKeys, leadUniqueKeys, amountDiscountBasis, geoFencingEnabled, geoVisitEnabled, geoAttendanceEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, refreshProfile, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
@@ -687,6 +692,11 @@ export function ModuleSettingsPanel() {
     setGstEnabled(!!originalSettings.gst_enabled);
     setHsnEnabled(!!originalSettings.hsn_enabled);
     setMultiUnitEnabled(!!originalSettings.extra_settings?.multi_unit_enabled);
+    // Discard has to put these back too, or the panel keeps showing a choice it
+    // did not save and the admin has no way to tell.
+    setBuyingStatusEnabled(originalSettings.extra_settings?.buying_status_enabled === true);
+    setMappingMode(readMappingMode(originalSettings));
+    setCodeSettings(readCodeSettings(originalSettings));
     setProductUniqueKey(originalSettings.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
     setCustomerUniqueKeys(readCustomerUniqueKeys(originalSettings));
     setLeadUniqueKeys(readLeadUniqueKeys(originalSettings));
