@@ -32,15 +32,29 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- ── Clean slate ────────────────────────────────────────────
+-- Settings go FIRST, before anything touches contacts. A previous run can leave
+-- the tenant with order hierarchy switched on, and migration 076 then refuses
+-- every write to a level-less customer — including this file's own clean-up,
+-- which aborted the fixture half-loaded and reported itself as unrelated
+-- duplicate-key failures three files later.
+UPDATE accounts SET settings = '{}'::jsonb
+ WHERE id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
+
 DELETE FROM employee_area_assignments WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
-DELETE FROM territories WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
+-- territories is deleted AFTER contacts: contacts.territory_id is ON DELETE
+-- RESTRICT, so dropping the tree first fails the moment any test has tagged a
+-- customer to an area. It used to sit here and reported itself as three
+-- unrelated failures in the files that run next, because a half-loaded fixture
+-- leaves the previous run's rows behind.
 DELETE FROM route_customers WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
 DELETE FROM route_parent_customers WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
 DELETE FROM routes WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
 DELETE FROM orders WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
 DELETE FROM products WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
+DELETE FROM customer_channel_parents WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
 UPDATE contacts SET parent_id = NULL WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
 DELETE FROM contacts WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
+DELETE FROM territories WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
 DELETE FROM profiles WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
 DELETE FROM account_sequences WHERE account_id IN ('aaaa0000-0000-0000-0000-000000000001','bbbb0000-0000-0000-0000-000000000002');
 DELETE FROM profiles WHERE user_id IN ('11110000-0000-0000-0000-000000000001','11110000-0000-0000-0000-000000000002','22220000-0000-0000-0000-000000000001');
