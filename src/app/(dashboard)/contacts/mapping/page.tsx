@@ -289,7 +289,20 @@ export default function CustomerMappingPage() {
       refreshAll();
       toast.success("Added to this area.");
     } catch (err) {
-      toast.error(errorMessage(err, "Could not save that."));
+      // 42P10 means the three-column unique key this upsert targets is not
+      // there, i.e. migration 20261105120000 has not been applied to this
+      // database yet and the table still allows only ONE holder per level per
+      // area. The raw message is "there is no unique or exclusion constraint
+      // matching the ON CONFLICT specification", which tells an admin nothing.
+      const code = (err as { code?: string } | null)?.code;
+      if (code === "42P10") {
+        toast.error(
+          "This database is still on the one-supplier-per-area rule. Apply the 2026-11-05 " +
+            "migration (docs/engineering/apply) and try again.",
+        );
+      } else {
+        toast.error(errorMessage(err, "Could not save that."));
+      }
     } finally {
       setSaving(false);
     }

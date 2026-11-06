@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { PrintSizeMenu } from '@/components/print/print-size-menu';
 import { formatCurrency } from '@/lib/currency';
 import { Timeline } from '@/components/shared/timeline';
+import { formatAddress } from '@/lib/contacts/address';
 import {
   DetailPageLayout,
   DetailSection,
@@ -203,7 +204,7 @@ export default function OrderDetailPage() {
   const customerName = cust.company || cust.name || order.leads?.name || 'Unknown';
   const custPhone = cust.phone || cust.whatsapp || '';
   const custEmail = cust.email || '';
-  const custAddress = [cust.address, cust.city, cust.state, cust.country].filter(Boolean).join(', ');
+  const custAddress = formatAddress([cust.address, cust.city, cust.state, cust.country]);
   const anyRemaining = items.some((it) => remaining(it) > 0.0001);
 
   const TabBtn = ({ value, label }: { value: Tab; label: string }) => (

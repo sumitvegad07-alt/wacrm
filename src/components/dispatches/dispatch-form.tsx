@@ -27,6 +27,7 @@ import { logModuleActivity } from '@/lib/activities';
 import { CustomFieldsSectionRenderer } from '@/components/custom-fields/custom-fields-section-renderer';
 import { validateRequiredCustomFields, ensureDefaultSectionsAndFields } from '@/lib/custom-fields';
 import { CustomField } from '@/types';
+import { formatAddress } from '@/lib/contacts/address';
 
 function supaErr(e: unknown): string {
   if (!e) return 'Unknown error';
@@ -132,7 +133,7 @@ export function DispatchForm({ dispatchId, prefillOrderId }: { dispatchId?: stri
       setCustomFields(fieldsData || []);
       setCustomers(((contactData ?? []) as any[]).map((c) => ({
         id: c.id, label: c.company || c.name || 'Unnamed',
-        address: [c.address, c.city, c.state, c.country].filter(Boolean).join(', '),
+        address: formatAddress([c.address, c.city, c.state, c.country]),
       })));
       setOrders(((orderData ?? []) as any[]).map((o) => ({ id: o.id, order_number: o.order_number, contact_id: o.contact_id })));
 

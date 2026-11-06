@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { Badge } from '@/components/ui/badge';
 import { Timeline } from '@/components/shared/timeline';
+import { formatAddress } from '@/lib/contacts/address';
 import {
   DetailPageLayout,
   DetailSection,
@@ -94,7 +95,7 @@ export default function DispatchDetailPage() {
   const customerName = cust.company || cust.name || order?.leads?.name || 'Unknown';
   const custPhone = cust.phone || cust.whatsapp || '';
   const custEmail = cust.email || '';
-  const custAddress = [cust.address, cust.city, cust.state, cust.country].filter(Boolean).join(', ');
+  const custAddress = formatAddress([cust.address, cust.city, cust.state, cust.country]);
   const lineTotal = (it: DItem) => Number(it.quantity) * Number(it.order_item?.price || 0);
   const subTotal = items.reduce((s, it) => s + lineTotal(it), 0);
   const dispNo = dispatch.dispatch_number || '';

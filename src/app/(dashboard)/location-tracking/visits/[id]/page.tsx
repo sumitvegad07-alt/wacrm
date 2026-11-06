@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DetailPageLayout } from "@/components/shared";
 import { Card } from "@/components/ui/card";
+import { formatAddress } from "@/lib/contacts/address";
 import {
   ArrowLeft,
   MapPin,
@@ -218,9 +219,9 @@ export default function VisitDetailPage() {
   const targetName = target?.name || "Unknown";
   const targetCode = target?.customer_id ? `[${target.customer_id}] ` : "";
   const targetHref = isLead ? `/leads/${target?.id}` : `/contacts/${target?.id}`;
-  const addressParts = [target?.address, target?.area, target?.city, target?.state, target?.pincode, target?.country]
-    .filter(Boolean)
-    .join(", ");
+  const addressParts = formatAddress([
+    target?.address, target?.area, target?.city, target?.state, target?.pincode, target?.country,
+  ]);
 
   return (
     // Was `mx-auto max-w-6xl px-4 py-6` — centred and width-capped, on top of
