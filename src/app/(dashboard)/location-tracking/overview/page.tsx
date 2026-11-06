@@ -40,23 +40,26 @@ export default function LocationTrackingOverviewPage() {
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
 
-      // Fetch today's pings for battery and agents
-      const { data: pings } = await supabase
-        .from("location_pings")
-        .select("user_id, battery_pct, lat, lng, accuracy_m, is_mocked, recorded_at")
-        .gte("recorded_at", startOfDay.toISOString());
+      // Three independent reads, so one wait instead of three. None of them
+      // feeds the next — they were simply written in a row, which on Mumbai
+      // meant the tiles stayed blank for three full round trips.
+      const [{ data: pings }, { count: visitsCount }, { data: profiles }] = await Promise.all([
+        // Today's pings, for battery and active agents.
+        supabase
+          .from("location_pings")
+          .select("user_id, battery_pct, lat, lng, accuracy_m, is_mocked, recorded_at")
+          .gte("recorded_at", startOfDay.toISOString()),
 
-      // Fetch today's visits (site_visits is the real table; customer_visits
-      // does not exist. Dated by check_in_at; RLS scopes it per hierarchy).
-      const { count: visitsCount } = await supabase
-        .from("site_visits")
-        .select("*", { count: "exact", head: true })
-        .gte("check_in_at", startOfDay.toISOString());
+        // Today's visits (site_visits is the real table; customer_visits does
+        // not exist. Dated by check_in_at; RLS scopes it per hierarchy).
+        supabase
+          .from("site_visits")
+          .select("*", { count: "exact", head: true })
+          .gte("check_in_at", startOfDay.toISOString()),
 
-      // Fetch profiles for names
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, full_name");
+        // Names for the agent list.
+        supabase.from("profiles").select("user_id, full_name"),
+      ]);
 
       const profileMap = new Map(
         (profiles || []).map((p) => [p.user_id, p.full_name]),

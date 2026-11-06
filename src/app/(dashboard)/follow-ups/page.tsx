@@ -37,7 +37,7 @@ type FollowUpTask = Task & {
 
 export default function FollowUpsPage() {
   const confirm = useConfirm();
-  const { accountId, profile, profileLoading } = useAuth();
+  const { accountId, profile, profileLoading, account } = useAuth();
   const supabase = createClient();
   const [profiles, setProfiles] = useState<{ id: string; full_name: string }[]>([]);
   const [taskTypes, setTaskTypes] = useState<string[]>(["Task", "Call", "Visit", "Meeting", "Follow up", "Note"]);
@@ -63,11 +63,18 @@ export default function FollowUpsPage() {
     async function loadInitialData() {
       if (!accountId) return;
       
+      // The account's settings are NOT fetched here: useAuth already carries
+      // the same JSONB, read on the same row as module_settings when the
+      // session loads. This used to be a second sequential round trip to
+      // Mumbai for data already sitting in memory.
+      const taskTypes = (account?.settings as { task_types?: unknown } | null)?.task_types;
+      if (Array.isArray(taskTypes)) setTaskTypes(taskTypes as string[]);
+
       const { data: profileData } = await supabase
         .from("profiles")
         .select("id, full_name, email")
         .order("full_name");
-      
+
       if (profileData) {
         const formattedProfiles = profileData.map(p => ({
           id: p.id,
@@ -75,19 +82,9 @@ export default function FollowUpsPage() {
         }));
         setProfiles(formattedProfiles);
       }
-
-      const { data: accountData } = await supabase
-        .from("accounts")
-        .select("settings")
-        .eq("id", accountId)
-        .single();
-
-      if (accountData?.settings?.task_types && Array.isArray(accountData.settings.task_types)) {
-        setTaskTypes(accountData.settings.task_types);
-      }
     }
     loadInitialData();
-  }, [accountId, supabase]);
+  }, [accountId, supabase, account]);
 
   // Default the assignee filter to the signed-in user, once — after that the
   // user owns the control and a re-render must not drag it back.

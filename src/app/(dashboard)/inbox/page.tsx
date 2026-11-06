@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Conversation, Message, Contact, ConversationStatus } from "@/types";
 import { useRealtime } from "@/hooks/use-realtime";
+import { useAuth } from "@/hooks/use-auth";
 import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
@@ -19,6 +20,7 @@ const CONTACT_PANEL_STORAGE_KEY = "wacrm:inbox:contact-panel-open";
 
 export default function InboxPage() {
   const router = useRouter();
+  const { accountId } = useAuth();
   const searchParams = useSearchParams();
   /**
    * `?c=<id>` deep-link support. Used when landing here from the
@@ -157,44 +159,35 @@ export default function InboxPage() {
   }, []);
 
   // Check WhatsApp connection status on mount
+  // One query, not three. This used to call auth.getSession(), then read the
+  // caller's profile to learn their account_id, then read whatsapp_config —
+  // three sequential round trips to Mumbai, two of them to rediscover an
+  // account id the session already knows. useAuth resolves the profile once
+  // for the whole app, so only the last query is real work.
+  //
+  // whatsapp_config is one-row-per-account post-multi-user, so this must be
+  // keyed on account_id: the original `.eq('user_id', user.id)` missed the row
+  // for any teammate who had not personally saved the config, and the shared
+  // inbox showed "WhatsApp not connected" even though the admin had set it up.
   useEffect(() => {
+    if (!accountId) return;
+    let alive = true;
     const checkConnection = async () => {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const user = session?.user;
-
-      if (!user) return;
-
-      // whatsapp_config is one-row-per-account post-multi-user, so
-      // the previous `.eq('user_id', user.id)` would miss the row
-      // for any teammate who didn't personally save the config —
-      // the "WhatsApp not connected" banner would show in the
-      // shared inbox even though the admin had it configured.
-      // Resolve account_id via the profile and query by that.
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("account_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      const accountId = profile?.account_id as string | undefined;
-      if (!accountId) {
-        setWhatsappConnected(false);
-        return;
-      }
-
       const { data } = await supabase
         .from("whatsapp_config")
         .select("status")
         .eq("account_id", accountId)
         .maybeSingle();
-
+      if (!alive) return;
       setWhatsappConnected(data?.status === "connected");
     };
 
-    checkConnection();
-  }, []);
+    void checkConnection();
+    return () => {
+      alive = false;
+    };
+  }, [accountId]);
 
   // Handle realtime message events
   const handleMessageEvent = useCallback(

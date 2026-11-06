@@ -91,17 +91,34 @@ describe('permissions', () => {
   it('denies when permissions are null', () => {
     expect(hasRoutePermission(null, ROUTE_PERMISSIONS.VIEW)).toBe(false);
   });
-  it('exposes 20 distinct keys', () => {
-    expect(new Set(ALL_ROUTE_PERMISSION_KEYS).size).toBe(20);
+  it('exposes 9 distinct keys', () => {
+    // Was 20 until 2026-11-05. The founder reviewed the Roles editor and
+    // called it "too much confusing", and he was right: the twenty keys
+    // enumerated every route RPC rather than every decision an admin takes.
+    // Several constants survive as aliases pointing at a surviving key, so the
+    // number of NAMES is still larger than the number of RIGHTS.
+    expect(new Set(ALL_ROUTE_PERMISSION_KEYS).size).toBe(9);
   });
   it('the Roles editor groups cover EVERY defined route permission key', () => {
-    // Guards the gap that hid modify_route_sequence: any key in ROUTE_PERMISSIONS that a server
-    // RPC checks must be grantable in the UI, so it must appear in a group.
+    // Guards the gap that once hid modify_route_sequence: any key in
+    // ROUTE_PERMISSIONS that a server RPC checks must be grantable in the UI,
+    // so it must appear in a group. Compared on DISTINCT values now, because
+    // the retired names (CLONE, ARCHIVE, ADD_CUSTOMERS, …) deliberately
+    // resolve to a surviving key rather than to one of their own.
     const grouped = new Set(ALL_ROUTE_PERMISSION_KEYS);
     for (const key of Object.values(ROUTE_PERMISSIONS)) {
       expect(grouped.has(key)).toBe(true);
     }
-    expect(grouped.size).toBe(Object.values(ROUTE_PERMISSIONS).length);
+    expect(grouped.size).toBe(new Set(Object.values(ROUTE_PERMISSIONS)).size);
+  });
+  it('every retired name resolves to one of the nine surviving rights', () => {
+    // The alias map in migration 20261105130000 must agree with this file: a
+    // name here that pointed at a string the DB has never heard of would be a
+    // right an admin can tick that nothing ever checks.
+    const survivors = new Set(ALL_ROUTE_PERMISSION_KEYS);
+    for (const [name, key] of Object.entries(ROUTE_PERMISSIONS)) {
+      expect(survivors.has(key), `${name} -> ${key}`).toBe(true);
+    }
   });
 });
 

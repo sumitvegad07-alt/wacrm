@@ -115,42 +115,53 @@ export default function EmployeesPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    
-    // The account filter is belt and braces, not decoration. `profiles_select`
-    // used to carry an `OR is_superadmin()` branch, and because a row policy
-    // cannot tell which screen is asking, this list showed the founder every
-    // tenant's staff. The branch is gone (migration 20261016120000); the filter
-    // means a future policy mistake cannot leak the list again.
-    const { data: empData, error: empError } = await supabase
-      .from("profiles")
-      .select("*, employee_roles(name), holiday_lists(id, name, is_default)")
-      .eq("account_id", accountId)
-      .order("full_name")
-      .limit(REFERENCE_ROW_CAP);
+
+    // ONE round trip, not four. These four queries never depended on each
+    // other, but they were written as four awaits in a row, so the browser
+    // waited out four full Mumbai round trips — roughly 0.9–1.2s of pure
+    // network before the first row could paint, on an account with 8 staff.
+    // Promise.all makes the wait equal to the slowest single query.
+    //
+    // The same shape is the reason employees/[id] felt slow (see the
+    // detail-page round-trips fix): the cost here has never been the data
+    // volume, it is the number of sequential hops.
+    const [
+      { data: empData, error: empError },
+      { data: cfData },
+      { data: listData },
+      { data: roleData },
+    ] = await Promise.all([
+      // The account filter is belt and braces, not decoration. `profiles_select`
+      // used to carry an `OR is_superadmin()` branch, and because a row policy
+      // cannot tell which screen is asking, this list showed the founder every
+      // tenant's staff. The branch is gone (migration 20261016120000); the filter
+      // means a future policy mistake cannot leak the list again.
+      supabase
+        .from("profiles")
+        .select("*, employee_roles(name), holiday_lists(id, name, is_default)")
+        .eq("account_id", accountId)
+        .order("full_name")
+        .limit(REFERENCE_ROW_CAP),
+
+      // The account's own field configuration for this module — its headings,
+      // which fields it hides from the table, and any field it added itself.
+      supabase
+        .from("custom_fields")
+        .select("*")
+        .eq("account_id", accountId)
+        .eq("module_name", "user"),
+
+      // Needed for the Holiday List column filter options and to name the default list.
+      supabase.from("holiday_lists").select("id, name, is_default").order("name"),
+
+      supabase.from("employee_roles").select("id, name, permissions").eq("status", "active"),
+    ]);
 
     if (empError) toast.error("Failed to load employees");
     else setEmployees(empData || []);
 
-    // The account's own field configuration for this module — its headings,
-    // which fields it hides from the table, and any field it added itself.
-    const { data: cfData } = await supabase
-      .from("custom_fields")
-      .select("*")
-      .eq("account_id", accountId)
-      .eq("module_name", "user");
     setCustomFields((cfData ?? []) as CustomField[]);
-
-    // Needed for the Holiday List column filter options and to name the default list.
-    const { data: listData } = await supabase
-      .from("holiday_lists")
-      .select("id, name, is_default")
-      .order("name");
     setHolidayLists(listData || []);
-
-    const { data: roleData } = await supabase
-      .from("employee_roles")
-      .select("id, name, permissions")
-      .eq("status", "active");
     if (roleData) setRoles(roleData);
 
     setLoading(false);

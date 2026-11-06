@@ -210,7 +210,12 @@ describe('secondary sales needs at least two levels', () => {
 
 describe('setup status', () => {
   test('missing or junk counts read as zero rather than NaN', () => {
-    expect(readSetupStatus(null)).toEqual({ total: 0, no_level: 0, no_parent: 0, no_area: 0, locked: 0 });
+    // needs_choice reads 0 against a database where 20261105120000 has not
+    // been applied yet, which is the correct answer there — an area cannot
+    // hold two distributors until the key is widened.
+    expect(readSetupStatus(null)).toEqual({
+      total: 0, no_level: 0, no_parent: 0, no_area: 0, locked: 0, needs_choice: 0,
+    });
     expect(readSetupStatus({ total: 'x' }).total).toBe(0);
   });
 

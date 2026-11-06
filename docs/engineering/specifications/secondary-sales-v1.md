@@ -143,10 +143,18 @@ Resolving a customer's parent:
 
 1. Let `L = contacts.hierarchy_level`. If `L` is null or `L = 1`, there is no
    parent. Stop.
-2. Start at the customer's `territory_id` and **walk up** the territory tree,
-   taking the first `customer_channel_parents` row found at level `L - 1`.
-3. If the result fails `is_legal_customer_parent` (itself, wrong level, a loop),
-   leave the customer unmapped rather than write a bad parent.
+2. Start at the customer's `territory_id` and **walk up** the territory tree to
+   the first area holding *any* `customer_channel_parents` row at level `L - 1`.
+3. **How many hold it there decides the answer** (amended 2026-11-05):
+   - exactly one → that is the parent;
+   - **more than one → there is no automatic answer.** Return nothing, stop the
+     walk, and count the customer as *needs a choice*. An admin picks from just
+     those holders on the Mapping screen, and picking sets `parent_locked`.
+4. If the single result fails the legality checks (itself, a loop), leave the
+   customer unmapped rather than write a bad parent.
+
+Step 3 stops the walk rather than climbing past the ambiguity. An ancestor's
+answer is not more correct than the three in front of it — only further away.
 
 Walking **up** matters because **Area is not mandatory** (founder, 2026-11-03,
 migration `24dbf73`): a customer may be tagged only to a City. Setting the chain
@@ -165,11 +173,37 @@ answers the question.
 ### 4.4 Overriding one customer by hand
 
 A new `contacts.parent_locked boolean NOT NULL DEFAULT false`. When true, area
-resync skips that customer and the hand-set parent stands.
+resync skips that customer and the hand-set parent stands. It mirrors
+`buying_status_locked`, a pattern the product already uses and the founder
+already knows.
 
-This exists for the real case the area model cannot express: one area that
-genuinely holds two Distributors. It mirrors `buying_status_locked`, a pattern the
-product already uses and the founder already knows.
+**Amended 2026-11-05.** This was originally the escape hatch for "one area that
+genuinely holds two Distributors", because `customer_channel_parents` was keyed
+`PRIMARY KEY (territory_id, hierarchy_level)` — one holder per level per area.
+The founder tested that against a real distribution network and rejected it:
+
+> you can not have only 1 stockiest in one area, you can not have only 1
+> distributor in one area
+
+He is right, and the constraint was never a claim about how many distributors
+exist — it was about keeping the mapping answerable. Migration
+`20261105120000` widens the key to
+`(territory_id, hierarchy_level, parent_contact_id)`, so an area may hold as
+many as it really has; what is refused is now only the *same* holder listed
+twice. The ambiguity that the single-holder rule was avoiding is handled by
+step 3 of §4.3 instead: ask, never guess.
+
+`parent_locked` therefore has a second and now primary job — recording the
+admin's answer to that question, so a later resync does not undo it. Choosing
+and overriding are the same act.
+
+### 4.4b Every level gets a column, including the bottom one
+
+The By-area grid originally listed `levels.slice(0, -1)`: the bottom level
+supplies nobody, so a row for it changed nothing. Correct, and still confusing
+— the founder set up Super Stockist / Stockist / Distributor / Dealer, saw no
+Dealer column and reported *"you did not provide dealers mapping by area"*. A
+missing column reads as a missing feature. All levels are shown.
 
 ### 4.5 The Mapping screen
 

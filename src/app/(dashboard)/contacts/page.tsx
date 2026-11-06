@@ -300,19 +300,21 @@ export default function ContactsPage() {
     };
   }, [supabase]);
 
+  // No fetch. `useAuth` already holds the account-wide `settings` JSONB — it
+  // is read on the same row as module_settings when the session loads, so the
+  // chrome has it before this page mounts. Selecting it again here cost a full
+  // Mumbai round trip on every visit to the Customers list to learn something
+  // already in memory, and it was the last blocking hop on this screen.
   useEffect(() => {
-    if (!accountId) return;
-    let alive = true;
-    void (async () => {
-      const { data: acct } = await supabase.from('accounts').select('settings').eq('id', accountId).single();
-      if (!alive) return;
-      const os = acct?.settings?.order_settings;
-      setHierarchy({ enabled: !!os?.hierarchy_enabled, levels: Array.isArray(os?.levels) ? os.levels : [] });
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [supabase, accountId]);
+    const os = (account?.settings as { order_settings?: { hierarchy_enabled?: boolean; levels?: unknown } } | null)
+      ?.order_settings;
+    setHierarchy({
+      enabled: !!os?.hierarchy_enabled,
+      levels: Array.isArray(os?.levels)
+        ? (os.levels as { position: number; name: string; color?: string }[])
+        : [],
+    });
+  }, [account]);
 
   /**
    * One page of customers, searched and filtered by the database.

@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MapPin, Upload, Users } from "lucide-react";
+import { MapPin, Upload, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageLayout, PageHeader, PageLoader, TableSkeleton } from "@/components/shared";
@@ -107,7 +107,8 @@ export default function CustomerMappingPage() {
 
   const [areaQuery, setAreaQuery] = useState("");
   const [custQuery, setCustQuery] = useState("");
-  const [custFilter, setCustFilter] = useState<"all" | "no_level" | "no_parent">("all");
+  const [custFilter, setCustFilter] =
+    useState<"all" | "no_level" | "no_parent" | "needs_choice">("all");
   const [bulkParent, setBulkParent] = useState<string>("");
   const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -127,8 +128,20 @@ export default function CustomerMappingPage() {
     return Array.isArray(raw) ? raw.filter((l) => (l.name ?? "").trim()) : [];
   }, [settings]);
 
-  /** Levels that can hold a channel position: everyone except the bottom, who supplies nobody. */
-  const holderLevels = useMemo(() => levels.slice(0, Math.max(0, levels.length - 1)), [levels]);
+  /**
+   * Every level gets a column, the bottom one included.
+   *
+   * It used to be `levels.slice(0, -1)` — the bottom level supplies nobody, so
+   * listing it had no effect on mapping. Correct, and still confusing: the
+   * founder set up Super Stockist / Stockist / Distributor / Dealer, opened
+   * this tab, saw no Dealer column and reported "you did not provide dealers
+   * mapping by area". A missing column reads as a missing feature.
+   *
+   * So the bottom level is shown. Naming a Dealer here changes no supplier
+   * today, and it is the row that would start mattering the moment a tenant
+   * adds a Retailer level beneath them.
+   */
+  const holderLevels = levels;
 
   const territoryById = useMemo(
     () => new Map(territories.map((t) => [t.id, t])),
@@ -137,10 +150,25 @@ export default function CustomerMappingPage() {
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
   const channelKey = (territoryId: string, level: number) => `${territoryId}:${level}`;
-  const channelMap = useMemo(
-    () => new Map(channel.map((r) => [channelKey(r.territory_id, r.hierarchy_level), r.parent_contact_id])),
-    [channel],
-  );
+
+  /**
+   * (area, level) -> every customer who holds that level there.
+   *
+   * An array, not a single id. Until 2026-11-05 the table's primary key was
+   * (territory_id, hierarchy_level), so one area could hold exactly one
+   * Distributor — which, as the founder put it, is not how any company works.
+   * Migration 20261105120000 widened the key; this is the UI catching up.
+   */
+  const channelMap = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const r of channel) {
+      const k = channelKey(r.territory_id, r.hierarchy_level);
+      const list = m.get(k);
+      if (list) list.push(r.parent_contact_id);
+      else m.set(k, [r.parent_contact_id]);
+    }
+    return m;
+  }, [channel]);
 
   /** How many customers sit in each territory, so the area list can lead with the ones that matter. */
   const customersPerTerritory = useMemo(() => {
@@ -231,34 +259,55 @@ export default function CustomerMappingPage() {
     [customers],
   );
 
-  async function setChannelHolder(territoryId: string, level: number, contactId: string | null) {
-    if (!accountId) return;
+  /**
+   * Add one holder to an area's level. Several may hold the same level.
+   *
+   * The upsert conflict target is the new three-column primary key, so adding
+   * somebody who is already listed is a no-op rather than an error — which is
+   * what a double-click should do.
+   *
+   * Every write re-reads the whole screen instead of patching state: the
+   * database re-parents every customer under this area by trigger, and going
+   * from one holder to two moves them all from "mapped" to "needs a choice".
+   * Patching in place would leave those rows showing a supplier the database
+   * had already taken away.
+   */
+  async function addChannelHolder(territoryId: string, level: number, contactId: string) {
+    if (!accountId || !contactId) return;
     setSaving(true);
     try {
-      if (contactId) {
-        const { error } = await supabase.from("customer_channel_parents").upsert(
-          {
-            account_id: accountId,
-            territory_id: territoryId,
-            hierarchy_level: level,
-            parent_contact_id: contactId,
-          },
-          { onConflict: "territory_id,hierarchy_level" },
-        );
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("customer_channel_parents")
-          .delete()
-          .eq("territory_id", territoryId)
-          .eq("hierarchy_level", level);
-        if (error) throw error;
-      }
-      // The database re-parents every customer under this area by trigger, so
-      // the whole screen is re-read rather than patched in place — anything
-      // else would show stale suppliers for rows that really did change.
+      const { error } = await supabase.from("customer_channel_parents").upsert(
+        {
+          account_id: accountId,
+          territory_id: territoryId,
+          hierarchy_level: level,
+          parent_contact_id: contactId,
+        },
+        { onConflict: "territory_id,hierarchy_level,parent_contact_id" },
+      );
+      if (error) throw error;
       refreshAll();
-      toast.success(contactId ? "Supplier set for this area." : "Supplier cleared for this area.");
+      toast.success("Added to this area.");
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not save that."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Remove one holder from an area's level, leaving any others in place. */
+  async function removeChannelHolder(territoryId: string, level: number, contactId: string) {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("customer_channel_parents")
+        .delete()
+        .eq("territory_id", territoryId)
+        .eq("hierarchy_level", level)
+        .eq("parent_contact_id", contactId);
+      if (error) throw error;
+      refreshAll();
+      toast.success("Removed from this area.");
     } catch (err) {
       toast.error(errorMessage(err, "Could not save that."));
     } finally {
@@ -374,14 +423,59 @@ export default function CustomerMappingPage() {
     [customers],
   );
 
+  /**
+   * Who could supply this customer — the holders of the level above them, in
+   * the NEAREST area up the tree that has any.
+   *
+   * This mirrors channel_parent_candidates() in 20261105120000 exactly: walk
+   * up, stop at the first area that holds the level at all, and never climb
+   * past it. If that walk is allowed to continue when an area is ambiguous,
+   * the screen would offer a city-level supplier the database will never
+   * assign, and the admin's pick would look arbitrary.
+   *
+   * Duplicated in TypeScript rather than fetched per row because the Mapping
+   * screen renders every customer at once: asking the server for each would
+   * be one round trip per row.
+   */
+  const candidatesFor = useCallback(
+    (c: CustomerRow): string[] => {
+      if (c.hierarchy_level == null || c.hierarchy_level <= 1 || !c.territory_id) return [];
+      let cur: string | null = c.territory_id;
+      // MAX_DEPTH 8, matching the SQL and lib/territories/coverage.ts.
+      for (let depth = 0; cur && depth < 8; depth += 1) {
+        const held = channelMap.get(channelKey(cur, c.hierarchy_level - 1));
+        if (held && held.length > 0) return held;
+        cur = territoryById.get(cur)?.parent_id ?? null;
+      }
+      return [];
+    },
+    [channelMap, territoryById],
+  );
+
+  /**
+   * Unmapped only because their area holds several possible suppliers. These
+   * are the rows a human has to answer; everything else in needsParent is a
+   * setup gap (nobody holds the level anywhere, or the customer has no area).
+   */
+  const needsChoice = useMemo(
+    () => needsParent.filter((c) => candidatesFor(c).length > 1),
+    [needsParent, candidatesFor],
+  );
+
   const custRows = useMemo(() => {
     const q = custQuery.trim().toLowerCase();
     const base =
-      custFilter === "no_level" ? needsLevel : custFilter === "no_parent" ? needsParent : customers;
+      custFilter === "no_level"
+        ? needsLevel
+        : custFilter === "no_parent"
+          ? needsParent
+          : custFilter === "needs_choice"
+            ? needsChoice
+            : customers;
     return base
       .filter((c) => (q ? labelOf(c).toLowerCase().includes(q) : true))
       .sort((a, b) => (a.hierarchy_level ?? 99) - (b.hierarchy_level ?? 99) || labelOf(a).localeCompare(labelOf(b)));
-  }, [customers, custQuery, custFilter, needsLevel, needsParent]);
+  }, [customers, custQuery, custFilter, needsLevel, needsParent, needsChoice]);
 
   /**
    * Suppliers offered for a bulk change.
@@ -503,10 +597,16 @@ export default function CustomerMappingPage() {
             <TabsContent value="areas" className="space-y-3">
               <div className="rounded-lg border border-border bg-muted/40 p-3">
                 <p className="text-caption text-muted-foreground">
-                  Set who holds each level in an area. Every customer in that area takes the level
-                  directly above their own, automatically. Set it once on a <strong>City</strong>{" "}
-                  and the areas under it inherit; set it on one area to override just that area.
-                  The bottom level is not listed — they supply nobody.
+                  Say who holds each level in an area. An area can have as many as it really
+                  has — three Distributors is normal. Set it once on a <strong>City</strong> and
+                  the areas under it inherit; set it on one area to override just that area.
+                </p>
+                <p className="mt-2 text-caption text-muted-foreground">
+                  When a level has <strong>one</strong> holder, every customer below them in that
+                  area is supplied by them automatically. When it has{" "}
+                  <strong>more than one</strong>, there is no single right answer, so those
+                  customers wait for you on the <strong>Customers</strong> tab instead of being
+                  guessed — look for <em>Needs a choice</em>.
                 </p>
               </div>
 
@@ -555,28 +655,72 @@ export default function CustomerMappingPage() {
                           {customersPerTerritory.get(t.id) ?? 0}
                         </td>
                         {holderLevels.map((l) => {
-                          const current = channelMap.get(channelKey(t.id, l.position)) ?? "";
-                          const options = holdersAt(l.position);
+                          const held = channelMap.get(channelKey(t.id, l.position)) ?? [];
+                          const heldSet = new Set(held);
+                          // Only offer people not already listed here, so the
+                          // dropdown shrinks as the area fills up and cannot
+                          // be used to add the same company twice.
+                          const options = holdersAt(l.position).filter((o) => !heldSet.has(o.id));
                           return (
-                            <td key={l.position} className="px-3 py-2">
+                            <td key={l.position} className="px-3 py-2 align-top">
+                              {held.length > 0 && (
+                                <div className="mb-1.5 flex flex-wrap gap-1">
+                                  {held.map((id) => (
+                                    <span
+                                      key={id}
+                                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-caption"
+                                    >
+                                      {labelOf(customerById.get(id))}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-xs"
+                                        disabled={saving}
+                                        onClick={() =>
+                                          void removeChannelHolder(t.id, l.position, id)
+                                        }
+                                        aria-label={`Remove ${labelOf(customerById.get(id))} from ${t.name}`}
+                                        className="-mr-1 size-4 md:size-4 text-muted-foreground hover:text-destructive"
+                                      >
+                                        <X className="size-3" />
+                                      </Button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* An uncontrolled picker reset to "" after every
+                                  pick: it is an ADD action, not a value, so
+                                  leaving the last choice showing would read as
+                                  "this is the holder" when it is one of many. */}
                               <select
-                                value={current}
-                                disabled={saving}
-                                onChange={(e) =>
-                                  void setChannelHolder(t.id, l.position, e.target.value || null)
-                                }
-                                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-body"
+                                value=""
+                                disabled={saving || options.length === 0}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  e.currentTarget.value = "";
+                                  if (v) void addChannelHolder(t.id, l.position, v);
+                                }}
+                                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-body disabled:opacity-60"
                               >
-                                <option value="">Not set</option>
+                                <option value="">
+                                  {held.length === 0 ? "Not set — add…" : "Add another…"}
+                                </option>
                                 {options.map((o) => (
                                   <option key={o.id} value={o.id}>
                                     {labelOf(o)}
                                   </option>
                                 ))}
                               </select>
-                              {options.length === 0 && (
+
+                              {holdersAt(l.position).length === 0 && (
                                 <span className="mt-0.5 block text-caption text-muted-foreground">
                                   No customer is a {l.name} yet
+                                </span>
+                              )}
+                              {held.length > 1 && (
+                                <span className="mt-0.5 block text-caption text-amber-600 dark:text-amber-500">
+                                  {held.length} here — customers below pick one by hand
                                 </span>
                               )}
                             </td>
@@ -615,6 +759,12 @@ export default function CustomerMappingPage() {
                   ["all", `All ${customers.length}`],
                   ["no_level", `Needs a level ${needsLevel.length}`],
                   ["no_parent", `Needs a supplier ${needsParent.length}`],
+                  // Only offered when there is something behind it — an
+                  // always-visible "0" chip is a question that is not being
+                  // asked, and it crowds out the two that are.
+                  ...(needsChoice.length > 0
+                    ? ([["needs_choice", `Needs a choice ${needsChoice.length}`]] as const)
+                    : []),
                 ] as const).map(([key, label]) => (
                   <Button
                     key={key}
@@ -729,6 +879,11 @@ export default function CustomerMappingPage() {
                   {custRows.map((c) => {
                     const parent = c.parent_id ? customerById.get(c.parent_id) : undefined;
                     const isTop = c.hierarchy_level === 1;
+                    // The holders of the level above, in the nearest area up
+                    // this customer's tree — exactly what the database would
+                    // have picked from. Empty in manual mode, where no area
+                    // chain exists to consult.
+                    const rowCandidates = mode === "area" ? candidatesFor(c) : [];
                     return (
                       <tr key={c.id} className="border-t border-border/60">
                         <td className="px-3 py-2">
@@ -798,19 +953,51 @@ export default function CustomerMappingPage() {
                                 <option value="">
                                   {c.hierarchy_level == null ? "Set a level first" : "Not set"}
                                 </option>
-                                {levels
-                                  .filter(
-                                    (l) =>
-                                      c.hierarchy_level != null && l.position < c.hierarchy_level,
-                                  )
-                                  .flatMap((l) => holdersAt(l.position))
-                                  .filter((o) => o.id !== c.id)
-                                  .map((o) => (
-                                    <option key={o.id} value={o.id}>
-                                      {labelOf(o)}
-                                    </option>
-                                  ))}
+                                {/* The holders of the level above, in this
+                                    customer's own area, listed first and
+                                    separately. These are the only answers
+                                    area mapping would ever have given — the
+                                    rest of the list is still there because an
+                                    admin may genuinely need to reach outside
+                                    the area, but it should not be the thing
+                                    they scroll through to find the obvious
+                                    two. */}
+                                {rowCandidates.length > 0 && (
+                                  <optgroup label="In this area">
+                                    {rowCandidates
+                                      .filter((id) => id !== c.id)
+                                      .map((id) => (
+                                        <option key={id} value={id}>
+                                          {labelOf(customerById.get(id))}
+                                        </option>
+                                      ))}
+                                  </optgroup>
+                                )}
+                                <optgroup
+                                  label={rowCandidates.length > 0 ? "Anyone else above them" : "Suppliers"}
+                                >
+                                  {levels
+                                    .filter(
+                                      (l) =>
+                                        c.hierarchy_level != null && l.position < c.hierarchy_level,
+                                    )
+                                    .flatMap((l) => holdersAt(l.position))
+                                    .filter((o) => o.id !== c.id && !rowCandidates.includes(o.id))
+                                    .map((o) => (
+                                      <option key={o.id} value={o.id}>
+                                        {labelOf(o)}
+                                      </option>
+                                    ))}
+                                </optgroup>
                               </select>
+                              {/* Says WHY this row is empty. "No supplier" on
+                                  its own reads as a bug; "two possible, pick
+                                  one" reads as a question. */}
+                              {mode === "area" && !c.parent_id && rowCandidates.length > 1 && (
+                                <span className="block text-caption text-amber-600 dark:text-amber-500">
+                                  {rowCandidates.length} possible in this area — choose one
+                                </span>
+                              )}
                               {mode === "area" && c.parent_locked && (
                                 <span className="flex items-center gap-1.5 text-caption text-muted-foreground">
                                   Set by hand

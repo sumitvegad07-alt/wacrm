@@ -107,6 +107,14 @@ export type SecondarySalesSetup = {
   no_parent: number;
   no_area: number;
   locked: number;
+  /**
+   * Unmapped ONLY because their area holds several possible suppliers — a
+   * deliberate subset of no_parent, so a screen can say "9 unmapped, 4 of them
+   * waiting on you to choose". Added 2026-11-05 with many-holders-per-area;
+   * reads 0 against a database where 20261105120000 has not been applied,
+   * which is the right answer there rather than an error.
+   */
+  needs_choice: number;
 };
 
 export function readSetupStatus(raw: unknown): SecondarySalesSetup {
@@ -118,6 +126,7 @@ export function readSetupStatus(raw: unknown): SecondarySalesSetup {
     no_parent: num(o.no_parent),
     no_area: num(o.no_area),
     locked: num(o.locked),
+    needs_choice: num(o.needs_choice),
   };
 }
 

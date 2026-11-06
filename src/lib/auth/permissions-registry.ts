@@ -228,25 +228,45 @@ export const PERMISSIONS = {
   },
 
   // Mobile field RULES — enforced INSIDE the mobile app (web stores + renders).
+  //
+  // Two spellings live here and they mean opposite things, which is worth
+  // saying out loud because the group's own help text got it wrong until
+  // 2026-11-05:
+  //   'X_without_Y'  — granted = the rep MAY skip the check.
+  //   'X_required'   — granted = the step is COMPULSORY.
+  // The *_required keys are backfilled true on every existing role and
+  // pre-ticked for new ones (migration 20261105130000), so they are on by
+  // default and an admin unticks to relax them.
   FIELD_RULES: {
     ORDER_WITHOUT_CHECKIN: 'order_without_checkin',
     PAYMENT_WITHOUT_CHECKIN: 'payment_without_checkin',
     VISIT_WITHOUT_PUNCHIN: 'visit_without_punchin',
     PUNCH_SELFIE_REQUIRED: 'punch_selfie_required',
+    /** Photo before a visit can be checked out. Founder request 2026-11-05. */
+    CHECKOUT_SELFIE_REQUIRED: 'visit_checkout_selfie_required',
+    /** Visit outcome before a visit can be checked out. Founder request 2026-11-05. */
+    VISIT_FEEDBACK_REQUIRED: 'visit_feedback_required',
     ODOMETER_PHOTO_REQUIRED: 'odometer_photo_required',
   },
 
-  // Routes / Beat
+  // Routes / Beat.
+  //
+  // ROUTE_PERMISSIONS in lib/route/permissions.ts is the real definition — it
+  // is what the Roles editor renders and what every call site imports. This
+  // block is a duplicate that nothing reads (verified 2026-11-05: no
+  // `PERMISSIONS.ROUTES.` anywhere in src). It is kept only so the registry
+  // stays a complete catalogue of key strings, and is trimmed to the nine
+  // surviving rights so it cannot drift back into a second source of truth.
   ROUTES: {
     VIEW: 'view_routes',
-    CREATE: 'create_routes',
+    CREATE: 'add_routes',
     EDIT: 'edit_routes',
     DELETE: 'delete_routes',
-    ASSIGN: 'assign_routes',
-    EXECUTE: 'execute_route',
     APPROVE: 'approve_routes',
-    MANAGE_CUSTOMERS: 'manage_route_customers',
-    MANAGE_SCHEDULE: 'manage_route_schedule',
+    EXECUTE: 'execute_route',
+    MODIFY_SEQUENCE: 'modify_route_sequence',
+    RESTRICT_OFF_ROUTE: 'restrict_off_route_visits',
+    OPTIMIZE: 'optimize_routes',
   },
 
   // WhatsApp Features

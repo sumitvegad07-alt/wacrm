@@ -6,6 +6,13 @@ CREATE TABLE qa_results (
   id serial primary key, scenario text, pass boolean, detail text
 );
 
+-- Several files SET ROLE authenticated to exercise RLS as a real user, and
+-- then call qa() to record the result. Without these grants the scenario
+-- itself fails with "permission denied for table qa_results" and is simply
+-- never counted — which reads as a shorter suite rather than as an error.
+GRANT SELECT, INSERT ON qa_results TO authenticated, anon;
+GRANT USAGE, SELECT ON SEQUENCE qa_results_id_seq TO authenticated, anon;
+
 CREATE OR REPLACE FUNCTION qa(p_scenario text, p_pass boolean, p_detail text DEFAULT '')
 RETURNS void LANGUAGE sql AS $$
   INSERT INTO qa_results(scenario, pass, detail) VALUES (p_scenario, p_pass, p_detail);

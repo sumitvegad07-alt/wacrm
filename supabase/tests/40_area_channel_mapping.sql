@@ -211,9 +211,20 @@ SELECT qa_refused('E23 a supplier belonging to another tenant is refused', forma
   INSERT INTO customer_channel_parents(account_id, territory_id, hierarchy_level, parent_contact_id)
   VALUES (%L, '70000000-0000-0000-0000-000000000002', 3, 'c1000000-0000-0000-0000-0000000000b3')$$, :ACCT));
 
-SELECT qa_refused('E24 two suppliers for the same level in the same area is refused', format($$
+-- E24 used to assert "two suppliers for the same level in the same area is
+-- refused", which was true of the PRIMARY KEY (territory_id, hierarchy_level)
+-- that 20261104130000 shipped with. The founder tested that rule against a real
+-- distribution network and rejected it — "you can not have only 1 distributor
+-- in one area" — so 20261105120000 widened the key and the rule is gone.
+--
+-- What survives is the narrower rule: the SAME supplier cannot be listed twice
+-- in the same area at the same level. SG Highway already holds C2 at level 3
+-- (E10), so re-inserting that exact row must still be refused. Asserting it
+-- here rather than with a fresh row keeps this file's end state unchanged for
+-- 50_rights_and_many_holders.sql.
+SELECT qa_refused('E24 the SAME supplier twice in one area is refused', format($$
   INSERT INTO customer_channel_parents(account_id, territory_id, hierarchy_level, parent_contact_id)
-  VALUES (%L, '71000000-0000-0000-0000-000000000005', 3, 'c1000000-0000-0000-0000-00000000000c')$$, :ACCT));
+  VALUES (%L, '71000000-0000-0000-0000-000000000005', 3, 'c1000000-0000-0000-0000-00000000000f')$$, :ACCT));
 
 -- ── An order remembers the supplier it was sold through ──────
 INSERT INTO orders(account_id, user_id, order_number, contact_id, status, date)

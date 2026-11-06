@@ -17,7 +17,10 @@ export type PermGroup = {
   // always-shown group but belongs to a single product line (e.g. the
   // "Lead & Deal Reports" right inside the shared Reports group). It's hidden
   // when the account's plan doesn't own that line.
-  permissions: { id: string; label: string; line?: PermLine }[];
+  // `hint` is one line of plain English under the label, for rights whose
+  // scope is wider than the label can say — e.g. "Edit routes" also covering
+  // the customers on the route. Optional; most rights do not need one.
+  permissions: { id: string; label: string; line?: PermLine; hint?: string }[];
   danger?: boolean;
   note?: string;
 };
@@ -203,8 +206,15 @@ export const PERMISSION_GROUPS: PermGroup[] = [
   {
     category: "Route Management",
     // Sourced from the Route SDK's permission definitions so keys/labels stay in one place.
+    //
+    // Nine rights, flat. This used to render twenty checkboxes under four
+    // sub-headings prefixed into the label ("Route customers · Reorder
+    // customers"), which read like four separate modules and was the founder's
+    // "too much confusing". The sub-grouping is gone; see lib/route/permissions.ts
+    // for which old keys each surviving right now covers.
+    note: "Each right covers the whole job — \"Edit routes\" includes adding, removing and reordering the customers on a route and changing its schedule.",
     permissions: ROUTE_PERMISSION_GROUPS.flatMap((g) =>
-      g.keys.map((k) => ({ id: k.key as string, label: `${g.group} · ${k.label}` }))
+      g.keys.map((k) => ({ id: k.key as string, label: k.label, hint: k.hint }))
     ),
   },
   {
@@ -265,12 +275,23 @@ export const PERMISSION_GROUPS: PermGroup[] = [
   },
   {
     category: "Mobile Field Rules",
-    note: "Enforced inside the mobile app. Leave a box UNticked to require the check (e.g. require a selfie). These take effect once the mobile app build reads them.",
+    // The old note here said "Leave a box UNticked to require the check (e.g.
+    // require a selfie)", which was true of the three "Allow …" rights and
+    // the exact opposite of the truth for "Require Selfie on Punch In / Out":
+    // mobile reads hasPermission('punch_selfie_required'), so TICKED means
+    // required. An admin following the note would have switched the selfie
+    // off believing they were switching it on. Both styles are now spelled out.
+    note: "Enforced inside the mobile app. Read each label literally: tick an \"Allow …\" box to let the rep skip the check, and tick a \"Require …\" box to make the step compulsory. The two visit check-out rules are ON by default.",
     permissions: [
       { id: PERMISSIONS.FIELD_RULES.ORDER_WITHOUT_CHECKIN, label: "Allow Order without Visit Check-in" },
       { id: PERMISSIONS.FIELD_RULES.PAYMENT_WITHOUT_CHECKIN, label: "Allow Payment without Visit Check-in" },
       { id: PERMISSIONS.FIELD_RULES.VISIT_WITHOUT_PUNCHIN, label: "Allow Visit without Punch-in (Attendance)" },
-      { id: PERMISSIONS.FIELD_RULES.PUNCH_SELFIE_REQUIRED, label: "Require Selfie on Punch In / Out" },
+      { id: PERMISSIONS.FIELD_RULES.PUNCH_SELFIE_REQUIRED, label: "Require Selfie on Punch In / Out",
+        hint: "The attendance selfie. This is its only home — it is not a setting anywhere else." },
+      { id: PERMISSIONS.FIELD_RULES.CHECKOUT_SELFIE_REQUIRED, label: "Require Selfie on Visit Check-out",
+        hint: "The rep must take a photo before they can close a customer visit." },
+      { id: PERMISSIONS.FIELD_RULES.VISIT_FEEDBACK_REQUIRED, label: "Require Feedback on Visit Check-out",
+        hint: "The rep must choose a visit outcome before they can close a customer visit." },
       { id: PERMISSIONS.FIELD_RULES.ODOMETER_PHOTO_REQUIRED, label: "Require Odometer Photo" },
     ]
   },
@@ -453,6 +474,28 @@ export const PERMISSION_GROUPS: PermGroup[] = [
     ]
   }
 ];
+
+/**
+ * Rights a NEW role starts with ticked.
+ *
+ * These are the compulsory-by-default field checks. They are modelled as
+ * "granted = required" keys, so a role created at `{}` would read as "selfie
+ * not required" — the opposite of the intended default. The roles editor
+ * spreads this over a new role, and migration 20261105130000 backfilled the
+ * same keys onto every role that already existed, so the two paths agree.
+ *
+ * Only add a key here if its ABSENCE would be the unsafe reading.
+ *
+ * Deliberately NOT here: punch_selfie_required and odometer_photo_required.
+ * They are the same "granted = required" shape, but they have shipped as
+ * off-unless-ticked for months. Flipping them would quietly start demanding
+ * an odometer photo from every role created after this deploy, on every
+ * tenant — a behaviour change nobody asked for. They stay as they are.
+ */
+export const DEFAULT_ON_PERMISSIONS: Record<string, boolean> = {
+  [PERMISSIONS.FIELD_RULES.CHECKOUT_SELFIE_REQUIRED]: true,
+  [PERMISSIONS.FIELD_RULES.VISIT_FEEDBACK_REQUIRED]: true,
+};
 
 /**
  * Flat index of every right (category + label) for the command palette.

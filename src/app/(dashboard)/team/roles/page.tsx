@@ -20,6 +20,7 @@ import { ConfirmDialog, PageLoader } from "@/components/shared";
 import type { RolePermissions } from "@/lib/auth/rbac";
 import {
   PERMISSION_GROUPS,
+  DEFAULT_ON_PERMISSIONS,
   type PermGroup,
   type PermLine,
 } from "@/lib/auth/permission-groups";
@@ -195,7 +196,13 @@ export default function RolesPage() {
     setDescription("");
     // New roles get web + mobile login access by default (admin unticks to deny),
     // so the Login Access checkboxes read truthfully out of the box.
-    setPermissions({ web_access: true, mobile_access: true });
+    //
+    // The *_required field rules start ticked for the same reason: they are
+    // compulsory-by-default checks, and a new role starting at {} would read
+    // as "selfie not required", which is the opposite of the intended
+    // default. Migration 20261105130000 does the same for roles that already
+    // exist. DEFAULT_ON_PERMISSIONS keeps the two lists from drifting apart.
+    setPermissions({ web_access: true, mobile_access: true, ...DEFAULT_ON_PERMISSIONS });
     setIsEditing(true);
   };
 
@@ -626,16 +633,26 @@ export default function RolesPage() {
                                     type="button"
                                     disabled={!canToggle}
                                     onClick={() => togglePermission(perm.id, !isChecked)}
-                                    className={`flex items-center gap-2.5 text-left ${canToggle ? "cursor-pointer" : "cursor-default"}`}
+                                    className={`flex items-start gap-2.5 text-left ${canToggle ? "cursor-pointer" : "cursor-default"}`}
                                   >
                                     <span
-                                      className={`flex w-5 h-5 shrink-0 items-center justify-center rounded border ${
+                                      className={`mt-0.5 flex w-5 h-5 shrink-0 items-center justify-center rounded border ${
                                         isChecked ? "bg-primary border-primary text-primary-foreground" : "border-input bg-background"
                                       } ${!canToggle ? "opacity-60" : ""}`}
                                     >
                                       {isChecked && <Check className="w-3.5 h-3.5" />}
                                     </span>
-                                    <span className="text-sm text-foreground leading-tight">{perm.label}</span>
+                                    <span className="min-w-0">
+                                      <span className="block text-sm text-foreground leading-tight">{perm.label}</span>
+                                      {/* One line of plain English for rights whose reach is
+                                          wider than the label — "Edit routes" also covering the
+                                          customers on the route, for instance. */}
+                                      {perm.hint && (
+                                        <span className="mt-0.5 block text-xs text-muted-foreground leading-snug">
+                                          {perm.hint}
+                                        </span>
+                                      )}
+                                    </span>
                                   </button>
                                 );
                               })}

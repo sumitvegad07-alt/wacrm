@@ -1,8 +1,8 @@
 # Database tests for the November 2026 modules
 
-86 scenarios covering Buying Status (incl. Blacklist), Customer mapping,
-Automatic codes, the territory "area is not mandatory" fix and Secondary Sales
-area mapping. They exercise the triggers, CHECK constraints and RPCs directly —
+Scenarios covering Buying Status (incl. Blacklist), Customer mapping,
+Automatic codes, the territory "area is not mandatory" fix, Secondary Sales
+area mapping, many-holders-per-area, and the simplified route rights. They exercise the triggers, CHECK constraints and RPCs directly —
 the layer that had no automated test of any kind before, and where the rules
 these modules promise actually live.
 
@@ -11,6 +11,33 @@ applied, not a mock. `tools/pgsql` in this workspace is a complete PostgreSQL
 17.6, which is what they were written against.
 
 ## Running them
+
+One command, added 2026-11-05:
+
+```
+PGDATA_DIR=/tmp/ozzo-pgtest bash scripts/run-db-tests.sh
+```
+
+It rebuilds a throwaway cluster, applies `supabase/tests/00_bootstrap.sql`
+(the Supabase primitives a bare PostgreSQL has not got), applies every
+migration in byte order, runs the scenario files in order and exits non-zero
+if anything failed. It takes about six minutes, so run it in the background.
+
+**Expect ~46 migration errors.** They are `storage.objects` /
+`storage.buckets`, `publication "supabase_realtime"`, the `vector` extension
+and the deliberate `import_commit` guard — none of which a bare PostgreSQL
+has. Watch for a *jump* in that count, not the count itself. Scenario
+failures are what matter.
+
+**The runner also fails the run if a scenario file is TRUNCATED.** A file that
+sets `ON_ERROR_STOP` and hits an unexpected error aborts, and everything below
+that line never runs — so the suite reports "all scenarios passed", truthfully,
+about a third fewer scenarios. That is exactly what a duplicate-key error in
+file 50 did on 2026-11-05, silently skipping all fifteen route-rights
+assertions while the run came back green. Each file's `qa()` calls are now
+counted and compared against the rows it actually recorded.
+
+<details><summary>Doing it by hand instead</summary>
 
 ```
 initdb -D "$PGDATA" -U postgres -A trust -E UTF8 --no-locale
@@ -28,12 +55,23 @@ psql -p 54399 -U postgres -f supabase/tests/10_buying_status.sql
 psql -p 54399 -U postgres -f supabase/tests/20_mapping_codes_territory.sql
 psql -p 54399 -U postgres -f supabase/tests/30_territory_coverage_rls.sql
 psql -p 54399 -U postgres -f supabase/tests/40_area_channel_mapping.sql
+psql -p 54399 -U postgres -f supabase/tests/50_rights_and_many_holders.sql
 select * from qa_results where pass is not true;   -- must be empty
 ```
 
+</details>
+
 Run them in order. `40_area_channel_mapping.sql` switches tenant A to
 `hierarchy_enabled` + mapping mode `area` and hangs its city off the India →
-Gujarat tree that file 30 builds, so it has to come last.
+Gujarat tree that file 30 builds, so it has to come after 30.
+
+**A new scenario file should establish its own starting state, explicitly, and
+not reason about where the previous file left off.** File 40 ends by switching
+the account to `'manual'` mapping mode and hand-setting a supplier for its
+E35–E37 scenarios. File 50 was written assuming `'area'`, and three scenarios
+failed with a symptom — "the dealer's supplier is the Stockist" — that pointed
+straight at the resolver rather than at the mode. Set the mode, the levels and
+the rows you depend on at the top of the file.
 
 Two traps in the fixture itself, both fixed on 2026-11-04 after file 40 tripped
 them, and both of which report as *unrelated* duplicate-key failures in a later
