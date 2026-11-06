@@ -184,6 +184,19 @@ distributor's godown rather than sold.
 
 ## 2. OZZO DMS — distributors place their own orders
 
+> ## SUPERSEDED, 2026-11-07 — do not build from this section
+>
+> The DMS is no longer a module inside the CRM. It is a **separate product** with its own
+> app and repo at `dms.ozzo.co.in`, sold as an add-on line at ₹10,000 per 100 logins.
+> Build from `ozzo-dms-product-v1.md`.
+>
+> Everything in this section is now decided the other way: any customer at any level may
+> have a login (not distributors only); they may order for anyone below them (not only
+> themselves); visibility is a recursive sub-tree read through portal-only functions with
+> **no table grants** (not `OR portal_can_see_contact(...)` bolted onto `contacts_select`);
+> portal users get **no `profiles` row**; and the DMS line is granted by the **superadmin
+> only**, never by a tenant toggle.
+
 ### 2.1 What it is
 
 > *"Our DMS will also have Sales order and purchase order, which means a distributor can

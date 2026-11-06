@@ -6,6 +6,10 @@
 > for now, we will make it a completely new product called DMS in future with some more
 > features as well."*
 >
+> **2026-11-07: that product is now SPEC'd — see `ozzo-dms-product-v1.md`.** This
+> document stays parked. Its §2.2 identity model (portal users in `profiles`) is REJECTED
+> there; its §2.3 mapping groundwork, §5 competitor gaps and §2.6 delivery model are reused.
+>
 > So **DMS is not a module inside OZZO.** It becomes its own product, with a wider
 > feature set than anything below, and it gets its own plan when that is started.
 > Nothing in this document is scheduled and nothing should be built from it.
