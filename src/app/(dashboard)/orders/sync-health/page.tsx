@@ -73,7 +73,7 @@ export default function OrderSyncHealthPage() {
     const [{ data: orderData }, { data: profiles }, { data: driftData }] = await Promise.all([
       supabase
         .from('orders')
-        .select('id, order_number, date, total_amount, expected_total, pricing_variance, user_id, contacts(company, name), leads(name)')
+        .select('id, order_number, date, total_amount, expected_total, pricing_variance, user_id, contacts!orders_contact_id_fkey(company, name), leads(name)')
         .eq('account_id', accountId)
         .eq('pricing_status', 'review')
         .order('created_at', { ascending: false }),

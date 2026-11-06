@@ -45,7 +45,7 @@ export default function OrderPrintView() {
     async function loadData() {
       const { data: order } = await supabase
         .from('orders')
-        .select('*, contacts(*), leads(*)')
+        .select('*, contacts!orders_contact_id_fkey(*), leads(*)')
         // maybeSingle, not single: a missing or unreadable order is a "not found" page, not
         // a 406 in the console on the way to the same screen.
         .eq('id', id)

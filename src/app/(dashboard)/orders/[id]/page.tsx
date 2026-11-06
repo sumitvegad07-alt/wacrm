@@ -125,7 +125,7 @@ export default function OrderDetailPage() {
     setLoading(true);
     const { data: o, error } = await supabase
       .from('orders')
-      .select('*, contacts(*), leads(name)')
+      .select('*, contacts!orders_contact_id_fkey(*), leads(name)')
       .eq('id', id)
       .maybeSingle();
     if (error || !o) { toast.error('Order not found'); router.push('/orders'); return; }

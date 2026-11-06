@@ -51,7 +51,7 @@ export default function DispatchDetailPage() {
     setLoading(true);
     const { data: d, error } = await supabase
       .from('order_dispatches')
-      .select('*, order:orders(*, contacts(*), leads(name)), dispatch_items(*, order_item:order_items(price, tax_rate, unit))')
+      .select('*, order:orders(*, contacts!orders_contact_id_fkey(*), leads(name)), dispatch_items(*, order_item:order_items(price, tax_rate, unit))')
       .eq('id', id)
       .maybeSingle();
     if (error || !d) { toast.error('Dispatch not found'); router.push('/dispatches'); return; }

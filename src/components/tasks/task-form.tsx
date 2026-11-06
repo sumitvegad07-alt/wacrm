@@ -304,7 +304,7 @@ export function TaskForm({
         supabase.from("quotations").select("*, contact:contacts(name)").order("quotation_number", { ascending: false }),
         supabase.from("leads").select("*").order("name"),
         supabase.from("expenses").select("*, expense_type:expense_types(expense_name)").order("created_at", { ascending: false }),
-        supabase.from("orders").select("id, order_number, contact:contacts(company, name)").order("created_at", { ascending: false }),
+        supabase.from("orders").select("id, order_number, contact:contacts!orders_contact_id_fkey(company, name)").order("created_at", { ascending: false }),
         supabase.from("order_dispatches").select("id, dispatch_number, order:orders(order_number)").order("created_at", { ascending: false }),
         supabase.from("payments").select("id, payment_number, amount, contact:contacts(name)").order("created_at", { ascending: false }),
         supabase.from("leaves").select("id, leave_number, employee:profiles!leaves_employee_id_fkey(full_name)").order("created_at", { ascending: false }),

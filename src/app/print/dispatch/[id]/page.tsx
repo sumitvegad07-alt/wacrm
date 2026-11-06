@@ -45,7 +45,7 @@ export default function DispatchPrintView() {
       const { data: dispatch } = await supabase
         .from('order_dispatches')
         .select(
-          '*, order:orders(*, contacts(*), leads(*)), dispatch_items(*, order_item:order_items(product_id, price, tax_rate, unit, sub_total, total, quantity))'
+          '*, order:orders(*, contacts!orders_contact_id_fkey(*), leads(*)), dispatch_items(*, order_item:order_items(product_id, price, tax_rate, unit, sub_total, total, quantity))'
         )
         .eq('id', id)
         .maybeSingle();
