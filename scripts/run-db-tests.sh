@@ -94,7 +94,8 @@ GRANTS
 say "Running scenarios"
 truncated=0
 for f in 00_fixture 10_buying_status 20_mapping_codes_territory \
-         30_territory_coverage_rls 40_area_channel_mapping 50_rights_and_many_holders; do
+         30_territory_coverage_rls 40_area_channel_mapping 50_rights_and_many_holders \
+         60_dms_foundation; do
   p="$WEB_DIR/supabase/tests/$f.sql"
   [ -f "$p" ] || continue
   before=$("${PSQL[@]}" -tAc "SELECT count(*) FROM qa_results;" 2>/dev/null || echo 0)
