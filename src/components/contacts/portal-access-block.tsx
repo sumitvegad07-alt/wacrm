@@ -17,6 +17,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { useConfirm } from '@/components/shared/confirm-provider';
 import { Switch } from '@/components/ui/switch';
 import { FormGrid } from '@/components/shared/form-grid';
 
@@ -29,6 +31,8 @@ export interface PortalAccessBlockProps {
   /** contacts.portal_access_set_by (a profiles.id) and portal_access_set_at. */
   setBy?: string | null;
   setAt?: string | null;
+  /** For the remove-access confirmation. */
+  customerName?: string | null;
   /**
    * Called after any successful write. Pass the page's FULL reload (e.g.
    * `refreshAll`), never a local setState: a block that refetches itself
@@ -70,9 +74,11 @@ export function PortalAccessBlock({
   portalAccessRevokedAt,
   setBy,
   setAt,
+  customerName,
   onChanged,
 }: PortalAccessBlockProps) {
   const { hasDMS, canManageMembers, account, accountId } = useAuth();
+  const confirm = useConfirm();
 
   // What this block has just done, shown until the parent's reload brings the
   // same truth back through props (the list page's `contact` prop is a
@@ -91,8 +97,6 @@ export function PortalAccessBlock({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
 
   const [seatsUsed, setSeatsUsed] = useState<number | null>(null);
   const [seatsTick, setSeatsTick] = useState(0);
@@ -140,9 +144,13 @@ export function PortalAccessBlock({
       setLocal(next);
       setPassword('');
       setError(null);
-      setNotice(message);
-      setWarning(warn ?? null);
       setSeatsTick((n) => n + 1);
+      // Toasts live outside the page's render tree. onChanged may reload the
+      // page behind a full-page spinner, which unmounts this block and its
+      // local state, so the message must not depend on it. The warning (a
+      // persisted restore whose password did NOT change) stays until closed.
+      if (warn) toast.warning(`${message} ${warn}`, { duration: Infinity, closeButton: true });
+      else toast.success(message);
       onChanged();
     },
     [onChanged],
@@ -151,7 +159,12 @@ export function PortalAccessBlock({
   if (!show) return null;
 
   const seatsLimit = account?.portal_seats_limit ?? 0;
-  const seatsLine = seatsUsed === null ? null : `${seatsUsed} of ${seatsLimit} logins used`;
+  const seatsLine =
+    seatsUsed === null
+      ? null
+      : seatsLimit <= 0
+        ? 'No logins included'
+        : `${seatsUsed} of ${seatsLimit} logins used`;
 
   if (!contactId) {
     return (
@@ -171,8 +184,6 @@ export function PortalAccessBlock({
   function begin() {
     setBusy(true);
     setError(null);
-    setNotice(null);
-    setWarning(null);
   }
 
   async function save() {
@@ -220,7 +231,13 @@ export function PortalAccessBlock({
 
   async function revoke() {
     if (!contactId || busy) return;
-    if (!window.confirm('Remove this customer’s DMS access? The login is kept and the seat is freed. You can restore it later.')) return;
+    const ok = await confirm({
+      title: 'Remove DMS access?',
+      description: `${customerName ? customerName + ' (' + email + ')' : email} will no longer be able to sign in to the distributor portal. The login is kept and the seat is freed. You can restore it later.`,
+      confirmLabel: 'Remove access',
+      variant: 'warning',
+    });
+    if (!ok) return;
     begin();
     try {
       const r = await call('DELETE', contactId);
@@ -325,16 +342,6 @@ export function PortalAccessBlock({
         </p>
       )}
       {seatsLine && <p className="text-caption text-muted-foreground">{seatsLine}</p>}
-      {notice && !error && (
-        <p className="text-caption text-foreground" role="status">
-          {notice}
-        </p>
-      )}
-      {warning && (
-        <p className="text-caption text-amber-600" role="status">
-          {warning}
-        </p>
-      )}
       {error && (
         <p className="text-caption text-destructive" role="alert">
           {error}

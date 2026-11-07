@@ -136,6 +136,13 @@ export interface Contact {
   buying_status_set_at?: string | null;
   /** Date of the earliest order that counts. Only the date part is meaningful. */
   first_order_at?: string | null;
+  /** DMS portal login state (migration 20261107130000). */
+  portal_email?: string | null;
+  portal_access?: boolean | null;
+  portal_user_id?: string | null;
+  portal_access_revoked_at?: string | null;
+  portal_access_set_by?: string | null;
+  portal_access_set_at?: string | null;
   opening_balance?: number | null;
   credit_limit?: number | null;
   credit_days?: number | null;

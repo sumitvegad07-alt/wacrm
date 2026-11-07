@@ -1084,11 +1084,12 @@ export function ContactForm({
 
           <PortalAccessBlock
             contactId={contact?.id}
-            portalEmail={(contact as any)?.portal_email}
-            portalAccess={(contact as any)?.portal_access}
-            portalAccessRevokedAt={(contact as any)?.portal_access_revoked_at}
-            setBy={(contact as any)?.portal_access_set_by}
-            setAt={(contact as any)?.portal_access_set_at}
+            portalEmail={contact?.portal_email}
+            portalAccess={contact?.portal_access}
+            portalAccessRevokedAt={contact?.portal_access_revoked_at}
+            setBy={contact?.portal_access_set_by}
+            setAt={contact?.portal_access_set_at}
+            customerName={contact?.company || contact?.name}
             onChanged={() => { portalChangedRef.current = true; }}
           />
 

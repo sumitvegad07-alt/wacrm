@@ -21,6 +21,7 @@ import {
   type AccountRole,
 } from "@/lib/auth/roles";
 import { type RolePermissions, hasPermission, getDataScope } from "@/lib/auth/rbac";
+import { selectAccountRow } from "@/lib/auth/account-select";
 import { accountLines, clampModuleSettings } from "@/lib/plans/catalog";
 
 interface Profile {
@@ -317,16 +318,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // account name lookup itself can't.
         let accountRow: AccountSummary | null = null;
         if (data.account_id) {
-          const { data: account, error: accountErr } = await supabase
-            .from("accounts")
-            // default_currency added in migration 021; narrowed to the
-            // USD fallback below for older schemas where it reads null.
-            // `module_settings` is selected here too (added in migration 090)
-            // so we don't pay a second round-trip to the same row. Older
-            // schemas without the column would error, so it's tolerated below.
-            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned, subscription_expires_at, module_settings, settings, addon_lines, portal_seats_limit")
-            .eq("id", data.account_id)
-            .maybeSingle();
+          // DMS columns (addon_lines, portal_seats_limit) are tolerated as
+          // missing: selectAccountRow retries once without them on 42703.
+          const { data: account, error: accountErr } = await selectAccountRow((cols) =>
+            supabase.from("accounts").select(cols).eq("id", data.account_id).maybeSingle(),
+          );
           if (accountErr) {
             console.error("[AuthProvider] fetchAccount error:", {
               message: accountErr.message,

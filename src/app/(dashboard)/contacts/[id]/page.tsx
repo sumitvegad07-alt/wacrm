@@ -531,11 +531,12 @@ export default function ContactDetailsPage() {
           {/* Renders nothing unless the account has the DMS add-on. onChanged is the page's FULL reload. */}
           <PortalAccessBlock
             contactId={contact.id}
-            portalEmail={(contact as any).portal_email}
-            portalAccess={(contact as any).portal_access}
-            portalAccessRevokedAt={(contact as any).portal_access_revoked_at}
-            setBy={(contact as any).portal_access_set_by}
-            setAt={(contact as any).portal_access_set_at}
+            portalEmail={contact.portal_email}
+            portalAccess={contact.portal_access}
+            portalAccessRevokedAt={contact.portal_access_revoked_at}
+            setBy={contact.portal_access_set_by}
+            setAt={contact.portal_access_set_at}
+            customerName={contact.company || contact.name}
             onChanged={refreshAll}
           />
 
