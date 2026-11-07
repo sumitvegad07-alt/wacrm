@@ -247,3 +247,100 @@ SELECT qa('K3 its placed_by_portal_contact_id is now NULL',
   (SELECT placed_by_portal_contact_id IS NULL FROM public.orders
     WHERE account_id = :ACCT AND order_number = 'ORD-K1'),
   'marker not cleared');
+
+-- ── J: a tenant admin cannot sell themselves a plan ──────────
+-- accounts_update is row-level only, so before 20261107150000 any tenant admin
+-- could PATCH their own plan, add-ons, seats and expiry. J1-J4 are that hole.
+-- J7 is the safety case: the founder's superadmin panel writes with the service
+-- role, and triggers still fire for it. If J7 fails, the guard has locked the
+-- founder out of his own billing screen: do not weaken the guard to pass it.
+--
+-- qa_refused passes on ANY error, so J-msg also asserts that every refusal
+-- carries the guard's own sentence, not a syntax error or some other failure.
+\set ADMIN '''11110000-0000-0000-0000-000000000001'''
+RESET ROLE;
+SELECT set_config('test.uid', :ADMIN, false);
+UPDATE public.accounts SET subscription_plan = 'CRM', subscription_status = 'active',
+       subscription_expires_at = '2027-01-01', addon_lines = '{}', portal_seats_limit = 5
+ WHERE id = :ACCT;
+
+SET ROLE authenticated;
+
+SELECT qa_refused('J1 a tenant admin cannot grant themselves the dms add-on',
+  'UPDATE public.accounts SET addon_lines = ARRAY[''dms''] WHERE id = ' || quote_literal(:ACCT));
+SELECT qa_refused('J2 a tenant admin cannot raise their own seat allowance',
+  'UPDATE public.accounts SET portal_seats_limit = 9999 WHERE id = ' || quote_literal(:ACCT));
+SELECT qa_refused('J3 a tenant admin cannot change their own plan',
+  'UPDATE public.accounts SET subscription_plan = ''CRM_SFA'' WHERE id = ' || quote_literal(:ACCT));
+SELECT qa_refused('J4 a tenant admin cannot extend their own expiry',
+  'UPDATE public.accounts SET subscription_expires_at = ''2099-01-01'' WHERE id = ' || quote_literal(:ACCT));
+SELECT qa_refused('J4b a tenant admin cannot reactivate their own subscription status',
+  'UPDATE public.accounts SET subscription_status = ''trialing'' WHERE id = ' || quote_literal(:ACCT));
+SELECT qa_refused('J4c a guarded column hidden inside an otherwise innocent update is still refused',
+  'UPDATE public.accounts SET name = ''Sneaky'', portal_seats_limit = 9999 WHERE id = ' || quote_literal(:ACCT));
+
+SELECT qa('J-msg every J1-J4c refusal is the guard (its own sentence), not some other error',
+  (SELECT count(*) FROM qa_results
+    WHERE scenario ~ '^J(1|2|3|4|4b|4c) ' AND pass
+      AND detail LIKE '%are set by OZZO%') = 6,
+  coalesce((SELECT string_agg(scenario || ' => ' || detail, ' | ') FROM qa_results
+             WHERE scenario ~ '^J(1|2|3|4|4b|4c) '), 'none recorded'));
+
+SELECT qa_allowed('J5 a tenant admin can still rename their own account',
+  'UPDATE public.accounts SET name = ''Renamed by its admin'' WHERE id = ' || quote_literal(:ACCT));
+SELECT qa('J5b the rename really landed (a 0-row RLS-filtered update would also read as allowed)',
+  (SELECT name FROM public.accounts WHERE id = :ACCT) = 'Renamed by its admin', 'name unchanged');
+
+SELECT qa_allowed('J6 a tenant admin can still change module_settings',
+  'UPDATE public.accounts SET module_settings = ''{"j6":true}''::jsonb WHERE id = ' || quote_literal(:ACCT));
+SELECT qa('J6b the module_settings change really landed',
+  (SELECT module_settings->>'j6' FROM public.accounts WHERE id = :ACCT) = 'true', 'not written');
+
+SELECT qa_allowed('J6c a full-row write that re-sends the SAME plan values is not blocked',
+  'UPDATE public.accounts SET subscription_plan = subscription_plan, '
+  'subscription_status = subscription_status, addon_lines = addon_lines, '
+  'portal_seats_limit = portal_seats_limit, subscription_expires_at = subscription_expires_at '
+  'WHERE id = ' || quote_literal(:ACCT));
+
+SELECT qa('J-hold the refused attempts changed nothing',
+  (SELECT subscription_plan = 'CRM' AND subscription_status = 'active'
+      AND addon_lines = '{}' AND portal_seats_limit = 5
+      AND subscription_expires_at = '2027-01-01'
+     FROM public.accounts WHERE id = :ACCT),
+  'a commercial column moved');
+
+-- J7: the service role, exactly as the superadmin panel connects.
+RESET ROLE;
+-- service_role needs the same qa_results grants the fixture gives authenticated, or the
+-- scenario is recorded as 'permission denied' and the file aborts.
+GRANT SELECT, INSERT ON qa_results TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE qa_results_id_seq TO service_role;
+SET ROLE service_role;
+SELECT qa_allowed('J7 the service role can still set plan, add-on, seats, status and expiry together',
+  'UPDATE public.accounts SET subscription_plan = ''CRM_SFA'', addon_lines = ARRAY[''dms''], '
+  'portal_seats_limit = 100, subscription_status = ''active'', '
+  'subscription_expires_at = ''2030-01-01'' WHERE id = ' || quote_literal(:ACCT));
+RESET ROLE;
+SELECT qa('J7b the service-role write really landed',
+  (SELECT subscription_plan = 'CRM_SFA' AND addon_lines = ARRAY['dms'] AND portal_seats_limit = 100
+      AND subscription_expires_at = '2030-01-01'
+     FROM public.accounts WHERE id = :ACCT),
+  'service-role write did not land');
+
+-- J8: the table owner (SQL editor, migrations, a cron job running as postgres).
+SELECT qa_allowed('J8 the owner role (SQL editor, migrations, cron) can still change them',
+  'UPDATE public.accounts SET subscription_plan = ''CRM'', addon_lines = ''{}'', portal_seats_limit = 5 WHERE id = '
+  || quote_literal(:ACCT));
+
+-- J9: a platform superadmin with an ordinary user session.
+UPDATE public.profiles SET is_superadmin = true WHERE user_id = :ADMIN;
+SET ROLE authenticated;
+SELECT qa_allowed('J9 a platform superadmin signed in as a user can change the plan',
+  'UPDATE public.accounts SET subscription_plan = ''CRM_SFA'' WHERE id = ' || quote_literal(:ACCT));
+RESET ROLE;
+UPDATE public.profiles SET is_superadmin = false WHERE user_id = :ADMIN;
+SELECT qa('J9b the superadmin write really landed',
+  (SELECT subscription_plan FROM public.accounts WHERE id = :ACCT) = 'CRM_SFA', 'not written');
+-- Leave the account as section G left it.
+UPDATE public.accounts SET subscription_plan = 'CRM_SFA', addon_lines = ARRAY['dms'], portal_seats_limit = 5
+ WHERE id = :ACCT;
