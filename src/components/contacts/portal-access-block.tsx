@@ -11,6 +11,7 @@
  * (seat cap, missing add-on, taken login, order-hierarchy level) for an admin.
  */
 
+import { seatsUsedLine, seatsFullText } from '@/lib/admin/portal-login-text';
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -165,9 +166,7 @@ export function PortalAccessBlock({
   const seatsLine =
     seatsUsed === null
       ? null
-      : seatsLimit <= 0
-        ? 'No logins included'
-        : `${seatsUsed} of ${seatsLimit} logins used`;
+      : seatsUsedLine(seatsUsed, seatsLimit);
 
   if (!contactId) {
     return (
@@ -305,7 +304,7 @@ export function PortalAccessBlock({
 
       {!noSeats && seatsFull && (
         <p className="text-caption text-muted-foreground" data-testid="portal-seats-full">
-          All {seatsLimit} portal logins are in use. Remove access from another customer, or ask OZZO for more.
+          {seatsFullText(seatsLimit)}
         </p>
       )}
 

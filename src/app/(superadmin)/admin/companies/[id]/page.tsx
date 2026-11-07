@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2, ToggleLeft, History } from "lucide-react";
+import { revokeLoginsConfirmText } from "@/lib/admin/portal-login-text";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/admin/billing";
 import {
   ADDON_LABEL,
@@ -76,6 +77,20 @@ export default function CompanyDetailPage() {
     })();
   }, [id]);
 
+  // Single place that copies a server account row into the form, so the first
+  // load and the post-save refresh cannot disagree.
+  const applyAccount = (c: any) => {
+    setModules((c.module_settings as Record<string, boolean>) ?? {});
+    setCompany(c);
+    setStatus(c.subscription_status || "active");
+    setPlan(c.subscription_plan || "Free");
+    setExpiresAt(c.subscription_expires_at ? c.subscription_expires_at.substring(0, 10) : "");
+    setUserCount(c.user_count || "");
+    setNotes(c.notes || "");
+    setDmsEnabled(Array.isArray(c.addon_lines) && c.addon_lines.includes("dms"));
+    setPortalSeats(String(c.portal_seats_limit ?? 0));
+  };
+
   useEffect(() => {
     async function load() {
       // Members come from the server route, not from the browser: the browser
@@ -93,22 +108,7 @@ export default function CompanyDetailPage() {
       ]);
 
       const company = (companyRes as { account?: Record<string, unknown> | null }).account;
-      if (company) {
-        const c = company as any;
-        setModules((c.module_settings as Record<string, boolean>) ?? {});
-        setCompany(c);
-        setStatus(c.subscription_status || "active");
-        setPlan(c.subscription_plan || "Free");
-        setExpiresAt(
-          c.subscription_expires_at
-            ? c.subscription_expires_at.substring(0, 10)
-            : ""
-        );
-        setUserCount(c.user_count || "");
-        setNotes(c.notes || "");
-        setDmsEnabled(Array.isArray(c.addon_lines) && c.addon_lines.includes("dms"));
-        setPortalSeats(String(c.portal_seats_limit ?? 0));
-      }
+      if (company) applyAccount(company as any);
       // The route orders by email; this screen has always listed owner first.
       const memberRows = ((membersRes as { users?: Member[] }).users ?? []).slice();
       memberRows.sort((a, b) => a.account_role.localeCompare(b.account_role));
@@ -166,7 +166,7 @@ export default function CompanyDetailPage() {
       // until the person has been told how many, then we retry with consent.
       if (res.status === 409 && payload.code === "confirm_revoke_logins") {
         const ok = window.confirm(
-          `This account has ${payload.seatsUsed} portal logins in use. Removing the DMS will stop all of them signing in. Nothing is deleted. Continue?`,
+          revokeLoginsConfirmText(Number(payload.seatsUsed)),
         );
         // The 409 can only come from a removal, so the database still has the
         // DMS ON. Put the control back so it never reads the opposite of reality.
@@ -189,6 +189,21 @@ export default function CompanyDetailPage() {
         setSaveMsg("No changes to save.");
       } else {
         setSaveMsg("Saved successfully!");
+      }
+      // Make the screen honest after a save: the server may have changed more
+      // than was typed (removing the DMS zeroes the logins allowance). Reset the
+      // form from what the database now holds. Failed or cancelled saves
+      // returned earlier or restore their own controls above.
+      if (res.ok && !payload.error) {
+        try {
+          const fresh = await fetch(`/api/admin/accounts/${id}`);
+          if (fresh.ok) {
+            const body = await fresh.json();
+            if (body.account) applyAccount(body.account);
+          }
+        } catch {
+          /* keep the form as is; the save itself succeeded */
+        }
       }
       setTimeout(() => setSaveMsg(null), res.ok && !payload.error ? 3000 : 10000);
     } catch (e: any) {

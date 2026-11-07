@@ -76,14 +76,14 @@ describe("DMS gating", () => {
     const { container } = render(
       <PortalAccessBlock contactId="c1" portalEmail="d@x.com" portalAccess={false} portalAccessRevokedAt="2026-11-01" onChanged={() => {}} />,
     );
-    await waitFor(() => expect(container.textContent).toContain("All 1 portal logins are in use"));
+    await waitFor(() => expect(container.textContent).toContain("The only portal login is in use"));
     expect(sw(container)?.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("keeps a customer who already holds a login interactive at a full cap", async () => {
     setup(1, 1);
     const { container } = render(<PortalAccessBlock contactId="c1" portalEmail="d@x.com" portalAccess={true} onChanged={() => {}} />);
-    await waitFor(() => expect(container.textContent).toContain("1 of 1 logins used"));
+    await waitFor(() => expect(container.textContent).toContain("1 of 1 login used"));
     expect(container.textContent).not.toContain("are in use");
     expect(sw(container)?.getAttribute("aria-disabled")).not.toBe("true");
   });
