@@ -599,6 +599,109 @@ git commit -m "Orders remember when they came from the portal"
 
 ---
 
+### Task 4b: Stop a tenant admin granting themselves the add-on
+
+**Added 2026-11-07, during execution.** Not in the original plan. Task 2's review found, and the controller verified, that `accounts_update` (`supabase/migrations/20261017120000_accounts_tenant_scope.sql:40-43`) is `using (is_account_member(id,'admin')) with check (is_account_member(id,'admin'))` — row-level only, with no column guard, no guarding trigger and no `REVOKE` anywhere in 293 migrations. A tenant admin can therefore `PATCH` their own `accounts` row through PostgREST and set `subscription_plan`, `subscription_status`, `subscription_expires_at`, `addon_lines` and `portal_seats_limit` to anything they like.
+
+This is a **live production hole that predates the DMS** — a CRM tenant can grant themselves CRM+SFA and extend their own expiry date today. It belongs in this plan because Plan 1 claims "only the superadmin can grant DMS", and without this that claim is false at the database.
+
+**Files:**
+- Create: `supabase/migrations/20261107150000_accounts_commercial_columns_guard.sql`
+- Modify: `supabase/tests/60_dms_foundation.sql` (append section J)
+- Modify: `docs/RUN-THIS-SQL-dms-foundation.md`
+
+**Interfaces:**
+- Consumes: `accounts.addon_lines`, `accounts.portal_seats_limit` (Task 2).
+- Produces: trigger `trg_guard_account_commercial_columns` on `public.accounts`.
+
+- [ ] **Step 1: Write the failing scenarios**
+
+Append a section J to `supabase/tests/60_dms_foundation.sql`. Seven scenarios, and the
+two that matter most are J1 (a tenant admin is refused) and J7 (the service role still
+succeeds) — J7 is the whole safety case for this task.
+
+Write them in the style the file already uses: `SELECT set_config('test.uid', :ADMIN, false);`
+then `SET LOCAL ROLE authenticated;` before the refusals, and `RESET ROLE;` before J7.
+Use `qa_refused('...', '...')` for the four that must be refused and `qa_allowed` for
+the three that must work, exactly as files 40 and 50 do.
+
+- J1: a tenant admin setting `addon_lines = ARRAY['dms']` on their own account — REFUSED.
+- J2: a tenant admin setting `portal_seats_limit = 9999` — REFUSED.
+- J3: a tenant admin setting `subscription_plan = 'CRM_SFA'` — REFUSED.
+- J4: a tenant admin setting `subscription_expires_at = '2099-01-01'` — REFUSED.
+- J5: a tenant admin renaming their own account (`SET name = ...`) — ALLOWED. The guard
+  must not turn into a blanket lock on the accounts row.
+- J6: a tenant admin changing `module_settings` — ALLOWED. Module toggles are theirs to
+  make and the server already clamps them to the plan.
+- J7: the service role setting `subscription_plan`, `addon_lines` and
+  `portal_seats_limit` together — ALLOWED.
+
+If this harness has no `service_role` role, create it inside the scenario file before J7
+rather than skipping J7.
+
+- [ ] **Step 2: Run the suite and watch J1-J4 fail**
+
+Run: `PGDATA_DIR=/tmp/ozzo-pgtest bash scripts/run-db-tests.sh` — about six minutes, run
+it in the background and wait for it.
+
+Expected: J1 through J4 report ALLOWED when they should be refused. That failure **is the
+production hole, reproduced**, and seeing it is the point of running this step before
+writing the guard. J5-J7 should already pass.
+
+- [ ] **Step 3: Write the guard**
+
+Create the migration. A `BEFORE UPDATE ... FOR EACH ROW` trigger on `public.accounts`
+calling a new `SECURITY DEFINER` function `public.guard_account_commercial_columns()`
+with `SET search_path TO public`, which:
+
+1. Returns `NEW` unchanged when the writer is the service role. This exemption is
+   mandatory: `/api/admin/accounts/[id]` — the real superadmin write path — uses the
+   service-role key, and **triggers still fire for the service role** even though RLS
+   does not apply to it. Test for it with `current_setting('role', true)`, `current_user`
+   and `session_user`, then report in your fix report which of the three actually
+   identifies the service role in this harness and in Supabase. Do not leave two dead
+   branches in the final code if only one works — say which, and keep that one.
+2. Returns `NEW` unchanged when `is_superadmin()` is true, guarded by
+   `to_regprocedure('public.is_superadmin()') IS NOT NULL` so the migration still applies
+   on a cluster where that function does not exist.
+3. Otherwise raises an exception if any of `subscription_plan`, `subscription_status`,
+   `subscription_expires_at`, `addon_lines` or `portal_seats_limit`
+   `IS DISTINCT FROM` its `OLD` value.
+
+The message a tenant sees must be a sentence they can act on, not a database error:
+`'Your plan, add-ons and login allowance are set by OZZO. Please contact us to change them.'`
+
+`module_settings` is deliberately **not** in the guarded list. Do not add it.
+
+Write a header comment explaining why the trigger exists: Postgres row policies cannot
+restrict columns, `accounts_update` is row-level only, and nothing else guarded these
+columns — so this predates the DMS and the DMS only added two more columns to the same
+open door.
+
+- [ ] **Step 4: Run the suite and watch J1-J7 pass**
+
+Run: `PGDATA_DIR=/tmp/ozzo-pgtest bash scripts/run-db-tests.sh`
+
+Expected: J1-J4 refused, J5-J7 allowed, every pre-existing scenario in files 00-60
+unchanged, and the migration-error count not jumping above the expected ~46.
+
+**If J7 fails, STOP and report BLOCKED.** A guard that blocks the service role would make
+the founder's own billing and company screens unusable, which is worse than the hole it
+closes. Do not try to work around it by weakening the guard — report what you observed.
+
+- [ ] **Step 5: Append to the SQL note and commit**
+
+Add the migration to `docs/RUN-THIS-SQL-dms-foundation.md`, with one plain-English line
+saying what it stops and stating that the superadmin panel is unaffected.
+
+```bash
+git add supabase/migrations/20261107150000_accounts_commercial_columns_guard.sql \
+        supabase/tests/60_dms_foundation.sql docs/RUN-THIS-SQL-dms-foundation.md
+git commit -m "A tenant admin cannot sell themselves a plan, an add-on or more seats"
+```
+
+---
+
 ### Task 5: The portal-login API route
 
 **Files:**

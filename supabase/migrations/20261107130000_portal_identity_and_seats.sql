@@ -60,6 +60,18 @@ GRANT EXECUTE ON FUNCTION public.portal_seats_used(uuid) TO authenticated, servi
 
 -- Enforced here and not only in the API route, because a cap that lives in a
 -- form is a suggestion. This is what someone calling PostgREST directly hits.
+--
+-- A seat is "held" exactly when portal_user_id is set, portal_access is true
+-- and portal_access_revoked_at is null: the same test portal_seats_used counts.
+-- This trigger keeps every write consistent with that test, so the count cannot
+-- drift no matter which column a writer touches:
+--   * turning a seat ON (including re-granting a revoked one) passes the
+--     add-on check and the cap, then clears portal_access_revoked_at, so the
+--     seat is counted;
+--   * stamping revoked_at on a held seat also switches portal_access off, so
+--     a row never reads "access on" while not being counted;
+--   * the grants are serialised per account, so two at once cannot both take
+--     the last seat.
 CREATE OR REPLACE FUNCTION public.enforce_portal_seat_cap()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -67,23 +79,36 @@ SECURITY DEFINER
 SET search_path TO public
 AS $$
 DECLARE
-  v_limit integer;
-  v_used  integer;
+  v_limit    integer;
+  v_used     integer;
+  v_was_held boolean := false;
 BEGIN
-  -- Only a row turning access ON is interesting. Revoking, and every ordinary
-  -- customer edit, costs nothing.
+  IF TG_OP = 'UPDATE' THEN
+    v_was_held := OLD.portal_user_id IS NOT NULL
+              AND OLD.portal_access IS TRUE
+              AND OLD.portal_access_revoked_at IS NULL
+              AND OLD.account_id = NEW.account_id;
+  END IF;
+
+  -- Revoking, and every ordinary customer edit, costs nothing.
   IF NEW.portal_access IS NOT TRUE THEN
     RETURN NEW;
   END IF;
-  IF TG_OP = 'UPDATE'
-     AND OLD.portal_access IS TRUE
-     AND OLD.portal_access_revoked_at IS NULL THEN
-    RETURN NEW;   -- already held a seat; not a new one
+
+  IF v_was_held THEN
+    -- Already held a seat; not a new one. Leave every column as the writer
+    -- set it, except that a revoked_at stamp means "revoked".
+    IF NEW.portal_access_revoked_at IS NOT NULL THEN
+      NEW.portal_access := false;
+    END IF;
+    RETURN NEW;
   END IF;
 
   IF NOT account_has_line(NEW.account_id, 'dms') THEN
     RAISE EXCEPTION 'This account does not have the DMS. Portal access cannot be given.';
   END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtextextended(NEW.account_id::text, 0));
 
   SELECT portal_seats_limit INTO v_limit
     FROM accounts WHERE id = NEW.account_id;
@@ -94,11 +119,15 @@ BEGIN
       COALESCE(v_limit, 0);
   END IF;
 
+  -- A new (or re-granted) seat must be counted. Done only after every check
+  -- has passed, so a refused grant changes nothing.
+  NEW.portal_access_revoked_at := NULL;
   RETURN NEW;
 END;
 $$;
 
 DROP TRIGGER IF EXISTS trg_enforce_portal_seat_cap ON public.contacts;
 CREATE TRIGGER trg_enforce_portal_seat_cap
-  BEFORE INSERT OR UPDATE OF portal_access ON public.contacts
+  BEFORE INSERT OR UPDATE OF portal_access, portal_access_revoked_at, portal_user_id, account_id
+  ON public.contacts
   FOR EACH ROW EXECUTE FUNCTION public.enforce_portal_seat_cap();

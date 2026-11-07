@@ -137,3 +137,24 @@ SELECT qa_refused('H7 KNOWN LIMITATION: level-less customer cannot get a login w
   'portal_email = ''shop1@abc.com'', '
   'portal_user_id = ''00000000-0000-0000-0000-0000000000c3'' '
   'WHERE id = ''c0000000-0000-0000-0000-000000000001''');
+
+-- H8: re-granting a revoked seat must be COUNTED. Before the trigger cleared
+-- portal_access_revoked_at, this UPDATE was allowed and the seat went uncounted.
+-- DIST_C2 was revoked in H4; DIST_C still holds its seat.
+UPDATE public.contacts SET portal_access = true
+ WHERE id = :DIST_C2;
+
+SELECT qa('H8 a re-granted seat is counted and the revoked stamp is cleared',
+  public.portal_seats_used(:ACCT) = 2
+  AND (SELECT portal_access_revoked_at FROM public.contacts WHERE id = :DIST_C2) IS NULL,
+  'seats_used=' || public.portal_seats_used(:ACCT)::text);
+
+-- H9: stamping revoked_at straight onto a held seat revokes it, so the row
+-- never reads "access on" while being uncounted.
+UPDATE public.contacts SET portal_access_revoked_at = now()
+ WHERE id = :DIST_C2;
+
+SELECT qa('H9 a revoked_at stamp on a held seat frees it and switches access off',
+  public.portal_seats_used(:ACCT) = 1
+  AND NOT (SELECT portal_access FROM public.contacts WHERE id = :DIST_C2),
+  'seats_used=' || public.portal_seats_used(:ACCT)::text);
