@@ -225,8 +225,17 @@ export function accountLines(
   return lines;
 }
 
-/** True if the plan grants the given product line. */
-export function planHasLine(rawPlan: unknown, line: ProductLine): boolean {
+/**
+ * True if the plan grants the given product line.
+ *
+ * Add-on lines are excluded on purpose: a plan code can never grant an add-on,
+ * so a function that takes only a plan cannot answer for one. Ask
+ * accountLines(plan, addonLines) instead.
+ */
+export function planHasLine(
+  rawPlan: unknown,
+  line: Exclude<ProductLine, AddonLine>
+): boolean {
   return planLines(rawPlan)[line];
 }
 

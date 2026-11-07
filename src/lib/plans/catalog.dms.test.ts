@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   PLAN_IDS,
   planLines,
+  planHasLine,
   accountLines,
   accountHasAddonLine,
   ADDON_LINES,
@@ -18,8 +19,8 @@ describe("dms add-on line", () => {
 
   it("is not granted by a legacy or unknown plan either", () => {
     // Legacy plans get full access in account_has_line's fallback. 001001 is one.
-    expect(planLines("Enterprise" as never).dms).toBe(false);
-    expect(planLines("" as never).dms).toBe(false);
+    expect(planLines("Enterprise").dms).toBe(false);
+    expect(planLines("").dms).toBe(false);
   });
 
   it("is granted only by an explicit addon_lines entry", () => {
@@ -63,5 +64,15 @@ describe("accountLines", () => {
 
   it("ignores unknown add-on names", () => {
     expect(accountLines("CRM", ["bogus"])).toEqual(planLines("CRM"));
+  });
+});
+
+describe("planHasLine", () => {
+  it("answers for plan lines only; add-on lines must go through accountLines", () => {
+    expect(planHasLine("CRM_SFA", "sfa")).toBe(true);
+    expect(planHasLine("CRM", "sfa")).toBe(false);
+    // @ts-expect-error add-on lines are not valid for planHasLine
+    expect(planHasLine("CRM_SFA", "dms")).toBe(false);
+    expect(accountLines("CRM_SFA", ["dms"]).dms).toBe(true);
   });
 });
