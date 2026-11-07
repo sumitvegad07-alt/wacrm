@@ -140,7 +140,8 @@ SELECT qa_refused('H7 KNOWN LIMITATION: level-less customer cannot get a login w
 
 -- H8: re-granting a revoked seat must be COUNTED. Before the trigger cleared
 -- portal_access_revoked_at, this UPDATE was allowed and the seat went uncounted.
--- DIST_C2 was revoked in H4; DIST_C still holds its seat.
+-- DIST_C2 was revoked in H4; DIST_C still holds its seat. Depends on: seat
+-- limit 5 and addon_lines = ['dms'], both set just before H7 (H6 empties them).
 UPDATE public.contacts SET portal_access = true
  WHERE id = :DIST_C2;
 
@@ -150,7 +151,8 @@ SELECT qa('H8 a re-granted seat is counted and the revoked stamp is cleared',
   'seats_used=' || public.portal_seats_used(:ACCT)::text);
 
 -- H9: stamping revoked_at straight onto a held seat revokes it, so the row
--- never reads "access on" while being uncounted.
+-- never reads "access on" while being uncounted. Depends on the same state as
+-- H8: seat limit 5 and the DMS add-on, restored just before H7.
 UPDATE public.contacts SET portal_access_revoked_at = now()
  WHERE id = :DIST_C2;
 
@@ -158,3 +160,58 @@ SELECT qa('H9 a revoked_at stamp on a held seat frees it and switches access off
   public.portal_seats_used(:ACCT) = 1
   AND NOT (SELECT portal_access FROM public.contacts WHERE id = :DIST_C2),
   'seats_used=' || public.portal_seats_used(:ACCT)::text);
+
+-- ── Safe paths: ordinary writes to contacts must never reach the guard ──
+-- State here: DIST_C holds one seat, DIST_C2 is revoked, limit 5, DMS on,
+-- order hierarchy on (so a new customer needs a level, per migration 076).
+CREATE TEMP TABLE h_snap(k text PRIMARY KEY, n integer);
+INSERT INTO h_snap VALUES ('before10', public.portal_seats_used(:ACCT));
+
+SELECT qa_allowed('H10a an ordinary customer INSERT with no portal columns succeeds',
+  'INSERT INTO public.contacts(id, account_id, user_id, name, company, phone, hierarchy_level) '
+  'VALUES (''c1000000-0000-0000-0000-0000000000f1'', '
+  || quote_literal(:ACCT) || ', ''11110000-0000-0000-0000-000000000001'', '
+  '''Plain Customer'', ''Plain Co'', ''1100000091'', 3)');
+
+SELECT qa('H10 that INSERT left the seat count unchanged',
+  public.portal_seats_used(:ACCT) = (SELECT n FROM h_snap WHERE k = 'before10')
+  AND EXISTS (SELECT 1 FROM public.contacts WHERE id = 'c1000000-0000-0000-0000-0000000000f1'),
+  'before=' || (SELECT n FROM h_snap WHERE k = 'before10')::text
+  || ' after=' || public.portal_seats_used(:ACCT)::text);
+
+INSERT INTO h_snap VALUES ('before11', public.portal_seats_used(:ACCT));
+
+SELECT qa_allowed('H11a renaming a customer that HOLDS a seat succeeds',
+  'UPDATE public.contacts SET name = ''Mr DI renamed'' WHERE id = ' || quote_literal(:DIST_C));
+
+SELECT qa('H11 and the seat is still held, count unchanged',
+  public.portal_seats_used(:ACCT) = (SELECT n FROM h_snap WHERE k = 'before11')
+  AND (SELECT name FROM public.contacts WHERE id = :DIST_C) = 'Mr DI renamed'
+  AND (SELECT portal_access FROM public.contacts WHERE id = :DIST_C),
+  'count=' || public.portal_seats_used(:ACCT)::text);
+
+INSERT INTO h_snap VALUES ('before12', public.portal_seats_used(:ACCT));
+
+SELECT qa_allowed('H12a a full-row style write of portal_access = true on a held seat succeeds',
+  'UPDATE public.contacts SET name = ''Mr DI full row'', portal_access = true, '
+  'portal_email = ''c@abc.com'', portal_user_id = ''00000000-0000-0000-0000-0000000000c1'', '
+  'portal_access_revoked_at = NULL WHERE id = ' || quote_literal(:DIST_C));
+
+SELECT qa('H12 it did not consume a second seat',
+  public.portal_seats_used(:ACCT) = (SELECT n FROM h_snap WHERE k = 'before12')
+  AND public.portal_seats_used(:ACCT) = 1,
+  'count=' || public.portal_seats_used(:ACCT)::text);
+
+-- H13: with the cap full, a refused re-grant must change NOTHING.
+UPDATE public.accounts SET portal_seats_limit = 1 WHERE id = :ACCT;
+
+SELECT qa_refused('H13a re-granting a revoked customer is refused when the cap is full',
+  'UPDATE public.contacts SET portal_access = true WHERE id = ' || quote_literal(:DIST_C2));
+
+SELECT qa('H13 the refused re-grant left the revoked row exactly as it was',
+  (SELECT portal_access_revoked_at FROM public.contacts WHERE id = :DIST_C2) IS NOT NULL
+  AND NOT (SELECT portal_access FROM public.contacts WHERE id = :DIST_C2)
+  AND public.portal_seats_used(:ACCT) = 1,
+  'revoked stamp kept, access still off, count=' || public.portal_seats_used(:ACCT)::text);
+
+UPDATE public.accounts SET portal_seats_limit = 5 WHERE id = :ACCT;
