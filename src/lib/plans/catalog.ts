@@ -12,7 +12,36 @@
 //   SFA and FSM both always include WFA. A plan is a combination of lines.
 // ============================================================
 
-export type ProductLine = "crm" | "wfa" | "sfa" | "fsm";
+// "dms" is an ADD-ON line. It is never produced by planLines(): see ADDON_LINES
+// below and §3 of ozzo-dms-product-v1.md. Keeping it inside ProductLine means
+// surface-gates.ts and the RLS ceiling speak one vocabulary.
+export type ProductLine = "crm" | "wfa" | "sfa" | "fsm" | "dms";
+
+/**
+ * Lines that are sold separately and granted per account, never implied by a
+ * plan code. Stored in `accounts.addon_lines`.
+ *
+ * Why this exists rather than a ninth plan code: `account_has_line` ends with
+ * `else (p_line is distinct from 'fsm')`, so a legacy or unknown plan is
+ * granted every line but FSM — and account 001001 is a legacy Enterprise plan.
+ * An ordinary `dms` line would have switched the DMS on, free, for every
+ * existing tenant the day its migration ran.
+ */
+export type AddonLine = "dms";
+
+export const ADDON_LINES: readonly AddonLine[] = ["dms"] as const;
+
+export const ADDON_LABEL: Record<AddonLine, string> = {
+  dms: "DMS (distributor portal)",
+};
+
+/** True only when the account has been explicitly granted the add-on. */
+export function accountHasAddonLine(
+  addonLines: string[] | null | undefined,
+  line: AddonLine
+): boolean {
+  return Array.isArray(addonLines) && addonLines.includes(line);
+}
 
 // The eight sellable plans. There is no separate "Trial" plan: a paid trial is
 // just a real plan (e.g. SFA) with a subscription_expires_at set to the trial
@@ -68,7 +97,7 @@ export const PLAN_PRICE: Record<PlanId, number> = {
  * Which product lines each plan turns on. SFA includes WFA, so the SFA plan
  * has wfa:true.
  */
-export const PLAN_LINES: Record<PlanId, Record<ProductLine, boolean>> = {
+export const PLAN_LINES: Record<PlanId, Partial<Record<ProductLine, boolean>>> = {
   CRM: { crm: true, wfa: false, sfa: false, fsm: false },
   WFA: { crm: false, wfa: true, sfa: false, fsm: false },
   CRM_WFA: { crm: true, wfa: true, sfa: false, fsm: false },
@@ -164,8 +193,36 @@ export function isNewPlan(raw: unknown): raw is PlanId {
  *   on for every legacy tenant.
  */
 export function planLines(rawPlan: unknown): Record<ProductLine, boolean> {
-  if (isNewPlan(rawPlan)) return { ...PLAN_LINES[rawPlan] };
-  return { crm: true, wfa: true, sfa: true, fsm: false };
+  if (isNewPlan(rawPlan)) {
+    const p = PLAN_LINES[rawPlan];
+    // A plan never grants an add-on line: a missing key is false.
+    return {
+      crm: p.crm ?? false,
+      wfa: p.wfa ?? false,
+      sfa: p.sfa ?? false,
+      fsm: p.fsm ?? false,
+      dms: false,
+    };
+  }
+  // Legacy/unknown plans: dms MUST stay false, or the add-on is given away free.
+  return { crm: true, wfa: true, sfa: true, fsm: false, dms: false };
+}
+
+/**
+ * Lines an ACCOUNT has: its plan's lines plus every explicitly granted add-on.
+ * planLines stays plan-only; use this where the question is "does this account
+ * have line X". An undefined/null addon list (column not present yet) means no
+ * add-ons, i.e. exactly planLines.
+ */
+export function accountLines(
+  rawPlan: unknown,
+  addonLines: string[] | null | undefined
+): Record<ProductLine, boolean> {
+  const lines = planLines(rawPlan);
+  for (const a of ADDON_LINES) {
+    if (accountHasAddonLine(addonLines, a)) lines[a] = true;
+  }
+  return lines;
 }
 
 /** True if the plan grants the given product line. */

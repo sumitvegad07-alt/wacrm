@@ -44,7 +44,7 @@ export default function ModuleImportPage() {
   // bypass. `moduleSettingsLoaded` matters because stock and territory also
   // ride a module toggle that ships off, and acting on the defaults would
   // refuse an import the account is entitled to on every cold load.
-  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM };
+  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: false };
   const offPlan =
     moduleSettingsLoaded && !gatePasses(IMPORT_GATES[moduleKey], { owns, isModuleEnabled });
 

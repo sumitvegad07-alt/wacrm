@@ -478,6 +478,7 @@ describe("no plan's document promises another plan's product line", () => {
     sfa: /order collection|dispatch|stock|price list|scheme|route management|outstanding/i,
     wfa: /geo-|odometer|punch-in|location tracking|travelled route|live feed/i,
     fsm: /work order|job card|complaint ticket/i,
+    dms: /(?!)/, // add-on line: no plan document promises it, nothing to forbid yet
   };
 
   for (const plan of ["CRM", "WFA", "CRM_WFA", "SFA", "CRM_SFA"] as PlanId[]) {

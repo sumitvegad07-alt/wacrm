@@ -46,7 +46,7 @@ function PaletteBody({ onOpenChange }: { onOpenChange: (open: boolean) => void }
   const navItems = useVisibleNavItems();
   const { hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled, hasPermission } = useAuth();
   const owns = useMemo<Record<ProductLine, boolean>>(
-    () => ({ crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM }),
+    () => ({ crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: false }),
     [hasCRM, hasWFA, hasSFA, hasFSM],
   );
   const [query, setQuery] = useState("");

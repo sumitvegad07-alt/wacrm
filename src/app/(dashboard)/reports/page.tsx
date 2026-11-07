@@ -30,7 +30,7 @@ export default function ReportsIndexPage() {
 
   useEffect(() => {
     if (!moduleSettingsLoaded) return;
-    const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM };
+    const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: false };
     const target =
       CANDIDATES.find((href) => gatePasses(gateForPath(href), { owns, isModuleEnabled })) ??
       "/reports/tasks";

@@ -51,6 +51,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
       wfa: hasWFA,
       sfa: hasSFA,
       fsm: hasFSM,
+      dms: false, // add-on line: not wired to the UI yet
     };
     const lineEnabled = (line: ProductLine) => owns[line];
 

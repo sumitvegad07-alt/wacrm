@@ -205,7 +205,7 @@ describe("custom-field gates", () => {
 
 describe("gatePasses", () => {
   const all: GateContext = {
-    owns: { crm: true, wfa: true, sfa: true, fsm: true },
+    owns: { crm: true, wfa: true, sfa: true, fsm: true, dms: false },
     isModuleEnabled: () => true,
   };
 
@@ -216,8 +216,8 @@ describe("gatePasses", () => {
 
   it("fails as soon as any one condition fails", () => {
     expect(gatePasses({ line: "crm" }, { ...all, owns: { ...all.owns, crm: false } })).toBe(false);
-    expect(gatePasses({ anyLine: ["crm", "sfa"] }, { ...all, owns: { crm: false, wfa: true, sfa: false, fsm: false } })).toBe(false);
-    expect(gatePasses({ allLines: ["crm", "wfa"] }, { ...all, owns: { crm: true, wfa: false, sfa: false, fsm: false } })).toBe(false);
+    expect(gatePasses({ anyLine: ["crm", "sfa"] }, { ...all, owns: { crm: false, wfa: true, sfa: false, fsm: false, dms: false } })).toBe(false);
+    expect(gatePasses({ allLines: ["crm", "wfa"] }, { ...all, owns: { crm: true, wfa: false, sfa: false, fsm: false, dms: false } })).toBe(false);
     expect(gatePasses({ configModule: "payment" }, { ...all, isModuleEnabled: () => false })).toBe(false);
   });
 

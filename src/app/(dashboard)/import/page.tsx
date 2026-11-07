@@ -50,6 +50,7 @@ export default function ImportHubPage() {
     wfa: hasWFA,
     sfa: hasSFA,
     fsm: hasFSM,
+    dms: false, // add-on line: not wired to the UI yet
   };
   const visibleModules = MODULES.filter((m) =>
     gatePasses(IMPORT_GATES[m.key], { owns, isModuleEnabled }),

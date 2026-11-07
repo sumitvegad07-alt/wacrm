@@ -607,6 +607,7 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
     wfa: hasWFA,
     sfa: hasSFA,
     fsm: hasFSM,
+    dms: false, // add-on line: not wired to the UI yet
   };
   const lineEnabled = (line: ProductLine) => owns[line];
 

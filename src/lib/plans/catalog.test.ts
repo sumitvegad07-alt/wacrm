@@ -15,28 +15,28 @@ import {
 
 describe("plan catalog — line mapping", () => {
   it("CRM grants only the CRM line", () => {
-    expect(planLines("CRM")).toEqual({ crm: true, wfa: false, sfa: false, fsm: false });
+    expect(planLines("CRM")).toEqual({ crm: true, wfa: false, sfa: false, fsm: false, dms: false });
   });
   it("WFA grants only the Workforce line", () => {
-    expect(planLines("WFA")).toEqual({ crm: false, wfa: true, sfa: false, fsm: false });
+    expect(planLines("WFA")).toEqual({ crm: false, wfa: true, sfa: false, fsm: false, dms: false });
   });
   it("SFA includes Workforce but not CRM", () => {
-    expect(planLines("SFA")).toEqual({ crm: false, wfa: true, sfa: true, fsm: false });
+    expect(planLines("SFA")).toEqual({ crm: false, wfa: true, sfa: true, fsm: false, dms: false });
   });
   it("CRM+SFA grants everything", () => {
-    expect(planLines("CRM_SFA")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
+    expect(planLines("CRM_SFA")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false, dms: false });
     expect(planHasLine("CRM_SFA", "sfa")).toBe(true);
   });
 });
 
 describe("plan catalog — legacy safety", () => {
   it("treats legacy Free/Enterprise as full access so nobody is locked out pre-migration", () => {
-    expect(planLines("Free")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
-    expect(planLines("Enterprise")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
+    expect(planLines("Free")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false, dms: false });
+    expect(planLines("Enterprise")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false, dms: false });
   });
   it("treats unknown/null as full access", () => {
-    expect(planLines(null)).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
-    expect(planLines("whatever")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false });
+    expect(planLines(null)).toEqual({ crm: true, wfa: true, sfa: true, fsm: false, dms: false });
+    expect(planLines("whatever")).toEqual({ crm: true, wfa: true, sfa: true, fsm: false, dms: false });
   });
   it("only the eight new plan ids are 'new' plans", () => {
     expect(isNewPlan("CRM")).toBe(true);

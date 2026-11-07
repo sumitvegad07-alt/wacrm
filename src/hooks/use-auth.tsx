@@ -21,7 +21,7 @@ import {
   type AccountRole,
 } from "@/lib/auth/roles";
 import { type RolePermissions, hasPermission, getDataScope } from "@/lib/auth/rbac";
-import { planLines, clampModuleSettings } from "@/lib/plans/catalog";
+import { accountLines, clampModuleSettings } from "@/lib/plans/catalog";
 
 interface Profile {
   id: string;
@@ -64,6 +64,9 @@ interface AccountSummary {
   default_currency: string;
   subscription_status: 'active' | 'expired' | 'deactivated' | 'trialing';
   subscription_plan: string;
+  /** Add-on product lines granted to this account (accounts.addon_lines).
+   *  Absent until the column exists and the select list reads it. */
+  addon_lines?: string[] | null;
   industry: string;
   is_provisioned: boolean;
   subscription_expires_at: string | null;
@@ -536,7 +539,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Product-line entitlements come from the plan catalog now, not from the
     // old Basic/Pro/Enterprise tiers. WhatsApp + AI ride the CRM line; field
     // tracking rides the WFA line. Legacy plan values resolve to full access.
-    const lines = planLines(account?.subscription_plan);
+    const lines = accountLines(account?.subscription_plan, account?.addon_lines);
 
     return {
       accountRole: role,
@@ -560,7 +563,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasFSM: lines.fsm,
       permissions: profile?.employee_role?.permissions ?? null,
     };
-  }, [profile, account?.subscription_plan]);
+  }, [profile, account?.subscription_plan, account?.addon_lines]);
 
   return (
     <AuthContext.Provider
