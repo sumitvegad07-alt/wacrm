@@ -272,6 +272,9 @@ export async function POST(req: NextRequest) {
         })
         .eq("id", contact.id)
         .eq("account_id", ctx.accountId)
+        // Race guard: a concurrent POST that linked a login first leaves this
+        // UPDATE matching zero rows, which takes the cleanup branch below.
+        .is("portal_user_id", null)
         .select("id");
 
       if (linkError || !updated || updated.length !== 1) {
