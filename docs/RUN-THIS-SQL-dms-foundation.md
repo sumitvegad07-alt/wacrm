@@ -317,18 +317,21 @@ CREATE INDEX IF NOT EXISTS orders_placed_by_portal_contact_fk_idx
 # Run this SQL fourth — stop customers editing their own plan
 
 Run this after the third one. It closes a hole that is live today. Right now an
-admin at any customer company can change their own plan, their add-ons, their
-login allowance and their expiry date. They only need to send one request to the
-database. This stops that. If they try, they see: "Your plan, add-ons and login
-allowance are set by OZZO. Please contact us to change them."
+admin at any customer company can change their own plan, add-ons, login
+allowance, number of paid users and expiry date. They only need to send one
+request to the database. This SQL adds a small lock (called a "trigger") on the
+accounts table. The lock refuses those changes. The customer sees: "Your plan,
+add-ons and login allowance are set by OZZO. Please contact us to change them."
 
-Your own superadmin panel is not affected. It writes with the service key, and
-the guard lets that through. You can still change any plan, status, expiry date
-or seats from your panel. Customers can still rename their company and switch
-their own modules on and off. Signing up a new company is not affected.
+Your own admin panel is not affected. The panel saves with a private key that
+only the server holds (the "service key"). The lock lets that key through. You
+can still change any plan, status, expiry date or seats from your panel.
+Customers can still rename their company and switch their own modules on and
+off. Signing up a new company is not affected.
 
-If it ever blocks something it should not, switch it off with this one line,
-then tell me:
+After you run this, test it. Open your admin panel and change one company's
+expiry date. If it saves, this is working. If it does not, switch the lock off
+with this one line, then tell me:
 
 `DROP TRIGGER trg_guard_account_commercial_columns ON public.accounts;`
 
@@ -352,7 +355,8 @@ Source file: `supabase/migrations/20261107150000_accounts_commercial_columns_gua
 -- (addon_lines, portal_seats_limit) to the same open door.
 --
 -- THE GUARD. A BEFORE UPDATE trigger that refuses a change to those five
--- columns when the write comes from an end-user API role.
+-- columns, plus user_count (the paid user-seat limit the app enforces in code)
+-- and addons, from 039_account_addons_and_users.sql, which were open the same way, when the write comes from an end-user API role.
 --
 -- WHO IS EXEMPT, AND HOW WE KNOW. The superadmin panel writes through the
 -- service-role key. RLS does not apply to the service role, but triggers still
@@ -384,6 +388,21 @@ SECURITY DEFINER
 SET search_path TO public
 AS $$
 BEGIN
+  -- Cheapest test first: nothing commercial changed, nothing to guard. This
+  -- keeps the role check and the is_superadmin() query off every ordinary
+  -- tenant save (name, settings, module_settings), and means a mistake in the
+  -- role handling below can only ever affect a write that really changes one
+  -- of these columns.
+  IF NOT (   NEW.subscription_plan       IS DISTINCT FROM OLD.subscription_plan
+          OR NEW.subscription_status     IS DISTINCT FROM OLD.subscription_status
+          OR NEW.subscription_expires_at IS DISTINCT FROM OLD.subscription_expires_at
+          OR NEW.addon_lines             IS DISTINCT FROM OLD.addon_lines
+          OR NEW.portal_seats_limit      IS DISTINCT FROM OLD.portal_seats_limit
+          OR NEW.user_count              IS DISTINCT FROM OLD.user_count
+          OR NEW.addons                  IS DISTINCT FROM OLD.addons) THEN
+    RETURN NEW;
+  END IF;
+
   -- Not an end-user API role: service role, SQL editor, migrations, DBA.
   IF coalesce(current_setting('role', true), 'none') NOT IN ('authenticated', 'anon') THEN
     RETURN NEW;
@@ -395,16 +414,8 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF NEW.subscription_plan       IS DISTINCT FROM OLD.subscription_plan
-  OR NEW.subscription_status     IS DISTINCT FROM OLD.subscription_status
-  OR NEW.subscription_expires_at IS DISTINCT FROM OLD.subscription_expires_at
-  OR NEW.addon_lines             IS DISTINCT FROM OLD.addon_lines
-  OR NEW.portal_seats_limit      IS DISTINCT FROM OLD.portal_seats_limit
-  THEN
-    RAISE EXCEPTION 'Your plan, add-ons and login allowance are set by OZZO. Please contact us to change them.'
-      USING ERRCODE = 'insufficient_privilege';
-  END IF;
-
+  RAISE EXCEPTION 'Your plan, add-ons and login allowance are set by OZZO. Please contact us to change them.'
+    USING ERRCODE = 'insufficient_privilege';
   RETURN NEW;
 END;
 $$;
@@ -413,4 +424,6 @@ DROP TRIGGER IF EXISTS trg_guard_account_commercial_columns ON public.accounts;
 CREATE TRIGGER trg_guard_account_commercial_columns
   BEFORE UPDATE ON public.accounts
   FOR EACH ROW EXECUTE FUNCTION public.guard_account_commercial_columns();
+
+ALTER FUNCTION public.guard_account_commercial_columns() OWNER TO postgres;
 ```
