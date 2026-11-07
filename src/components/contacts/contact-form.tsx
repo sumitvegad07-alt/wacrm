@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { codePlaceholder } from '@/lib/codes/auto-codes';
@@ -57,6 +57,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PortalAccessBlock } from '@/components/contacts/portal-access-block';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Users } from 'lucide-react';
@@ -90,7 +91,7 @@ interface ContactFormProps {
 
 export function ContactForm({
   open,
-  onOpenChange,
+  onOpenChange: onOpenChangeProp,
   asPage = false,
   contact,
   contactTags = [],
@@ -98,6 +99,17 @@ export function ContactForm({
   onViewExisting,
 }: ContactFormProps) {
   const supabase = createClient();
+  // A DMS-access write happens while this form is open. The page's reload must
+  // not run then (the effect below resets every field when `contact` changes
+  // and would wipe unsaved edits), so it is deferred to when the form closes.
+  const portalChangedRef = useRef(false);
+  const onOpenChange = (o: boolean) => {
+    onOpenChangeProp(o);
+    if (!o && portalChangedRef.current) {
+      portalChangedRef.current = false;
+      onSaved();
+    }
+  };
   const { accountId, user, isModuleEnabled, hasPermission, defaultCurrency, hasSFA, account } = useAuth();
   // These three fields decide what a customer owes, so the database refuses to change
   // them without the matching permission. Mirror that here rather than letting someone
@@ -1069,6 +1081,16 @@ export function ContactForm({
           )}
           </>
           )}
+
+          <PortalAccessBlock
+            contactId={contact?.id}
+            portalEmail={(contact as any)?.portal_email}
+            portalAccess={(contact as any)?.portal_access}
+            portalAccessRevokedAt={(contact as any)?.portal_access_revoked_at}
+            setBy={(contact as any)?.portal_access_set_by}
+            setAt={(contact as any)?.portal_access_set_at}
+            onChanged={() => { portalChangedRef.current = true; }}
+          />
 
           {asPage ? (
             <FormActions

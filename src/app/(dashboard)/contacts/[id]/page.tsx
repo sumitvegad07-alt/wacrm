@@ -25,6 +25,7 @@ import {
 } from '@/lib/customers/buying-status';
 import { readMappingMode } from '@/lib/customers/mapping';
 import { ContactForm } from "@/components/contacts/contact-form";
+import { PortalAccessBlock } from "@/components/contacts/portal-access-block";
 import { Timeline } from "@/components/shared/timeline";
 import {
   DetailPageLayout,
@@ -526,7 +527,18 @@ export default function ContactDetailsPage() {
               </>
             )}
           </DetailSection>
-          
+
+          {/* Renders nothing unless the account has the DMS add-on. onChanged is the page's FULL reload. */}
+          <PortalAccessBlock
+            contactId={contact.id}
+            portalEmail={(contact as any).portal_email}
+            portalAccess={(contact as any).portal_access}
+            portalAccessRevokedAt={(contact as any).portal_access_revoked_at}
+            setBy={(contact as any).portal_access_set_by}
+            setAt={(contact as any).portal_access_set_at}
+            onChanged={refreshAll}
+          />
+
           <DetailSection title="Deals">
              {deals.length === 0 ? (
                <p className="text-body text-muted-foreground italic">No deals associated with this contact.</p>

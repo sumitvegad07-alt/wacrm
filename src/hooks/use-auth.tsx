@@ -67,6 +67,8 @@ interface AccountSummary {
   /** Add-on product lines granted to this account (accounts.addon_lines).
    *  Absent until the column exists and the select list reads it. */
   addon_lines?: string[] | null;
+  /** accounts.portal_seats_limit: how many customers may hold a DMS login. */
+  portal_seats_limit?: number | null;
   industry: string;
   is_provisioned: boolean;
   subscription_expires_at: string | null;
@@ -217,6 +219,8 @@ interface AuthContextValue {
   hasSFA: boolean;
   /** FSM (field service) line. Legacy plans read false — see planLines(). */
   hasFSM: boolean;
+  /** True when the account holds the DMS add-on line (accounts.addon_lines). */
+  hasDMS: boolean;
 
   /** Admin-configurable module toggles. All true while loading. */
   moduleSettings: ModuleSettings;
@@ -320,7 +324,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // `module_settings` is selected here too (added in migration 090)
             // so we don't pay a second round-trip to the same row. Older
             // schemas without the column would error, so it's tolerated below.
-            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned, subscription_expires_at, module_settings, settings")
+            .select("id, customer_id, name, default_currency, subscription_status, subscription_plan, industry, is_provisioned, subscription_expires_at, module_settings, settings, addon_lines, portal_seats_limit")
             .eq("id", data.account_id)
             .maybeSingle();
           if (accountErr) {
@@ -338,6 +342,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               default_currency: account.default_currency ?? DEFAULT_CURRENCY,
               subscription_status: account.subscription_status ?? 'active',
               subscription_plan: account.subscription_plan ?? 'Basic',
+              addon_lines: (account as { addon_lines?: string[] | null }).addon_lines ?? [],
+              portal_seats_limit:
+                (account as { portal_seats_limit?: number | null }).portal_seats_limit ?? 0,
               industry: account.industry ?? 'Other',
               is_provisioned: account.is_provisioned ?? false,
               subscription_expires_at: (account as any).subscription_expires_at ?? null,
@@ -561,6 +568,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasWFA: lines.wfa,
       hasSFA: lines.sfa,
       hasFSM: lines.fsm,
+      hasDMS: lines.dms,
       permissions: profile?.employee_role?.permissions ?? null,
     };
   }, [profile, account?.subscription_plan, account?.addon_lines]);
@@ -637,6 +645,7 @@ export function useAuth(): AuthContextValue {
       hasWFA: false,
       hasSFA: false,
       hasFSM: false,
+      hasDMS: false,
       moduleSettings: { ...DEFAULT_MODULE_SETTINGS },
       moduleSettingsLoaded: false,
       isModuleEnabled: () => true,
