@@ -178,6 +178,9 @@ export function PortalAccessBlock({
     );
   }
 
+  // The DMS is granted but no logins were bought: the switch could only fail.
+  // A login already active (allowance later cut) can still be switched off.
+  const noSeats = seatsLimit <= 0 && !active;
   const open = active || wantOpen;
   const status = active ? 'Login active' : hasLogin ? 'Access withdrawn' : 'No login yet';
 
@@ -268,7 +271,7 @@ export function PortalAccessBlock({
         </div>
         <Switch
           checked={open}
-          disabled={busy}
+          disabled={busy || noSeats}
           aria-label="Provide DMS Access"
           onCheckedChange={(on: boolean) => {
             if (on) setWantOpen(true);
@@ -277,6 +280,12 @@ export function PortalAccessBlock({
           }}
         />
       </div>
+
+      {noSeats && (
+        <p className="text-caption text-muted-foreground" data-testid="portal-no-seats">
+          This account has no portal logins included. Contact OZZO to buy some.
+        </p>
+      )}
 
       {open && (
         <div className="space-y-3">

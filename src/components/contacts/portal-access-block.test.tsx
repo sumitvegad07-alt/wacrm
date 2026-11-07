@@ -35,4 +35,19 @@ describe("DMS gating", () => {
     const { container } = render(<PortalAccessBlock contactId="c1" onChanged={() => {}} />);
     expect(container.textContent).toContain("Provide DMS Access");
   });
+
+  it("disables the switch and says why when the account has no logins included", () => {
+    auth.value = { hasDMS: true, canManageMembers: true, account: { portal_seats_limit: 0 }, accountId: "a" };
+    const { container } = render(<PortalAccessBlock contactId="c1" onChanged={() => {}} />);
+    expect(container.textContent).toContain("no portal logins included");
+    expect(container.textContent).toContain("Contact OZZO");
+    expect(container.querySelector('[role="switch"]')?.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("keeps the switch usable when logins are included", () => {
+    auth.value = { hasDMS: true, canManageMembers: true, account: { portal_seats_limit: 5 }, accountId: "a" };
+    const { container } = render(<PortalAccessBlock contactId="c1" onChanged={() => {}} />);
+    expect(container.textContent).not.toContain("no portal logins included");
+    expect(container.querySelector('[role="switch"]')?.getAttribute("aria-disabled")).not.toBe("true");
+  });
 });

@@ -176,6 +176,21 @@ export async function PATCH(
     if (linesChanged) patch.addon_lines = newLines;
     if (seatsChanged) patch.portal_seats_limit = body.portalSeatsLimit;
 
+    // Taking the DMS away takes its allowance with it, however the route is
+    // called: an account with no add-on but spare logins is a configuration
+    // that must not exist. Fires only when this patch leaves the account with
+    // no add-on AND it had one before; the audit log picks the column up from
+    // the patch like any other change. An explicit seat value in the same
+    // request is overridden on purpose (no add-on means no allowance).
+    if (
+      linesChanged &&
+      curLines.length > 0 &&
+      (newLines ?? []).length === 0 &&
+      (cur.portal_seats_limit ?? 0) !== 0
+    ) {
+      patch.portal_seats_limit = 0;
+    }
+
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ ok: true, changed: {} });
     }

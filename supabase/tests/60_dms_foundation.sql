@@ -106,10 +106,19 @@ SELECT qa_refused('H5 two customers cannot share one login email',
 -- An account that never bought the DMS cannot have a login at all. Aimed at
 -- DIST_C2, whose access was revoked in H4, so OLD.portal_access is false and
 -- the trigger's "already held a seat" early-return cannot short-circuit it.
-UPDATE public.accounts SET addon_lines = '{}', portal_seats_limit = 0 WHERE id = :ACCT;
+-- Seats are deliberately SPARE (limit 5, one used): with the allowance at 0 the
+-- cap check would also refuse, and deleting the add-on check from the trigger
+-- would go unnoticed. Here ONLY the add-on check can refuse this write.
+UPDATE public.accounts SET addon_lines = '{}', portal_seats_limit = 5 WHERE id = :ACCT;
 
 SELECT qa_refused('H6 no add-on, no login',
   'UPDATE public.contacts SET portal_access = true WHERE id = ' || quote_literal(:DIST_C2));
+
+SELECT qa('H6-msg the H6 refusal is the add-on guard (its own sentence), not the seat cap',
+  (SELECT count(*) FROM qa_results
+    WHERE scenario = 'H6 no add-on, no login' AND pass
+      AND detail LIKE '%does not have the DMS%') = 1,
+  coalesce((SELECT detail FROM qa_results WHERE scenario = 'H6 no add-on, no login'), 'none recorded'));
 
 UPDATE public.accounts SET addon_lines = ARRAY['dms'], portal_seats_limit = 5
  WHERE id = :ACCT;
@@ -152,7 +161,7 @@ SELECT qa('H8 a re-granted seat is counted and the revoked stamp is cleared',
 
 -- H9: stamping revoked_at straight onto a held seat revokes it, so the row
 -- never reads "access on" while being uncounted. Depends on the same state as
--- H8: seat limit 5 and the DMS add-on, restored just before H7.
+-- H8: seat limit 5 and the DMS add-on, restored just before H7 (H6 leaves the add-on off).
 UPDATE public.contacts SET portal_access_revoked_at = now()
  WHERE id = :DIST_C2;
 
@@ -248,6 +257,29 @@ SELECT qa('H16 the service role gets the real count for any account',
   public.portal_seats_used(:ACCT) = 1,
   'service role saw ' || public.portal_seats_used(:ACCT)::text || ', expected 1');
 RESET ROLE;
+
+-- H17: the seat cap as the role it exists to stop. Everything above ran as the
+-- file owner. portal_seats_used returns 0 to non-members, which the trigger
+-- reads as "none used", so the cap is only right if every writer is a member
+-- (or the service role). Uid 1111...0001 is the account-A admin (the same uid
+-- H14 uses as a member). The cap is made FULL first (limit 1, DIST_C holds it).
+-- If RLS filtered the row the UPDATE would raise nothing and this scenario
+-- FAILS: fix the uid, never the guard.
+RESET ROLE;
+UPDATE public.accounts SET portal_seats_limit = 1 WHERE id = :ACCT;
+SELECT set_config('test.uid', '11110000-0000-0000-0000-000000000001', false);
+SET ROLE authenticated;
+SELECT qa_refused('H17 the seat cap refuses a grant when run as an authenticated account admin',
+  'UPDATE public.contacts SET portal_email = ''c2@abc.com'', '
+  'portal_user_id = ''00000000-0000-0000-0000-0000000000c2'', '
+  'portal_access = true WHERE id = ' || quote_literal(:DIST_C2));
+RESET ROLE;
+SELECT qa('H17-msg that refusal is the cap''s own sentence, and nothing was granted',
+  (SELECT count(*) FROM qa_results
+    WHERE scenario LIKE 'H17 %' AND pass AND detail LIKE '%portal logins are in use%') = 1
+  AND NOT (SELECT portal_access FROM public.contacts WHERE id = :DIST_C2),
+  coalesce((SELECT detail FROM qa_results WHERE scenario LIKE 'H17 %'), 'none recorded'));
+UPDATE public.accounts SET portal_seats_limit = 5 WHERE id = :ACCT;
 
 -- ── K: deleting a customer who placed a portal order ─────────
 -- An order must outlive the customer who placed it. ON DELETE SET NULL: the
