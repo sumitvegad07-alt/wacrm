@@ -44,6 +44,8 @@ interface OrderQueryRow {
   lead_id: string | null;
   customer_name: string | null;
   salesman_name: string | null;
+  /** Only selected when the account has the DMS add-on. */
+  placed_by_portal_contact_id?: string | null;
   order_items?: { count: number }[] | null;
 }
 
@@ -62,6 +64,8 @@ interface OrderRow {
   customerName: string;
   itemCount: number;
   salesmanName: string;
+  /** 'portal' | 'staff'. Only present for accounts with the DMS add-on. */
+  placedVia?: 'portal' | 'staff';
 }
 
 const CLASS_BADGE: Record<string, string> = {
@@ -118,7 +122,7 @@ export default function OrdersPage() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner } = useAuth();
+  const { accountId, defaultCurrency, hasPermission, isAdmin, isOwner, hasDMS } = useAuth();
   const scope = useDataScope();
 
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -170,7 +174,9 @@ export default function OrdersPage() {
         sb
           .from('orders')
           .select(
-            'id, created_at, order_number, date, total_amount, status, classification, user_id, contact_id, lead_id, customer_name, salesman_name, order_items(count)',
+            // Portal-origin column is selected only with the DMS add-on, so an
+            // account without it sends the exact query it always did.
+            `id, created_at, order_number, date, total_amount, status, classification, user_id, contact_id, lead_id, customer_name, salesman_name${hasDMS ? ', placed_by_portal_contact_id' : ''}, order_items(count)`,
             { count: 'exact' },
           )
           .eq('account_id', accountId!),
@@ -194,6 +200,12 @@ export default function OrdersPage() {
       if (Array.isArray(f.status) && f.status.length) {
         q = q.in('status', f.status as string[]);
       }
+      // Placed via: choosing both (or neither) is no filter at all.
+      if (hasDMS && Array.isArray(f.placedVia) && f.placedVia.length === 1) {
+        q = f.placedVia[0] === 'portal'
+          ? q.not('placed_by_portal_contact_id', 'is', null)
+          : q.is('placed_by_portal_contact_id', null);
+      }
       if (f.date) {
         const { gte, lte } = dateFilterToRange(f.date as string | string[]);
         if (gte) q = q.gte('date', gte);
@@ -208,14 +220,14 @@ export default function OrdersPage() {
         ServerTableQuery<Record<string, unknown>>
       >;
     },
-    [accountId, scope],
+    [accountId, scope, hasDMS],
   );
 
   const table = useServerTable<Record<string, unknown>>({
     tableView,
     buildQuery,
     enabled: Boolean(accountId) && scope.ready,
-    deps: [accountId, scope.key],
+    deps: [accountId, scope.key, hasDMS],
   });
 
   const fetchData = table.reload;
@@ -269,10 +281,11 @@ export default function OrdersPage() {
           customerName: row.customer_name || 'Unknown',
           itemCount: row.order_items?.[0]?.count ?? 0,
           salesmanName: row.salesman_name || 'Unknown',
+          ...(hasDMS ? { placedVia: row.placed_by_portal_contact_id ? 'portal' : 'staff' } : {}),
           ...(customValues[row.id] ?? {}),
         } as OrderRow;
       }),
-    [table.rows, customValues],
+    [table.rows, customValues, hasDMS],
   );
 
   const loading = table.loading;
@@ -391,6 +404,20 @@ export default function OrdersPage() {
       visibleByDefault: false,
       render: (o) => <span className="text-sm">{o.salesmanName}</span>,
     },
+    // DMS add-on only: whether staff or a distributor's portal placed the order.
+    // A portal customer has no profiles row, so Salesman alone would read blank.
+    ...(hasDMS ? [{
+      id: 'placedVia',
+      label: 'Placed via',
+      type: 'select' as const,
+      options: [
+        { label: 'Portal', value: 'portal' },
+        { label: 'Staff', value: 'staff' },
+      ],
+      render: (o: OrderRow) => (
+        <span className="text-sm">{o.placedVia === 'portal' ? 'Portal' : 'Staff'}</span>
+      ),
+    }] : []),
     ...(canEditOrder ? [{
       id: 'actions',
       label: 'Action',
@@ -441,11 +468,12 @@ export default function OrdersPage() {
           customerName: row.customer_name || 'Unknown',
           salesmanName: row.salesman_name || 'Unknown',
           itemCount: row.order_items?.[0]?.count ?? 0,
+          ...(hasDMS ? { placedVia: row.placed_by_portal_contact_id ? 'Portal' : 'Staff' } : {}),
         };
       }),
       truncated,
     };
-  }, [supabase, buildQuery, table.search, filterState]);
+  }, [supabase, buildQuery, table.search, filterState, hasDMS]);
 
   return (
     <PageLayout fill>
