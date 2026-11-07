@@ -224,12 +224,14 @@ route holding the service-role key calling `auth.admin.createUser`. **This stays
 CRM.** If the portal app is ever compromised it cannot mint users or read across tenants,
 because it has no privileged key.
 
-One detail that will bite if missed: `handle_new_user` fires on every new `auth.users` row
-and creates an account unless the metadata says otherwise (`member_of_account` is the
-existing escape hatch, and it still inserts a `profiles` row). A portal user needs metadata
-that makes the trigger do **nothing at all** — no account **and no `profiles` row**. Note
-that `handle_new_user` was last touched by `20261103130000_automatic_master_codes.sql`;
-patch from that version, not an older one.
+`handle_new_user` fires on every new `auth.users` row and would normally mint a whole
+account. **It needs no change.** Its current definition
+(`20260929153000_fsm_signup_plans.sql`, the trigger itself restored by
+`20261003120000`) returns immediately when the metadata carries
+`skip_account_provision = 'true'` or `member_of_account`, and on that path it inserts
+**no `profiles` row either** — the team-member route does that itself. So a portal user is
+created with `skip_account_provision: true` and the trigger does nothing at all, which is
+exactly what is wanted. Verified 2026-11-07.
 
 ### 5.4 Revoking
 
