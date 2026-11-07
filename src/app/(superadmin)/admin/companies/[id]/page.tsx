@@ -17,6 +17,7 @@ import {
 import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2, ToggleLeft, History } from "lucide-react";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/admin/billing";
 import {
+  ADDON_LABEL,
   PLAN_IDS,
   PLAN_LABEL,
   allowedModules,
@@ -61,6 +62,8 @@ export default function CompanyDetailPage() {
   const [expiresAt, setExpiresAt] = useState("");
   const [userCount, setUserCount] = useState<number | "">("");
   const [notes, setNotes] = useState("");
+  const [dmsEnabled, setDmsEnabled] = useState(false);
+  const [portalSeats, setPortalSeats] = useState<string>("0");
   const [modules, setModules] = useState<Record<string, boolean>>({});
   const [timeline, setTimeline] = useState<
     { occurred_at: string; category: string; summary: string }[]
@@ -103,6 +106,8 @@ export default function CompanyDetailPage() {
         );
         setUserCount(c.user_count || "");
         setNotes(c.notes || "");
+        setDmsEnabled(Array.isArray(c.addon_lines) && c.addon_lines.includes("dms"));
+        setPortalSeats(String(c.portal_seats_limit ?? 0));
       }
       // The route orders by email; this screen has always listed owner first.
       const memberRows = ((membersRes as { users?: Member[] }).users ?? []).slice();
@@ -126,18 +131,38 @@ export default function CompanyDetailPage() {
     // have: an RLS-blocked UPDATE succeeded with no error and changed nothing,
     // while the page reported "Saved successfully!".
     try {
-      const res = await fetch(`/api/admin/accounts/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status,
-          plan,
-          expiresAt: expiresAt || null,
-          userCount: userCount === "" ? undefined : Number(userCount),
-          modules,
-        }),
-      });
-      const payload = await res.json();
+      const send = (confirmRevokeLogins: boolean) =>
+        fetch(`/api/admin/accounts/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status,
+            plan,
+            expiresAt: expiresAt || null,
+            userCount: userCount === "" ? undefined : Number(userCount),
+            modules,
+            addonLines: dmsEnabled ? ["dms"] : [],
+            portalSeatsLimit: Number(portalSeats) || 0,
+            ...(confirmRevokeLogins ? { confirmRevokeLogins: true } : {}),
+          }),
+        });
+      let res = await send(false);
+      let payload = await res.json();
+
+      // Removing the DMS stops every portal login at once. The server refuses
+      // until the person has been told how many, then we retry with consent.
+      if (res.status === 409 && payload.code === "confirm_revoke_logins") {
+        const ok = window.confirm(
+          `This account has ${payload.seatsUsed} portal logins in use. Removing the DMS will stop all of them signing in. Nothing is deleted. Continue?`,
+        );
+        if (!ok) {
+          setSaveMsg("Not saved: DMS removal cancelled.");
+          setTimeout(() => setSaveMsg(null), 5000);
+          return;
+        }
+        res = await send(true);
+        payload = await res.json();
+      }
 
       if (!res.ok || payload.error) {
         setSaveMsg(`Error: ${payload.error || "Save failed"}`);
@@ -280,6 +305,41 @@ export default function CompanyDetailPage() {
                 <SelectItem value="deactivated">Deactivated</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>DMS add-on</Label>
+            {/* Granted here and nowhere else. A tenant admin must never be able
+                to switch on something they have not bought, which is why there
+                is no module_settings.dms toggle anywhere in the product. */}
+            <Select
+              value={dmsEnabled ? "on" : "off"}
+              onValueChange={(v) => setDmsEnabled(v === "on")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Not sold</SelectItem>
+                <SelectItem value="on">{ADDON_LABEL.dms}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Portal logins</Label>
+            <Input
+              type="number"
+              min={0}
+              value={portalSeats}
+              onChange={(e) => setPortalSeats(e.target.value)}
+              disabled={!dmsEnabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              How many customers this account may give a portal login to. Sold in hundreds.
+            </p>
           </div>
         </div>
 
