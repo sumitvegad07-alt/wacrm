@@ -190,6 +190,12 @@ SELECT qa('H11 and the seat is still held, count unchanged',
   AND (SELECT portal_access FROM public.contacts WHERE id = :DIST_C),
   'count=' || public.portal_seats_used(:ACCT)::text);
 
+-- H12 only means something with the cap FULL (limit 1, used 1): then the
+-- v_was_held early-return is the ONLY thing letting this write through. With
+-- spare seats the cap check would pass and the test could not tell working
+-- from broken. Do not "tidy" the limit away from 1 before H12.
+UPDATE public.accounts SET portal_seats_limit = 1 WHERE id = :ACCT;
+
 INSERT INTO h_snap VALUES ('before12', public.portal_seats_used(:ACCT));
 
 SELECT qa_allowed('H12a a full-row style write of portal_access = true on a held seat succeeds',
@@ -202,8 +208,8 @@ SELECT qa('H12 it did not consume a second seat',
   AND public.portal_seats_used(:ACCT) = 1,
   'count=' || public.portal_seats_used(:ACCT)::text);
 
--- H13: with the cap full, a refused re-grant must change NOTHING.
-UPDATE public.accounts SET portal_seats_limit = 1 WHERE id = :ACCT;
+-- H13: the cap is still full (limit 1, set before H12); a refused re-grant
+-- must change NOTHING.
 
 SELECT qa_refused('H13a re-granting a revoked customer is refused when the cap is full',
   'UPDATE public.contacts SET portal_access = true WHERE id = ' || quote_literal(:DIST_C2));
