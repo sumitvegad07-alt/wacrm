@@ -33,6 +33,8 @@ export interface PortalAccessBlockProps {
   setAt?: string | null;
   /** For the remove-access confirmation. */
   customerName?: string | null;
+  /** contacts.hierarchy_level: the DB refuses any update to a level-less customer when order hierarchy is on. */
+  hierarchyLevel?: number | null;
   /**
    * Called after any successful write. Pass the page's FULL reload (e.g.
    * `refreshAll`), never a local setState: a block that refetches itself
@@ -75,6 +77,7 @@ export function PortalAccessBlock({
   setBy,
   setAt,
   customerName,
+  hierarchyLevel,
   onChanged,
 }: PortalAccessBlockProps) {
   const { hasDMS, canManageMembers, account, accountId } = useAuth();
@@ -181,6 +184,19 @@ export function PortalAccessBlock({
   // The DMS is granted but no logins were bought: the switch could only fail.
   // A login already active (allowance later cut) can still be switched off.
   const noSeats = seatsLimit <= 0 && !active;
+  // Seats exist but all are taken. Only a customer who does NOT hold one is
+  // blocked (new grant or restore both consume a seat). A null count (read
+  // failed) is never "full": the server decides. A holder stays interactive:
+  // removing access is how an admin frees a seat.
+  const seatsFull = seatsLimit > 0 && seatsUsed !== null && seatsUsed >= seatsLimit && !active;
+  // Order hierarchy on + no Customer Level: the DB rejects any update to this
+  // customer, and granting access is one. Read from the already-loaded account
+  // settings (no fetch).
+  const hierarchyOn =
+    (account?.settings as { order_settings?: { hierarchy_enabled?: boolean } } | null | undefined)
+      ?.order_settings?.hierarchy_enabled === true;
+  const needsLevel = hierarchyOn && !active && (hierarchyLevel === null || hierarchyLevel === undefined);
+  const blocked = noSeats || seatsFull || needsLevel;
   const open = active || wantOpen;
   const status = active ? 'Login active' : hasLogin ? 'Access withdrawn' : 'No login yet';
 
@@ -271,7 +287,7 @@ export function PortalAccessBlock({
         </div>
         <Switch
           checked={open}
-          disabled={busy || noSeats}
+          disabled={busy || blocked}
           aria-label="Provide DMS Access"
           onCheckedChange={(on: boolean) => {
             if (on) setWantOpen(true);
@@ -287,7 +303,20 @@ export function PortalAccessBlock({
         </p>
       )}
 
-      {open && (
+      {!noSeats && seatsFull && (
+        <p className="text-caption text-muted-foreground" data-testid="portal-seats-full">
+          All {seatsLimit} portal logins are in use. Remove access from another customer, or ask OZZO for more.
+        </p>
+      )}
+
+      {!noSeats && !seatsFull && needsLevel && (
+        <p className="text-caption text-muted-foreground" data-testid="portal-needs-level">
+          Set this customer&apos;s Customer Level first. A customer without a level cannot be given a portal login
+          while order hierarchy is on.
+        </p>
+      )}
+
+      {open && !blocked && (
         <div className="space-y-3">
           <FormGrid variant="dialog">
             <div className="space-y-1">

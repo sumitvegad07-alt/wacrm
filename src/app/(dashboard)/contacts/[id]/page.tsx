@@ -537,6 +537,7 @@ export default function ContactDetailsPage() {
             setBy={contact.portal_access_set_by}
             setAt={contact.portal_access_set_at}
             customerName={contact.company || contact.name}
+            hierarchyLevel={contact.hierarchy_level}
             onChanged={refreshAll}
           />
 
