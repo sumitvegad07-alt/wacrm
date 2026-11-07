@@ -130,6 +130,19 @@ export default function CompanyDetailPage() {
     // log. It also removes the silent-no-op failure mode this screen used to
     // have: an RLS-blocked UPDATE succeeded with no error and changed nothing,
     // while the page reported "Saved successfully!".
+    // A blank or non-numeric allowance must never be coerced to 0 and sent: with
+    // no logins in use that would silently zero a paid allowance.
+    const seatsText = portalSeats.trim();
+    const seatsNumber = Number(seatsText);
+    const seatsValid =
+      seatsText !== "" && Number.isInteger(seatsNumber) && seatsNumber >= 0;
+    if (dmsEnabled && !seatsValid) {
+      setSaveMsg("Error: Portal logins must be a whole number, zero or more. Nothing was saved.");
+      setTimeout(() => setSaveMsg(null), 10000);
+      setSaving(false);
+      return;
+    }
+
     try {
       const send = (confirmRevokeLogins: boolean) =>
         fetch(`/api/admin/accounts/${id}`, {
@@ -142,7 +155,7 @@ export default function CompanyDetailPage() {
             userCount: userCount === "" ? undefined : Number(userCount),
             modules,
             addonLines: dmsEnabled ? ["dms"] : [],
-            portalSeatsLimit: Number(portalSeats) || 0,
+            portalSeatsLimit: seatsValid ? seatsNumber : undefined,
             ...(confirmRevokeLogins ? { confirmRevokeLogins: true } : {}),
           }),
         });
@@ -155,13 +168,19 @@ export default function CompanyDetailPage() {
         const ok = window.confirm(
           `This account has ${payload.seatsUsed} portal logins in use. Removing the DMS will stop all of them signing in. Nothing is deleted. Continue?`,
         );
+        // The 409 can only come from a removal, so the database still has the
+        // DMS ON. Put the control back so it never reads the opposite of reality.
         if (!ok) {
-          setSaveMsg("Not saved: DMS removal cancelled.");
-          setTimeout(() => setSaveMsg(null), 5000);
+          setDmsEnabled(true);
+          setSaveMsg(
+            "Nothing was saved. Your other changes were not saved either, because the DMS removal was cancelled.",
+          );
+          setTimeout(() => setSaveMsg(null), 10000);
           return;
         }
         res = await send(true);
         payload = await res.json();
+        if (!res.ok || payload.error) setDmsEnabled(true);
       }
 
       if (!res.ok || payload.error) {

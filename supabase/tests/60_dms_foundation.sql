@@ -222,6 +222,33 @@ SELECT qa('H13 the refused re-grant left the revoked row exactly as it was',
 
 UPDATE public.accounts SET portal_seats_limit = 5 WHERE id = :ACCT;
 
+-- H14-H16: portal_seats_used is SECURITY DEFINER and granted to authenticated,
+-- so it must not hand one company's count to another. State here: DIST_C holds
+-- exactly one seat (see H13). Staff of A and staff of B are both signed in as
+-- ordinary users; the service role is the superadmin route.
+RESET ROLE;
+SELECT set_config('test.uid', '11110000-0000-0000-0000-000000000001', false);
+SET ROLE authenticated;
+SELECT qa('H14 a member of the account gets the real login count',
+  public.portal_seats_used(:ACCT) = 1,
+  'member saw ' || public.portal_seats_used(:ACCT)::text || ', expected 1');
+
+RESET ROLE;
+SELECT set_config('test.uid', '22220000-0000-0000-0000-000000000001', false);
+SET ROLE authenticated;
+SELECT qa('H15 a user from ANOTHER account gets 0, not the count',
+  public.portal_seats_used(:ACCT) = 0,
+  'outsider saw ' || public.portal_seats_used(:ACCT)::text || ', expected 0');
+
+RESET ROLE;
+GRANT SELECT, INSERT ON qa_results TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE qa_results_id_seq TO service_role;
+SET ROLE service_role;
+SELECT qa('H16 the service role gets the real count for any account',
+  public.portal_seats_used(:ACCT) = 1,
+  'service role saw ' || public.portal_seats_used(:ACCT)::text || ', expected 1');
+RESET ROLE;
+
 -- ── K: deleting a customer who placed a portal order ─────────
 -- An order must outlive the customer who placed it. ON DELETE SET NULL: the
 -- delete succeeds, the order stays, and its marker goes back to NULL. If the

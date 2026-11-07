@@ -79,6 +79,10 @@ export interface ValidatedChange {
   subscription_expires_at?: string | null;
   user_count?: number;
   module_settings?: Record<string, boolean>;
+  // Set by the PATCH route, not by validateBillingChange: they need the
+  // portal_seats_used RPC and the revoke confirmation, which live in the route.
+  addon_lines?: string[];
+  portal_seats_limit?: number;
 }
 
 export class BillingValidationError extends Error {}

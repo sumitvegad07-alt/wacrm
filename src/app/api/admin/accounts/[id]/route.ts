@@ -52,6 +52,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // Deliberately the route's existing guard: subscription_plan, an equally
+    // commercial field, is governed by requireSuperadmin, and superadmin is
+    // itself granted only by the founder.
     const ctx = await requireSuperadmin();
     const admin = serviceClient();
     const { id } = await params;
@@ -170,10 +173,8 @@ export async function PATCH(
       }
     }
 
-    const commercialExtra: Record<string, unknown> = {};
-    if (linesChanged) commercialExtra.addon_lines = newLines;
-    if (seatsChanged) commercialExtra.portal_seats_limit = body.portalSeatsLimit;
-    patch = { ...patch, ...commercialExtra } as typeof patch;
+    if (linesChanged) patch.addon_lines = newLines;
+    if (seatsChanged) patch.portal_seats_limit = body.portalSeatsLimit;
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ ok: true, changed: {} });
