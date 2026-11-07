@@ -8,8 +8,12 @@ import { serviceRoleKey } from "@/lib/supabase/service-role-key";
 // Supabase validates the shape, so an admin typing "ramesh" must be told why.
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Supabase's duplicate-email error is GLOBAL (auth.users is shared by all of OZZO).
 const TAKEN_MESSAGE =
   "That login is already taken. Portal logins are shared across all of OZZO, so pick another address.";
+
+// Our own unique index is per account.
+const SAME_ACCOUNT_MESSAGE = "Another customer in your account already uses that login.";
 
 export function validatePortalLogin(email: string, password: string): string | null {
   if (!EMAIL_SHAPE.test(email ?? "")) {
@@ -28,6 +32,71 @@ export function friendlyAuthError(message: string): string {
   return message;
 }
 
+/**
+ * Our own unique index (account_id, lower(portal_email)) is a clash WITHIN the
+ * admin's account. Matched by index name so an unrelated unique violation on
+ * contacts is not caught. Everything else is the database's own wording,
+ * passed through verbatim.
+ */
+export function friendlyDbError(err: { message: string; code?: string }): string {
+  if (err.code === "23505" && /contacts_portal_email_idx/.test(err.message)) {
+    return SAME_ACCOUNT_MESSAGE;
+  }
+  return err.message;
+}
+
+export type PortalGrantPlan =
+  | { kind: "refuse"; error: string }
+  | { kind: "restore"; password: string | null }
+  | { kind: "create"; email: string; password: string };
+
+/**
+ * Pure decision: brand-new login, restore of a revoked one, or refusal.
+ * Seat and add-on rules are NOT decided here: the database does that.
+ */
+export function planPortalGrant(
+  contact: {
+    portal_user_id: string | null;
+    portal_access: boolean | null;
+    portal_access_revoked_at: string | null;
+    portal_email: string | null;
+  },
+  email: unknown,
+  password: unknown
+): PortalGrantPlan {
+  const em = typeof email === "string" ? email.trim() : "";
+  const pw = typeof password === "string" ? password : "";
+
+  if (!contact.portal_user_id) {
+    const invalid = validatePortalLogin(em, pw);
+    return invalid ? { kind: "refuse", error: invalid } : { kind: "create", email: em, password: pw };
+  }
+
+  if (contact.portal_access === true && !contact.portal_access_revoked_at) {
+    return {
+      kind: "refuse",
+      error: "This customer already has a portal login. Reset the password instead.",
+    };
+  }
+
+  // Restore of a revoked login. The auth user already exists and owns the email.
+  if (em && em.toLowerCase() !== (contact.portal_email ?? "").toLowerCase()) {
+    return {
+      kind: "refuse",
+      error:
+        "This customer's login is " +
+        (contact.portal_email ?? "already set") +
+        ". Changing a login address is not supported. Restore access without an email, or use the same one.",
+    };
+  }
+  if (pw) {
+    const invalid = validatePortalLogin("x@y.co", pw);
+    if (invalid) return { kind: "refuse", error: invalid };
+    return { kind: "restore", password: pw };
+  }
+  return { kind: "restore", password: null };
+}
+
 // This client holds the service-role key and ignores RLS. It stays inside this
 // file and is never returned, serialised or logged.
 function admin() {
@@ -41,6 +110,15 @@ function admin() {
 
 type Admin = ReturnType<typeof admin>;
 
+interface OwnContact {
+  id: string;
+  account_id: string;
+  portal_user_id: string | null;
+  portal_access: boolean | null;
+  portal_access_revoked_at: string | null;
+  portal_email: string | null;
+}
+
 /**
  * The customer must belong to the caller's account. Checked server-side because
  * these requests run with the service-role key, which ignores RLS.
@@ -51,13 +129,13 @@ async function loadOwnContact(sb: Admin, contactId: unknown, accountId: string) 
   }
   const { data: contact } = await sb
     .from("contacts")
-    .select("id, account_id, portal_user_id")
+    .select("id, account_id, portal_user_id, portal_access, portal_access_revoked_at, portal_email")
     .eq("id", contactId)
     .maybeSingle();
   if (!contact || contact.account_id !== accountId) {
     throw new ForbiddenError("That customer is not in your account");
   }
-  return contact as { id: string; account_id: string; portal_user_id: string | null };
+  return contact as OwnContact;
 }
 
 /**
@@ -78,32 +156,70 @@ async function callerProfileId(sb: Admin, userId: string, accountId: string) {
   return data.id as string;
 }
 
-/** Give a customer a portal login. */
+// NOTE: portal_access_set_by / portal_access_set_at mean "last changed by / at"
+// (grant, restore or revoke), not only "granted by". Revocation is the event
+// most likely to need an audit trail.
+
+/** Give a customer a portal login, or restore a revoked one. */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const contact_id: unknown = body?.contact_id;
-    const email: string = body?.email;
-    const password: string = body?.password;
     if (!contact_id) {
       return NextResponse.json({ error: "Missing contact_id" }, { status: 400 });
     }
-    const invalid = validatePortalLogin(email, password);
-    if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
 
     const ctx = await requireRole("admin");
     const sb = admin();
 
     const contact = await loadOwnContact(sb, contact_id, ctx.accountId);
-    if (contact.portal_user_id) {
-      return NextResponse.json(
-        { error: "This customer already has a portal login. Reset the password instead." },
-        { status: 400 }
-      );
+    const plan = planPortalGrant(contact, body?.email, body?.password);
+    if (plan.kind === "refuse") {
+      return NextResponse.json({ error: plan.error }, { status: 400 });
     }
 
-    // Resolved BEFORE the auth user exists, so a failure here orphans nothing.
+    // Resolved BEFORE any auth user is touched, so a failure here orphans nothing.
     const setBy = await callerProfileId(sb, ctx.userId, ctx.accountId);
+    const now = new Date().toISOString();
+
+    if (plan.kind === "restore") {
+      // RESTORE. No auth user is created here, so there is deliberately no
+      // deleteUser anywhere in this branch: the login already existed and a
+      // refusal must leave it exactly as it was. The trigger re-checks the
+      // add-on and seat cap and clears portal_access_revoked_at itself.
+      const { data: restored, error: restoreError } = await sb
+        .from("contacts")
+        .update({ portal_access: true, portal_access_set_by: setBy, portal_access_set_at: now })
+        .eq("id", contact.id)
+        .eq("account_id", ctx.accountId)
+        .select("id");
+      if (restoreError || !restored || restored.length !== 1) {
+        return NextResponse.json(
+          { error: restoreError?.message ?? "Could not restore access for this customer" },
+          { status: 400 }
+        );
+      }
+      if (plan.password) {
+        // After the contact update, so a refused restore never changes the password.
+        const { error: pwError } = await sb.auth.admin.updateUserById(contact.portal_user_id!, {
+          password: plan.password,
+        });
+        if (pwError) {
+          return NextResponse.json(
+            {
+              error:
+                "Access was restored, but the password was not changed: " +
+                friendlyAuthError(pwError.message),
+            },
+            { status: 400 }
+          );
+        }
+      }
+      return NextResponse.json({ ok: true, portal_user_id: contact.portal_user_id, restored: true });
+    }
+
+    // CREATE
+    const { email, password } = plan;
 
     // `skip_account_provision` makes handle_new_user return at once: no account
     // and no profiles row. A portal customer is an auth user and nothing else.
@@ -121,9 +237,9 @@ export async function POST(req: NextRequest) {
     }
     const newUserId = authData.user.id;
 
-    // From here on the auth user exists. EVERY exit that is not success must
-    // delete it, or it keeps the globally-unique email and the admin's
-    // corrected retry fails with "already taken".
+    // From here on the auth user WE JUST CREATED exists. EVERY exit that is not
+    // success deletes newUserId (and only that id), or it keeps the
+    // globally-unique email and the admin's corrected retry fails.
     try {
       // The seat cap, the add-on check and the hierarchy guard all live in
       // triggers on this UPDATE. A refusal is the database's: pass it through.
@@ -134,7 +250,7 @@ export async function POST(req: NextRequest) {
           portal_email: email,
           portal_access: true,
           portal_access_set_by: setBy,
-          portal_access_set_at: new Date().toISOString(),
+          portal_access_set_at: now,
         })
         .eq("id", contact.id)
         .eq("account_id", ctx.accountId)
@@ -142,12 +258,8 @@ export async function POST(req: NextRequest) {
 
       if (linkError || !updated || updated.length !== 1) {
         await sb.auth.admin.deleteUser(newUserId);
-        const msg = linkError?.message ?? "Could not give this customer access";
-        // Only the unique index on (account_id, lower(portal_email)) is not
-        // already worded for an admin; everything else passes through verbatim.
-        const isUniqueClash = linkError?.code === "23505";
         return NextResponse.json(
-          { error: isUniqueClash ? TAKEN_MESSAGE : msg },
+          { error: linkError ? friendlyDbError(linkError) : "Could not give this customer access" },
           { status: 400 }
         );
       }
@@ -203,6 +315,7 @@ export async function DELETE(req: NextRequest) {
     const setBy = await callerProfileId(sb, ctx.userId, ctx.accountId);
     const now = new Date().toISOString();
 
+    // set_by / set_at mean "last changed by / at": here, who revoked and when.
     const { error } = await sb
       .from("contacts")
       .update({
