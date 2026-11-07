@@ -97,6 +97,27 @@ export function planPortalGrant(
   return { kind: "restore", password: null };
 }
 
+/**
+ * Body for a successful restore. If the password step failed AFTER access was
+ * restored, the response is still ok:true (HTTP 200) with a warning, because
+ * the restore is durable. Do not turn this into a 400.
+ */
+export function restoreBody(portalUserId: string, passwordError: string | null) {
+  return {
+    ok: true as const,
+    restored: true as const,
+    portal_user_id: portalUserId,
+    ...(passwordError
+      ? {
+          warning:
+            "Access was restored, but the password was not changed. Try the password reset. (" +
+            passwordError +
+            ")",
+        }
+      : {}),
+  };
+}
+
 // This client holds the service-role key and ignores RLS. It stays inside this
 // file and is never returned, serialised or logged.
 function admin() {
@@ -205,17 +226,14 @@ export async function POST(req: NextRequest) {
           password: plan.password,
         });
         if (pwError) {
+          // Access IS restored and persisted, so this is a 200 with a warning,
+          // never a 4xx: a non-2xx must mean nothing durable changed.
           return NextResponse.json(
-            {
-              error:
-                "Access was restored, but the password was not changed: " +
-                friendlyAuthError(pwError.message),
-            },
-            { status: 400 }
+            restoreBody(contact.portal_user_id!, friendlyAuthError(pwError.message))
           );
         }
       }
-      return NextResponse.json({ ok: true, portal_user_id: contact.portal_user_id, restored: true });
+      return NextResponse.json(restoreBody(contact.portal_user_id!, null));
     }
 
     // CREATE
@@ -257,7 +275,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (linkError || !updated || updated.length !== 1) {
-        await sb.auth.admin.deleteUser(newUserId);
+        const { error: delError } = await sb.auth.admin.deleteUser(newUserId);
+        if (delError) {
+          // Not durable on contacts, but the auth user is left behind: log the id (never the password).
+          console.error("[portal-access] could not delete orphaned auth user", newUserId, delError.message);
+        }
         return NextResponse.json(
           { error: linkError ? friendlyDbError(linkError) : "Could not give this customer access" },
           { status: 400 }

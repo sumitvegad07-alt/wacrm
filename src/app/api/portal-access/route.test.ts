@@ -3,6 +3,7 @@ import {
   friendlyAuthError,
   friendlyDbError,
   planPortalGrant,
+  restoreBody,
   validatePortalLogin,
 } from "./route";
 
@@ -87,5 +88,18 @@ describe("friendlyDbError", () => {
     expect(friendlyDbError({ code: "23505", message: other })).toBe(other);
     const seats = "All 1 portal logins are in use. Remove access from another customer, or buy more.";
     expect(friendlyDbError({ message: seats })).toBe(seats);
+  });
+});
+
+describe("restoreBody", () => {
+  it("is a plain success when nothing went wrong", () => {
+    expect(restoreBody("u1", null)).toEqual({ ok: true, restored: true, portal_user_id: "u1" });
+  });
+
+  it("stays ok:true with a warning when only the password step failed (never a 400)", () => {
+    const b = restoreBody("u1", "Password is too weak");
+    expect(b.ok).toBe(true);
+    expect(b.restored).toBe(true);
+    expect((b as { warning?: string }).warning).toMatch(/Access was restored, but the password was not changed/);
   });
 });
