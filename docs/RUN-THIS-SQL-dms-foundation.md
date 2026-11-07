@@ -231,3 +231,41 @@ CREATE TRIGGER trg_enforce_portal_seat_cap
   ON public.contacts
   FOR EACH ROW EXECUTE FUNCTION public.enforce_portal_seat_cap();
 ```
+
+---
+
+# Run this SQL third — mark orders placed through the portal
+
+Run this after the second one. It adds one new box to each order. The box says
+which customer placed the order through the portal. Staff orders leave it empty.
+It starts empty for every order, so nothing changes for old orders. The file is
+safe to run twice.
+
+Open Supabase → SQL Editor → paste the SQL below, Run.
+
+Source file: `supabase/migrations/20261107140000_order_placed_via_portal.sql`
+
+```sql
+-- ============================================================
+-- Where a portal order came from.
+--
+-- The Orders list resolves the salesman by looking orders.user_id up in
+-- profiles IN THE BROWSER. A portal customer has no profiles row, so without
+-- this column a portal order shows a blank salesman — not broken, just
+-- mysterious, and mysterious is how a number stops being trusted.
+--
+-- Written by portal_place_order in Plan 3. Read by the Orders list now.
+-- ============================================================
+
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS placed_by_portal_contact_id uuid NULL
+    REFERENCES public.contacts(id);
+
+COMMENT ON COLUMN public.orders.placed_by_portal_contact_id IS
+  'The customer who placed this order through the DMS portal. NULL means a '
+  'member of staff placed it. Drives the "Placed via" column.';
+
+CREATE INDEX IF NOT EXISTS orders_placed_by_portal_idx
+  ON public.orders (account_id, placed_by_portal_contact_id)
+  WHERE placed_by_portal_contact_id IS NOT NULL;
+```
