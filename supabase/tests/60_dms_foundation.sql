@@ -221,3 +221,29 @@ SELECT qa('H13 the refused re-grant left the revoked row exactly as it was',
   'revoked stamp kept, access still off, count=' || public.portal_seats_used(:ACCT)::text);
 
 UPDATE public.accounts SET portal_seats_limit = 5 WHERE id = :ACCT;
+
+-- ── K: deleting a customer who placed a portal order ─────────
+-- An order must outlive the customer who placed it. ON DELETE SET NULL: the
+-- delete succeeds, the order stays, and its marker goes back to NULL. If the
+-- FK ever reverts to NO ACTION, K1 fails (the delete is refused) and K2/K3
+-- fail with it. Makes its own customer and order, so no earlier section depends on it.
+\set K_CUST '''c1000000-0000-0000-0000-0000000000e1'''
+
+INSERT INTO public.contacts(id, account_id, user_id, name, company, phone, hierarchy_level)
+VALUES (:K_CUST, :ACCT, '11110000-0000-0000-0000-000000000001',
+        'Portal Customer K', 'K Co', '1100000092', 3);
+
+INSERT INTO public.orders(account_id, user_id, order_number, status, date, placed_by_portal_contact_id)
+VALUES (:ACCT, '11110000-0000-0000-0000-000000000001', 'ORD-K1', 'Pending', '2026-03-02', :K_CUST);
+
+SELECT qa_allowed('K1 deleting a customer who placed a portal order succeeds',
+  'DELETE FROM public.contacts WHERE id = ' || quote_literal(:K_CUST));
+
+SELECT qa('K2 the order survives the customer deletion',
+  EXISTS (SELECT 1 FROM public.orders WHERE account_id = :ACCT AND order_number = 'ORD-K1'),
+  'ORD-K1 is missing');
+
+SELECT qa('K3 its placed_by_portal_contact_id is now NULL',
+  (SELECT placed_by_portal_contact_id IS NULL FROM public.orders
+    WHERE account_id = :ACCT AND order_number = 'ORD-K1'),
+  'marker not cleared');
