@@ -31,14 +31,23 @@ export default async function PaymentPrintView(props: {
   const paper = parsePaperSize((await props.searchParams)?.size);
   const supabase = await createClient();
 
-  const { data: payment } = await supabase
+  // No leads(*) here, however much the order and quotation print views look like
+  // this one: payments has contact_id and nothing pointing at leads, so asking
+  // for that embed made PostgREST reject the whole request (PGRST200) and every
+  // receipt printed "Payment not found".
+  const { data: payment, error } = await supabase
     .from('payments')
-    .select('*, contacts(*), leads(*), payment_types(name)')
+    .select('*, contacts(*), payment_types(name)')
     .eq('id', id)
     .maybeSingle();
 
   if (!payment) {
-    return <div className="p-8 text-center text-red-500 bg-white min-h-screen">Payment not found</div>;
+    // A rejected query and a missing row are different failures; say which.
+    return (
+      <div className="p-8 text-center text-red-500 bg-white min-h-screen">
+        {error ? `Could not load this payment: ${error.message}` : 'Payment not found'}
+      </div>
+    );
   }
 
   const { data: auth } = await supabase.auth.getUser();
@@ -54,7 +63,7 @@ export default async function PaymentPrintView(props: {
   const customFieldValues = await fetchCustomFieldValues(supabase, 'payment', id, config.customFieldIds);
 
   const money = (v: unknown) => formatCurrency(Number(v || 0));
-  const cust = payment.contacts || payment.leads || {};
+  const cust = payment.contacts || {};
 
   // Finance verifies against the counted amount, so the receipt must show what was actually
   // credited — the same COALESCE the outstanding calculation uses.
