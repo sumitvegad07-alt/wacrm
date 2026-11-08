@@ -15,6 +15,8 @@ export const DEFAULT_TERRITORY_LEVELS: TerritoryLevel[] = [
 export const DEFAULT_TERRITORY_SETTINGS: TerritorySettings = {
   levels: DEFAULT_TERRITORY_LEVELS,
   assignment_mode: 'area_wise',
+  // Off by default: an assigned Area covers that Area, not the city around it.
+  area_covers_parents: false,
 };
 
 function isMode(v: unknown): v is AssignmentMode {
@@ -24,7 +26,11 @@ function isMode(v: unknown): v is AssignmentMode {
 /** Normalise the raw jsonb into a well-formed TerritorySettings (1..5 levels). */
 export function normalizeTerritorySettings(raw: unknown): TerritorySettings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { levels: DEFAULT_TERRITORY_LEVELS.map((l) => ({ ...l })), assignment_mode: 'area_wise' };
+    return {
+      levels: DEFAULT_TERRITORY_LEVELS.map((l) => ({ ...l })),
+      assignment_mode: 'area_wise',
+      area_covers_parents: false,
+    };
   }
   const src = raw as Record<string, unknown>;
   const levelsRaw = Array.isArray(src.levels) ? src.levels : [];
@@ -44,6 +50,9 @@ export function normalizeTerritorySettings(raw: unknown): TerritorySettings {
   return {
     levels,
     assignment_mode: isMode(src.assignment_mode) ? src.assignment_mode : 'area_wise',
+    // Must be carried through: the panel saves what this returns, so dropping
+    // the key would reset an account's area coverage on an unrelated save.
+    area_covers_parents: src.area_covers_parents === true,
   };
 }
 

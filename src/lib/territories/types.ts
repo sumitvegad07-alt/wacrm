@@ -15,6 +15,20 @@ export interface TerritoryLevel {
 export interface TerritorySettings {
   levels: TerritoryLevel[];
   assignment_mode: AssignmentMode;
+  /**
+   * Does an area assignment also cover the territories ABOVE it?
+   *
+   * OFF (the default): an assigned Area means that Area and its sub-areas. A
+   * customer tagged only to a City is NOT in a rep's patch.
+   * ON: the City/State/Country above the assignment are covered too, so a
+   * customer recorded no finer than "Rajkot" is visible to every rep with an
+   * area inside Rajkot. That is the trade-off for not requiring an Area on
+   * every customer.
+   *
+   * Read in the database by employee_covered_territory_ids (migration
+   * 20261108120000); this is the same key, so the UI and RLS cannot disagree.
+   */
+  area_covers_parents: boolean;
 }
 
 /** A row from public.territories. */

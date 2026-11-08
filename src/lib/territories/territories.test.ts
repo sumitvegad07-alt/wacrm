@@ -71,6 +71,35 @@ describe('normalizeTerritorySettings', () => {
     expect(s.assignment_mode).toBe('area_wise');
     expect(s.levels[1].enabled).toBe(false);
   });
+
+  // area_covers_parents decides whether an area assignment also covers the
+  // City/State/Country ABOVE it — the difference between a rep seeing the four
+  // customers in his area and seeing everyone tagged "Rajkot". It is read by
+  // employee_covered_territory_ids in the database (20261108120000), so this
+  // normaliser MUST carry it: the settings panel saves whatever comes back from
+  // here, and a dropped key would silently reset the account to the default on
+  // the next unrelated save of territory settings.
+  describe('area_covers_parents', () => {
+    it('defaults to off, which is what an assigned area means on its own', () => {
+      expect(normalizeTerritorySettings(null).area_covers_parents).toBe(false);
+      expect(normalizeTerritorySettings({ levels: [] }).area_covers_parents).toBe(false);
+    });
+
+    it('is preserved when set, so saving the panel cannot wipe it', () => {
+      const s = normalizeTerritorySettings({
+        levels: [{ position: 1, name: 'Country', enabled: true }],
+        assignment_mode: 'area_wise',
+        area_covers_parents: true,
+      });
+      expect(s.area_covers_parents).toBe(true);
+    });
+
+    it('ignores a non-boolean rather than letting it through', () => {
+      expect(
+        normalizeTerritorySettings({ levels: [], area_covers_parents: 'yes' }).area_covers_parents,
+      ).toBe(false);
+    });
+  });
 });
 
 describe('enabledLevels / leafLevel / levelName', () => {

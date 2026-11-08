@@ -138,17 +138,27 @@ export const restoreTerritory = (id: string) => rpc('territory_restore', { p_id:
 export const deleteTerritory = (id: string) => rpc('territory_delete', { p_id: id });
 export const assignEmployeeAreas = (employeeId: string, territoryIds: string[]) =>
   rpc('territory_assign_employee_areas', { p_employee_id: employeeId, p_territory_ids: territoryIds });
+/**
+ * Saves levels, assignment mode and area coverage together.
+ *
+ * `p_area_covers_parents` selects the five-argument form added in
+ * 20261108120000. The four-argument form still exists and now MERGES rather
+ * than replacing territory_settings, so whichever of the migration and this
+ * deploy lands first, the settings page keeps working.
+ */
 export const updateTerritorySettings = (
   accountId: string,
   levels: TerritoryLevel[],
   assignmentMode: AssignmentMode,
-  confirm = false
+  confirm = false,
+  areaCoversParents = false
 ) =>
   rpc('territory_update_settings', {
     p_account_id: accountId,
     p_levels: levels,
     p_assignment_mode: assignmentMode,
     p_confirm: confirm,
+    p_area_covers_parents: areaCoversParents,
   });
 export const migrateContactGeo = (accountId: string) =>
   rpc('territory_migrate_contact_geo', { p_account_id: accountId });

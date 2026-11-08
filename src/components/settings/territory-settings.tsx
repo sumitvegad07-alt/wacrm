@@ -29,6 +29,7 @@ export function TerritorySettings({ onSaved }: { onSaved?: () => void } = {}) {
   const [saving, setSaving] = useState(false);
   const [levels, setLevels] = useState<TerritoryLevel[]>(DEFAULT_TERRITORY_LEVELS.map((l) => ({ ...l })));
   const [mode, setMode] = useState<AssignmentMode>("direct");
+  const [coversParents, setCoversParents] = useState(false);
   const [confirm, setConfirm] = useState<{ affected: AffectedLevel[] } | null>(null);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export function TerritorySettings({ onSaved }: { onSaved?: () => void } = {}) {
       const s = await getAccountTerritorySettings(accountId);
       setLevels(s.levels.map((l) => ({ ...l })));
       setMode(s.assignment_mode);
+      setCoversParents(s.area_covers_parents);
     } catch {
       toast.error("Failed to load territory settings");
     } finally {
@@ -66,7 +68,7 @@ export function TerritorySettings({ onSaved }: { onSaved?: () => void } = {}) {
     }
     setSaving(true);
     try {
-      const res = (await updateTerritorySettings(accountId, cleaned, mode, withConfirm)) as {
+      const res = (await updateTerritorySettings(accountId, cleaned, mode, withConfirm, coversParents)) as {
         ok: boolean;
         requires_confirmation?: boolean;
         affected?: AffectedLevel[];
@@ -168,6 +170,35 @@ export function TerritorySettings({ onSaved }: { onSaved?: () => void } = {}) {
                   <span className="text-xs text-muted-foreground">Each area belongs to exactly one employee; customers in that area are auto-owned by them. Assigning a second employee to a taken area is blocked.</span>
                 </span>
               </label>
+            </div>
+
+            {/* Area coverage. The answer to "I assigned one area, why does the
+                rep see other areas' customers" — and to its opposite, "I only
+                tagged the City, why does the rep see nothing". */}
+            <div className="p-4 border border-border rounded-lg bg-card space-y-3">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <p className="text-sm font-medium">What an assigned area covers</p>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <span>
+                  <span className="text-sm font-medium block">
+                    Also cover the City / State above the area
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Off: an employee sees customers in their own assigned areas and sub-areas only.
+                    A customer saved with just a City is not in anyone&apos;s area until you tag them
+                    down to an area. On: that City customer is visible to every employee holding an
+                    area inside it. A neighbouring area is never shared either way.
+                  </span>
+                </span>
+                <Switch
+                  checked={coversParents}
+                  onCheckedChange={setCoversParents}
+                  disabled={!canEditSettings}
+                  aria-label="Area assignment also covers the city and state above it"
+                />
+              </div>
             </div>
 
             {canEditSettings && (
