@@ -102,6 +102,32 @@ CREATE TABLE IF NOT EXISTS report_registry_scopes (
 COMMENT ON TABLE report_registry_scopes IS
   'Per report module: how to narrow it to a set of AUTH user ids. Consulted by execute_report only when p_user_ids is supplied; a module missing from here RAISES rather than returning the whole account.';
 
+-- READABLE BY EVERYONE, WRITABLE BY NOBODY — the same shape as the four
+-- registry tables this one joins (20260811163442 lines 80-88).
+--
+-- Both halves matter, and getting either wrong breaks something:
+--
+--  * RLS ON WITH NO POLICY WOULD BREAK EVERY SCOPED DASHBOARD. execute_report
+--    is SECURITY INVOKER, so it reads this table as the signed-in rep. With no
+--    SELECT policy that read returns zero rows, the fail-closed guard fires
+--    ("No scope rule for module …"), and the phone shows "Analytics needs a
+--    database update" to everyone, for ever. This is what Supabase's SQL
+--    editor offers to do for you with "Run and enable RLS": do not take it.
+--
+--  * RLS OFF WOULD BE WORSE THAN THE OTHER REGISTRY TABLES. Supabase grants
+--    the API roles table privileges and relies on RLS to gate them, so a table
+--    in `public` with RLS off is writable by any authenticated user — and
+--    `sql_where` here is spliced straight into the generated statement. That
+--    is an injection path, and it is exactly why the other registry tables
+--    were given SELECT-only policies rather than left open.
+--
+-- SELECT USING (true) and no INSERT/UPDATE/DELETE policy gives both: the
+-- engine can read it, nobody holding an anon or authenticated key can change
+-- it, and migrations still write to it because service_role bypasses RLS.
+ALTER TABLE report_registry_scopes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can read scopes" ON report_registry_scopes;
+CREATE POLICY "Anyone can read scopes" ON report_registry_scopes FOR SELECT USING (true);
+
 INSERT INTO report_registry_scopes (module_name, sql_where, note) VALUES
   -- orders.user_id, payments.user_id, site_visits.user_id, leads.user_id,
   -- deals.user_id and quotations.user_id all reference auth.users(id).

@@ -171,4 +171,35 @@ SELECT qa('scope: the order report resolves a salesperson''s name',
           'got ' || COALESCE(public.execute_report(:ACCT::uuid, 'order', ARRAY['user'],
                                                    ARRAY['net_amount'])::text, 'NULL'));
 
+-- ── 11. The scope table's RLS shape ─────────────────────────
+-- Both halves of this nearly went wrong, and each breaks something different.
+--
+-- READABLE: execute_report is SECURITY INVOKER, so it reads this table AS THE
+-- SIGNED-IN REP. RLS on with no SELECT policy returns zero rows, the
+-- fail-closed guard fires, and every scoped dashboard shows "needs a database
+-- update" for ever. That is precisely what Supabase's SQL editor offers to do
+-- with its "Run and enable RLS" button.
+--
+-- NOT WRITABLE: Supabase grants the API roles table privileges and leans on
+-- RLS to gate them, so a public table with RLS OFF is writable by anyone
+-- holding an authenticated key — and `sql_where` is spliced straight into the
+-- generated statement. SELECT-only, exactly like the four registry tables
+-- this one sits beside.
+SET ROLE authenticated;
+
+SELECT qa('scope: a signed-in user can READ the scope rules',
+          (SELECT count(*) > 0 FROM report_registry_scopes),
+          'without this every scoped dashboard fails closed and shows nothing');
+
+SELECT qa_refused('scope: a signed-in user cannot WRITE a scope rule',
+                  $q$INSERT INTO report_registry_scopes(module_name, sql_where)
+                     VALUES ('injected', 'TRUE')$q$);
+
+RESET ROLE;
+
+-- Belt and braces: the row must genuinely not be there.
+SELECT qa('scope: the refused write really did not land',
+          NOT EXISTS (SELECT 1 FROM report_registry_scopes WHERE module_name = 'injected'),
+          'sql_where is spliced into SQL, so a writable registry is an injection path');
+
 SELECT 'dashboard viewer scope scenarios done' AS status;
