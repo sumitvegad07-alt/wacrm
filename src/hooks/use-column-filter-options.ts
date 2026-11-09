@@ -72,6 +72,93 @@ export function resetPeopleOptionsCache(): void {
   peoplePromise = null;
 }
 
+/**
+ * Answers already fetched for a `distinct` column, and the requests in flight.
+ *
+ * Opening a filter dropdown took one to three seconds EVERY time, on every
+ * table, and the reason was that nothing here was ever reused. Each open fired
+ * a fresh /api/table/column-values, and that endpoint has to authenticate the
+ * caller, find their account and then scan up to 2,000 rows — four sequential
+ * round trips to Mumbai before a single value appears. Closing the dropdown and
+ * opening it again paid the whole bill a second time, and so did the next
+ * screen asking for the same column.
+ *
+ * So the answers are held for the life of the page, and concurrent asks for the
+ * same column share one request instead of racing. A filter dropdown's value
+ * list is a convenience, not a source of truth — a value added by someone else
+ * in the last few minutes being missing from the list is a far smaller cost than
+ * every open of every filter waiting on the network.
+ *
+ * `reload` on the table still refetches the ROWS; this only caches the list of
+ * values the dropdown offers.
+ */
+interface DistinctResult {
+  values: ColumnOption[];
+  truncated: boolean;
+}
+
+const DISTINCT_TTL_MS = 5 * 60 * 1000;
+
+const distinctCache = new Map<string, { at: number; result: DistinctResult }>();
+const distinctInflight = new Map<string, Promise<DistinctResult>>();
+
+function distinctKey(module: string, column: string, search: string): string {
+  return `${module}\u0000${column}\u0000${search}`;
+}
+
+async function fetchDistinct(
+  module: string,
+  column: string,
+  search: string,
+): Promise<DistinctResult> {
+  const key = distinctKey(module, column, search);
+
+  const cached = distinctCache.get(key);
+  if (cached && Date.now() - cached.at < DISTINCT_TTL_MS) return cached.result;
+
+  const existing = distinctInflight.get(key);
+  if (existing) return existing;
+
+  const request = (async (): Promise<DistinctResult> => {
+    const params = new URLSearchParams({ module, column });
+    if (search) params.set("q", search);
+
+    const res = await fetch(`/api/table/column-values?${params.toString()}`);
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload?.error || "Could not load values");
+
+    const result: DistinctResult = {
+      values: ((payload.values as string[]) ?? []).map((v) => ({ label: v, value: v })),
+      truncated: Boolean(payload.truncated),
+    };
+    distinctCache.set(key, { at: Date.now(), result });
+    return result;
+  })();
+
+  distinctInflight.set(key, request);
+  try {
+    return await request;
+  } finally {
+    // Whether it resolved or threw: a failure must not be remembered as an
+    // in-flight request, or the dropdown never retries.
+    distinctInflight.delete(key);
+  }
+}
+
+/** Forget every cached value list — for tests, and after a bulk import. */
+export function resetColumnValuesCache(): void {
+  distinctCache.clear();
+  distinctInflight.clear();
+}
+
+/**
+ * How long to wait after the last keystroke before asking the server.
+ *
+ * Typing "Rajkot" in the dropdown's search box fired six requests, each a
+ * 2,000-row scan, and the only one whose answer mattered was the last.
+ */
+const SEARCH_DEBOUNCE_MS = 300;
+
 export interface ColumnFilterOptions {
   options: ColumnOption[];
   loading: boolean;
@@ -91,6 +178,17 @@ export function useColumnFilterOptions<T>(
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [search, setSearch] = useState("");
+  /**
+   * The search term the fetch actually uses, which trails the box by
+   * SEARCH_DEBOUNCE_MS. `search` stays immediate so typing never feels laggy.
+   */
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    if (search === debouncedSearch) return;
+    const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search, debouncedSearch]);
 
   const source = column.valueSource;
   const hasOwnOptions = (column.options?.length ?? 0) > 0;
@@ -110,13 +208,24 @@ export function useColumnFilterOptions<T>(
     if (!enabled || !source) return;
 
     const id = ++requestId.current;
-    setLoading(true);
+    // A cached answer must not flash a spinner — that is most opens after the
+    // first, and a spinner on instant data reads as slower than no spinner.
+    const cachedHit =
+      source.kind !== "people" &&
+      distinctCache.has(
+        distinctKey(
+          (source as { module: string }).module,
+          (source as { column: string }).column,
+          debouncedSearch.trim(),
+        ),
+      );
+    if (!cachedHit) setLoading(true);
     setError(null);
 
     const run = async (): Promise<{ values: ColumnOption[]; truncated: boolean }> => {
       if (source.kind === "people") {
         const people = await fetchPeople();
-        const needle = search.trim().toLowerCase();
+        const needle = debouncedSearch.trim().toLowerCase();
         const matching = needle
           ? people.filter((p) => p.label.toLowerCase().includes(needle))
           : people;
@@ -135,17 +244,7 @@ export function useColumnFilterOptions<T>(
         };
       }
 
-      const params = new URLSearchParams({ module: source.module, column: source.column });
-      if (search.trim()) params.set("q", search.trim());
-
-      const res = await fetch(`/api/table/column-values?${params.toString()}`);
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || "Could not load values");
-
-      return {
-        values: ((payload.values as string[]) ?? []).map((v) => ({ label: v, value: v })),
-        truncated: Boolean(payload.truncated),
-      };
+      return fetchDistinct(source.module, source.column, debouncedSearch.trim());
     };
 
     run()
@@ -168,7 +267,7 @@ export function useColumnFilterOptions<T>(
   }, [
     enabled,
     hasOwnOptions,
-    search,
+    debouncedSearch,
     source?.kind,
     (source as { idSpace?: string })?.idSpace,
     (source as { module?: string })?.module,

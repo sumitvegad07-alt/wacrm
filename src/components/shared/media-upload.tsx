@@ -2,7 +2,17 @@
 
 import { useRef, useState } from "react";
 import { UploadCloud, X, FileText, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { downscaleImage } from "@/lib/images/downscale";
+
+/**
+ * The ceiling every storage bucket in the product is configured with
+ * (migration 030 and 20260929120000). A file over this is refused by Supabase
+ * with a raw error after the whole upload has been sent, so it is checked here
+ * instead — before the wait, with a sentence that says what to do.
+ */
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export interface MediaUploadItem {
   /** Stable key used for removal. */
@@ -47,15 +57,52 @@ export function MediaUpload({
 }: MediaUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  /** Shrinking a photo takes a moment; the add-tile shows a spinner meanwhile. */
+  const [preparing, setPreparing] = useState(false);
 
   // Single-file controls hide the add-tile once a file is present (replace via
   // remove-then-add); multi always shows it.
   const showAdd = multiple || items.length === 0;
 
-  function handleFiles(list: FileList | null) {
-    const picked = list ? Array.from(list) : [];
+  /**
+   * Takes files that have ALREADY been copied out of their FileList.
+   *
+   * See the file input's onChange below for why that copy has to happen at the
+   * call site rather than here.
+   */
+  async function handleFiles(picked: File[]) {
     if (picked.length === 0) return;
-    onPick(multiple ? picked : picked.slice(0, 1));
+    const chosen = multiple ? picked : picked.slice(0, 1);
+
+    setPreparing(true);
+    try {
+      /**
+       * Shrink photos before they are handed on.
+       *
+       * A picture off a phone is 5–12 MB, which is both over every bucket's
+       * 5 MB ceiling and a minute of waiting on mobile data — the form just
+       * sat on "Saving…". Nothing here is displayed larger than about 500px,
+       * so the full-resolution original was never worth sending.
+       */
+      const prepared = await Promise.all(chosen.map((file) => downscaleImage(file)));
+
+      // Whatever could not be shrunk (a PDF receipt, an iPhone HEIC this
+      // browser cannot decode) is checked against the real limit and refused
+      // HERE, with a reason, rather than after the upload has been sent.
+      const tooBig = prepared.filter((f) => f.size > MAX_UPLOAD_BYTES);
+      const usable = prepared.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+
+      for (const file of tooBig) {
+        toast.error(
+          `"${file.name}" is ${(file.size / 1048576).toFixed(1)} MB — the limit is 5 MB. ` +
+            `Save it as a JPEG or PNG and try again.`,
+        );
+      }
+
+      if (usable.length > 0) onPick(usable);
+    } finally {
+      setPreparing(false);
+    }
   }
 
   return (
@@ -97,19 +144,25 @@ export function MediaUpload({
           <label
             onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); if (!disabled) handleFiles(e.dataTransfer.files); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              if (!disabled) void handleFiles(e.dataTransfer.files ? Array.from(e.dataTransfer.files) : []);
+            }}
             className={cn(
               "size-24 rounded-xl border border-dashed flex flex-col items-center justify-center gap-1 bg-muted shrink-0 cursor-pointer transition-colors",
               dragOver ? "border-primary bg-primary/10" : "border-border hover:bg-muted/80 hover:border-primary/50",
               disabled && "opacity-50 cursor-not-allowed",
             )}
           >
-            {busy ? (
+            {busy || preparing ? (
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             ) : (
               <UploadCloud className="size-5 text-muted-foreground" />
             )}
-            <span className="text-[10px] text-muted-foreground">{addLabel}</span>
+            <span className="text-[10px] text-muted-foreground">
+              {preparing ? "Preparing…" : addLabel}
+            </span>
             <input
               ref={inputRef}
               type="file"
@@ -117,7 +170,28 @@ export function MediaUpload({
               multiple={multiple}
               disabled={disabled}
               className="hidden"
-              onChange={(e) => { const l = e.target.files; e.target.value = ""; handleFiles(l); }}
+              /**
+               * Copy the files out BEFORE resetting the input.
+               *
+               * `e.target.files` is a LIVE FileList bound to the input, and
+               * `e.target.value = ""` empties that very object — so the old
+               * `const l = e.target.files; e.target.value = ""; handleFiles(l)`
+               * handed on a list that had already become empty. Picking a file
+               * through the file dialog did nothing at all: no preview tile,
+               * and a save that reported success having uploaded nothing. This
+               * is the shared upload control, so that was true of product
+               * images, profile photos, payment proofs and expense receipts
+               * alike. Dragging a file in still worked, which is what made it
+               * look intermittent.
+               *
+               * The reset itself has to stay: without it, picking the SAME file
+               * again fires no change event at all.
+               */
+              onChange={(e) => {
+                const picked = e.target.files ? Array.from(e.target.files) : [];
+                e.target.value = "";
+                void handleFiles(picked);
+              }}
             />
           </label>
         )}

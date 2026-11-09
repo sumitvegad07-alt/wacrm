@@ -7,7 +7,14 @@ import { MediaUpload } from "./media-upload";
 import { errorMessage } from '@/lib/errors/message';
 
 const ACCEPTED = ["image/png", "image/jpeg", "image/webp", "image/gif"];
-const MAX_BYTES = 10 * 1024 * 1024;
+/**
+ * 5 MB, which is what the storage buckets themselves are configured with
+ * (migration 030). This said 10 MB, so a 7 MB photo passed the check here and
+ * was then refused by Supabase with a raw error after the whole upload.
+ * MediaUpload shrinks photos before this is reached, so the limit now only
+ * catches what could not be shrunk at all.
+ */
+const MAX_BYTES = 5 * 1024 * 1024;
 
 interface PhotoUploadProps {
   /** Current image URL (empty string when none). */
@@ -32,7 +39,7 @@ export function PhotoUpload({
   onChange,
   bucket,
   label = "Photo",
-  hint = "PNG, JPG, WebP or GIF. Recommended 256×256px. Max 10 MB.",
+  hint = "PNG, JPG, WebP or GIF. Recommended 256×256px. Max 5 MB.",
   disabled,
 }: PhotoUploadProps) {
   const supabase = createClient();
@@ -46,7 +53,7 @@ export function PhotoUpload({
       return;
     }
     if (file.size > MAX_BYTES) {
-      toast.error("Image is too large. Maximum 10 MB.");
+      toast.error("Image is too large. Maximum 5 MB.");
       return;
     }
     try {

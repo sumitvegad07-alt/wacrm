@@ -54,6 +54,28 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
   return EARTH_RADIUS_KM * 2 * Math.asin(Math.sqrt(a));
 }
 
+/**
+ * Straight-line distance between two points, in whole metres, or null when
+ * either point is missing.
+ *
+ * This is the "how far from the customer was the rep when he checked in"
+ * number. It must stay identical to `enforce_site_visit_geofence` in migration
+ * 20260910140000, which stamps the same figure onto `check_in_distance_m` —
+ * but only for accounts that have geo-fencing switched ON. Everyone else has
+ * the two coordinates and no distance, so the reading screens work it out.
+ */
+export function haversineMeters(
+  lat1: number | null | undefined,
+  lng1: number | null | undefined,
+  lat2: number | null | undefined,
+  lng2: number | null | undefined,
+): number | null {
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return null;
+  const a = [Number(lat1), Number(lng1), Number(lat2), Number(lng2)];
+  if (a.some((n) => !Number.isFinite(n))) return null;
+  return Math.round(haversineKm(a[0], a[1], a[2], a[3]) * 1000);
+}
+
 /** True if a ping has a real position AND an accuracy good enough to trust for distance. */
 export function isTrustworthyPing(p: DistancePing): boolean {
   return (

@@ -530,7 +530,7 @@ export function ProductForm({
                   if (kind === 'img') setImages((prev) => prev.filter((_, x) => x !== idx));
                   else setNewImageFiles((prev) => prev.filter((_, x) => x !== idx));
                 }}
-                hint="Add one or more images. The first is the primary image shown in lists. Recommended 500×500px, max 10 MB."
+                hint="Add one or more images. The first is the primary image shown in lists. Large photos are shrunk automatically before upload."
               />
             </FormSection>
 
