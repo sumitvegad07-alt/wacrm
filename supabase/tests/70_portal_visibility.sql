@@ -601,3 +601,146 @@ SELECT qa('T14 another company''s admin reads nothing through the portal functio
   AND public.portal_outstanding() IS NULL,
   'spec 15 test 1, through the definer functions this time');
 RESET ROLE;
+
+-- ── U: the policy sweep's four findings ──────────────────────
+--
+-- Section O proved the seven tables the portal touches are closed. It did not
+-- prove the other ~120 are, so Plan 2 Task 3 Step 4 asks for the whole list of
+-- policies that never test membership. Ten came back. Five were
+-- report_registry_* (engine metadata, no account_id column), one was
+-- ozzo_docs_select (is_published = true, public on purpose), and these four
+-- were FOR ALL TO public USING (true) on tables that hold tenant data:
+--
+--   customer_visit_custom_values, lead_visit_custom_values,
+--   dispatch_custom_values, user_custom_values
+--
+-- 20261114140000 scopes them by is_account_member(account_id). Every scenario
+-- below FAILS without that migration — measured, not assumed: before it, a
+-- portal customer of tenant A read tenant B's row, inserted into tenant B and
+-- updated tenant B's row, and an anonymous visitor read it too.
+--
+-- U5 and U6 are the non-regression half, and they matter as much: all four
+-- tables are written by the live web app (employee form, dispatch form, visits
+-- screen) and two by the mobile app's offline queue. If scoping broke those
+-- writes, custom fields would silently stop saving.
+
+\set CF_ACCT_B '''bbbb0000-0000-0000-0000-000000000002'''
+
+RESET ROLE;
+SELECT set_config('test.uid', :ADMIN_A, false);
+
+-- One row of TENANT B's data in each of the four tables, written as the owner
+-- the way a migration or the service role would. visit_id, dispatch_id and
+-- user_id carry no foreign key, and custom_field_id is nullable, so these need
+-- no other fixture.
+DELETE FROM public.user_custom_values           WHERE value LIKE 'U-section%';
+DELETE FROM public.customer_visit_custom_values WHERE value LIKE 'U-section%';
+DELETE FROM public.lead_visit_custom_values     WHERE value LIKE 'U-section%';
+DELETE FROM public.dispatch_custom_values       WHERE value LIKE 'U-section%';
+
+INSERT INTO public.user_custom_values (account_id, user_id, custom_field_id, value)
+VALUES (:CF_ACCT_B, '22220000-0000-0000-0000-000000000001', NULL, 'U-section tenant B employee value');
+INSERT INTO public.customer_visit_custom_values (account_id, visit_id, custom_field_id, value)
+VALUES (:CF_ACCT_B, '99990000-0000-0000-0000-0000000000b1', NULL, 'U-section tenant B visit value');
+INSERT INTO public.lead_visit_custom_values (account_id, visit_id, custom_field_id, value)
+VALUES (:CF_ACCT_B, '99990000-0000-0000-0000-0000000000b2', NULL, 'U-section tenant B lead visit value');
+INSERT INTO public.dispatch_custom_values (account_id, dispatch_id, custom_field_id, value)
+VALUES (:CF_ACCT_B, '99990000-0000-0000-0000-0000000000b3', NULL, 'U-section tenant B dispatch value');
+
+SELECT qa('U0 precondition: there IS a row of tenant B data in each of the four tables',
+  (SELECT count(*) FROM public.user_custom_values           WHERE value LIKE 'U-section%') = 1
+  AND (SELECT count(*) FROM public.customer_visit_custom_values WHERE value LIKE 'U-section%') = 1
+  AND (SELECT count(*) FROM public.lead_visit_custom_values     WHERE value LIKE 'U-section%') = 1
+  AND (SELECT count(*) FROM public.dispatch_custom_values       WHERE value LIKE 'U-section%') = 1,
+  'with no rows seeded, U1-U3 would pass on an empty table and prove nothing — '
+  'which is exactly why the hole survived until a sweep looked for it');
+
+-- U1: the portal customer of tenant A. No profiles row, no membership of
+-- anything, and before the fix it read all four.
+SELECT set_config('test.uid', :PORTAL_U_A1, false);
+SET ROLE authenticated;
+SELECT qa('U1 a portal customer of tenant A reads NONE of tenant B''s custom values',
+  (SELECT count(*) FROM public.user_custom_values) = 0
+  AND (SELECT count(*) FROM public.customer_visit_custom_values) = 0
+  AND (SELECT count(*) FROM public.lead_visit_custom_values) = 0
+  AND (SELECT count(*) FROM public.dispatch_custom_values) = 0,
+  'saw ' || (SELECT count(*) FROM public.user_custom_values)::text || '/'
+  || (SELECT count(*) FROM public.customer_visit_custom_values)::text || '/'
+  || (SELECT count(*) FROM public.lead_visit_custom_values)::text || '/'
+  || (SELECT count(*) FROM public.dispatch_custom_values)::text
+  || ' rows; every one must be 0');
+
+-- U2: and cannot write into another tenant either. Before the fix this INSERT
+-- succeeded.
+SELECT qa_refused('U2 a portal customer of tenant A cannot insert into tenant B',
+  'INSERT INTO public.user_custom_values (account_id, user_id, custom_field_id, value) VALUES ('
+  || quote_literal(:CF_ACCT_B) || ', ''22220000-0000-0000-0000-000000000001'', NULL, ''U-section written by an outsider'')');
+
+-- U3: an UPDATE is asked the O10 way — not "was it refused", which is ALLOWED
+-- for a statement that matches no visible row, but "did the row move".
+DO $u3$ BEGIN
+  UPDATE public.user_custom_values SET value = 'U-section overwritten by an outsider'
+   WHERE value = 'U-section tenant B employee value';
+EXCEPTION WHEN OTHERS THEN NULL;
+END $u3$;
+
+-- U4: a visitor who is not signed in at all. The anon key is in the browser
+-- bundle, so this is the case that made the hole public rather than merely
+-- cross-tenant.
+RESET ROLE;
+SELECT set_config('test.uid', '', false);
+SET ROLE anon;
+SELECT qa('U4 a visitor who is not signed in reads none of them either',
+  (SELECT count(*) FROM public.user_custom_values) = 0
+  AND (SELECT count(*) FROM public.customer_visit_custom_values) = 0
+  AND (SELECT count(*) FROM public.lead_visit_custom_values) = 0
+  AND (SELECT count(*) FROM public.dispatch_custom_values) = 0,
+  'the anon key ships in the browser bundle, so "readable by anon" means '
+  'readable by anyone at all');
+
+RESET ROLE;
+SELECT qa('U3 and the outsider''s UPDATE did not change tenant B''s row',
+  (SELECT count(*) FROM public.user_custom_values
+    WHERE value = 'U-section tenant B employee value') = 1
+  AND NOT EXISTS (SELECT 1 FROM public.user_custom_values
+    WHERE value LIKE '%overwritten by an outsider%'
+       OR value LIKE '%written by an outsider%'),
+  'the row must read exactly as tenant B left it');
+
+-- U5: THE NON-REGRESSION. Tenant B's own admin must still read and write its
+-- own rows, or the employee form, the dispatch form, the visits screen and the
+-- mobile offline queue all stop saving custom fields.
+SELECT set_config('test.uid', :ADMIN_B, false);
+SET ROLE authenticated;
+SELECT qa('U5 tenant B''s own admin still reads its own custom values',
+  (SELECT count(*) FROM public.user_custom_values WHERE value LIKE 'U-section%') = 1
+  AND (SELECT count(*) FROM public.customer_visit_custom_values WHERE value LIKE 'U-section%') = 1
+  AND (SELECT count(*) FROM public.lead_visit_custom_values WHERE value LIKE 'U-section%') = 1
+  AND (SELECT count(*) FROM public.dispatch_custom_values WHERE value LIKE 'U-section%') = 1,
+  'scoping must not take a tenant''s own data away from it');
+
+SELECT qa_allowed('U6 and can still write them, exactly as the forms do',
+  'INSERT INTO public.user_custom_values (account_id, user_id, custom_field_id, value) VALUES ('
+  || quote_literal(:CF_ACCT_B) || ', ''22220000-0000-0000-0000-000000000001'', NULL, ''U-section written by its own admin'')');
+
+SELECT qa_allowed('U6b and can update its own row',
+  'UPDATE public.user_custom_values SET value = ''U-section tenant B employee value'''
+  || ' WHERE value = ''U-section tenant B employee value''');
+
+-- U7: an employee of the OTHER tenant is refused too — this is not only about
+-- portal logins. Before the fix, every tenant could read every other tenant's
+-- custom field values.
+RESET ROLE;
+SELECT set_config('test.uid', :ADMIN_A, false);
+SET ROLE authenticated;
+SELECT qa('U7 tenant A''s admin reads none of tenant B''s custom values',
+  (SELECT count(*) FROM public.user_custom_values) = 0
+  AND (SELECT count(*) FROM public.dispatch_custom_values) = 0,
+  'saw ' || (SELECT count(*) FROM public.user_custom_values)::text
+  || ' employee values of another company');
+
+RESET ROLE;
+DELETE FROM public.user_custom_values           WHERE value LIKE 'U-section%';
+DELETE FROM public.customer_visit_custom_values WHERE value LIKE 'U-section%';
+DELETE FROM public.lead_visit_custom_values     WHERE value LIKE 'U-section%';
+DELETE FROM public.dispatch_custom_values       WHERE value LIKE 'U-section%';
