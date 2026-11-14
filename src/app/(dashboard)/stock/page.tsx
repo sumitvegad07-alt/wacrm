@@ -15,12 +15,15 @@ import { Input } from '@/components/ui/input';
 import { StockImportDialog } from '@/components/stock/stock-import-dialog';
 import { Boxes, Search, SlidersHorizontal, AlertTriangle, Upload, BarChart3, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { previewRecalculate, type RecalculatePreview } from '@/lib/stock/recalculate-preview';
 
 export default function StockPage() {
   const supabase = createClient();
   const { accountId, isModuleEnabled, moduleSettingsLoaded, hasPermission } = useAuth();
 
   const [recalculating, setRecalculating] = useState(false);
+  const [preview, setPreview] = useState<RecalculatePreview | null>(null);
 
   const canView = hasPermission(PERMISSIONS.STOCK.VIEW) || hasPermission(PERMISSIONS.STOCK.MANAGE);
   const canManage = hasPermission(PERMISSIONS.STOCK.MANAGE);
@@ -53,7 +56,38 @@ export default function StockPage() {
    * on a product that has already been ordered leaves those orders unposted.
    * This asks the database to work out the difference and post it.
    */
+  /**
+   * Show what recalculating would post, BEFORE posting it.
+   *
+   * Recalculating reconciles orders the ledger has never seen, which includes
+   * every order closed before Stock Management was switched on. If the opening
+   * balance or a manual stock-in was counted AFTER those orders shipped, that
+   * figure already accounts for them and posting them again subtracts the same
+   * sale twice. Only the person who counted the stock knows which it is, so
+   * they get the list and the oldest date first.
+   */
+  const openRecalculate = useCallback(async () => {
+    if (!accountId) return;
+    setRecalculating(true);
+    try {
+      const { data: account } = await supabase
+        .from('accounts')
+        .select('settings')
+        .eq('id', accountId)
+        .maybeSingle();
+      const event =
+        ((account as { settings?: { stock_settings?: { stock_out_event?: string } } } | null)
+          ?.settings?.stock_settings?.stock_out_event) ?? 'order_closed';
+      setPreview(await previewRecalculate(supabase, accountId, event));
+    } catch {
+      toast.error('Could not work out what would change.');
+    } finally {
+      setRecalculating(false);
+    }
+  }, [accountId, supabase]);
+
   const recalculate = useCallback(async () => {
+    setPreview(null);
     setRecalculating(true);
     try {
       const { data, error } = await supabase.rpc('stock_recalculate_account');
@@ -174,7 +208,7 @@ export default function StockPage() {
                 the reconcile posts only the difference, so a second run adds
                 nothing. */}
             {canManage && (
-              <Button variant="outline" size="sm" onClick={recalculate} disabled={recalculating}>
+              <Button variant="outline" size="sm" onClick={openRecalculate} disabled={recalculating}>
                 <RefreshCw className={`mr-1.5 h-4 w-4 ${recalculating ? 'animate-spin' : ''}`} />
                 {recalculating ? 'Recalculating…' : 'Recalculate'}
               </Button>
@@ -188,6 +222,73 @@ export default function StockPage() {
 
       {importOpen && (
         <StockImportDialog open={importOpen} onOpenChange={setImportOpen} onDone={load} />
+      )}
+
+      {/* Mounted only while there is something to confirm, the same shape as
+          StockImportDialog above. Left permanently mounted with
+          `open={preview !== null}`, this dialog would not close: clearing the
+          state emptied its body but the dialog stayed on screen. */}
+      {preview !== null && (
+      <Dialog open onOpenChange={(open) => { if (!open) setPreview(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Recalculate stock</DialogTitle>
+          </DialogHeader>
+          {preview && preview.orders.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Every order is already counted in your stock. There is nothing to recalculate.
+            </p>
+          ) : preview ? (
+            <div className="space-y-3 text-sm">
+              <p>
+                This will count{' '}
+                <strong>
+                  {preview.orders.length} {preview.orders.length === 1 ? 'order' : 'orders'}
+                </strong>{' '}
+                into your stock that are not counted yet
+                {preview.oldest ? <>, the oldest from <strong>{preview.oldest}</strong></> : null}.
+              </p>
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                <p className="font-medium text-amber-700 dark:text-amber-400">Check this first</p>
+                <p className="mt-1 text-muted-foreground">
+                  If you counted your opening stock, or added stock by hand, <em>after</em> these
+                  orders went out, that figure already has them taken off. Counting them again
+                  would take the same goods off twice. If you are not sure, leave it.
+                </p>
+              </div>
+              <div className="max-h-40 overflow-auto rounded-md border border-border p-2">
+                <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">Orders</p>
+                <p className="text-muted-foreground">
+                  {preview.orders.map((o) => `${o.orderNumber} (${o.closedOn ?? '—'})`).join(', ')}
+                </p>
+                {preview.products.length > 0 && (
+                  <>
+                    <p className="mt-2 mb-1 text-xs font-medium uppercase text-muted-foreground">
+                      Products
+                    </p>
+                    <p className="text-muted-foreground">
+                      {preview.products
+                        .map((p) => (p.tracked ? p.name : `${p.name} (stock not tracked — skipped)`))
+                        .join(', ')}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            {/* DialogClose, not a Button with an onClick: this is Base UI, and
+                a plain button inside the footer does not dismiss the dialog —
+                the first version of this left Cancel dead. */}
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            {preview && preview.orders.length > 0 && (
+              <Button onClick={recalculate} disabled={recalculating}>
+                {recalculating ? 'Recalculating…' : 'Yes, count them'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       )}
     </PageLayout>
   );
