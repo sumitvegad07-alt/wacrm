@@ -151,7 +151,7 @@ describe("POST /api/portal-access handler", () => {
   });
 
   it("create whose contact update is refused: non-2xx, DB text verbatim, deleteUser called with createUser's id", async () => {
-    const msg = "All 1 portal logins are in use. Remove access from another customer, or buy more.";
+    const msg = "All 2 portal logins are in use. Remove access from another customer, or buy more.";
     h.updateResult = { data: null, error: { message: msg } };
     const res = await post({ contact_id: "c1", email: "x@y.co", password: "secret12" });
     const body = await res.json();
@@ -173,7 +173,7 @@ describe("POST /api/portal-access handler", () => {
 
   it("restore whose contact update is refused: non-2xx and deleteUser NEVER called, createUser never called", async () => {
     h.contact = { ...REVOKED_CONTACT };
-    h.updateResult = { data: null, error: { message: "All 1 portal logins are in use." } };
+    h.updateResult = { data: null, error: { message: "All 2 portal logins are in use." } };
     const res = await post({ contact_id: "c1" });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(h.deleteUser).not.toHaveBeenCalled();

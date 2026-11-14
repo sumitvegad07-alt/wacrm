@@ -276,7 +276,12 @@ SELECT qa_refused('H17 the seat cap refuses a grant when run as an authenticated
 RESET ROLE;
 SELECT qa('H17-msg that refusal is the cap''s own sentence, and nothing was granted',
   (SELECT count(*) FROM qa_results
-    WHERE scenario LIKE 'H17 %' AND pass AND detail LIKE '%portal logins are in use%') = 1
+    WHERE scenario LIKE 'H17 %' AND pass
+      -- H17 sets the limit to 1, so the cap answers in the SINGULAR since
+      -- 20261108100000. Both wordings are listed because either is the cap
+      -- speaking, and neither is the add-on guard's sentence.
+      AND (detail LIKE '%portal logins are in use%'
+        OR detail LIKE '%only portal login is in use%')) = 1
   AND NOT (SELECT portal_access FROM public.contacts WHERE id = :DIST_C2),
   coalesce((SELECT detail FROM qa_results WHERE scenario LIKE 'H17 %'), 'none recorded'));
 UPDATE public.accounts SET portal_seats_limit = 5 WHERE id = :ACCT;
@@ -413,3 +418,141 @@ SELECT qa('J9b the superadmin write really landed',
 -- Leave the account as section G left it.
 UPDATE public.accounts SET subscription_plan = 'CRM_SFA', addon_lines = ARRAY['dms'], portal_seats_limit = 5, user_count = 3, addons = '{}'
  WHERE id = :ACCT;
+
+
+-- -- L: one login per customer, and who may change a login ----
+--
+-- Deleting trg_guard_contact_portal_columns must make L3, L4, L5 and L7 fail.
+-- Deleting contacts_portal_user_unique_idx must make L1b fail.
+-- L2, L6 and L8 are non-regression: contacts is the busiest table in the
+-- product and 2026-11-04's incident was a guard on it refusing an unrelated
+-- write and taking the order save down.
+--
+-- THREE DEVIATIONS FROM THE PLAN'S DRAFT, each because the draft's scenario
+-- would have passed for the wrong reason -- which is the fault this file
+-- exists to prevent:
+--   a) the draft worked on Shop One (c0000000-...-0001). Section H7 switches
+--      order hierarchy ON and leaves it on, and Shop One has hierarchy_level
+--      NULL, so migration 076 refuses EVERY write to it. L1 would have failed
+--      and L5 would have passed without the guard. Section L uses 'Plain
+--      Customer' (c1000000-...-00f1, level 3, inserted by H10a) instead.
+--   b) the draft's "free" auth id in L1 was ...0000c1, which DIST_C already
+--      holds, so L1 and L1b were the same write. L1 uses ...0000c3, minted by
+--      section H and never attached (H7 was refused).
+--   c) the draft's L4 pointed at ...0000ff, which is in no auth.users row, so
+--      the FK would have refused it with the guard deleted. L4 uses a fresh
+--      auth user that no customer holds, so only the guard can refuse.
+
+\set PLAIN   '''c1000000-0000-0000-0000-0000000000f1'''
+\set FREE_U  '''00000000-0000-0000-0000-0000000000c3'''
+\set SPARE_U '''00000000-0000-0000-0000-0000000000c4'''
+
+RESET ROLE;
+SELECT set_config('test.uid', :ADMIN, false);
+UPDATE public.accounts SET addon_lines = ARRAY['dms'], portal_seats_limit = 5 WHERE id = :ACCT;
+
+-- A login id for L4 that no customer holds, so the unique index cannot be what
+-- refuses that write.
+ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;
+INSERT INTO auth.users(id, email) VALUES (:SPARE_U, 'c4@abc.com') ON CONFLICT (id) DO NOTHING;
+ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;
+
+SELECT qa('L0 precondition: the target has a level, spare seats, and no login',
+  (SELECT hierarchy_level IS NOT NULL AND portal_user_id IS NULL
+     FROM public.contacts WHERE id = :PLAIN)
+  AND public.portal_seats_used(:ACCT) < 5
+  AND public.account_has_line(:ACCT, 'dms'),
+  'L1 and L5 must be able to succeed on their own merits, or they test nothing');
+
+-- L1: a FREE auth user id is accepted by the index, as the service role. This
+-- is the control that proves L1b's refusal is about the duplicate and not about
+-- the column guard or some unrelated failure.
+SELECT qa_allowed('L1 the service role may link a customer to a free login id',
+  'SET LOCAL ROLE service_role;'
+  || ' UPDATE public.contacts SET portal_user_id = ' || quote_literal(:FREE_U)
+  || ' WHERE id = ' || quote_literal(:PLAIN));
+RESET ROLE;
+
+SELECT qa('L1c and that link really landed',
+  (SELECT portal_user_id FROM public.contacts WHERE id = :PLAIN) = :FREE_U,
+  'if L1 reported PASS without writing, L1b would be refused by nothing at all');
+
+-- L1b: now point PLAIN at the SAME auth user DIST_C already uses. Still the
+-- service role, so only the unique index can refuse it.
+SELECT qa_refused('L1b two customers cannot share one portal login',
+  'SET LOCAL ROLE service_role;'
+  || ' UPDATE public.contacts SET portal_user_id = (SELECT portal_user_id FROM public.contacts WHERE id = '
+  || quote_literal(:DIST_C) || ') WHERE id = ' || quote_literal(:PLAIN));
+RESET ROLE;
+
+-- L2: the service role still writes the login columns. This is the
+-- portal-access route's own path; if it broke, no login could be created again.
+SELECT qa_allowed('L2 the service role still sets a login email',
+  'SET LOCAL ROLE service_role;'
+  || ' UPDATE public.contacts SET portal_email = ''l2@abc.com'''
+  || ' WHERE id = ' || quote_literal(:DIST_C));
+RESET ROLE;
+
+-- L3: the attack. A tenant ADMIN rewrites the displayed login address through
+-- the API. Sign-in would still use the real auth.users email, so the customer
+-- page would show an address nobody can sign in with.
+SELECT set_config('test.uid', :ADMIN, false);
+SET ROLE authenticated;
+SELECT qa_refused('L3 a tenant admin cannot rewrite the displayed login email',
+  'UPDATE public.contacts SET portal_email = ''hijack@abc.com'''
+  || ' WHERE id = ' || quote_literal(:DIST_C));
+
+SELECT qa('L3-msg the L3 refusal is the portal-column guard, in its own words',
+  (SELECT count(*) FROM qa_results
+    WHERE scenario = 'L3 a tenant admin cannot rewrite the displayed login email'
+      -- qa_refused records left(SQLERRM, 70), and "Use Provide DMS Access"
+      -- falls past character 70. Match a phrase inside the window that still
+      -- belongs to no other refusal on this table.
+      AND pass AND detail LIKE '%changed on the customer page%') = 1,
+  coalesce((SELECT detail FROM qa_results
+             WHERE scenario = 'L3 a tenant admin cannot rewrite the displayed login email'),
+           'none recorded'));
+
+-- L4: the worse version of L3 -- repointing the login at another auth user.
+SELECT qa_refused('L4 a tenant admin cannot repoint a login at another user',
+  'UPDATE public.contacts SET portal_user_id = ' || quote_literal(:SPARE_U)
+  || ' WHERE id = ' || quote_literal(:DIST_C));
+
+-- L5: and cannot grant access by hand, bypassing the route entirely.
+SELECT qa_refused('L5 a tenant admin cannot switch portal access on directly',
+  'UPDATE public.contacts SET portal_access = true, portal_email = ''byhand@abc.com'''
+  || ' WHERE id = ' || quote_literal(:PLAIN));
+
+-- L6: THE NON-REGRESSION THAT MATTERS. An ordinary admin edit to a customer
+-- that HOLDS a login must still work. If the comparison-first ordering were
+-- removed, this would fail and every customer edit on a DMS tenant would break.
+SELECT qa_allowed('L6 an ordinary name edit on a customer WITH a login still works',
+  'UPDATE public.contacts SET name = ''Dist C renamed'' WHERE id = ' || quote_literal(:DIST_C));
+
+-- L7: an INSERT carrying a login is refused for an end-user role too, otherwise
+-- the admin simply creates the customer with the login already attached.
+-- hierarchy_level is supplied because H7 left order hierarchy ON, and migration
+-- 076 would otherwise refuse this insert whether the guard existed or not.
+SELECT qa_refused('L7 a tenant admin cannot create a customer with a login attached',
+  'INSERT INTO public.contacts (account_id, user_id, name, phone, hierarchy_level, portal_email, portal_access)'
+  || ' VALUES (' || quote_literal(:ACCT) || ', ' || quote_literal(:ADMIN)
+  || ', ''Smuggled'', ''1999999999'', 3, ''smuggle@abc.com'', true)');
+
+-- L8: an ordinary new customer, with no portal columns at all, still inserts --
+-- as the same role, in the same breath, so L7 cannot be passing merely because
+-- an admin may not insert a customer at all.
+SELECT qa_allowed('L8 an ordinary new customer still inserts',
+  'INSERT INTO public.contacts (account_id, user_id, name, phone, hierarchy_level)'
+  || ' VALUES (' || quote_literal(:ACCT) || ', ' || quote_literal(:ADMIN)
+  || ', ''Ordinary L8'', ''1999999998'', 3)');
+
+RESET ROLE;
+DELETE FROM public.contacts WHERE account_id = :ACCT AND name = 'Ordinary L8';
+-- Leave the fixture exactly as section H left it: H11a renamed DIST_C to
+-- 'Mr DI renamed', and its login email was 'c@abc.com' until L2.
+UPDATE public.contacts SET name = 'Mr DI renamed' WHERE id = :DIST_C;
+SET LOCAL ROLE service_role;
+UPDATE public.contacts SET portal_email = 'c@abc.com' WHERE id = :DIST_C;
+-- And leave PLAIN without a login, so later files see the fixture they expect.
+UPDATE public.contacts SET portal_user_id = NULL WHERE id = :PLAIN;
+RESET ROLE;

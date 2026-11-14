@@ -27,7 +27,7 @@ describe("portal login validation", () => {
 
   it("passes other errors through rather than inventing a message", () => {
     expect(friendlyAuthError("Password is too weak")).toBe("Password is too weak");
-    const seats = "All 1 portal logins are in use. Remove access from another customer, or buy more.";
+    const seats = "All 2 portal logins are in use. Remove access from another customer, or buy more.";
     expect(friendlyAuthError(seats)).toBe(seats);
   });
 });
@@ -86,7 +86,7 @@ describe("friendlyDbError", () => {
   it("does not catch an unrelated unique violation, and passes trigger text through", () => {
     const other = 'duplicate key value violates unique constraint "contacts_something_else_key"';
     expect(friendlyDbError({ code: "23505", message: other })).toBe(other);
-    const seats = "All 1 portal logins are in use. Remove access from another customer, or buy more.";
+    const seats = "All 2 portal logins are in use. Remove access from another customer, or buy more.";
     expect(friendlyDbError({ message: seats })).toBe(seats);
   });
 });
