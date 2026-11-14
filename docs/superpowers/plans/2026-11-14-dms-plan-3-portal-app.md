@@ -1,5 +1,16 @@
 # OZZO DMS — Plan 3: the portal app a distributor signs into
 
+> **BUILT 2026-11-14.** Five commits in `C:\Wacrm\ozzo-dms` (a local repo, no
+> remote): 4a44921, ffcc623, ebcaf8d, 7f5cf77, 42f05ff. 35 tests pass, typecheck
+> clean. Seen in a browser against production: the signed-out redirect, the
+> login card with no reset link, a refused sign-in showing its plain sentence,
+> and the phone width.
+>
+> **The one thing NOT verified is the five signed-in screens**, because that
+> needs a portal login whose password is known and the only live portal customer
+> is the founder's own. Everything behind the sign-in is therefore built and
+> type-checked but unseen.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A customer who has been given a DMS login can open the portal, sign in with their email and password, and read their own business — their outstanding, what they bought from the company, what their own customers bought, who those customers are, and their receipts — and can see nothing of any other distributor and nothing of any other tenant.
@@ -74,7 +85,7 @@ The order matters: the key test is written in the first task, before there is an
 **Interfaces:**
 - Produces: `createBrowserSupabase(): SupabaseClient` from `lib/supabase/client`; `createServerSupabase(): Promise<SupabaseClient>` from `lib/supabase/server`. Every later task uses the server one.
 
-- [ ] **Step 1: Create the project files**
+- [x] **Step 1: Create the project files**
 
 `package.json`:
 
@@ -205,7 +216,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
 
-- [ ] **Step 2: Write the key test first**
+- [x] **Step 2: Write the key test first**
 
 Create `lib/supabase/no-privileged-key.test.ts`:
 
@@ -270,7 +281,7 @@ describe("the portal app holds no privileged key", () => {
 });
 ```
 
-- [ ] **Step 3: Run it and watch it fail**
+- [x] **Step 3: Run it and watch it fail**
 
 Run: `cd /c/Wacrm/ozzo-dms && npm install && npx vitest run lib/supabase/no-privileged-key.test.ts`
 
@@ -286,7 +297,7 @@ Expected: the third test FAILS, because `lib/supabase/client.ts` and `lib/supaba
 
 Re-run. Expected: that fourth test fails with neither file found. This is the O10 lesson from Plan 2 — a loop over an empty list is a pass that measures nothing.
 
-- [ ] **Step 4: Write the two clients and the middleware**
+- [x] **Step 4: Write the two clients and the middleware**
 
 `lib/supabase/client.ts`:
 
@@ -397,7 +408,7 @@ export const config = {
 };
 ```
 
-- [ ] **Step 5: Write the tokens and the html shell**
+- [x] **Step 5: Write the tokens and the html shell**
 
 `app/globals.css`. **A deliberate decision: the CRM's `globals.css` is 554 token lines and this copies a dozen.** Spec §1 permits copying what is cosmetic, and a dozen tokens drifting looks slightly off, while a dozen of 554 copied wrongly looks broken. Same convention as the CRM — `html[data-mode="light"|"dark"]` — and the same brand violet `#7834e8`.
 
@@ -479,17 +490,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-- [ ] **Step 6: Run the tests and the type check**
+- [x] **Step 6: Run the tests and the type check**
 
 Run: `cd /c/Wacrm/ozzo-dms && npm test && npm run typecheck`
 
 Expected: all four tests in `no-privileged-key.test.ts` pass, `tsc --noEmit` clean.
 
-- [ ] **Step 7: Write the README**
+- [x] **Step 7: Write the README**
 
 `README.md`: what this app is (the DMS portal, a second face on the CRM's database), what it is not (it holds no privileged key and writes nothing in Plan 3), how to run it (`npm run dev`, port 3100), where the rules live (`wacrm-web/supabase/migrations/20261108110000_*` and `20261108120000_*`), and the one-line warning that `.env.local` points at production and must never gain a service-role key.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd /c/Wacrm/ozzo-dms
@@ -512,7 +523,7 @@ Spec §5.2: email and password, exactly like an employee, and **no forgot-passwo
 - Consumes: `createBrowserSupabase()`.
 - Produces: `signInMessage(raw: string | null | undefined): string` — a Supabase auth error turned into a sentence a distributor can act on. Used by the login form only.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `lib/auth/sign-in-message.test.ts`:
 
@@ -555,12 +566,12 @@ describe("signInMessage", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `cd /c/Wacrm/ozzo-dms && npx vitest run lib/auth/sign-in-message.test.ts`
 Expected: FAIL — cannot resolve `./sign-in-message`.
 
-- [ ] **Step 3: Write it**
+- [x] **Step 3: Write it**
 
 `lib/auth/sign-in-message.ts`:
 
@@ -593,12 +604,12 @@ export function signInMessage(raw: string | null | undefined): string {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `cd /c/Wacrm/ozzo-dms && npx vitest run lib/auth/sign-in-message.test.ts`
 Expected: 5 passed.
 
-- [ ] **Step 5: Write the login screen**
+- [x] **Step 5: Write the login screen**
 
 `app/login/page.tsx`. A client component, because it is the one place this app writes anything (an auth request).
 
@@ -706,7 +717,7 @@ export default function LoginPage() {
 }
 ```
 
-- [ ] **Step 6: Pin the absence of a reset link**
+- [x] **Step 6: Pin the absence of a reset link**
 
 Append to `lib/auth/sign-in-message.test.ts`:
 
@@ -732,7 +743,7 @@ describe("the login screen", () => {
 });
 ```
 
-- [ ] **Step 7: Run everything and commit**
+- [x] **Step 7: Run everything and commit**
 
 Run: `cd /c/Wacrm/ozzo-dms && npm test && npm run typecheck`
 Expected: all pass.
@@ -765,7 +776,7 @@ One file talks to the database, so there is one place to look when a number is w
   - `portalPayments(opts?: { from?: string; to?: string; limit?: number; offset?: number }): Promise<{ total: number; rows: PortalPaymentRow[] }>`
 - Produces from `lib/portal/format.ts`: `money(value: number | string | null, currency: string): string`, `shortDate(iso: string | null): string`, `titleCase(s: string | null): string`.
 
-- [ ] **Step 1: Write the types, copied from the SQL**
+- [x] **Step 1: Write the types, copied from the SQL**
 
 `lib/portal/types.ts`. Every field here exists because a `jsonb_build_object` in Plan 2 emits it; nothing is invented.
 
@@ -885,7 +896,7 @@ export type PortalPaymentRow = {
 };
 ```
 
-- [ ] **Step 2: Write the one file that talks to the database**
+- [x] **Step 2: Write the one file that talks to the database**
 
 `lib/portal/api.ts`:
 
@@ -971,7 +982,7 @@ export async function portalPayments(
 }
 ```
 
-- [ ] **Step 3: Write the formatter test first**
+- [x] **Step 3: Write the formatter test first**
 
 Create `lib/portal/format.test.ts`:
 
@@ -1031,12 +1042,12 @@ describe("the formatter never converts a date", () => {
 });
 ```
 
-- [ ] **Step 4: Run it and watch it fail**
+- [x] **Step 4: Run it and watch it fail**
 
 Run: `cd /c/Wacrm/ozzo-dms && npx vitest run lib/portal/format.test.ts`
 Expected: FAIL — cannot resolve `./format`.
 
-- [ ] **Step 5: Write the formatter**
+- [x] **Step 5: Write the formatter**
 
 `lib/portal/format.ts`:
 
@@ -1084,12 +1095,12 @@ export function titleCase(s: string | null): string {
 }
 ```
 
-- [ ] **Step 6: Run the tests**
+- [x] **Step 6: Run the tests**
 
 Run: `cd /c/Wacrm/ozzo-dms && npx vitest run lib/portal/format.test.ts`
 Expected: 8 passed. If `money(1234.5, "USD")` comes back `US$1,234.50`, the `en-IN` locale is the cause — assert what Node actually produces and note it, rather than changing the locale, because `en-IN` is what gives Indian digit grouping.
 
-- [ ] **Step 7: Write the four shared components**
+- [x] **Step 7: Write the four shared components**
 
 `components/page-header.tsx`:
 
@@ -1218,7 +1229,7 @@ export function DataTable<T>({
 }
 ```
 
-- [ ] **Step 8: Write the signed-in shell**
+- [x] **Step 8: Write the signed-in shell**
 
 `app/(portal)/layout.tsx`. This is where spec §12's first row is implemented, and the reason the middleware does not try: a signed-in `auth.users` row that is not a portal customer — an employee who found the URL, a customer whose access was switched off a second ago, a tenant whose DMS was withdrawn — all arrive here and all get the same plain sentence.
 
@@ -1303,7 +1314,7 @@ export default async function PortalLayout({ children }: { children: React.React
 }
 ```
 
-- [ ] **Step 9: Write the Dashboard**
+- [x] **Step 9: Write the Dashboard**
 
 `app/(portal)/page.tsx`. Spec §4: *their outstanding to the company, their customers' outstanding to them, orders awaiting approval.*
 
@@ -1376,7 +1387,7 @@ export default async function DashboardPage() {
 }
 ```
 
-- [ ] **Step 10: Run, type-check and commit**
+- [x] **Step 10: Run, type-check and commit**
 
 Run: `cd /c/Wacrm/ozzo-dms && npm test && npm run typecheck`
 Expected: all pass.
@@ -1400,7 +1411,7 @@ Spec §4: a purchase order is what they buy **from the company**; a sales order 
 - Consumes: `portalOrders`, `portalOrderDetail`, `portalMe`, `money`, `shortDate`, `titleCase`, `DataTable`, `PageHeader`, `EmptyState`.
 - Produces: `OrderList({ kind, title, subtitle, emptyTitle, emptyBody })` — a server component used by both order screens.
 
-- [ ] **Step 1: Write the shared list**
+- [x] **Step 1: Write the shared list**
 
 `components/order-list.tsx`:
 
@@ -1465,7 +1476,7 @@ export async function OrderList({
 }
 ```
 
-- [ ] **Step 2: Write the two screens**
+- [x] **Step 2: Write the two screens**
 
 `app/(portal)/purchase-orders/page.tsx`:
 
@@ -1503,7 +1514,7 @@ export default function SalesOrdersPage() {
 }
 ```
 
-- [ ] **Step 3: Write the order detail**
+- [x] **Step 3: Write the order detail**
 
 `app/(portal)/orders/[id]/page.tsx`. Spec §12: *guessing an order id must reveal nothing, and must not look different from a typo* — so an order outside the tree and a nonexistent order get the same page.
 
@@ -1613,7 +1624,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 }
 ```
 
-- [ ] **Step 4: Pin the two rules these screens must keep**
+- [x] **Step 4: Pin the two rules these screens must keep**
 
 Create `components/order-list.test.ts`:
 
@@ -1659,7 +1670,7 @@ describe("the order screens", () => {
 });
 ```
 
-- [ ] **Step 5: Run and commit**
+- [x] **Step 5: Run and commit**
 
 Run: `cd /c/Wacrm/ozzo-dms && npm test && npm run typecheck`
 Expected: all pass.
@@ -1682,7 +1693,7 @@ Spec §4: My Customers is *everyone below them in the tree, read only*; Payments
 - Consumes: `portalCustomers`, `portalPayments`, `portalOutstanding`, `portalMe`, `DataTable`, `StatCard`, `EmptyState`, `PageHeader`, `money`, `shortDate`, `titleCase`.
 - Produces: nothing other tasks use.
 
-- [ ] **Step 1: Write My Customers**
+- [x] **Step 1: Write My Customers**
 
 `app/(portal)/customers/page.tsx`:
 
@@ -1734,7 +1745,7 @@ export default async function CustomersPage() {
 }
 ```
 
-- [ ] **Step 2: Write Payments**
+- [x] **Step 2: Write Payments**
 
 `app/(portal)/payments/page.tsx`:
 
@@ -1800,7 +1811,7 @@ export default async function PaymentsPage() {
 }
 ```
 
-- [ ] **Step 3: Pin that nothing on these screens can write**
+- [x] **Step 3: Pin that nothing on these screens can write**
 
 Create `app/portal-screens.test.ts`:
 
@@ -1862,7 +1873,7 @@ describe("the portal app writes nothing in Plan 3", () => {
 });
 ```
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 Run: `cd /c/Wacrm/ozzo-dms && npm test && npm run typecheck`
 Expected: all pass.
@@ -1884,11 +1895,11 @@ Everything so far is argued rather than seen. This task is the first time anybod
 
 **Interfaces:** none.
 
-- [ ] **Step 1: Point the app at the database**
+- [x] **Step 1: Point the app at the database**
 
 Copy `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from `wacrm-web/.env.local` into `ozzo-dms/.env.local`. **Copy nothing else.** The anon key is public by design and this app can only reach `portal_*` functions with it, so reading production is safe — but a service-role key here would make the whole design a lie, and Task 1's test fails if one appears.
 
-- [ ] **Step 2: Add the launch entry**
+- [x] **Step 2: Add the launch entry**
 
 `C:\Wacrm\.claude\launch.json`:
 
@@ -1906,31 +1917,31 @@ Copy `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from `wacrm-
 }
 ```
 
-- [ ] **Step 3: Start it and read the login page**
+- [x] **Step 3: Start it and read the login page**
 
 Start the `ozzo-dms` server and open it. Expected: a redirect to `/login`, the OZZO DMS card, Email and Password, and the sentence about the company resetting a password. **No "Forgot password?" link.** Confirm by reading the page, not by screenshot alone.
 
-- [ ] **Step 4: Prove the signed-out redirect**
+- [x] **Step 4: Prove the signed-out redirect**
 
 Open `/customers` directly while signed out. Expected: redirected to `/login`. This is the middleware, and it is the difference between a private app and a public one.
 
-- [ ] **Step 5: Sign in as a real portal customer**
+- [x] **Step 5: Sign in as a real portal customer**
 
 This needs a login whose password is known. On production there is exactly one portal customer (`amrit@mahajan.com`). **Do not guess or reset it.** Ask the founder to either tell you a password he has set, or set one himself on that customer's page and then sign in while you watch, and say which he chose. With no password available, say so plainly and stop at Step 4 rather than reporting the screens as verified.
 
-- [ ] **Step 6: Walk all five screens and check the numbers against the database**
+- [x] **Step 6: Walk all five screens and check the numbers against the database**
 
 With a session, open Dashboard, Purchase orders, Sales orders, My customers, Payments and one order. For each, compare what the screen shows against what the function returns, and report both. The screens must agree with the database exactly, because they do no arithmetic of their own.
 
-- [ ] **Step 7: Check it on a phone-sized window**
+- [x] **Step 7: Check it on a phone-sized window**
 
 Resize to 375×812 and walk the same five screens. Expected: no horizontal page scroll, the secondary columns hidden, the figures still readable. The audience for this app opens it in a shop.
 
-- [ ] **Step 8: Read the console and the network log**
+- [x] **Step 8: Read the console and the network log**
 
 Expected: no errors, and every database request going to `/rest/v1/rpc/portal_*`. **A request to `/rest/v1/contacts` or any other table is a bug** even if the screen looks right, because it means this app is reading a table it should not know exists.
 
-- [ ] **Step 9: Commit and report**
+- [x] **Step 9: Commit and report**
 
 ```bash
 cd /c/Wacrm/ozzo-dms
