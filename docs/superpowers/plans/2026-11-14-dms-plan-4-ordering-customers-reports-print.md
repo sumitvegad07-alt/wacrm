@@ -442,6 +442,117 @@ portal stops being believed.
 
 ---
 
+## Task 6: Settings a distributor can set for themselves
+
+Asked for by the founder on 2026-11-15: *"some of the settings option in DMS too where
+they can mention their GST Details, their own logo, their own templates, Their own Custom
+fields, Manage column, Theme settings similar to admin."*
+
+Six things, and they are not one feature. Three are safe and cheap, one needs a
+distinction drawn before it is built, and two should not be built as asked.
+
+### 6a. Theme — yes, and it is nearly free
+
+`lib/themes.ts` is already copied into the portal with all five accents, and the CRM's
+picker is pure `localStorage` — no table, no tenant, no migration. A **Settings → Display**
+panel with the accent swatches and the light/dark choice, exactly the CRM's.
+
+### 6b. Manage columns — yes
+
+The portal's `Column<T>` list is already the single description of each table, and the
+export in Task 4 reads the same list, so a hidden column stays hidden in the CSV without
+any extra work. Persist the choice in `localStorage` per device, **not** in the database:
+the CRM's saved views ride on the employee engine, and a portal customer has no profile to
+hang one from. A device-scoped choice is also the honest one — a distributor on a phone
+wants fewer columns than the same distributor on a laptop.
+
+### 6c. Their business details and their logo — yes, but as a PRINT PROFILE, never as an edit
+
+This is the one that needs the distinction drawn before a line is written.
+
+A distributor's GSTIN already exists: it is on their `contacts` row, put there by the
+company, and it is the number **the company raises its invoices against**. Letting an
+outsider edit that field means letting them change a tax identifier on documents the
+company is legally responsible for. That is not a settings screen, it is a hole.
+
+But the reason they want it is legitimate and different: when they print an order for
+**their own** customer, the paper should carry **their** letterhead, because on that
+document they are the seller. So:
+
+```sql
+ALTER TABLE public.contacts
+  ADD COLUMN IF NOT EXISTS portal_print_profile jsonb NOT NULL DEFAULT '{}'::jsonb;
+```
+
+`portal_set_print_profile(p jsonb)` writes only that column, only for `portal_caller()`'s
+own row, and only these keys: `trade_name`, `address`, `gstin`, `phone`, `email`,
+`logo_path`. Anything else in the payload is dropped rather than refused, so a future key
+cannot arrive by accident.
+
+The Settings screen shows the **company-held** details — the GSTIN the company invoices
+them against, their credit limit, their area — **read only**, with one line saying *"These
+are held by your company. Ask them to change anything here."* Underneath, the print profile
+they own. Two blocks, visibly different, so nobody believes editing the second changed the
+first.
+
+The logo goes to Supabase storage under `portal-logos/<account_id>/<contact_id>.<ext>`,
+uploaded through a definer function that checks the caller — the portal gets **no** blanket
+bucket grant. Cap it: 512KB, PNG/JPG/WEBP, and reject anything else by content type rather
+than by extension.
+
+**Tests:** the print profile cannot be written for another contact; the company-held GSTIN
+is unchanged by any payload that names it; an upload for somebody else's contact id is
+refused; a 2MB file is refused.
+
+### 6d. Their own document templates — not in this plan, and here is the smaller thing instead
+
+The CRM's template engine is storage, an editor, a renderer and per-account template rows.
+Giving each distributor their own adds a whole new dimension — per **contact** templates —
+through every part of it, and each one then needs a preview, a default, and a fallback when
+it is broken.
+
+Nine tenths of why they want it is **"my name and my logo on the paper I hand my
+customer"**, and 6c delivers exactly that into the Task 3 print view. Build 6c, put it in
+front of a distributor, and see whether the remaining tenth is still asked for. If it is,
+it gets its own plan.
+
+### 6e. Their own custom fields — recommend NOT, and build the opposite instead
+
+A field a distributor invents would be created in the **company's** `custom_fields` table
+and its values stored against the **company's** customers, orders and visits. It would then
+appear in the company's own screens, its exports, its imports and its reports — and in the
+four `*_custom_values` tables that were world-readable until 2026-11-15. Ten distributors
+would invent ten different versions of "shop type", and the company would own all of them
+forever.
+
+The need underneath it is real, so meet it the other way round: **the company creates the
+field and marks it "ask the distributor"**, and the portal's add-customer and order screens
+show those fields. The company keeps one vocabulary, the distributor fills it in, and the
+data is worth reporting on afterwards — which fields invented ten ways are not.
+
+That is a small change to the existing custom-fields engine (one boolean on
+`custom_fields`, a filter in two portal functions), and it belongs with Task 1 and Task 2
+rather than in a settings screen. Costed here, built when the founder agrees the trade.
+
+### Steps
+
+- [ ] **6.1** Settings shell: `app/(portal)/settings/page.tsx`, the CRM's `SettingsPanel` /
+      `SettingsCard` / `SettingsRow` copied, Settings joins the menu, and
+      `app/portal-screens.test.ts` gains its pin.
+- [ ] **6.2** Display panel — accent picker and light/dark, `localStorage` only. No database.
+- [ ] **6.3** Manage columns — the dialog, `localStorage` per table, and a test that a
+      hidden column is absent from the CSV as well as from the screen.
+- [ ] **6.4** The migration: `portal_print_profile`, `portal_set_print_profile()`,
+      `portal_upload_logo()`. Scenarios first, then the functions, then mutation-check the
+      "own row only" rule by removing it.
+- [ ] **6.5** My business panel: company-held details read only, print profile editable,
+      logo upload with its size and type caps.
+- [ ] **6.6** Feed the print profile into the Task 3 print view, and check a printed order
+      carries the distributor's letterhead and the company's name in the right places.
+- [ ] **6.7** RUN-THIS-SQL document, suite green, commit.
+
+---
+
 ## Still outstanding after this plan
 
 * **Announcements** (spec §9) and **Activity management** (spec §10) — the two remaining
