@@ -1,5 +1,13 @@
 # OZZO DMS — Plan 2: Visibility and the portal app
 
+> **DONE 2026-11-14.** All five tasks executed; four commits on local main (52f9ff1,
+> 3006175, 2b33a55, 31c6e1a), nothing pushed. The founder applied the three SQL blocks on
+> production and they are verified live. Suite: 270 scenarios, 0 failed, 305 migrations,
+> the known 46 errors. Every rule was mutation-tested. Nine faults in this plan's own
+> draft code are recorded in the commit messages and in the test files themselves — read
+> those before writing Plan 3. **The portal app in the title was never in these tasks and
+> does not exist; Plans 3 and 4 are still unwritten.**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A customer who has been given a portal login can sign in at the new DMS app, see themselves and everyone below them in the customer tree, and read their orders, payments and outstanding — and can see nothing of any other distributor and nothing whatsoever of any other tenant. No existing policy on `contacts`, `orders` or `payments` is edited to make this work.
@@ -221,7 +229,7 @@ Plan 1's final review left two holes open and named them Plan 2's first SQL job.
 - Consumes: `public.is_superadmin()`; `public.enforce_portal_seat_cap()` (redefined here, message only); the role test in `public.guard_account_commercial_columns()` (`supabase/migrations/20261107150000_accounts_commercial_columns_guard.sql:69`) — copy it **character for character** so the two "is this caller trusted" tests cannot drift.
 - Produces: unique index `contacts_portal_user_unique_idx`; trigger `trg_guard_contact_portal_columns` on `public.contacts`; function `public.guard_contact_portal_columns()`.
 
-- [ ] **Step 1: Give the founder the pre-flight check**
+- [x] **Step 1: Give the founder the pre-flight check**
 
 The index cannot build if production already holds two contacts with the same `portal_user_id`. Plan 1's verification recorded exactly one portal login across all 15 tenants, so it cannot — but record the check rather than the belief. This query goes in the RUN-THIS-SQL document **above** the block:
 
@@ -235,7 +243,7 @@ select portal_user_id, count(*)
 having count(*) > 1;
 ```
 
-- [ ] **Step 2: Write the migration**
+- [x] **Step 2: Write the migration**
 
 Create `supabase/migrations/20261108100000_portal_columns_guard_and_unique_login.sql`:
 
@@ -416,7 +424,7 @@ $$;
 ALTER FUNCTION public.enforce_portal_seat_cap() OWNER TO postgres;
 ```
 
-- [ ] **Step 3: Write the harness scenarios**
+- [x] **Step 3: Write the harness scenarios**
 
 Append a section **L** to `supabase/tests/60_dms_foundation.sql`. Read the end of that file first: section H leaves `portal_seats_limit` at 5 and `DIST_C` holding one seat, and section J works on `:ACCT`. Re-assert whatever you depend on rather than inheriting it.
 
@@ -510,13 +518,13 @@ UPDATE public.contacts SET portal_user_id = NULL WHERE id = :C1;
 RESET ROLE;
 ```
 
-- [ ] **Step 4: Run the harness**
+- [x] **Step 4: Run the harness**
 
 Run: `cd /c/Wacrm/wacrm-web && PGDATA_DIR=/tmp/ozzo-pgtest bash scripts/run-db-tests.sh 2>&1 | tail -40`
 
 Expected: `298 migrations applied, 46 reported errors` — one more migration than Plan 1's 297, and the error count **unchanged** (a change means this migration itself errored). The scenario count rises by 9 from 175 to **184**, `0 failed`, and **no `TRUNCATED` line**. If the count does not rise by exactly 9, the file aborted part way or the edit did not save — Plan 1 hit both of those.
 
-- [ ] **Step 5: Prove each refusal would fail if the rule were deleted**
+- [x] **Step 5: Prove each refusal would fail if the rule were deleted**
 
 Do not reason about this; measure it.
 
@@ -526,7 +534,7 @@ Do not reason about this; measure it.
 
 Three extra harness runs, about twenty minutes. It is the step Plan 1 skipped five times, each time shipping a scenario that reported PASS while testing nothing. Report all three run summaries.
 
-- [ ] **Step 6: Write the RUN-THIS-SQL document**
+- [x] **Step 6: Write the RUN-THIS-SQL document**
 
 Create `docs/RUN-THIS-SQL-dms-plan-2.md`. Follow the shape of `docs/RUN-THIS-SQL-dms-foundation.md`: a plain-English paragraph saying what the block does and why, in words the founder uses; then the SQL in one fenced block he can paste whole; then what he should see; then how to undo it. Define "trigger" and "index" in one sentence each the first time they appear.
 
@@ -541,7 +549,7 @@ cmp /tmp/mig.sql /tmp/doc.sql && echo IDENTICAL
 
 Include the pre-flight query from Step 1 above the block, with "must return no rows" stated, plus this note in plain words: the block is safe to apply while the app is running — `CREATE UNIQUE INDEX` without `CONCURRENTLY` takes a brief lock on the customer table that stops writes but not reads, and it builds in milliseconds on a few thousand rows.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add supabase/migrations/20261108100000_portal_columns_guard_and_unique_login.sql supabase/tests/60_dms_foundation.sql docs/RUN-THIS-SQL-dms-plan-2.md
@@ -568,7 +576,7 @@ The whole security model therefore rests on a claim nobody has measured: **that 
   - `PORTAL_U_B1` `00000000-0000-0000-0000-00000000b001` — a login in tenant B
   - `DIST_A1` `cc000000-0000-0000-0000-0000000000a1`, `DIST_A2` `…a2`, `STK_A1` `…a3`, `DLR_A1` `…a4`, `DLR_A2` `…a5`, `DLR_ORPHAN` `…a6`, `DIST_B1` `cc000000-0000-0000-0000-0000000000b1`
 
-- [ ] **Step 1: Build the fixture and the "reads nothing" assertions**
+- [x] **Step 1: Build the fixture and the "reads nothing" assertions**
 
 Create `supabase/tests/70_portal_visibility.sql`:
 
@@ -743,7 +751,7 @@ SELECT qa_refused('O10 a portal login cannot update its own customer row',
 RESET ROLE;
 ```
 
-- [ ] **Step 2: Add the file to the runner**
+- [x] **Step 2: Add the file to the runner**
 
 In `scripts/run-db-tests.sh`, extend the scenario list so it reads:
 
@@ -755,7 +763,7 @@ for f in 00_fixture 10_buying_status 20_mapping_codes_territory \
 
 A file not named here never runs, and the suite still reports green. That is how fifteen route-rights assertions were silently skipped on 2026-11-05.
 
-- [ ] **Step 3: Run the harness and read every line of the result**
+- [x] **Step 3: Run the harness and read every line of the result**
 
 Run: `cd /c/Wacrm/wacrm-web && PGDATA_DIR=/tmp/ozzo-pgtest bash scripts/run-db-tests.sh 2>&1 | tail -45`
 
@@ -770,7 +778,7 @@ select policyname, cmd, qual, with_check from pg_policies
 
 and say in plain English what a distributor of one company could see of another. That would be a live production leak affecting every tenant, with or without the DMS, and it outranks this plan.
 
-- [ ] **Step 4: Enumerate every policy that does not test membership**
+- [x] **Step 4: Enumerate every policy that does not test membership**
 
 A passing O section proves the seven tables the portal will touch are closed. It does not prove the other ~120 are. Run this on the harness cluster and attach the **full** output to the report:
 
@@ -791,7 +799,7 @@ select tablename, policyname, cmd,
 
 For each row returned, say in one line whether a profile-less authenticated user could read something a distributor should not. Anything you cannot dismiss becomes another **O-section scenario** proving it reads zero rows for `PORTAL_U_A1`. Do not simply paste the rows — the list is the start of the work, not the end of it.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add supabase/tests/70_portal_visibility.sql scripts/run-db-tests.sh
@@ -819,7 +827,7 @@ Four things in it are load-bearing and must not be "tidied": no arguments; `c.ac
   - `public.portal_me() RETURNS jsonb` — one object: `{ contact_id, account_id, name, company, phone, email, address, city, state, hierarchy_level, credit_limit, outstanding_balance, account_name, currency, timezone }`, or `null` when there is no caller.
   - `public.portal_customers() RETURNS jsonb` — a JSON array of everyone **below** the caller (the caller itself excluded), each `{ id, name, company, phone, city, state, hierarchy_level, parent_id, parent_name, is_active, buying_status, outstanding_balance, credit_limit, has_portal_login }`, ordered by `hierarchy_level` then `name`.
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 Create `supabase/migrations/20261108110000_portal_resolver_and_identity.sql`:
 
@@ -993,7 +1001,7 @@ ALTER FUNCTION public.portal_customers() OWNER TO postgres;
 GRANT EXECUTE ON FUNCTION public.portal_customers() TO authenticated, service_role;
 ```
 
-- [ ] **Step 2: Append section P to the visibility test file**
+- [x] **Step 2: Append section P to the visibility test file**
 
 These are spec §15's tests 1, 2, 3 and 4. Each is written so that deleting the rule it guards makes it fail, and the comment says which rule.
 
@@ -1111,7 +1119,7 @@ RESET ROLE;
 DELETE FROM auth.users WHERE id = '00000000-0000-0000-0000-00000000a003';
 ```
 
-- [ ] **Step 3: Append section S — the depth cap and the orphan**
+- [x] **Step 3: Append section S — the depth cap and the orphan**
 
 ```sql
 -- ── S: the belt-and-braces guards ────────────────────────────
@@ -1195,13 +1203,13 @@ UPDATE public.accounts SET settings = jsonb_set(COALESCE(settings,'{}'::jsonb),
   '{order_settings,hierarchy_enabled}', 'false'::jsonb, true) WHERE id = :ACCT_A;
 ```
 
-- [ ] **Step 4: Run the harness**
+- [x] **Step 4: Run the harness**
 
 Run: `cd /c/Wacrm/wacrm-web && PGDATA_DIR=/tmp/ozzo-pgtest bash scripts/run-db-tests.sh 2>&1 | tail -50`
 
 Expected: `299 migrations applied, 46 reported errors`. Scenario count 197 + 18 = **215**, 0 failed, no `TRUNCATED`.
 
-- [ ] **Step 5: Prove the three load-bearing lines are load-bearing**
+- [x] **Step 5: Prove the three load-bearing lines are load-bearing**
 
 Measure, do not reason. Three edits, three runs, restore after each:
 
@@ -1211,7 +1219,7 @@ Measure, do not reason. Three edits, three runs, restore after each:
 
 Report all three results. Also report what happened when you removed `public.account_has_line(c.account_id, 'dms')` from `portal_caller()` → **P10 must fail**.
 
-- [ ] **Step 6: Check the plan for the resolver, and say what it is**
+- [x] **Step 6: Check the plan for the resolver, and say what it is**
 
 A portal screen calls these on every page load, so the shape of the plan matters. On the harness, as `PORTAL_U_A1`:
 
@@ -1228,11 +1236,11 @@ EXPLAIN SELECT * FROM public.contacts WHERE portal_user_id = '00000000-0000-0000
 
 On a tiny table Postgres may legitimately prefer a seq scan; if it does, say so and note that `SET enable_seqscan = off` shows the index is at least usable. Report what you saw, not what you hoped.
 
-- [ ] **Step 7: Append the second block to the RUN-THIS-SQL document and prove it identical**
+- [x] **Step 7: Append the second block to the RUN-THIS-SQL document and prove it identical**
 
 Same `cmp` proof as Task 2 Step 6. The plain-English note for this block: "This adds four read-only lookups the distributor portal uses. It changes no existing rule and no existing screen. Nothing about it can be seen by a company that does not have the DMS."
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add supabase/migrations/20261108110000_portal_resolver_and_identity.sql supabase/tests/70_portal_visibility.sql docs/RUN-THIS-SQL-dms-plan-2.md
@@ -1260,7 +1268,7 @@ Spec §17 question 4 is assumed **no**: a distributor does not see which employe
   - `public.portal_outstanding() RETURNS jsonb` — `{ mine: numeric, mine_credit_limit: numeric, customers_total: numeric, customers: [ { id, name, company, outstanding_balance, credit_limit } ] }`.
   - `public.portal_payments(p_from date DEFAULT NULL, p_to date DEFAULT NULL, p_limit int DEFAULT 200, p_offset int DEFAULT 0) RETURNS jsonb` — `{ total, rows: [ { id, payment_number, payment_date, customer_id, customer_name, amount, verified_amount, payment_type, status, reference_number } ] }`, newest first.
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 Create `supabase/migrations/20261108120000_portal_orders_and_money.sql`. Four functions; the pattern is identical in each, so read the first carefully and follow it.
 
@@ -1524,7 +1532,7 @@ ALTER FUNCTION public.portal_payments(date, date, int, int) OWNER TO postgres;
 GRANT EXECUTE ON FUNCTION public.portal_payments(date, date, int, int) TO authenticated, service_role;
 ```
 
-- [ ] **Step 2: Seed orders and payments in the test fixture**
+- [x] **Step 2: Seed orders and payments in the test fixture**
 
 `supabase/tests/00_fixture.sql` deletes all products and orders for both tenants and seeds none, so section T must create its own. Append this to `supabase/tests/70_portal_visibility.sql` **before** the assertions. Write the rows directly rather than through `create_order` — this task is testing the read functions, and `create_order` is Plan 3's subject.
 
@@ -1585,7 +1593,7 @@ INSERT INTO public.payments (id, account_id, user_id, contact_id, payment_number
   (:PAY_B, :ACCT_B, :ADMIN_B, :DIST_B1, 'PAY-B-1', 300, 'Cash', CURRENT_DATE - 2, 'Approved');
 ```
 
-- [ ] **Step 3: Write the section T assertions**
+- [x] **Step 3: Write the section T assertions**
 
 ```sql
 RESET ROLE;
@@ -1677,7 +1685,7 @@ SELECT qa('T14 another company''s admin reads nothing through the portal functio
 RESET ROLE;
 ```
 
-- [ ] **Step 4: Run the harness**
+- [x] **Step 4: Run the harness**
 
 Run: `cd /c/Wacrm/wacrm-web && PGDATA_DIR=/tmp/ozzo-pgtest bash scripts/run-db-tests.sh 2>&1 | tail -50`
 
@@ -1685,15 +1693,15 @@ Expected: `300 migrations applied, 46 reported errors`. Scenario count 215 + 14 
 
 Note on T9: compute the expected number from the fixture rather than copying it. The fixture's dates are relative to `CURRENT_DATE`, and the point of the assertion is that the `total` and the row count agree — if your arithmetic says a different number, fix the assertion and say so in the report.
 
-- [ ] **Step 5: Prove the tree filter is what refuses, not something else**
+- [x] **Step 5: Prove the tree filter is what refuses, not something else**
 
 Replace `o.contact_id = any(v_ids)` with `o.account_id = (select account_id from public.portal_caller())` in `portal_orders`, re-run, and confirm **T3 and T13 fail** while T4 still passes. That distinguishes "the tenant check works" from "the tree check works" — T4 would pass either way, and a plan that only tested T4 would ship a cross-distributor leak inside every tenant. Restore and re-run clean. Report both runs.
 
-- [ ] **Step 6: Append the fourth block to RUN-THIS-SQL and prove it identical**
+- [x] **Step 6: Append the fourth block to RUN-THIS-SQL and prove it identical**
 
 Plain-English note: "This adds four more read-only lookups: the distributor's own orders, their customers' orders, their receipts and their outstanding. Nothing here can write anything, and nothing here is visible to a company without the DMS."
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add supabase/migrations/20261108120000_portal_orders_and_money.sql supabase/tests/70_portal_visibility.sql docs/RUN-THIS-SQL-dms-plan-2.md
