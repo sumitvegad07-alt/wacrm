@@ -50,7 +50,7 @@ Plan 1 widened `ProductLine` to include `"dms"` and every `Record<ProductLine, b
 - Consumes: `useAuth().hasDMS: boolean` (already exported); `gatePasses(gate, ctx)` and `GateContext` from `src/lib/plans/surface-gates.ts`; `ProductLine` from `src/lib/plans/catalog.ts`.
 - Produces: `owns.dms === hasDMS` in all nine surfaces, so a `SurfaceGate` of `{ line: "dms" }` becomes usable by Plans 3 and 4. No new exports.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Two tests, because they catch different failures. The first is a **source scan** — the only thing that can notice a constant creeping back in, and the repo already has precedent for source-level assertions (`scripts/check-design-system.mjs`, `proposal-pages.test.tsx`). The second proves the gate itself discriminates.
 
@@ -140,13 +140,13 @@ describe("a surface gated on the dms line", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests and watch them fail**
+- [x] **Step 2: Run the tests and watch them fail**
 
 Run: `npm test -- src/lib/plans/dms-owns-wiring.test.ts src/lib/plans/surface-gates.dms.test.ts`
 
 Expected: the wiring test FAILS on all nine files (`still hardcodes dms`). The surface-gates test PASSES already — `gatePasses` is pure and reads whatever `owns` it is handed; it is there to pin the contract the nine files must now satisfy, and to be the thing Plans 3 and 4 rely on.
 
-- [ ] **Step 3: Wire the three hook-shaped surfaces**
+- [x] **Step 3: Wire the three hook-shaped surfaces**
 
 These three keep `owns` inside a hook or a `useMemo`, so `hasDMS` must also join the dependency array. **A stale dependency array is the fault that once made four whole modules appear unbuilt while Save reported success** — check every one of the three, and do not add `hasDMS` to the destructure without adding it to the deps.
 
@@ -156,7 +156,7 @@ These three keep `owns` inside a hook or a `useMemo`, so `hasDMS` must also join
 
 `src/app/(dashboard)/dashboard-shell.tsx` — add `hasDMS` to the `useAuth()` destructure, change line 96 to `dms: hasDMS,`, and add `hasDMS` to the dependency array of the route-protection `useEffect` (the one that ends `router,` around line 123, listing `hasCRM, hasWFA, hasSFA, hasFSM`).
 
-- [ ] **Step 4: Wire the six plain-render surfaces**
+- [x] **Step 4: Wire the six plain-render surfaces**
 
 In each, add `hasDMS` to the `useAuth()` destructure and replace `dms: false` with `dms: hasDMS`. Where the `owns` literal sits inside a `useEffect` or `useMemo`, add `hasDMS` to that dependency array too — check each one; `reports/page.tsx` and `settings/page.tsx` both read `owns` inside an effect.
 
@@ -169,13 +169,13 @@ In each, add `hasDMS` to the `useAuth()` destructure and replace `dms: false` wi
 
 Replace the trailing comment `// add-on line: not wired to the UI yet` with `// granted per account via accounts.addon_lines, never by a plan code` wherever it appears, so the five words that are now false do not survive.
 
-- [ ] **Step 5: Run the two tests and the type check**
+- [x] **Step 5: Run the two tests and the type check**
 
 Run: `npm test -- src/lib/plans/dms-owns-wiring.test.ts src/lib/plans/surface-gates.dms.test.ts && npm run typecheck`
 
 Expected: both files pass, `tsc --noEmit` clean.
 
-- [ ] **Step 6: Prove nothing in the menu moved for an account without the add-on**
+- [x] **Step 6: Prove nothing in the menu moved for an account without the add-on**
 
 This is the constraint that matters. There is no `surface-gates` row with `line: "dms"` yet, and this task adds none, so for every one of the 15 live tenants the nine maps now carry `dms: false` (14 of them) or `dms: true` (001001) and **no gate reads it**. Confirm by search, and record the count in the report:
 
@@ -183,7 +183,7 @@ Run: `grep -c '"dms"' src/lib/plans/surface-gates.ts`
 
 Expected: `0`. If it is not 0, a row has been added that this task did not ask for — remove it; adding the first `dms` row is Plan 3's or Plan 4's job, in the task that needs it.
 
-- [ ] **Step 7: Run the whole suite and the ratchet**
+- [x] **Step 7: Run the whole suite and the ratchet**
 
 ```bash
 git stash && npm run lint:ui > /tmp/lintui-baseline.txt; git stash pop && npm run lint:ui > /tmp/lintui-after.txt; diff /tmp/lintui-baseline.txt /tmp/lintui-after.txt
@@ -193,7 +193,7 @@ Then: `npm test`
 
 Expected: the ratchet diff is empty (baseline 347 / 18 / 15 / 132). The full suite passes with 2 more test files than before. If any suite fails, **open its output** and report what it says — do not call it flaky, and do not re-run and declare the first run void.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/hooks/use-nav-items.ts src/components/layout/sidebar.tsx src/components/layout/command-palette.tsx "src/app/(dashboard)/dashboard-shell.tsx" "src/app/(dashboard)/import/page.tsx" "src/app/(dashboard)/import/[module]/page.tsx" "src/app/(dashboard)/custom-fields/[module]/page.tsx" "src/app/(dashboard)/reports/page.tsx" "src/app/(dashboard)/settings/page.tsx" src/lib/plans/dms-owns-wiring.test.ts src/lib/plans/surface-gates.dms.test.ts
