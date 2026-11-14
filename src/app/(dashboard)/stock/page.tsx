@@ -13,11 +13,14 @@ import { ColumnDef, FilterState } from '@/components/ui/data-table/data-table-ty
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StockImportDialog } from '@/components/stock/stock-import-dialog';
-import { Boxes, Search, SlidersHorizontal, AlertTriangle, Upload, BarChart3 } from 'lucide-react';
+import { Boxes, Search, SlidersHorizontal, AlertTriangle, Upload, BarChart3, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function StockPage() {
   const supabase = createClient();
   const { accountId, isModuleEnabled, moduleSettingsLoaded, hasPermission } = useAuth();
+
+  const [recalculating, setRecalculating] = useState(false);
 
   const canView = hasPermission(PERMISSIONS.STOCK.VIEW) || hasPermission(PERMISSIONS.STOCK.MANAGE);
   const canManage = hasPermission(PERMISSIONS.STOCK.MANAGE);
@@ -39,6 +42,39 @@ export default function StockPage() {
   }, [accountId, supabase]);
 
   useEffect(() => { if (enabled && canView) load(); }, [enabled, canView, load]);
+
+  /**
+   * Re-run the stock reconciliation over the whole account.
+   *
+   * Everything that moves stock is a trigger that begins "if the module is off,
+   * do nothing", and nothing goes back over what it skipped. So an account that
+   * switches Stock Management on — the default is off — has a ledger that
+   * ignores every order closed before that moment, and ticking "Maintain stock"
+   * on a product that has already been ordered leaves those orders unposted.
+   * This asks the database to work out the difference and post it.
+   */
+  const recalculate = useCallback(async () => {
+    setRecalculating(true);
+    try {
+      const { data, error } = await supabase.rpc('stock_recalculate_account');
+      if (error) throw error;
+      const added = Number((data as { entries_added?: number } | null)?.entries_added ?? 0);
+      toast.success(
+        added > 0
+          ? `Stock recalculated — ${added} ${added === 1 ? 'entry' : 'entries'} added.`
+          : 'Stock recalculated — everything was already up to date.',
+      );
+      await load();
+    } catch (err) {
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not recalculate stock.',
+      );
+    } finally {
+      setRecalculating(false);
+    }
+  }, [supabase, load]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -127,6 +163,20 @@ export default function StockPage() {
             {canManage && (
               <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
                 <Upload className="mr-1.5 h-4 w-4" /> Import
+              </Button>
+            )}
+            {/* Catch-up. Stock only moves automatically while the module is ON
+                and "Maintain stock" is ticked on the product, and nothing ever
+                goes back for what happened before either was true — so an
+                account that switches Stock Management on starts from whatever
+                the ledger happens to hold. This re-runs the reconciliation over
+                every order, dispatch and opening balance. Safe to press twice:
+                the reconcile posts only the difference, so a second run adds
+                nothing. */}
+            {canManage && (
+              <Button variant="outline" size="sm" onClick={recalculate} disabled={recalculating}>
+                <RefreshCw className={`mr-1.5 h-4 w-4 ${recalculating ? 'animate-spin' : ''}`} />
+                {recalculating ? 'Recalculating…' : 'Recalculate'}
               </Button>
             )}
             <Link href="/reports/stock" className={buttonVariants({ variant: 'outline', size: 'sm' })}>

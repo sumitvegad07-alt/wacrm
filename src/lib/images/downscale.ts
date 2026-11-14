@@ -44,14 +44,32 @@ function isReEncodable(file: File): boolean {
   return file.type !== "image/svg+xml" && file.type !== "image/gif";
 }
 
+/**
+ * Formats that can carry transparency. A logo or a cut-out product shot in one
+ * of these must not come back on a white rectangle.
+ */
+function mayHaveAlpha(type: string): boolean {
+  return type === "image/png" || type === "image/webp";
+}
+
 /** The best format this browser can encode to, preferring WebP. */
-async function pickOutput(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
+async function pickOutput(
+  canvas: HTMLCanvasElement,
+  quality: number,
+  needsAlpha: boolean,
+): Promise<Blob | null> {
   const webp = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/webp", quality),
   );
-  // Safari used to return null here rather than throwing. Fall back to JPEG,
-  // which every browser can encode and the storage buckets accept.
+  // WebP keeps transparency, so it is the right answer for both cases.
   if (webp && webp.type === "image/webp") return webp;
+
+  // No WebP encoder (old Safari). A transparent source would lose its alpha to
+  // JPEG, so PNG is the only safe fallback — larger, but a flattened logo is a
+  // visible defect and a bigger file is not.
+  if (needsAlpha) {
+    return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  }
   return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
 }
 
@@ -79,7 +97,7 @@ async function decode(file: File): Promise<ImageBitmap | HTMLImageElement | null
 }
 
 function replaceExtension(name: string, blobType: string): string {
-  const ext = blobType === "image/webp" ? "webp" : "jpg";
+  const ext = blobType === "image/webp" ? "webp" : blobType === "image/png" ? "png" : "jpg";
   const base = name.replace(/\.[^./\\]+$/, "") || "image";
   return `${base}.${ext}`;
 }
@@ -115,14 +133,22 @@ export async function downscaleImage(file: File, options: DownscaleOptions = {})
     canvas.height = Math.max(1, Math.round(height * scale));
     const ctx = canvas.getContext("2d");
     if (!ctx) return file;
-    // White underneath, so a transparent PNG re-encoded as JPEG comes out on
-    // white rather than black.
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    /**
+     * White underneath ONLY for formats that cannot carry transparency, so a
+     * photo re-encoded as JPEG comes out on white rather than black. Filling
+     * unconditionally would put a white rectangle behind every transparent PNG
+     * — a cut-out product shot or a logo — which is a visible change to an
+     * image the user never asked to have altered.
+     */
+    const needsAlpha = mayHaveAlpha(file.type);
+    if (!needsAlpha) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     ctx.drawImage(source as CanvasImageSource, 0, 0, canvas.width, canvas.height);
     if ("close" in source) source.close();
 
-    const blob = await pickOutput(canvas, quality);
+    const blob = await pickOutput(canvas, quality, needsAlpha);
     if (!blob) return file;
     // Re-encoding can make an already-optimised file bigger. Keep whichever wins.
     if (blob.size >= file.size) return file;
