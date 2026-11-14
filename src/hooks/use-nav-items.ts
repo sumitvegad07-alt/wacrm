@@ -32,6 +32,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
     hasWFA,
     hasSFA,
     hasFSM,
+    hasDMS,
     isModuleEnabled,
     moduleSettings,
   } = useAuth();
@@ -51,7 +52,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
       wfa: hasWFA,
       sfa: hasSFA,
       fsm: hasFSM,
-      dms: false, // add-on line: not wired to the UI yet
+      dms: hasDMS, // granted per account via accounts.addon_lines, never by a plan code
     };
     const lineEnabled = (line: ProductLine) => owns[line];
 
@@ -129,6 +130,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
     hasWFA,
     hasSFA,
     hasFSM,
+    hasDMS,
     isModuleEnabled,
   ]);
 }

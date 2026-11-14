@@ -12,7 +12,7 @@ import type { ProductLine } from '@/lib/plans/catalog';
 export default function CustomFieldsModulePage() {
   const params = useParams();
   const moduleName = (typeof params.module === 'string' ? params.module : params.module?.[0]) || 'contact';
-  const { hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled, moduleSettingsLoaded } = useAuth();
+  const { hasCRM, hasWFA, hasSFA, hasFSM, hasDMS, isModuleEnabled, moduleSettingsLoaded } = useAuth();
 
   // Plan ceiling. Custom Fields had no plan gating at all, so a WFA-only tenant
   // was handed the Sale Quotation, Lead, Deal, Order and Dispatch field
@@ -23,7 +23,7 @@ export default function CustomFieldsModulePage() {
   // Waits for moduleSettingsLoaded: several of these ride a module toggle that
   // ships off, and judging on the defaults would refuse a page the account is
   // entitled to on every cold load and refresh.
-  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: false };
+  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: hasDMS };
   const offPlan =
     moduleSettingsLoaded &&
     !gatePasses(CUSTOM_FIELD_GATES[moduleName], { owns, isModuleEnabled });

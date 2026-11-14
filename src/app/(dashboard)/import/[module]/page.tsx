@@ -30,7 +30,7 @@ const PLANNED_LABELS: Record<string, string> = {
 export default function ModuleImportPage() {
   const params = useParams<{ module: string }>();
   const moduleKey = params?.module ?? "";
-  const { hasPermission, hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled, moduleSettingsLoaded } = useAuth();
+  const { hasPermission, hasCRM, hasWFA, hasSFA, hasFSM, hasDMS, isModuleEnabled, moduleSettingsLoaded } = useAuth();
   const descriptor = getImportDescriptor(moduleKey);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -44,7 +44,7 @@ export default function ModuleImportPage() {
   // bypass. `moduleSettingsLoaded` matters because stock and territory also
   // ride a module toggle that ships off, and acting on the defaults would
   // refuse an import the account is entitled to on every cold load.
-  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: false };
+  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: hasDMS };
   const offPlan =
     moduleSettingsLoaded && !gatePasses(IMPORT_GATES[moduleKey], { owns, isModuleEnabled });
 

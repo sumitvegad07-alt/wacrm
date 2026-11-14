@@ -26,16 +26,16 @@ const CANDIDATES = [
 
 export default function ReportsIndexPage() {
   const router = useRouter();
-  const { hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled, moduleSettingsLoaded } = useAuth();
+  const { hasCRM, hasWFA, hasSFA, hasFSM, hasDMS, isModuleEnabled, moduleSettingsLoaded } = useAuth();
 
   useEffect(() => {
     if (!moduleSettingsLoaded) return;
-    const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: false };
+    const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: hasDMS };
     const target =
       CANDIDATES.find((href) => gatePasses(gateForPath(href), { owns, isModuleEnabled })) ??
       "/reports/tasks";
     router.replace(target);
-  }, [moduleSettingsLoaded, hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled, router]);
+  }, [moduleSettingsLoaded, hasCRM, hasWFA, hasSFA, hasFSM, hasDMS, isModuleEnabled, router]);
 
   return (
     <div className="p-8 text-center text-sm text-muted-foreground">Opening reports…</div>

@@ -42,7 +42,7 @@ function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
-    hasCRM, hasWFA, hasSFA, hasFSM,
+    hasCRM, hasWFA, hasSFA, hasFSM, hasDMS,
     isModuleEnabled, moduleSettingsLoaded, hasPermission, profileLoading,
   } = useAuth();
 
@@ -104,7 +104,7 @@ function SettingsContent() {
   // `moduleSettingsLoaded` has to be true first: payment, route, scheme, stock
   // and reporting_hierarchy all ship OFF, so judging on the defaults would
   // refuse a panel the account is entitled to on every cold load and refresh.
-  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: false };
+  const owns: Record<ProductLine, boolean> = { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: hasDMS };
   const meta = SECTION_META[section];
   const blocked: 'plan' | 'permission' | null = !meta
     ? null

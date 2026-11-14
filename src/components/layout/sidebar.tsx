@@ -556,6 +556,7 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
     hasWFA,
     hasSFA,
     hasFSM,
+    hasDMS,
     hasPermission,
     isModuleEnabled,
     moduleSettings,
@@ -607,7 +608,7 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
     wfa: hasWFA,
     sfa: hasSFA,
     fsm: hasFSM,
-    dms: false, // add-on line: not wired to the UI yet
+    dms: hasDMS, // granted per account via accounts.addon_lines, never by a plan code
   };
   const lineEnabled = (line: ProductLine) => owns[line];
 

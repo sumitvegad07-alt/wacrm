@@ -40,7 +40,7 @@ const MODULES: {
 ];
 
 export default function ImportHubPage() {
-  const { hasPermission, hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled } = useAuth();
+  const { hasPermission, hasCRM, hasWFA, hasSFA, hasFSM, hasDMS, isModuleEnabled } = useAuth();
   const canImport = hasPermission(PERMISSIONS.IMPORT.DATA);
 
   // Keyed by ProductLine: a new line is a compile error here until it is given
@@ -50,7 +50,7 @@ export default function ImportHubPage() {
     wfa: hasWFA,
     sfa: hasSFA,
     fsm: hasFSM,
-    dms: false, // add-on line: not wired to the UI yet
+    dms: hasDMS, // granted per account via accounts.addon_lines, never by a plan code
   };
   const visibleModules = MODULES.filter((m) =>
     gatePasses(IMPORT_GATES[m.key], { owns, isModuleEnabled }),

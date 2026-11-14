@@ -44,10 +44,11 @@ export function CommandPalette({
 function PaletteBody({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
   const navItems = useVisibleNavItems();
-  const { hasCRM, hasWFA, hasSFA, hasFSM, isModuleEnabled, hasPermission } = useAuth();
+  const { hasCRM, hasWFA, hasSFA, hasFSM, hasDMS, isModuleEnabled, hasPermission } = useAuth();
   const owns = useMemo<Record<ProductLine, boolean>>(
-    () => ({ crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: false }),
-    [hasCRM, hasWFA, hasSFA, hasFSM],
+    // granted per account via accounts.addon_lines, never by a plan code
+    () => ({ crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: hasDMS }),
+    [hasCRM, hasWFA, hasSFA, hasFSM, hasDMS],
   );
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);

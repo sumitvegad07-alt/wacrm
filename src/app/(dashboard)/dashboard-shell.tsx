@@ -47,6 +47,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasWFA,
     hasSFA,
     hasFSM,
+    hasDMS,
     isModuleEnabled,
     moduleSettingsLoaded,
     hasPermission,
@@ -93,7 +94,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       wfa: hasWFA,
       sfa: hasSFA,
       fsm: hasFSM,
-      dms: false, // add-on line: not wired to the UI yet
+      dms: hasDMS, // granted per account via accounts.addon_lines, never by a plan code
     };
 
     // WhatsApp's three sub-features ride extra flags on top of the CRM line.
@@ -117,6 +118,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasWFA,
     hasSFA,
     hasFSM,
+    hasDMS,
     isModuleEnabled,
     moduleSettingsLoaded,
     router,
