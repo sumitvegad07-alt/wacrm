@@ -12,6 +12,8 @@
  */
 
 import { seatsUsedLine, seatsFullText } from '@/lib/admin/portal-login-text';
+import { portalUrl } from '@/lib/dms/portal-url';
+import { shareMessage } from '@/lib/dms/share-message';
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -272,6 +274,19 @@ export function PortalAccessBlock({
     }
   }
 
+  // navigator.clipboard is undefined on an insecure origin and throws when the
+  // document is not focused, which is exactly what happens if the click lands
+  // while a toast is animating. Failing silently would leave the admin
+  // believing they had copied the link, so a failure says so.
+  async function copy(text: string, done: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(done);
+    } catch {
+      toast.error('Could not copy. Select the text and copy it by hand.');
+    }
+  }
+
   // This block sits inside the customer <form>: Enter in a field must not submit the customer.
   const noSubmit = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') e.preventDefault();
@@ -368,6 +383,53 @@ export function PortalAccessBlock({
               </Button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Where the customer actually goes. Shown only while the login works:
+          handing someone an address that refuses them is worse than handing
+          them nothing. The link and the message both come from lib/dms, so the
+          address exists in one place and cannot drift between them. */}
+      {active && email !== '' && (
+        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3" data-testid="portal-share">
+          <p className="text-caption font-medium text-foreground">Send this to the customer</p>
+          <p className="text-body break-all">
+            <a
+              href={portalUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              {portalUrl()}
+            </a>
+          </p>
+          <p className="text-caption text-muted-foreground break-all">Login: {email}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void copy(portalUrl(), 'Link copied.')}
+            >
+              Copy link
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void copy(
+                  shareMessage({ url: portalUrl(), loginEmail: email, companyName: account?.name }),
+                  'Message copied. Send the password separately.',
+                )
+              }
+            >
+              Copy message
+            </Button>
+          </div>
+          <p className="text-caption text-muted-foreground">
+            Send the password on its own, not in the same message.
+          </p>
         </div>
       )}
 
