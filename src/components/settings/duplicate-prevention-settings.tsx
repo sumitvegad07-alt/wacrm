@@ -24,6 +24,17 @@ export interface DuplicatePreventionSettingsProps {
   customerKeys: CustomerUniqueKey[];
   leadKeys: LeadUniqueKey[];
   disabled?: boolean;
+  /**
+   * Which record types this account actually has.
+   *
+   * The card always showed all three columns, so an SFA-only tenant was asked
+   * which Lead fields must be unique when the plan gives them no Leads screen
+   * at all — the founder's "I can see CRM things in only SFA plan too". The
+   * settings are kept in the account's JSON either way; a column the plan does
+   * not include is simply not offered.
+   */
+  showLeads?: boolean;
+  showProducts?: boolean;
   onChange: (next: {
     productUniqueKey: "name" | "code";
     customerKeys: CustomerUniqueKey[];
@@ -87,8 +98,12 @@ export function DuplicatePreventionSettings({
   customerKeys,
   leadKeys,
   disabled,
+  showLeads = true,
+  showProducts = true,
   onChange,
 }: DuplicatePreventionSettingsProps) {
+  // Customers are a base module on every plan, so there is always one column.
+  const columns = 1 + (showLeads ? 1 : 0) + (showProducts ? 1 : 0);
   return (
     <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-5">
       <div className="flex items-start gap-2">
@@ -102,7 +117,12 @@ export function DuplicatePreventionSettings({
         </div>
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-3">
+      <div
+        className={
+          "grid gap-5 " +
+          (columns === 3 ? "sm:grid-cols-3" : columns === 2 ? "sm:grid-cols-2" : "sm:grid-cols-1")
+        }
+      >
         {/* Customers */}
         <div>
           <p className="text-sm font-medium text-foreground mb-1.5">Customer</p>
@@ -117,7 +137,8 @@ export function DuplicatePreventionSettings({
           </div>
         </div>
 
-        {/* Leads */}
+        {/* Leads — CRM line only. */}
+        {showLeads && (
         <div>
           <p className="text-sm font-medium text-foreground mb-1.5">Lead</p>
           <KeyChecklist
@@ -134,8 +155,11 @@ export function DuplicatePreventionSettings({
             choose. Turning one on starts rejecting saves that used to be allowed.
           </p>
         </div>
+        )}
 
-        {/* Products — unchanged single choice (founder, 2026-10-05). */}
+        {/* Products — the catalogue, which is sold with CRM and with SFA but
+            never with WFA alone. Unchanged single choice (founder, 2026-10-05). */}
+        {showProducts && (
         <div>
           <p className="text-sm font-medium text-foreground mb-1.5">Product unique key</p>
           <div className="space-y-1.5">
@@ -162,6 +186,7 @@ export function DuplicatePreventionSettings({
             Products keep a single choice.
           </p>
         </div>
+        )}
       </div>
     </div>
   );

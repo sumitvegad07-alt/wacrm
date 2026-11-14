@@ -59,7 +59,14 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export function SfaAnalytics() {
-  const { defaultCurrency } = useAuth();
+  /**
+   * Visits are the WORKFORCE line, not Sales. The two visit tiles below were
+   * rendered on every SFA dashboard, so a tenant who bought Sales alone was
+   * shown "Customer Visits" for a module their plan does not include — and the
+   * figure was always zero, because they have no reps checking in. Shown only
+   * where the account owns both lines.
+   */
+  const { defaultCurrency, hasWFA } = useAuth();
   const [freq, setFreq] = useState<Frequency>("monthly");
   const [data, setData] = useState<SfaAnalytics | null>(null);
   const [failed, setFailed] = useState(false);
@@ -118,7 +125,7 @@ export function SfaAnalytics() {
             </p>
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               {loading || !data ? (
-                Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)
+                Array.from({ length: hasWFA ? 8 : 6 }).map((_, i) => <SkeletonCard key={i} />)
               ) : (
                 <>
                   <MetricCard title="Sales Orders" value={data.kpis.salesOrders.toLocaleString()} icon={ShoppingCart} />
@@ -127,8 +134,12 @@ export function SfaAnalytics() {
                   <MetricCard title="Payment Collection" value={money(data.kpis.paymentCollection)} icon={Banknote} />
                   <MetricCard title="Unique Customers Ordered" value={data.kpis.uniqueCustomersOrdered.toLocaleString()} icon={Users} />
                   <MetricCard title="New Customers" value={data.kpis.newCustomers.toLocaleString()} icon={UserPlus} />
-                  <MetricCard title="Customer Visits" value={data.kpis.customerVisits.toLocaleString()} icon={MapPin} />
-                  <MetricCard title="Unique Customer Visits" value={data.kpis.uniqueCustomerVisits.toLocaleString()} icon={Footprints} />
+                  {hasWFA && (
+                    <>
+                      <MetricCard title="Customer Visits" value={data.kpis.customerVisits.toLocaleString()} icon={MapPin} />
+                      <MetricCard title="Unique Customer Visits" value={data.kpis.uniqueCustomerVisits.toLocaleString()} icon={Footprints} />
+                    </>
+                  )}
                 </>
               )}
             </div>

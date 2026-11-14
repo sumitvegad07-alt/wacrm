@@ -25,6 +25,7 @@ import { Trash2, X, CheckSquare } from "lucide-react";
 import { FormPageShell, FormActions, FormField} from "@/components/shared";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { useAssignableProfiles } from "@/hooks/use-assignable-profiles";
 import { cn } from "@/lib/utils";
 
 const TIME_OPTIONS = Array.from({ length: 288 }).map((_, i) => {
@@ -101,7 +102,9 @@ export function TaskForm({
   onSaved,
 }: TaskFormProps) {
   const supabase = createClient();
-  const { user, profile, accountId, accountRole, hasPermission } = useAuth();
+  // accountRole / hasPermission were read only to decide who could be assigned
+  // work; useAssignableProfiles answers that now.
+  const { user, profile, accountId } = useAuth();
 
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("Pending");
@@ -534,10 +537,19 @@ export function TaskForm({
 
   const isNote = activityType.toLowerCase() === "note";
   
-  // Use new RBAC permissions for assigning tasks
-  const hasAssignPerm = hasPermission("assign_tasks_all") || hasPermission("assign_tasks_parent") || hasPermission("assign_tasks_child");
-  const canAssignOthers = accountRole === "admin" || accountRole === "owner" || hasAssignPerm;
-  const assignableProfiles = canAssignOthers ? profiles : profiles.filter(p => p.id === user?.id);
+  /**
+   * Who this user may hand the activity to.
+   *
+   * This was one `_all || _parent || _child` question answered against the
+   * whole staff roster, so a Sales Executive holding only `assign_tasks_child`
+   * was offered every employee in the company. Its else branch compared
+   * `profiles.id` to the auth user id — different id spaces, so it matched
+   * nothing and a user without the right got an empty picker instead of their
+   * own name. useAssignableProfiles applies the directional rule properly.
+   */
+  const assignableScope = useAssignableProfiles();
+  const canAssignOthers = assignableScope.canAssignOthers;
+  const assignableProfiles = assignableScope.profiles;
 
   const formBody = (
     <>
@@ -628,6 +640,10 @@ export function TaskForm({
                     </SelectContent>
                   </Select>
                 </FormField>
+                {/* Hidden outright when there is nobody else to choose. A
+                    disabled picker advertises a choice the role does not have;
+                    the activity simply stays with its creator. */}
+                {canAssignOthers && (
                 <FormField label="Assigned To" labelClassName="uppercase">
                   {/* Several people can share a task, and each ticks off their
                       own copy. Searchable: an account with a hundred employees
@@ -636,7 +652,6 @@ export function TaskForm({
                   <MultiSelect
                     selectedValues={assignedUserIds}
                     onChange={setAssignedUserIds}
-                    disabled={!canAssignOthers}
                     placeholder="Unassigned"
                     emptyMessage="No employees found."
                     searchable
@@ -646,6 +661,7 @@ export function TaskForm({
                     }))}
                   />
                 </FormField>
+                )}
               </div>
 
               {/* `empty:hidden` so the divider goes too when the renderer paints

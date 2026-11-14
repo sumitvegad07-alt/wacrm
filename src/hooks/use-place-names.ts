@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { reverseGeocode } from "@/lib/geo-service";
 
 /**
@@ -131,8 +131,11 @@ export interface PlaceInput {
  */
 export function usePlaceNames(points: PlaceInput[]): Map<string, string> {
   const [, setTick] = useState(0);
-  // The map identity must change when a name lands, or React skips the render.
-  const snapshot = useRef(new Map<string, string>());
+
+  // Lazy, once-per-page module init rather than an effect: the names already
+  // in localStorage must be in the map BEFORE the first render reads it, or
+  // the column would show "Locating…" for values it already knows.
+  if (typeof window !== "undefined") loadStorage();
 
   // A stable description of the points asked for, so the effect runs when the
   // page of rows changes and not on every render.
@@ -143,7 +146,6 @@ export function usePlaceNames(points: PlaceInput[]): Map<string, string> {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    loadStorage();
 
     const listener = () => setTick((t) => t + 1);
     listeners.add(listener);
@@ -158,8 +160,6 @@ export function usePlaceNames(points: PlaceInput[]): Map<string, string> {
       queued = true;
     }
     if (queued) void drain();
-    // Names already cached need a render to be picked up.
-    setTick((t) => t + 1);
 
     return () => {
       listeners.delete(listener);
@@ -174,7 +174,6 @@ export function usePlaceNames(points: PlaceInput[]): Map<string, string> {
     const name = memory.get(key);
     if (name) next.set(key, name);
   }
-  snapshot.current = next;
   return next;
 }
 

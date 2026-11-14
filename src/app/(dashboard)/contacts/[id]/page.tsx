@@ -46,7 +46,7 @@ export default function ContactDetailsPage() {
   useMarkRecordSeen("contact", id);
   const router = useRouter();
   const supabase = createClient();
-  const { defaultCurrency, accountId, account, isModuleEnabled, hasPermission, hasFSM, profile } = useAuth();
+  const { defaultCurrency, accountId, account, isModuleEnabled, hasPermission, hasFSM, hasCRM, profile } = useAuth();
   // Setting Buyer / Yet to Buy by hand locks the row, so it is its own right.
   // Releasing that lock stays admin-only, which is why isAdmin is separate.
   const isAdmin = profile?.account_role === 'admin' || profile?.account_role === 'owner';
@@ -541,6 +541,11 @@ export default function ContactDetailsPage() {
             onChanged={refreshAll}
           />
 
+          {/* Deals are the CRM line. This section rendered on every plan, so an
+              SFA-only tenant was shown a Deals block for a module they do not
+              have — and its links went to /pipelines, which the route guard
+              then bounced them straight back out of. */}
+          {hasCRM && (
           <DetailSection title="Deals">
              {deals.length === 0 ? (
                <p className="text-body text-muted-foreground italic">No deals associated with this contact.</p>
@@ -567,6 +572,7 @@ export default function ContactDetailsPage() {
                </div>
              )}
           </DetailSection>
+          )}
 
           {/* FSM only: not mounted (so nothing is fetched) unless the plan has the fsm line and the user can view assets. */}
           {shouldShowCustomerAssets({

@@ -164,7 +164,15 @@ export function ModuleSettingsPanel() {
     refreshProfile,
     hasSFA,
     hasWFA,
+    hasCRM,
   } = useAuth();
+
+  /**
+   * The catalogue (products, tax, HSN) is sold in the CRM column and the SFA
+   * column, never with WFA alone — the same CATALOG_LINES rule the sidebar and
+   * the route guard use.
+   */
+  const hasCatalog = hasCRM || hasSFA;
 
   // Modules the account's plan includes. Legacy plans return the full set, so
   // those tenants keep every toggle. A module outside the plan is locked: the
@@ -767,10 +775,15 @@ export function ModuleSettingsPanel() {
           </div>
         ) : (
           <div className="space-y-8">
-            <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
-              <ToggleRow label="Enable GST" enabled={gstEnabled} onChange={setGstEnabled} disabled={!canEditSettings} />
-              <ToggleRow label="Enable HSN Code" enabled={hsnEnabled} onChange={setHsnEnabled} disabled={!canEditSettings} />
-            </div>
+            {/* GST and HSN describe goods on a catalogue, a quotation or an
+                order. A WFA-only tenant has none of those, so neither switch
+                has anything to apply to. */}
+            {hasCatalog && (
+              <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
+                <ToggleRow label="Enable GST" enabled={gstEnabled} onChange={setGstEnabled} disabled={!canEditSettings} />
+                <ToggleRow label="Enable HSN Code" enabled={hsnEnabled} onChange={setHsnEnabled} disabled={!canEditSettings} />
+              </div>
+            )}
 
             {/* Settings that reveal more configuration when they are switched
                 on. That configuration opens underneath the row rather than in a
@@ -803,13 +816,18 @@ export function ModuleSettingsPanel() {
                 </FeatureRow>
               )}
 
-              <FeatureRow
-                label="Show Buying Status on customers"
-                description="Adds a second status — Buyer / Yet to Buy — alongside Active / Inactive. It answers “has this customer ever ordered?”, which Active / Inactive does not: a dealer who has never ordered is a current customer the rep is visiting BECAUSE he has not ordered yet. Worked out from order history; an order that was Cancelled or Rejected does not count."
-                enabled={buyingStatusEnabled}
-                onChange={setBuyingStatusEnabled}
-                disabled={!canEditSettings}
-              />
+              {/* Buyer / Yet to Buy is worked out from ORDER history, and
+                  orders are the SFA line. Without it the status could never
+                  move off "Yet to Buy" for anybody. */}
+              {hasSFA && (
+                <FeatureRow
+                  label="Show Buying Status on customers"
+                  description="Adds a second status — Buyer / Yet to Buy — alongside Active / Inactive. It answers “has this customer ever ordered?”, which Active / Inactive does not: a dealer who has never ordered is a current customer the rep is visiting BECAUSE he has not ordered yet. Worked out from order history; an order that was Cancelled or Rejected does not count."
+                  enabled={buyingStatusEnabled}
+                  onChange={setBuyingStatusEnabled}
+                  disabled={!canEditSettings}
+                />
+              )}
 
               {/* Secondary sales, in one card: the switch, the levels, the
                   mapping method and a way into the Mapping screen. It replaces
@@ -838,6 +856,11 @@ export function ModuleSettingsPanel() {
                 productUniqueKey={productUniqueKey}
                 customerKeys={customerUniqueKeys}
                 leadKeys={leadUniqueKeys}
+                // Leads are CRM; the product catalogue is CRM or SFA. An
+                // SFA-only tenant was being asked to configure Lead duplicate
+                // rules for a module its plan does not include.
+                showLeads={hasCRM}
+                showProducts={hasCatalog}
                 disabled={!canEditSettings}
                 onChange={(next) => {
                   setProductUniqueKey(next.productUniqueKey);
@@ -856,6 +879,8 @@ export function ModuleSettingsPanel() {
                 disabled={!canEditSettings}
                 onChange={setCodeSettings}
                 onBackfill={handleBackfillCodes}
+                // Product numbering only where the plan includes the catalogue.
+                kinds={hasCatalog ? CODE_KINDS : CODE_KINDS.filter((k) => k !== 'product')}
               />
 
               <FeatureRow

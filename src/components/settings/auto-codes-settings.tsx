@@ -43,6 +43,13 @@ export interface AutoCodesSettingsProps {
   disabled?: boolean;
   onChange: (next: CodeSettings) => void;
   onBackfill?: (kind: CodeKind) => void;
+  /**
+   * The code kinds this account's plan actually has. Product codes are only
+   * meaningful where the plan includes the catalogue (CRM or SFA), so a
+   * WFA-only tenant is not offered a numbering rule for products it cannot
+   * create. Customers and employees exist on every plan.
+   */
+  kinds?: readonly CodeKind[];
 }
 
 /** The number the next save will really use. */
@@ -181,6 +188,7 @@ export function AutoCodesSettings({
   disabled,
   onChange,
   onBackfill,
+  kinds,
 }: AutoCodesSettingsProps) {
   return (
     <SettingsCard
@@ -198,7 +206,7 @@ export function AutoCodesSettings({
       }
       bodyClassName="px-4 py-1"
     >
-      {CODE_KINDS.map((kind) => (
+      {(kinds ?? CODE_KINDS).map((kind) => (
         <CodeRuleRow
           key={kind}
           kind={kind}

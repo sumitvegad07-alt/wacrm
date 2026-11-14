@@ -105,3 +105,16 @@ export async function getVisibleUserScope(
 
   return { userIds: [...userIds], profileIds: [...profileIds] };
 }
+
+/**
+ * Every profile in the caller's account.
+ *
+ * `profiles_select` is account-scoped RLS (migration 20261016120000), so this
+ * is the caller's own staff and needs no account filter. Lives here rather than
+ * in the hook because UI code must not talk to Supabase directly.
+ */
+export async function listAccountProfiles<T = Record<string, unknown>>(): Promise<T[]> {
+  const supabase = createClient();
+  const { data } = await supabase.from("profiles").select("*").order("full_name");
+  return (data ?? []) as T[];
+}
