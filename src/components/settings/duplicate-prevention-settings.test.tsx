@@ -85,3 +85,46 @@ describe("DuplicatePreventionSettings", () => {
     expect(markup).toContain("Product unique key");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Plan gating (bug tracker #15, 2026-11-09). An SFA-only tenant has no Leads
+// screen, and was still asked which Lead fields must be unique. A WFA-only one
+// has no catalogue and was still asked for a product key. The settings stay in
+// the account's JSON either way — a column the plan does not include is simply
+// not offered, and the grid closes up behind it.
+// ---------------------------------------------------------------------------
+describe("plan gating", () => {
+  test("offers all three columns when the plan has CRM and a catalogue", () => {
+    const html = render({ showLeads: true, showProducts: true });
+    expect(html).toContain("Lead");
+    expect(html).toContain("Product unique key");
+    expect(html).toContain("Customer");
+  });
+
+  test("hides the Lead column on a plan without CRM", () => {
+    const html = render({ showLeads: false, showProducts: true });
+    expect(html).not.toContain(">Lead<");
+    // The two that survive are still there.
+    expect(html).toContain("Product unique key");
+    expect(html).toContain("Customer");
+  });
+
+  test("hides the product key on a plan with no catalogue", () => {
+    const html = render({ showLeads: true, showProducts: false });
+    expect(html).not.toContain("Product unique key");
+    expect(html).toContain("Customer");
+  });
+
+  test("leaves Customer alone — it is a base module on every plan", () => {
+    const html = render({ showLeads: false, showProducts: false });
+    expect(html).toContain("Customer");
+    expect(html).not.toContain(">Lead<");
+    expect(html).not.toContain("Product unique key");
+  });
+
+  test("defaults to showing everything, so existing callers are unchanged", () => {
+    const html = render();
+    expect(html).toContain("Lead");
+    expect(html).toContain("Product unique key");
+  });
+});
