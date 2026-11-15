@@ -164,7 +164,7 @@ Customers list gains **Added by**; Organisation Settings gains the two DMS switc
   `portal_update_my_customer(p_contact_id uuid, …same fields…) returns boolean`;
   `portal_can_create_customer() returns boolean`.
 
-- [ ] **Step 1: Write the failing scenarios first**
+- [x] **Step 1: Write the failing scenarios first**
 
 In `supabase/tests/71_portal_customer_create.sql`, using the `qa()` / `qa_allowed()` /
 `qa_refused()` helpers and the fixture from `60_dms_foundation.sql`. Phone numbers must not
@@ -190,7 +190,7 @@ select qa('V1', 'create refused while the setting is off',
 -- V14 there is no delete path at all
 ```
 
-- [ ] **Step 2: Run them and watch every one fail**
+- [x] **Step 2: Run them and watch every one fail**
 
 ```bash
 PGDATA_DIR=/tmp/ozzo-pgtest bash scripts/run-db-tests.sh
@@ -198,7 +198,7 @@ PGDATA_DIR=/tmp/ozzo-pgtest bash scripts/run-db-tests.sh
 Expected: V1–V14 FAIL with `function public.portal_create_customer(...) does not exist`.
 The 46 known migration errors are noise; the scenario count is what matters.
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 ```sql
 ALTER TABLE public.contacts
@@ -225,11 +225,11 @@ defaults apply; sets `created_via = 'portal'`. Grant `execute` to `authenticated
 The customer code is NOT generated here — the existing auto-code trigger does it, and a
 second generator is how two code series start.
 
-- [ ] **Step 4: Run the suite again**
+- [x] **Step 4: Run the suite again**
 
 Expected: V1–V14 PASS, and the Plan 2 suites (`60`, `70`) still pass unchanged.
 
-- [ ] **Step 5: Mutation-check the three rules that matter**
+- [x] **Step 5: Mutation-check the three rules that matter**
 
 | Remove | Scenario that must fail |
 |---|---|
@@ -239,7 +239,7 @@ Expected: V1–V14 PASS, and the Plan 2 suites (`60`, `70`) still pass unchanged
 
 Put each back and re-run. A rule whose removal breaks nothing is not a rule.
 
-- [ ] **Step 6: The screen**
+- [x] **Step 6: The screen**
 
 `app/(portal)/customers/new/page.tsx` — six fields on the CRM's `Input` / `Label`, the
 `Button` for save, the form shell from `components/shared/form-*` if it is worth copying.
@@ -250,16 +250,39 @@ worse than no button.
 Wording for the refusal, in the founder's plain English: *"Your company has not switched
 this on. Ask them to add the customer for you."*
 
-- [ ] **Step 7: The CRM side**
+- [x] **Step 7: The CRM side**
 
 Organisation Settings gains **Let distributors add their own customers** (default off). The
 Customers list gains an **Added by** column reading *Portal* or *Company*, filterable, next
 to the existing new-entry highlight.
 
-- [ ] **Step 8: Write the RUN-THIS-SQL document and commit**
+- [x] **Step 8: Write the RUN-THIS-SQL document and commit**
 
 `docs/RUN-THIS-SQL-dms-plan-4-customers.md`, plain English, SQL block byte-identical to the
 migration, verified with `diff`.
+
+### Built 2026-11-15 — what the build changed
+
+* **`parent_locked` is set on a portal-created shop**, which the plan did not
+  foresee. In AREA mapping mode `trg_area_parent_sync` fires BEFORE INSERT and
+  replaces `parent_id` with whatever its area/level table resolves — NULL for a
+  brand-new shop — so the shop belonged to nobody and the distributor who had
+  just added it could not see it. Scenario V3 caught it. `parent_locked` is that
+  trigger's own documented escape hatch, and V3b pins it with the account in
+  area mode.
+* **`SET search_path = public`, not `''`**, on both writing functions. Every
+  trigger on `contacts` names its tables unqualified, so an empty search_path
+  made all of them fail with `relation "accounts" does not exist`.
+* **Step 2's "watch them fail" was not honoured as written**: the migration
+  already existed when this session resumed. The equivalent evidence is Step 5,
+  where each of the three rules was removed and the named scenario watched to
+  fail. Eleven rules across Tasks 1 and 2 were checked that way.
+* Two faults in the plan's own draft scenarios: `jsonb_set` cannot create the
+  missing `dms_settings` object (so the setting never switched on), and
+  `portal_customers()` returns one jsonb array rather than a table, so
+  `FROM portal_customers() WHERE id = …` is a syntax error. Both are recorded in
+  the file itself.
+* 25 scenarios, V0–V14, all passing.
 
 ---
 
@@ -282,7 +305,7 @@ migration, verified with `diff`.
   `p_order_id` is supplied by the client so a retried submit replays rather than duplicates —
   the same idempotency `create_order` already relies on.
 
-- [ ] **Step 1: The scenarios, before any function**
+- [x] **Step 1: The scenarios, before any function**
 
 Spec §15 item 5 is the release gate here. In `supabase/tests/72_portal_place_order.sql`:
 
@@ -307,7 +330,7 @@ W8 and W12 are the two that decide whether the numbers are trusted. W12 is spec 
 dealer is the customer on that order*, so the dealer's price list and the dealer's credit
 limit apply.
 
-- [ ] **Step 2: Run, watch them fail, then write the gate**
+- [x] **Step 2: Run, watch them fail, then write the gate**
 
 `portal_place_order` checks five things and then calls `create_order` — it does not
 re-implement any of it:
@@ -320,12 +343,12 @@ re-implement any of it:
 
 Then `orders.placed_by_portal_contact_id := portal_caller()`.
 
-- [ ] **Step 3: Mutation-check**
+- [x] **Step 3: Mutation-check**
 
 Remove check 3 → W3 and W4 must fail. Remove check 5 → W5. Remove the idempotency key →
 W11. Hand the client's total straight through → W8.
 
-- [ ] **Step 4: The order screen**
+- [x] **Step 4: The order screen**
 
 Buyer picker (themselves plus `portal_customers()`), product search, quantity with the unit
 dropdown when multi-unit is on for that account, live totals from `portal_price_quote`, and
@@ -336,12 +359,55 @@ The screen must say what happens next, because a distributor who does not know i
 distributor who telephones: *"Your order has gone to the company. They will approve it and
 send it."*
 
-- [ ] **Step 5: The CRM side, and the notification**
+- [x] **Step 5: The CRM side, and the notification**
 
 Orders list: **Placed via** column reading *Portal* or *Company*, filterable. The existing
 notification system fires on the new order. No second inbox — spec §7.3.
 
-- [ ] **Step 6: RUN-THIS-SQL document, suite green, commit**
+- [x] **Step 6: RUN-THIS-SQL document, suite green, commit**
+
+### Built 2026-11-15 — what the build changed
+
+The five checks are as planned. Three interface changes, each for a reason the
+plan could not have known:
+
+* **`portal_place_order` returns `jsonb`, not `uuid`** — `{order_id,
+  order_number, pricing_status, idempotent_replay}`. The screen has to tell the
+  reader the order number, and a replayed submit has to be distinguishable from
+  a new one; both would otherwise need a second round trip.
+* **It takes `p_accept`, and NOT `p_order_schemes`.** The plan had the screen
+  send the schemes, as the admin app's browser does. That cannot be allowed
+  here: `scheme_discount_amount` is money. So `portal_apply_schemes` (new) asks
+  the detector itself and applies what it finds, and `p_accept` carries only
+  TICKS — `"<position>:<scheme_id>"`. Free goods need a tick because
+  `detect_eligible_schemes` returns `default_selected = false` for them on
+  purpose, exactly as the admin app makes a salesman tick them; money discounts
+  are applied unasked. A tick naming an offer that does not apply is ignored
+  (W13f).
+* **`portal_normalize_lines` (new) is the only shape the browser may send**:
+  product, quantity, entered unit. The conversion factor is read from
+  `product_unit_conversions` and the tax mode from the account's own order
+  settings, because a forged factor of 1 prices a box as a piece and the engine
+  would price it faithfully (W15).
+* **An extra rule the plan did not list, and it was a leak:** `create_order`
+  replays by id and returns the existing ORDER NUMBER, so without an ownership
+  check on the replay branch a guessed uuid would have handed an outsider a real
+  order number from another tenant (W11b).
+* **W8 reads differently from the plan.** `create_order` only sets
+  `pricing_status = 'review'` for `offline_sync`; an online order logs the drift
+  and stays confirmed. The gate therefore holds the order for review itself when
+  the quoted total and the engine's total disagree — the saved figure was never
+  in doubt, the point is that the company sees the disagreement before dispatch.
+* **Sales credit (spec §7.5) is built and defaults to the dealer's own rep.**
+  `dms_settings.portal_order_sales_credit`: `dealer_salesman` (default) or
+  `portal`. The default is not a guess: a portal login has no `profiles` row, so
+  an order left in its name shows a blank salesman AND drops out of every list
+  that scopes by `user_id` in the client — including the rep responsible for that
+  beat. **The founder still has to confirm he wants that default.**
+* The CRM side of Step 5 was already built (`f8a2bdd`, migration
+  `20261107140000`): the Orders list has had its **Placed via** column and
+  filter since Plan 2.
+* 35 scenarios, W1–W18, all passing; eight rules mutation-checked.
 
 ---
 
@@ -353,15 +419,15 @@ notification system fires on the new order. No second inbox — spec §7.3.
 - Create: `ozzo-dms/app/print/print.css` — copied from the CRM's A4/A5 print stylesheet
 - Modify: `ozzo-dms/app/(portal)/orders/[id]/page.tsx` — a **Print** action in the header
 
-- [ ] **Step 1** Copy the CRM's print stylesheet and its `@page` A4/A5 rules verbatim; the
+- [x] **Step 1** Copy the CRM's print stylesheet and its `@page` A4/A5 rules verbatim; the
       two apps must produce the same sheet of paper.
-- [ ] **Step 2** The print page reads `portal_order_detail` — the same function the screen
+- [x] **Step 2** The print page reads `portal_order_detail` — the same function the screen
       uses, so the paper and the screen cannot disagree.
-- [ ] **Step 3** The header carries the COMPANY's name and the distributor's, because the
+- [x] **Step 3** The header carries the COMPANY's name and the distributor's, because the
       distributor hands this to their own customer.
-- [ ] **Step 4** A test pins that the print route is outside the portal shell and that it
+- [x] **Step 4** A test pins that the print route is outside the portal shell and that it
       still calls only `portal_order_detail`.
-- [ ] **Step 5** Check it in the browser at A4 and A5, screenshot both, commit.
+- [ ] **Step 5** Check it in the browser at A4 and A5, screenshot both, commit. **NOT DONE** — the portal cannot be opened without a portal login, and the only real one belongs to a live customer. Needs the founder signed in, as on 11-14.
 
 ---
 
@@ -372,7 +438,7 @@ notification system fires on the new order. No second inbox — spec §7.3.
 - Create: `ozzo-dms/components/export-button.tsx`
 - Modify: the five list screens and the four report screens
 
-- [ ] **Step 1: The failing test**
+- [x] **Step 1: The failing test**
 
 ```ts
 it("quotes a field that contains a comma, a quote or a newline", () => {
@@ -393,13 +459,34 @@ it("refuses to start a field with = + - or @", () => {
 });
 ```
 
-- [ ] **Step 2** Run; expect `toCsv is not a function`.
-- [ ] **Step 3** Write `toCsv`. Columns come from the table's own `Column<T>` list, so the
+- [x] **Step 2** Run; expect `toCsv is not a function`.
+- [x] **Step 3** Write `toCsv`. Columns come from the table's own `Column<T>` list, so the
       export and the screen can never show different columns.
-- [ ] **Step 4** Run; green.
-- [ ] **Step 5** `ExportButton` in each list's `PageHeader`; the filename carries the screen
+- [x] **Step 4** Run; green.
+- [x] **Step 5** `ExportButton` in each list's `PageHeader`; the filename carries the screen
       and the date, account-local: `sales-orders-2026-11-14.csv`.
-- [ ] **Step 6** Commit.
+- [x] **Step 6** Commit.
+
+### Built 2026-11-15
+
+* The sheet is `app/print/orders/[id]/page.tsx`, outside the `(portal)` group,
+  reading `portal_order_detail` — the same function the screen reads, so the
+  paper and the screen cannot disagree. `?size=a5` halves it.
+* The CRM's print stylesheet and A4/A5 metrics are **copied** into
+  `lib/print-paper.ts` and `lib/print-document-styles.ts`. What is NOT copied is
+  the CRM's print PAGE: it renders the account's Document Template, resolved per
+  employee, and names the salesman — none of which a portal customer may have or
+  see.
+* `toCsv` found a bug while being mutation-checked. Removing the "bare number"
+  branch changed nothing, because plain digits need no quoting anyway — so the
+  branch was dead, and it was hiding a real fault: a NEGATIVE numeric string
+  (`"-12.50"`, which is what an outstanding balance can be) starts with a
+  character Excel treats as a formula, so the CSV-injection guard would have
+  exported it as text. The number check now runs BEFORE the formula guard and
+  has its own failing-first test.
+* A hidden-column test is **not** written: Manage Columns is Task 6b and does
+  not exist yet, so there is no hidden column to assert about. The export reads
+  the table's own `Column<T>` list, which is what makes that test possible later.
 
 ---
 
