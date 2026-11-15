@@ -520,6 +520,66 @@ SELECT qa('W18b and the other tenant''s catalogue is empty to them',
   public.portal_products(:DIST_A1::uuid) -> 'rows' = '[]'::jsonb,
   'the buyer is not theirs, so there is nothing to price');
 
+-- ── D: what has actually been sent ───────────────────────────
+-- ORD_F1 is 3 x PROD_C1 from W1. One of them goes out, so the line must read
+-- 1 dispatched of 3 ordered - not 3, and not nothing.
+RESET ROLE;
+SELECT set_config('test.uid', :ADMIN_A, false);
+
+DELETE FROM public.dispatch_items WHERE dispatch_id IN
+  (SELECT id FROM public.order_dispatches WHERE order_id = :ORD_F1);
+DELETE FROM public.order_dispatches WHERE order_id = :ORD_F1;
+
+INSERT INTO public.order_dispatches
+  (id, account_id, order_id, dispatch_number, dispatched_at, transport_name, tracking_number)
+VALUES ('dc000000-0000-0000-0000-0000000000d1', :ACCT_A, :ORD_F1, 'DSP-TEST-1',
+        CURRENT_DATE, 'Gati', 'TRK-001');
+
+INSERT INTO public.dispatch_items (dispatch_id, order_item_id, product_name, unit, quantity)
+SELECT 'dc000000-0000-0000-0000-0000000000d1', oi.id, oi.product_name, oi.unit, 1
+  FROM public.order_items oi WHERE oi.order_id = :ORD_F1 LIMIT 1;
+
+SELECT set_config('test.uid', :PORTAL_U_A1, false);
+SET ROLE authenticated;
+SELECT public.portal_order_detail(:ORD_F1::uuid) AS d \gset d_
+
+RESET ROLE;
+SELECT qa('D1 a part-dispatched line reads 1 sent of 3 ordered',
+  (:'d_d'::jsonb -> 'lines' -> 0 ->> 'quantity')::numeric = 3
+  AND (:'d_d'::jsonb -> 'lines' -> 0 ->> 'dispatched_quantity')::numeric = 1,
+  'saw ' || coalesce(:'d_d'::jsonb -> 'lines' -> 0 ->> 'dispatched_quantity', 'nothing'));
+
+SELECT qa('D2 the load itself is there: number, date, transporter, docket, items',
+  (:'d_d'::jsonb -> 'dispatches' -> 0 ->> 'dispatch_number') = 'DSP-TEST-1'
+  AND (:'d_d'::jsonb -> 'dispatches' -> 0 ->> 'transport_name') = 'Gati'
+  AND (:'d_d'::jsonb -> 'dispatches' -> 0 ->> 'tracking_number') = 'TRK-001'
+  AND jsonb_array_length(:'d_d'::jsonb -> 'dispatches' -> 0 -> 'items') = 1);
+
+SELECT qa('D2b and it names no person - a transporter is a company, a driver is not sent',
+  (:'d_d'::jsonb -> 'dispatches' -> 0)::text NOT LIKE '%driver%'
+  AND (:'d_d'::jsonb -> 'dispatches' -> 0)::text NOT LIKE '%delivery_boy%');
+
+SELECT set_config('test.uid', :PORTAL_U_A2, false);
+SET ROLE authenticated;
+SELECT qa('D3 the distributor beside them sees none of it',
+  public.portal_order_detail(:ORD_F1::uuid) IS NULL,
+  'the order is not theirs, so neither is its dispatch');
+
+RESET ROLE;
+SELECT set_config('test.uid', :PORTAL_U_A1, false);
+SET ROLE authenticated;
+SELECT qa('D4 portal_me says how this distributor collects',
+  (public.portal_me() ->> 'collection_route') IN ('direct', 'salesman', 'both')
+  AND (public.portal_me() ->> 'currency') IS NOT NULL
+  AND (public.portal_me() ->> 'timezone') IS NOT NULL,
+  'the route is new; currency and timezone are asserted because this function '
+  'was rewritten to add it and a rewrite is how a field goes missing');
+
+RESET ROLE;
+SELECT set_config('test.uid', :ADMIN_A, false);
+DELETE FROM public.dispatch_items WHERE dispatch_id = 'dc000000-0000-0000-0000-0000000000d1';
+DELETE FROM public.order_dispatches WHERE id = 'dc000000-0000-0000-0000-0000000000d1';
+
 -- ── Put the tenant back the way the next file expects ────────
 RESET ROLE;
 SELECT set_config('test.uid', :ADMIN_A, false);
