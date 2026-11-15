@@ -95,7 +95,8 @@ say "Running scenarios"
 truncated=0
 for f in 00_fixture 10_buying_status 20_mapping_codes_territory \
          30_territory_coverage_rls 40_area_channel_mapping 50_rights_and_many_holders \
-         60_dms_foundation 70_dashboard_viewer_scope 70_portal_visibility; do
+         60_dms_foundation 70_dashboard_viewer_scope 70_portal_visibility \
+         71_portal_customer_create 72_portal_place_order; do
   p="$WEB_DIR/supabase/tests/$f.sql"
   [ -f "$p" ] || continue
   before=$("${PSQL[@]}" -tAc "SELECT count(*) FROM qa_results;" 2>/dev/null || echo 0)

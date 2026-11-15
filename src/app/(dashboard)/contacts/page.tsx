@@ -98,7 +98,7 @@ export default function ContactsPage() {
   const searchParams = useSearchParams();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
-  const { accountId, isModuleEnabled, hasPermission, defaultCurrency, hasSFA, account } = useAuth();
+  const { accountId, isModuleEnabled, hasPermission, defaultCurrency, hasSFA, hasDMS, account } = useAuth();
   // Off until an admin asks for it in Organisation Settings. The column is
   // maintained underneath either way, so the day it is switched on the answer
   // is already right rather than starting from "nobody has ever bought".
@@ -375,6 +375,18 @@ export default function ContactsPage() {
       q = applyInFilter(q, 'buying_status', filters.buying_status);
       q = applyInFilter(q, 'parent_id', filters.supplied_by);
 
+      // Added by. created_via holds four values ('app', 'import', 'portal',
+      // 'api') but the admin is only ever asking one question: did a
+      // distributor type this in, or did we? So Company is "anything but
+      // portal" rather than a list that would silently drop imported rows.
+      // Choosing both (or neither) is no filter at all.
+      const addedBy = filters.added_by as string[] | undefined;
+      if (hasDMS && Array.isArray(addedBy) && addedBy.length === 1) {
+        q = addedBy[0] === 'portal'
+          ? q.eq('created_via', 'portal')
+          : q.neq('created_via', 'portal');
+      }
+
       // The columns Manage Column offers for the rest of the stored fields.
 
       q = applyExtraColumnFilters(q, filters, CONTACT_EXTRA_COLUMNS);
@@ -385,7 +397,7 @@ export default function ContactsPage() {
     },
     // `refData` matters: the Assigned Employee filter resolves through it, and
     // a stale copy would quietly add no condition at all.
-    [customFields, refData],
+    [customFields, refData, hasDMS],
   );
 
   /** Stable dep: only changes when an ACTIVE cf_* filter's type could change the query. */
@@ -673,6 +685,27 @@ export default function ContactsPage() {
               </Badge>
             );
           },
+        } satisfies ColumnDef<ContactWithData>]
+      : []),
+    // DMS add-on only: did a distributor add this shop from the portal, or
+    // did our own team? A distributor can only ever correct a row that reads
+    // Portal, so this column is also the admin's answer to "who may change
+    // this record". Hidden by default - it answers a question most days
+    // nobody asks.
+    ...(hasDMS
+      ? [{
+          id: "added_by",
+          label: "Added By",
+          type: "select" as const,
+          options: [
+            { label: "Portal", value: "portal" },
+            { label: "Company", value: "company" },
+          ],
+          render: (contact: ContactWithData) => (
+            contact.created_via === 'portal'
+              ? <Badge className="bg-primary/10 text-primary border-transparent text-micro px-1.5 font-semibold">Portal</Badge>
+              : <span className="text-muted-foreground">Company</span>
+          ),
         } satisfies ColumnDef<ContactWithData>]
       : []),
     // Supplied By. Only present once the admin has chosen a mapping mode, so

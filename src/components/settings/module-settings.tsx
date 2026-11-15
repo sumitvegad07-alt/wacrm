@@ -165,6 +165,7 @@ export function ModuleSettingsPanel() {
     hasSFA,
     hasWFA,
     hasCRM,
+    hasDMS,
   } = useAuth();
 
   /**
@@ -198,6 +199,10 @@ export function ModuleSettingsPanel() {
   // Multi Unit: base + conversion units per product; pricing/stock in base units.
   const [multiUnitEnabled, setMultiUnitEnabled] = useState(false);
   const [buyingStatusEnabled, setBuyingStatusEnabled] = useState(false);
+  // DMS: may a distributor add their own shop from the portal? Off for
+  // everybody until an admin says otherwise - a company that wants its own
+  // team to own every customer record must not find this on underneath them.
+  const [dmsAllowCustomerCreate, setDmsAllowCustomerCreate] = useState(false);
   const [amountDiscountBasis, setAmountDiscountBasis] = useState<'entered' | 'base'>('entered');
   // Which field must be unique to block duplicates on save (per module).
   const [productUniqueKey, setProductUniqueKey] = useState<'name' | 'code'>('name');
@@ -269,6 +274,7 @@ export function ModuleSettingsPanel() {
         setHsnEnabled(!!s.hsn_enabled);
         setMultiUnitEnabled(!!s.extra_settings?.multi_unit_enabled);
         setBuyingStatusEnabled(s.extra_settings?.buying_status_enabled === true);
+        setDmsAllowCustomerCreate(s.dms_settings?.allow_customer_create === true);
         setProductUniqueKey(s.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
         setCustomerUniqueKeys(readCustomerUniqueKeys(s));
         setLeadUniqueKeys(readLeadUniqueKeys(s));
@@ -556,6 +562,13 @@ export function ModuleSettingsPanel() {
         // is held in state, so a partial merge could only ever resurrect a
         // stale rule an admin had just turned off.
         code_settings: codeSettings,
+        // Its own block rather than a key in extra_settings: the portal's SQL
+        // reads settings->'dms_settings' directly, and a setting the database
+        // itself enforces should be findable where the database looks.
+        dms_settings: {
+          ...(baseSettings?.dms_settings || {}),
+          allow_customer_create: dmsAllowCustomerCreate,
+        },
         extra_settings: {
           ...(baseSettings?.extra_settings || {}),
           multi_unit_enabled: multiUnitEnabled,
@@ -624,7 +637,7 @@ export function ModuleSettingsPanel() {
     // reporting success while the admin's choice is thrown away. Buying Status,
     // Customer mapping and Automatic codes all shipped broken this way on
     // 3 Nov 2026. module-settings.deps.test.ts now fails the build on it.
-  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, buyingStatusEnabled, mappingMode, codeSettings, productUniqueKey, customerUniqueKeys, leadUniqueKeys, amountDiscountBasis, geoFencingEnabled, geoVisitEnabled, geoAttendanceEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, refreshProfile, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
+  }, [accountId, draft, assignmentMode, hierarchyEnabled, gstEnabled, hsnEnabled, multiUnitEnabled, buyingStatusEnabled, dmsAllowCustomerCreate, mappingMode, codeSettings, productUniqueKey, customerUniqueKeys, leadUniqueKeys, amountDiscountBasis, geoFencingEnabled, geoVisitEnabled, geoAttendanceEnabled, geoEnforceCheckIn, geoEnforceCheckOut, geoRadius, levels, originalSettings, refreshModuleSettings, refreshProfile, supabase, trackingStart, trackingEnd, trackingInterval, trackingGrace]);
 
   const handleDiscard = () => {
     setDraft({ ...moduleSettings });
@@ -636,6 +649,7 @@ export function ModuleSettingsPanel() {
     // Discard has to put these back too, or the panel keeps showing a choice it
     // did not save and the admin has no way to tell.
     setBuyingStatusEnabled(originalSettings.extra_settings?.buying_status_enabled === true);
+    setDmsAllowCustomerCreate(originalSettings.dms_settings?.allow_customer_create === true);
     setMappingMode(readMappingMode(originalSettings));
     setCodeSettings(readCodeSettings(originalSettings));
     setProductUniqueKey(originalSettings.extra_settings?.product_unique_key === 'code' ? 'code' : 'name');
@@ -825,6 +839,21 @@ export function ModuleSettingsPanel() {
                   description="Adds a second status — Buyer / Yet to Buy — alongside Active / Inactive. It answers “has this customer ever ordered?”, which Active / Inactive does not: a dealer who has never ordered is a current customer the rep is visiting BECAUSE he has not ordered yet. Worked out from order history; an order that was Cancelled or Rejected does not count."
                   enabled={buyingStatusEnabled}
                   onChange={setBuyingStatusEnabled}
+                  disabled={!canEditSettings}
+                />
+              )}
+
+              {/* Only an account that actually HAS the DMS add-on. A switch for
+                  a product you have not bought is a question you cannot answer.
+                  The database checks the same setting itself, in
+                  portal_create_customer - this switch is how an admin sets it,
+                  not what enforces it. */}
+              {hasDMS && (
+                <FeatureRow
+                  label="Let distributors add their own customers"
+                  description="A distributor can add a shop from the DMS portal: name, business name, phone, city, address and GST number, and nothing else. It is filed under them automatically. The credit limit, the prices, the area and the customer code stay yours, and they can never change or delete a customer your team created. Off means they ask you to add it."
+                  enabled={dmsAllowCustomerCreate}
+                  onChange={setDmsAllowCustomerCreate}
                   disabled={!canEditSettings}
                 />
               )}
