@@ -52,7 +52,7 @@ no employee code, no phone, no role, no territory.
 
 ---
 
-## 1. Payments a distributor can record
+## 1. Payments a distributor can record — SEE §1A, which supersedes the model here
 
 > *"Ok let them record a payment and allow them to convert statuses."*
 
@@ -117,6 +117,109 @@ Three ways through, and only one is acceptable:
       receipt the distributor owns. Their own dues to the company show the status read-only
       with one line: *"Your company confirms this one."*
 - [ ] **1.5** RUN-THIS-SQL document.
+
+---
+
+## 1A. SUPERSEDES §1 — the collection route is per distributor
+
+Founder, 2026-11-15, after reading the research:
+
+> *"In one organisation there are different ways some distributors collect payment them
+> selves and some distributors send salesman to collect payments… this option will be
+> provided when admin enable DMS access at that time he will choose for that particular
+> distributor how they want to handle payments entries."*
+
+He is describing two routes, chosen per distributor at the moment DMS access is granted:
+
+* **A — direct:** Shop → Distributor → Company. *"we must need to mentioned which salesman
+  did enter it."*
+* **B — via salesmen:** Shop → Salesman → Distributor → the company's salesman → Company
+  approves.
+
+### The structural point that makes this buildable
+
+**Two different questions are being answered by one word, and they must not be.**
+
+* **Custody** — who is holding the money right now? That is what his arrows are. Route A
+  has two handovers; route B has four.
+* **Approval** — is this receipt accepted? That is `payments.status`, which already exists,
+  already has a fixed transition table, already has permissions and an audit trail, and is
+  already read by the CRM, the mobile app and the ageing report.
+
+If the four hops are squeezed into `status`, "Approved" comes to mean two things and every
+existing screen that reads it becomes wrong. So: **`status` is untouched, and custody
+becomes its own thing.**
+
+### And route B is really TWO ledgers, not one chain of four
+
+Follow the money rather than the arrows:
+
+| Leg | Who owes whom | What settles it |
+|---|---|---|
+| Shop → … → Distributor | the shop owes the **distributor** (secondary) | a receipt against the shop's outstanding |
+| Distributor → … → Company | the distributor owes the **company** (primary) | a payment against the distributor's own outstanding |
+
+The company never receives the shop's money. It receives *the distributor's* money, which
+the distributor happens to have funded out of collections. These are two payment rows
+against two different customers, and the portal already shows both — "You owe the company
+₹95" and "Your customers owe you ₹28,997" are those two ledgers.
+
+**So the salesman legs are custody steps inside each ledger, not a single five-party
+pipeline.** This matters: modelled as one chain, a shop's ₹5,000 would appear to reduce the
+distributor's dues to the company, which is wrong and would corrupt the ageing report.
+
+### What gets built
+
+**The setting** — `contacts.portal_collection_route`, `'direct' | 'salesman'`, default
+`'direct'`, set on the **Provide DMS Access** block beside the login, exactly where he said
+it belongs. It is a **seventh portal column**, so it MUST be added to both lists inside
+`guard_contact_portal_columns()` (migration `20261108100000`) — the guard names its six
+columns one by one, and a column it does not name can be changed by anyone, silently.
+
+**The setting decides what the PORTAL OFFERS, not what is true.** A distributor on
+`'salesman'` whose own man is off sick still collects a payment himself that day. So the
+route changes which buttons and which confirmations the portal shows; the payment row
+records what actually happened either way. A rule that forbids the real world loses.
+
+**The custody trail** — `payment_handovers (payment_id, seq, from_party, to_party,
+happened_at, recorded_by_profile_id, recorded_by_contact_id, amount, note)`. A table, not
+columns on `payments`: route A has two rows and route B four, he has asked for a "logs
+view", and this IS that log. `from_party`/`to_party` are `'shop' | 'salesman' |
+'distributor' | 'company'`.
+
+**Who may add a hop**: only the party receiving the money, and only for a payment they can
+already see. A distributor confirms *salesman → distributor*; the company confirms
+*distributor → company*. Nobody can confirm a handover to somebody else.
+
+**"Which salesman entered it" already exists** — `payments.user_id` and `orders.user_id`
+are the auth user who created the row, and `payments.source` already distinguishes a
+visit-collected receipt (`'visit'`) from an office one (`'admin'`). §2 of this plan surfaces
+the name; nothing new is recorded for his point 1.
+
+- [ ] **1A.1** Scenarios first, in `supabase/tests/74_portal_payments_write.sql`: the ones
+      listed in §1.1, plus — the route defaults to `'direct'` for an existing distributor;
+      a handover can only be added by the receiving party; a handover against another
+      distributor's payment is refused; the two ledgers stay separate (a shop's receipt
+      never moves the distributor's own outstanding); and the guard refuses a direct write
+      to `portal_collection_route` from an API role.
+- [ ] **1A.2** Migration: the column, the guard update, `payment_handovers` + RLS,
+      `portal_record_payment`, `portal_set_payment_status`, `portal_confirm_handover`.
+- [ ] **1A.3** Mutation-check each rule, including the guard's new column.
+- [ ] **1A.4** CRM: the route selector on the DMS access block; a **Collected by** column
+      and a handover state on the Payments list; the handover log on the payment.
+- [ ] **1A.5** Portal: Record payment, the status action on their own receipts, and
+      "Received from salesman" confirmation when the route is `'salesman'`.
+
+### Three answers still needed from him
+
+1. **Can one distributor use both routes at once** — some shops collected by his own man,
+   some by himself? The build above says yes and treats the setting as the default. Confirm.
+2. **When a salesman collects for a distributor, may the distributor REJECT the receipt**
+   (wrong amount, cheque bounced), or only confirm it? Rejecting somebody else's entry
+   needs a reason and an audit row; confirming does not.
+3. **Does the company's salesman collecting FROM the distributor need the same portal
+   confirmation**, or is that leg entirely inside the CRM? It is the company's own money
+   and the company's own staff, so this plan assumes the CRM and the portal only shows it.
 
 ## 2. "Collected by" and "Booked by"
 
