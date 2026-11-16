@@ -279,6 +279,42 @@ UPDATE public.contacts SET portal_access = true, portal_access_revoked_at = NULL
  WHERE id = :DIST_A1;
 RESET ROLE;
 
+-- ── R: one receipt in full, with its log ─────────────────────
+SELECT set_config('test.uid', :PORTAL_U_A1, false);
+SET ROLE authenticated;
+SELECT public.portal_payment_detail(:PAY_2::uuid) AS d \gset r_
+
+RESET ROLE;
+SELECT qa('R1 the detail carries the receipt and its whole log',
+  (:'r_d'::jsonb ->> 'payment_number') IS NOT NULL
+  AND (:'r_d'::jsonb ->> 'status') = 'Rejected'
+  AND jsonb_array_length(:'r_d'::jsonb -> 'handovers') >= 3,
+  'two hops in, one rejection back out; saw '
+  || jsonb_array_length(:'r_d'::jsonb -> 'handovers')::text);
+
+SELECT qa('R1b the log is in order and says why the money went back',
+  (:'r_d'::jsonb -> 'handovers' -> 0 ->> 'seq')::int = 1
+  AND (:'r_d'::jsonb -> 'handovers' -> 0 ->> 'from_party') = 'shop'
+  AND (:'r_d'::jsonb::text) LIKE '%Cheque bounced%');
+
+SELECT qa('R2 it says whose money this is, so no screen has to work it out',
+  (:'r_d'::jsonb ->> 'is_my_own_due')::boolean = false);
+
+SELECT set_config('test.uid', :PORTAL_U_A1, false);
+SET ROLE authenticated;
+SELECT public.portal_payment_detail(:PAY_4::uuid) AS d \gset r2_
+RESET ROLE;
+SELECT qa('R2b and his own dues to the company say so',
+  (:'r2_d'::jsonb ->> 'is_my_own_due')::boolean = true);
+
+SELECT set_config('test.uid', :PORTAL_U_A2, false);
+SET ROLE authenticated;
+SELECT qa('R3 the distributor beside them cannot read it at all',
+  public.portal_payment_detail(:PAY_2::uuid) IS NULL);
+
+RESET ROLE;
+SELECT set_config('test.uid', :ADMIN_A, false);
+
 -- ── Put the tenant back ──────────────────────────────────────
 SELECT set_config('test.uid', :ADMIN_A, false);
 DELETE FROM public.payment_handovers WHERE payment_id IN
