@@ -49,6 +49,9 @@
 \set ORD_F7 '''ee000000-0000-0000-0000-0000000000f7'''
 \set ORD_F8 '''ee000000-0000-0000-0000-0000000000f8'''
 \set ORD_F9 '''ee000000-0000-0000-0000-0000000000f9'''
+-- DLR_A2's order, from 70's tree. Declared here because F6 names it and an
+-- undeclared psql variable is left as a literal colon and kills the file.
+\set ORD_X1 '''ee000000-0000-0000-0000-0000000000e4'''
 \set ORD_FA '''ee000000-0000-0000-0000-0000000000fa'''
 \set ORD_FB '''ee000000-0000-0000-0000-0000000000fb'''
 \set ORD_FC '''ee000000-0000-0000-0000-0000000000fc'''
@@ -579,6 +582,71 @@ RESET ROLE;
 SELECT set_config('test.uid', :ADMIN_A, false);
 DELETE FROM public.dispatch_items WHERE dispatch_id = 'dc000000-0000-0000-0000-0000000000d1';
 DELETE FROM public.order_dispatches WHERE id = 'dc000000-0000-0000-0000-0000000000d1';
+
+-- ── F: the searchable filters ────────────────────────────────
+-- The trap this set is built around: an empty search must NOT filter, and a
+-- search that matches nothing must return NOTHING. Treating "no match" as "no
+-- filter" shows the reader the whole table and looks like the filter is
+-- broken; treating "empty" as a filter shows them nothing and looks the same.
+-- THE EXPECTATIONS ARE COMPUTED FIRST, AS THE ADMIN. Inside these files the
+-- portal login is `authenticated` with SELECT on no table, so a sub-query
+-- written into a scenario to work out what the answer SHOULD be comes back
+-- empty and the scenario fails for a reason that has nothing to do with the
+-- filter. F3 and F4 did exactly that. Read the expected values up here, where
+-- the rows are visible, and compare literals down there.
+RESET ROLE;
+SELECT set_config('test.uid', :ADMIN_A, false);
+SELECT order_number AS n FROM public.orders WHERE id = :ORD_F1 \gset f_
+SELECT count(*)::text AS n FROM public.orders o
+  JOIN public.contacts c ON c.id = o.contact_id
+ WHERE o.contact_id = any(ARRAY[:DIST_A1::uuid, :STK_A1::uuid, :DLR_A1::uuid])
+   AND coalesce(c.company, c.name, '') ILIKE '%Stockist%' \gset fstk_
+
+SELECT set_config('test.uid', :PORTAL_U_A1, false);
+SET ROLE authenticated;
+
+SELECT qa('F1 no search is no filter',
+  (public.portal_orders('all', NULL, NULL, 200, 0, NULL, NULL) ->> 'total')::int
+  = (public.portal_orders('all', NULL, NULL, 200, 0, '   ', NULL) ->> 'total')::int,
+  'blank and absent must mean the same thing');
+
+SELECT qa('F2 a search that matches nothing returns nothing, not everything',
+  (public.portal_orders('all', NULL, NULL, 200, 0, 'zzzz-no-such-order', NULL) ->> 'total')::int = 0
+  AND public.portal_orders('all', NULL, NULL, 200, 0, 'zzzz-no-such-order', NULL) -> 'rows' = '[]'::jsonb);
+
+SELECT qa('F3 searching an order number finds it, and narrows the COUNT too',
+  (public.portal_orders('all', NULL, NULL, 200, 0, :'f_n', NULL) ->> 'total')::int = 1,
+  'the count must agree with the rows, or the pager lies');
+
+SELECT qa('F4 the customer name is searchable, not only the order columns',
+  (public.portal_orders('all', NULL, NULL, 200, 0, 'Stockist', NULL) ->> 'total')::int
+  = :'fstk_n'::int
+  AND :'fstk_n'::int > 0,
+  'Stockist A1 is STK_A1 company name; expected ' || :'fstk_n');
+
+SELECT qa('F5 the status filter is exact',
+  NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(
+      public.portal_orders('all', NULL, NULL, 200, 0, NULL, 'Pending') -> 'rows') r
+     WHERE r ->> 'status' <> 'Pending'));
+
+SELECT qa('F6 a filter cannot reach another distributor''s orders',
+  public.portal_orders('all', NULL, NULL, 200, 0, 'ORD', NULL)::text
+    NOT LIKE '%' || trim(both '''' from :'ORD_X1') || '%',
+  'the visible-ids rule still runs underneath the filter');
+
+SELECT qa('F7 customers: an empty search is no filter, a miss is empty',
+  jsonb_array_length(public.portal_customers('zzzz-no-such-customer', NULL)) = 0
+  AND jsonb_array_length(public.portal_customers(NULL, NULL))
+      = jsonb_array_length(public.portal_customers('  ', NULL)));
+
+SELECT qa('F8 payments: the same two rules, and the count follows the filter',
+  (public.portal_payments(NULL, NULL, 200, 0, 'zzzz-no-such-receipt', NULL) ->> 'total')::int = 0
+  AND (public.portal_payments(NULL, NULL, 200, 0, NULL, NULL) ->> 'total')::int
+      = (public.portal_payments(NULL, NULL, 200, 0, '', NULL) ->> 'total')::int);
+
+RESET ROLE;
+SELECT set_config('test.uid', :ADMIN_A, false);
 
 -- ── Put the tenant back the way the next file expects ────────
 RESET ROLE;
