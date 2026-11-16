@@ -527,11 +527,23 @@ SELECT qa('T5 placed_via distinguishes a portal order from a company one',
     WHERE x ->> 'id' = trim(both '''' from :'ORD_S1')) = 'company',
   'the column exists so a portal order is never a blank salesman');
 
-SELECT qa('T6 NO salesman is returned anywhere',
-  public.portal_orders('all')::text NOT LIKE '%salesman%'
-  AND public.portal_orders('all')::text NOT LIKE '%user_id%'
-  AND coalesce(public.portal_order_detail(:ORD_S1)::text, '') NOT LIKE '%salesman%',
-  'spec 17 q4 is assumed NO: an outsider is not told an employee''s name');
+-- T6 — REVERSED 2026-11-16, Plan 6 §1, on the founder's own instruction.
+--
+-- This scenario used to read "NO salesman is returned anywhere", pinning spec
+-- §17 q4 (2026-11-07). He asked for Booked by and Collected by after using the
+-- portal, and the cash-handover model is why he is right: a distributor whose
+-- retailer disputes a quantity has to know who wrote it down.
+--
+-- The reversal is NARROW and this scenario is now what keeps it narrow — the
+-- NAME is allowed through, and the row is still checked for everything else.
+-- `75_portal_list_filters.sql` F12–F16 assert the name itself is correct.
+SELECT qa('T6 the booker''s name is allowed through; nothing ELSE about them is',
+  public.portal_orders('all')::text NOT LIKE '%user_id%'
+  AND public.portal_orders('all')::text NOT LIKE '%@%'
+  AND public.portal_orders('all')::text NOT LIKE '%employee_code%'
+  AND public.portal_orders('all')::text NOT LIKE '%territory%'
+  AND coalesce(public.portal_order_detail(:ORD_S1)::text, '') NOT LIKE '%@%',
+  'spec 17 q4, reversed to the name alone: no code, no phone, no role, no territory');
 
 SELECT qa('T7 an order detail inside the tree opens, with its lines',
   public.portal_order_detail(:ORD_S2) ->> 'order_number' IS NOT NULL

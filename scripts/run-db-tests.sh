@@ -93,11 +93,12 @@ GRANTS
 # it actually recorded. A shortfall fails the run and names the file.
 say "Running scenarios"
 truncated=0
-for f in 00_fixture 10_buying_status 20_mapping_codes_territory \
-         30_territory_coverage_rls 40_area_channel_mapping 50_rights_and_many_holders \
-         60_dms_foundation 70_dashboard_viewer_scope 70_portal_visibility \
-         71_portal_customer_create 72_portal_place_order \
-         74_portal_payments_write; do
+#
+# 75 runs immediately after 70 ON PURPOSE. It counts rows - "three orders in
+# the tree", "one customer at level 2" - and 71 and 72 both ADD rows to that
+# same tree, so after them those counts are no longer the fixture's and the
+# file would fail for a reason that has nothing to do with filtering.
+for f in 00_fixture 10_buying_status 20_mapping_codes_territory 30_territory_coverage_rls 40_area_channel_mapping 50_rights_and_many_holders 60_dms_foundation 70_dashboard_viewer_scope 70_portal_visibility 75_portal_list_filters 71_portal_customer_create 72_portal_place_order 74_portal_payments_write 76_portal_dispatch_write 77_portal_reports; do
   p="$WEB_DIR/supabase/tests/$f.sql"
   [ -f "$p" ] || continue
   before=$("${PSQL[@]}" -tAc "SELECT count(*) FROM qa_results;" 2>/dev/null || echo 0)
