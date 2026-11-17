@@ -54,7 +54,9 @@ export default function CompaniesListPage() {
             <tr>
               <th className="px-4 py-3 font-medium text-foreground">Customer ID</th>
               <th className="px-4 py-3 font-medium text-foreground">Company Name</th>
-              <th className="px-4 py-3 font-medium text-foreground">Owner</th>
+              {/* The person who signed the company up. They are an Admin
+                  like any other — "Owner" is not a role in this product. */}
+              <th className="px-4 py-3 font-medium text-foreground">Main Admin</th>
               <th className="px-4 py-3 font-medium text-foreground">Industry</th>
               <th className="px-4 py-3 font-medium text-foreground">Plan</th>
               <th className="px-4 py-3 font-medium text-foreground">Users</th>

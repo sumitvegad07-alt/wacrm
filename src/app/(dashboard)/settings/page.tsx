@@ -17,7 +17,6 @@ import { LeadsSettings } from '@/components/settings/leads-settings';
 import { TasksSettings } from '@/components/settings/tasks-settings';
 import { OrdersSettings } from '@/components/settings/orders-settings';
 import { PricingSchemesSettings } from '@/components/settings/pricing-schemes-settings';
-import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { AISettingsPanel } from '@/components/settings/ai-settings-panel';
 import { ExpenseTypesSettings } from '@/components/settings/expense-types-settings';
@@ -91,7 +90,6 @@ function SettingsContent() {
     territories: <TerritoryManager />,
     route: <RouteSettings />,
     attendance_locations: <AttendanceLocationsSettings />,
-    members: <MembersTab />,
     api: <ApiKeysSettings />,
     module_settings: <ModuleSettingsPanel />,
   };

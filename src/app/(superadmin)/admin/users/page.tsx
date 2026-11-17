@@ -4,11 +4,15 @@ import { useEffect, useState } from "react";
 import { Search, UserCircle2, ExternalLink, KeyRound, X } from "lucide-react";
 import { Link } from "@/components/ui/link";
 import { Button } from "@/components/ui/button";
+import { displayRoleName, hasFullAccess } from "@/lib/auth/display-role";
 
 interface UserRow {
   id: string;
   full_name: string | null;
   email: string;
+  /** The admin-created role — the only one we ever show. */
+  role_name: string | null;
+  /** Internal full-access flag. Picks the chip colour, never printed. */
   account_role: string | null;
   is_superadmin: boolean;
   account_id: string | null;
@@ -72,6 +76,7 @@ export default function GlobalUsersPage() {
         id: p.id,
         full_name: p.full_name,
         email: p.email,
+        role_name: p.role_name ?? null,
         account_role: p.account_role,
         is_superadmin: p.is_superadmin,
         account_id: p.account_id,
@@ -99,30 +104,26 @@ export default function GlobalUsersPage() {
     );
   }, [search, users]);
 
-  const roleBadge = (role: string | null, isSuperadmin: boolean) => {
-    if (isSuperadmin)
+  // Shows the admin-created role name ("Admin", "Sales Executive", or
+  // whatever that tenant called it). The internal account_role flag only
+  // picks the colour — a tenant's own role names are unbounded, so there
+  // is nothing stable to key a palette off.
+  const roleBadge = (u: UserRow) => {
+    if (u.is_superadmin)
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-600 text-white shadow-sm">
           Platform Superadmin
         </span>
       );
-    const colors: Record<string, string> = {
-      owner:
-        "bg-blue-600 text-white shadow-sm",
-      admin:
-        "bg-amber-600 text-white shadow-sm",
-      agent:
-        "bg-slate-600 text-white shadow-sm",
-      viewer:
-        "bg-muted text-muted-foreground border border-border",
-    };
     return (
       <span
         className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold ${
-          colors[role || "viewer"] || colors["viewer"]
+          hasFullAccess(u.account_role)
+            ? "bg-amber-600 text-white shadow-sm"
+            : "bg-muted text-muted-foreground border border-border"
         }`}
       >
-        {role || "—"}
+        {displayRoleName(u.role_name, u.account_role)}
       </span>
     );
   };
@@ -198,7 +199,7 @@ export default function GlobalUsersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {roleBadge(u.account_role, u.is_superadmin)}
+                    {roleBadge(u)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">

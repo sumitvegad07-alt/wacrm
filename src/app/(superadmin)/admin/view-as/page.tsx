@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { getMenuStructure, type MenuNode } from "@/components/layout/sidebar";
 import { hasPermission } from "@/lib/auth/rbac";
+import { displayRoleName } from "@/lib/auth/display-role";
 import type { ModuleSettings } from "@/hooks/use-auth";
 import type { AssignmentMode } from "@/hooks/use-extra-settings";
 
@@ -42,6 +43,9 @@ interface UserOption {
   full_name: string | null;
   email: string;
   account_id: string;
+  /** The admin-created role — the only one we show. */
+  role_name: string | null;
+  /** Internal full-access flag; fallback only, never printed verbatim. */
   account_role: string;
   accounts?: { name: string } | null;
 }
@@ -133,7 +137,8 @@ export default function ViewAsPage() {
           <option value="">Choose a user…</option>
           {users.map((u) => (
             <option key={u.id} value={u.id}>
-              {u.accounts?.name ?? "—"} · {u.full_name || u.email} ({u.account_role})
+              {u.accounts?.name ?? "—"} · {u.full_name || u.email} (
+              {displayRoleName(u.role_name, u.account_role)})
             </option>
           ))}
         </select>
@@ -165,10 +170,7 @@ export default function ViewAsPage() {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                  {target.employee_role_name ?? "No employee role"}
-                  <span className="text-muted-foreground">
-                    ({target.account_role})
-                  </span>
+                  {displayRoleName(target.employee_role_name, target.account_role)}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Building2 className="h-4 w-4 text-muted-foreground" />

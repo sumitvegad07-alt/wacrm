@@ -65,10 +65,15 @@ interface PeekFail {
 }
 type PeekResult = PeekOk | PeekFail;
 
+// The invite link carries the internal account_role flag, not a role
+// name — "agent" and "viewer" name nothing in this product. The only
+// thing worth telling the invitee is whether they are joining with
+// full access; their real role is whatever the admin assigns them in
+// Team → Employees once they are in.
 const ROLE_LABEL: Record<PeekOk['role'], string> = {
-  admin: 'Admin',
-  agent: 'Agent',
-  viewer: 'Viewer',
+  admin: 'an Admin',
+  agent: 'a team member',
+  viewer: 'a team member',
 };
 
 const FAIL_COPY: Record<PeekFail['reason'], { title: string; body: string }> = {

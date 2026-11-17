@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2, ShieldCheck } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 
 import { SECTION_META, type SettingsSection } from './settings-sections';
 import { SettingsChip, StatusDot } from './settings-chip';
-import { ROLE_META } from './role-meta';
+import { displayRoleName, hasFullAccess } from '@/lib/auth/display-role';
 
 interface OverviewCounts {
   members: number | null;
@@ -135,8 +135,11 @@ export function SettingsOverview({
 
   const displayName = profile?.full_name || profile?.email || 'Your account';
   const initial = (profile?.full_name || profile?.email || 'U').charAt(0).toUpperCase();
-  const roleMeta = accountRole ? ROLE_META[accountRole] : null;
-  const RoleIcon = roleMeta?.icon;
+  // The chip names the role this person's admin actually created
+  // ("Admin", "Sales Executive", or whatever it was called). It must
+  // never show `accountRole` — that is an internal database-security
+  // flag, and its values ("owner", "agent") name nothing in this product.
+  const roleLabel = displayRoleName(profile?.employee_role?.name, accountRole);
 
   // Per-tile loading + subtitle. `null` counts render as a graceful
   // fallback so a single failed query never blanks a tile.
@@ -254,12 +257,10 @@ export function SettingsOverview({
             </div>
           ) : null}
         </div>
-        {roleMeta && RoleIcon ? (
-          <SettingsChip variant={roleMeta.variant}>
-            <RoleIcon />
-            {roleMeta.label}
-          </SettingsChip>
-        ) : null}
+        <SettingsChip variant={hasFullAccess(accountRole) ? 'admin' : 'muted'}>
+          <ShieldCheck />
+          {roleLabel}
+        </SettingsChip>
       </Card>
 
       {/* Status tiles */}

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2, ToggleLeft, History } from "lucide-react";
 import { revokeLoginsConfirmText } from "@/lib/admin/portal-login-text";
+import { displayRoleName, hasFullAccess } from "@/lib/auth/display-role";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/admin/billing";
 import {
   ADDON_LABEL,
@@ -39,6 +40,9 @@ interface Member {
   id: string;
   full_name: string | null;
   email: string;
+  /** The admin-created role — this is the only one we ever show. */
+  role_name: string | null;
+  /** Internal full-access flag. Used for sorting only, never printed. */
   account_role: string;
 }
 
@@ -109,9 +113,16 @@ export default function CompanyDetailPage() {
 
       const company = (companyRes as { account?: Record<string, unknown> | null }).account;
       if (company) applyAccount(company as any);
-      // The route orders by email; this screen has always listed owner first.
+      // The route orders by email; this screen lists the full-access
+      // people first, then everyone else alphabetically by role name.
       const memberRows = ((membersRes as { users?: Member[] }).users ?? []).slice();
-      memberRows.sort((a, b) => a.account_role.localeCompare(b.account_role));
+      memberRows.sort((a, b) => {
+        const byAccess = Number(hasFullAccess(b.account_role)) - Number(hasFullAccess(a.account_role));
+        if (byAccess !== 0) return byAccess;
+        return displayRoleName(a.role_name, a.account_role).localeCompare(
+          displayRoleName(b.role_name, b.account_role),
+        );
+      });
       setMembers(memberRows);
       setLoading(false);
     }
@@ -241,23 +252,20 @@ export default function CompanyDetailPage() {
     }
   };
 
-  const roleBadge = (role: string) => {
-    const colors: Record<string, string> = {
-      owner: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
-      admin: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
-      agent: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
-      viewer: "bg-muted text-muted-foreground",
-    };
-    return (
-      <span
-        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-          colors[role] || colors["viewer"]
-        }`}
-      >
-        {role}
-      </span>
-    );
-  };
+  // The chip shows the admin-created role name. Colour is driven by the
+  // internal full-access flag, never by a role name — a tenant can call a
+  // role anything, so there is no fixed list to key a palette off.
+  const roleBadge = (m: Member) => (
+    <span
+      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+        hasFullAccess(m.account_role)
+          ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+          : "bg-muted text-muted-foreground"
+      }`}
+    >
+      {displayRoleName(m.role_name, m.account_role)}
+    </span>
+  );
 
   if (loading) return <p className="text-muted-foreground p-6">Loading...</p>;
   if (!company) return <p className="text-muted-foreground p-6">Company not found.</p>;
@@ -490,7 +498,7 @@ export default function CompanyDetailPage() {
                     <p className="text-xs text-muted-foreground">{m.email}</p>
                   </div>
                 </div>
-                {roleBadge(m.account_role)}
+                {roleBadge(m)}
               </div>
             ))}
           </div>

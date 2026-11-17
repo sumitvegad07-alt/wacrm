@@ -12,7 +12,6 @@ import {
   Tags,
   ToggleRight,
   User,
-  UsersRound,
   BrainCircuit,
   Wallet,
   Map,
@@ -52,7 +51,6 @@ export const SETTINGS_SECTIONS = [
   'orders',
   'payments',
   'pricing',
-  'members',
   'api',
   'expense_types',
   'leave_types',
@@ -121,7 +119,6 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   territories: { id: 'territories', label: 'Territory', icon: Map, group: 'workspace', gate: { line: 'wfa', configModule: 'territory' }, permission: PERMISSIONS.MASTERS.EDIT_TERRITORIES },
   attendance_locations: { id: 'attendance_locations', label: 'Attendance Locations', icon: MapPin, group: 'workspace', gate: { line: 'wfa' }, permission: PERMISSIONS.MASTERS.EDIT_ATTENDANCE_LOCATIONS },
   // ── Admin ──
-  members: { id: 'members', label: 'Team', icon: UsersRound, group: 'hidden', permission: PERMISSIONS.TEAM.MANAGE_EMPLOYEES },
   api: { id: 'api', label: 'API Settings', icon: KeyRound, group: 'workspace', permission: PERMISSIONS.SETTINGS.MANAGE_API_KEYS },
   module_settings: { id: 'module_settings', label: 'Organization Settings', icon: ToggleRight, group: 'workspace', permission: PERMISSIONS.SETTINGS.MANAGE_ORG },
 };

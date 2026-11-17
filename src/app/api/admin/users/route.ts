@@ -35,10 +35,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ count: count ?? 0 });
     }
 
+    // `employee_roles(name)` is the role a human actually has — "Admin",
+    // "Sales Executive", or whatever the account's admin named it. It is
+    // the only role these screens may print; `account_role` rides along
+    // purely as the full-access flag used for sorting and as a fallback
+    // (see lib/auth/display-role.ts). `profiles.employee_role_id` is the
+    // single FK between these two tables (migration 054), so this embed
+    // is unambiguous to PostgREST.
     let query = admin
       .from("profiles")
       .select(
-        "id, full_name, email, account_role, is_superadmin, account_id, accounts(name)",
+        "id, full_name, email, account_role, is_superadmin, account_id, accounts(name), employee_roles(name)",
       );
 
     if (accountId) query = query.eq("account_id", accountId);
@@ -47,7 +54,20 @@ export async function GET(req: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-    return NextResponse.json({ users: data ?? [] });
+    // Flatten the embed so every consumer reads one plain `role_name`
+    // field and nobody has to guess whether PostgREST handed back an
+    // object or an array.
+    const users = (data ?? []).map((row) => {
+      const embedded = (row as { employee_roles?: unknown }).employee_roles;
+      const roleRow = Array.isArray(embedded) ? embedded[0] : embedded;
+      const roleName =
+        roleRow && typeof roleRow === "object" && "name" in roleRow
+          ? ((roleRow as { name: string | null }).name ?? null)
+          : null;
+      return { ...row, role_name: roleName };
+    });
+
+    return NextResponse.json({ users });
   } catch (err) {
     return toErrorResponse(err);
   }
