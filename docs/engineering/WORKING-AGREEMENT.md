@@ -132,3 +132,52 @@ So, until that is fixed:
 - Mobile changes need an APK before they exist for anyone.
 - Say plainly what was verified and what was not. "Tests pass" and "I opened
   it and it worked" are different claims.
+
+## 7. The gate that was never wired
+
+Added 2026-11-17, after the founder found Lead, Quotation and Deal columns on
+the DSR of an account whose plan has no CRM.
+
+The cause was not a regression. `ReportMeasure.requiredModule` was declared in
+`src/lib/reports/types.ts` on 2026-08-12, the day the report engine was
+written, and read by nothing — `git log -S requiredModule -- report-viewer.tsx`
+returns no commit for the file's whole history. Its values were the wrong
+vocabulary too: report module names (`'orders'`, `'leads'`) rather than
+`accounts.module_settings` keys (`'order'`, `'payment'`), so even a lookup
+would have missed. Ten report configs set it. Two tests
+(`src/lib/mcp/catalog.test.ts`) even said in a comment that it was "consumed
+nowhere in the app" — and that was left as a note rather than a bug.
+
+**This is the dangerous shape: a field that looks like a gate, is set
+conscientiously at every call site, and gates nothing.** Nobody re-checks a
+protection that appears to exist. It survived three months and every audit.
+
+So:
+
+1. **A declared gate must have a test that proves it refuses something.** Not
+   that the field is set — that a forbidden thing is actually withheld. If you
+   cannot write that test, the field is decoration: delete it.
+2. **Delete dead fields; do not leave them with a comment.** A `@deprecated`
+   that still reads like protection is worse than an empty object, because the
+   next person sets it and believes they are done.
+3. **One vocabulary per question.** "Which plan may see this?" is answered by
+   `SurfaceGate` + `gatePasses` in `src/lib/plans/surface-gates.ts` and by
+   nothing else. `requiredModule` was the fourth dialect of that question; the
+   2026-10-18 audit already collapsed three others into that one table.
+4. **Gate per column, not only per screen, on anything cross-module.** The DSR
+   is the only report with more than one base table, so it is the only one
+   where the route gate is not enough. `src/lib/reports/measure-gates.test.ts`
+   now fails if a DSR column is added without declaring its product line.
+5. **When a comment says something is unused, that is a bug report.** Open it
+   or fix it. Do not write it down and move on.
+
+### Plan-leak checklist for any new column, screen or report
+
+- Which table does it read? Which product line is that table sold on?
+- Does it read **two** tables? Then it needs `allLines`, not `line` — "Lead
+  Visits" is a visit (WFA) against a lead (CRM) and neither alone produces one.
+- Is it reachable by URL, not just by menu? Route gates live in the same table.
+- Is it offered in a *default* selection as well as a picker? Both need
+  filtering: the DSR's `defaultMeasures` lists all eighteen columns.
+- Can a **saved view** carry it from before the plan changed? Narrow the
+  selection on load, not only the picker.

@@ -90,41 +90,43 @@ export const dsrReportConfig: ReportDefinition = {
     // the schema, so this cannot be period-bound; the label says so because a
     // reader filtering to Today would otherwise think the filter was ignored.
     { key: 'assigned_customers', label: 'Assigned Customers (Current)', type: 'number' },
-    { key: 'visited_customers', label: 'Visited Customers', type: 'number' },
+    { key: 'visited_customers', label: 'Visited Customers', type: 'number', gate: { line: 'wfa' } },
     // Assigned - Visited. Named for what it counts: over a single day this is
     // "customers you did not visit today", not a list of failures.
-    { key: 'missed_customers', label: 'Not Visited', type: 'number' },
+    { key: 'missed_customers', label: 'Not Visited', type: 'number', gate: { line: 'wfa' } },
     // Attendance
-    { key: 'days_present', label: 'Days Present', type: 'number' },
-    { key: 'leave_days', label: 'Leave Days', type: 'number' },
-    { key: 'distance_km', label: 'Distance (km)', type: 'number' },
+    { key: 'days_present', label: 'Days Present', type: 'number', gate: { line: 'wfa' } },
+    { key: 'leave_days', label: 'Leave Days', type: 'number', gate: { line: 'wfa' } },
+    { key: 'distance_km', label: 'Distance (km)', type: 'number', gate: { line: 'wfa' } },
     // Visits
-    { key: 'total_visits', label: 'Total Visits', type: 'number' },
-    { key: 'productive_visits', label: 'Productive Visits', type: 'number' },
-    { key: 'lead_visits', label: 'Lead Visits', type: 'number' },
+    { key: 'total_visits', label: 'Total Visits', type: 'number', gate: { line: 'wfa' } },
+    // A visit (WFA) that produced an order (SFA): EXISTS(orders) inside the subquery.
+    { key: 'productive_visits', label: 'Productive Visits', type: 'number', gate: { allLines: ['wfa', 'sfa'] } },
+    // A visit (WFA) against a lead (CRM): site_visits WHERE target_type = 'Lead'.
+    { key: 'lead_visits', label: 'Lead Visits', type: 'number', gate: { allLines: ['wfa', 'crm'] } },
     // Acquisition
     { key: 'new_customers', label: 'New Customers', type: 'number' },
-    { key: 'new_leads', label: 'New Leads', type: 'number' },
+    { key: 'new_leads', label: 'New Leads', type: 'number', gate: { line: 'crm' } },
     // Orders
-    { key: 'order_count', label: 'Orders', type: 'number' },
-    { key: 'order_amount', label: 'Order Amount', type: 'currency' },
-    { key: 'order_quantity', label: 'Order Quantity', type: 'number' },
+    { key: 'order_count', label: 'Orders', type: 'number', gate: { line: 'sfa' } },
+    { key: 'order_amount', label: 'Order Amount', type: 'currency', gate: { line: 'sfa' } },
+    { key: 'order_quantity', label: 'Order Quantity', type: 'number', gate: { line: 'sfa' } },
     // Payments — Collected = Approved + Pending + Rejected (see header).
-    { key: 'payment_collected', label: 'Payment Collected', type: 'currency' },
-    { key: 'payment_approved', label: 'Payment Approved', type: 'currency' },
-    { key: 'payment_pending', label: 'Payment Pending', type: 'currency' },
-    { key: 'payment_rejected', label: 'Payment Rejected', type: 'currency' },
-    { key: 'payment_cancelled', label: 'Payment Cancelled', type: 'currency' },
+    { key: 'payment_collected', label: 'Payment Collected', type: 'currency' , gate: { line: 'sfa' } },
+    { key: 'payment_approved', label: 'Payment Approved', type: 'currency' , gate: { line: 'sfa' } },
+    { key: 'payment_pending', label: 'Payment Pending', type: 'currency' , gate: { line: 'sfa' } },
+    { key: 'payment_rejected', label: 'Payment Rejected', type: 'currency' , gate: { line: 'sfa' } },
+    { key: 'payment_cancelled', label: 'Payment Cancelled', type: 'currency' , gate: { line: 'sfa' } },
     // Expenses — Claimed = Approved + Pending + Rejected.
-    { key: 'expense_claimed', label: 'Expense Claimed', type: 'currency' },
-    { key: 'expense_approved', label: 'Expense Approved', type: 'currency' },
-    { key: 'expense_pending', label: 'Expense Pending', type: 'currency' },
-    { key: 'expense_rejected', label: 'Expense Rejected', type: 'currency' },
+    { key: 'expense_claimed', label: 'Expense Claimed', type: 'currency' , gate: { line: 'wfa' } },
+    { key: 'expense_approved', label: 'Expense Approved', type: 'currency' , gate: { line: 'wfa' } },
+    { key: 'expense_pending', label: 'Expense Pending', type: 'currency' , gate: { line: 'wfa' } },
+    { key: 'expense_rejected', label: 'Expense Rejected', type: 'currency' , gate: { line: 'wfa' } },
     // Quotations & deals
-    { key: 'quotation_amount', label: 'Quotation Amount', type: 'currency' },
-    { key: 'approved_quotation_amount', label: 'Approved Quotation Amount', type: 'currency' },
-    { key: 'new_deals', label: 'New Deals', type: 'number' },
-    { key: 'deal_amount', label: 'Deal Amount', type: 'currency' },
+    { key: 'quotation_amount', label: 'Quotation Amount', type: 'currency', gate: { line: 'crm' } },
+    { key: 'approved_quotation_amount', label: 'Approved Quotation Amount', type: 'currency', gate: { line: 'crm' } },
+    { key: 'new_deals', label: 'New Deals', type: 'number', gate: { line: 'crm' } },
+    { key: 'deal_amount', label: 'Deal Amount', type: 'currency', gate: { line: 'crm' } },
   ],
 
   kpis: ['total_visits', 'productive_visits', 'order_amount', 'payment_collected'],

@@ -37,6 +37,8 @@ import { ReportKpiCards } from "./report-kpi-cards";
 import { ReportDefaultViewDialog } from "./report-default-view-dialog";
 import { ActiveFilterSummary } from "./ActiveFilterSummary";
 import { useAuth } from "@/hooks/use-auth";
+import type { GateContext } from "@/lib/plans/surface-gates";
+import { allowedMeasureKeys, allowedMeasures, narrowSelection } from "@/lib/reports/measure-gates";
 import { createClient } from "@/lib/supabase/client";
 import { isBuyingStatusEnabled } from "@/lib/customers/buying-status";
 
@@ -52,7 +54,39 @@ const PRODUCT_LEVEL_DIMENSIONS: Record<string, number> = {
 };
 
 export function ReportViewer({ config }: ReportViewerProps) {
-  const { defaultCurrency, accountId } = useAuth();
+  const {
+    defaultCurrency,
+    accountId,
+    hasCRM,
+    hasWFA,
+    hasSFA,
+    hasFSM,
+    hasDMS,
+    isModuleEnabled,
+    moduleSettingsLoaded,
+  } = useAuth();
+
+  /** What the account's plan allows, in the one vocabulary every other gated
+   *  surface uses. Until module settings have loaded, `owns` is all-false, so
+   *  this is held back rather than briefly hiding every column: see
+   *  `planAllowedMeasures` below. */
+  const gateCtx: GateContext = useMemo(
+    () => ({
+      owns: { crm: hasCRM, wfa: hasWFA, sfa: hasSFA, fsm: hasFSM, dms: hasDMS },
+      isModuleEnabled,
+    }),
+    [hasCRM, hasWFA, hasSFA, hasFSM, hasDMS, isModuleEnabled],
+  );
+
+  /** The report's columns minus the ones this plan cannot produce. A measure is
+   *  a subquery over one module's table, so an SFA-only account has no `leads`
+   *  to count and must not be offered "New Leads". While the plan is still
+   *  loading every measure is kept — hiding them and putting them back makes the
+   *  column list flicker on every report open. */
+  const planAllowedMeasures = useMemo(
+    () => (moduleSettingsLoaded ? allowedMeasures(config.measures, gateCtx) : config.measures),
+    [config.measures, gateCtx, moduleSettingsLoaded],
+  );
   const supabase = createClient();
   
   // Product settings state (to control category/subcategory tab visibility)
@@ -129,7 +163,13 @@ export function ReportViewer({ config }: ReportViewerProps) {
   // Get default measures for the active tab
   const getDefaultMeasures = (tabKey: string) => {
     const tab = config.tabConfigs?.find(t => t.key === tabKey);
-    return tab?.defaultMeasures || ['gross_amount', 'net_amount', 'order_count', 'product_quantity'];
+    const defaults =
+      tab?.defaultMeasures || ['gross_amount', 'net_amount', 'order_count', 'product_quantity'];
+    // A tab's defaultMeasures lists every column the report has — the DSR's
+    // lists all eighteen — so the plan filter has to run here too, or an
+    // SFA-only account opens the DSR with the Lead and Quotation columns
+    // already selected and only Manage Column hiding them.
+    return moduleSettingsLoaded ? narrowSelection(defaults, config.measures, gateCtx) : defaults;
   };
 
   /** Every dimension column a tab shows: its primary one, then any extras
@@ -160,6 +200,25 @@ export function ReportViewer({ config }: ReportViewerProps) {
     topN: 10
   });
 
+  /**
+   * Drop any selected column the plan does not allow, once the plan is known.
+   *
+   * Three things can put a forbidden column into the selection: the initial
+   * state above is built before `moduleSettingsLoaded` turns true, a saved view
+   * can carry a column chosen before a line was removed from the account, and a
+   * shared URL can name one. Filtering only the Manage Column list would leave
+   * all three rendering a column whose module the account no longer has.
+   */
+  useEffect(() => {
+    if (!moduleSettingsLoaded) return;
+    setReportState((s) => {
+      const kept = narrowSelection(s.measures, config.measures, gateCtx);
+      if (kept.length === s.measures.length) return s;
+      const chartStillShown = s.chartMeasure && kept.includes(s.chartMeasure);
+      return { ...s, measures: kept, chartMeasure: chartStillShown ? s.chartMeasure : undefined };
+    });
+  }, [moduleSettingsLoaded, config.measures, gateCtx]);
+
   /** The registry module the ACTIVE TAB queries. Almost always the report's own,
    *  but Ageing's product tabs read a different base table (see
    *  TabConfig.moduleOverride), so the engine has to be told which. The saved
@@ -174,8 +233,16 @@ export function ReportViewer({ config }: ReportViewerProps) {
    *  measures different things (# customer vs # product). */
   const activeKpis = useMemo(() => {
     const tab = config.tabConfigs?.find((t) => t.key === activeTab);
-    return tab?.kpis ?? config.kpis;
-  }, [config.tabConfigs, config.kpis, activeTab]);
+    const picked = tab?.kpis ?? config.kpis;
+    if (!picked || !moduleSettingsLoaded) return picked;
+    // The same plan filter as the columns. The DSR's KPI row is Total Visits,
+    // Productive Visits, Order Amount and Payment Collected — not one of which
+    // a CRM-only account can produce, and asking for them returns a row of
+    // zeros that reads as "you sold nothing" rather than "you did not buy this".
+    // An empty list is fine: ReportKpiCards renders nothing.
+    const allowed = allowedMeasureKeys(config.measures, gateCtx);
+    return picked.filter((key) => allowed.has(key));
+  }, [config.tabConfigs, config.kpis, config.measures, activeTab, gateCtx, moduleSettingsLoaded]);
 
   const [data, setData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
@@ -537,12 +604,12 @@ export function ReportViewer({ config }: ReportViewerProps) {
     const allowed = config.tabConfigs?.find(t => t.key === activeTab)?.availableMeasures;
     // A measure behind an opt-in module is hidden until that module is on,
     // whatever the tab allows.
-    const gated = config.measures.filter(
+    const gated = planAllowedMeasures.filter(
       (m) => m.requiresFeature !== 'buying_status' || buyingStatusOn,
     );
     if (!allowed) return gated;
     return gated.filter(m => allowed.includes(m.key));
-  }, [config.measures, config.tabConfigs, activeTab, buyingStatusOn]);
+  }, [planAllowedMeasures, config.tabConfigs, activeTab, buyingStatusOn]);
 
   // Get the period label for display
   const periodLabel = PERIOD_PRESETS.find(p => p.value === reportState.period)?.label ?? 'This Month';

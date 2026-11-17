@@ -1,4 +1,5 @@
 import type { ModuleSettings } from '@/hooks/use-auth';
+import type { SurfaceGate } from '@/lib/plans/surface-gates';
 
 export type ReportSharingMode = 'private' | 'team' | 'organization';
 
@@ -37,6 +38,9 @@ export interface ReportDimension {
   label: string;
   category?: 'customer' | 'user' | 'area' | 'time' | 'product';
   requiredModule?: keyof ModuleSettings | string;
+  /** Same meaning as ReportMeasure.gate — a dimension that groups by a module
+   *  the plan does not include must not be offered either. */
+  gate?: SurfaceGate;
   requiredFeature?: string;
   requiredCustomField?: string;
   allowedChildDimensions?: string[];
@@ -51,7 +55,17 @@ export interface ReportMeasure {
    *  another's 90 produces 130, which means nothing. `percent` measures get this
    *  behaviour automatically (§5e); this is for the non-percent cases. */
   additive?: boolean;
+  /** @deprecated Declared since 2026-08-12 and read by nothing — and its values
+   *  are report module names ('orders'), not `accounts.module_settings` keys
+   *  ('order'), so a lookup would miss anyway. Use `gate`. */
   requiredModule?: keyof ModuleSettings | string;
+  /** Which product line / module toggle this column needs, in the same
+   *  vocabulary the sidebar, route guard and settings tabs use. A measure is a
+   *  subquery over one module's table, so a column the account's plan cannot
+   *  produce must not be offered: "New Leads" reads `leads` (CRM), "Order
+   *  Amount" reads `orders` (SFA). Columns reading two tables take `allLines`.
+   *  See lib/reports/measure-gates.ts. */
+  gate?: SurfaceGate;
   /** Same gate as TabConfig.requiresFeature: hide the measure entirely until
    *  the account switches the module on. */
   requiresFeature?: 'buying_status';
