@@ -49,8 +49,9 @@ Every one of these was decided by the founder during brainstorming, not assumed:
 ### The app
 
 A Next.js App Router app, same major versions as `wacrm-web`, built the way
-`ozzo-dms` was: own private repo, own Vercel project, own domain. Dev port **3200**
-(`wacrm-web` 3000, `ozzo-dms` 3100).
+`ozzo-dms` was: own private repo, own Vercel project, own domain. Dev port **3300**
+(`wacrm-web` 3000, `ozzo-dms` 3100, and `ozzo-site`'s launch config already
+claims 3200).
 
 The design system (`components/ui`, `globals.css`, tokens, the `PageLayout` /
 `PageHeader` / `SettingsPanel` family, the table framework) is copied from

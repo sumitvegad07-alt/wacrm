@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- New app lives at `C:\Wacrm\ozzo-partner`. Dev + start port is **3200** (`wacrm-web` 3000, `ozzo-dms` 3100).
+- New app lives at `C:\Wacrm\ozzo-partner`. Dev + start port is **3300** (`wacrm-web` 3000, `ozzo-dms` 3100; ozzo-site's launch config already claims 3200).
 - Dependency versions are pinned to match `ozzo-dms`/`wacrm-web` exactly: `next` `16.2.6`, `react` / `react-dom` `19.2.4`, `eslint-config-next` `16.2.6`, `typescript` `^6`, `vitest` `^4.1.9`, `@supabase/ssr` `^0.10.3`, `@supabase/supabase-js` `^2.107.0`.
 - The `service_role` key may appear in **exactly two places**: `lib/auth/partner-service.ts` and files under `app/api/**`. A test enforces this. On Vercel the variable is named `service_role` (not `SUPABASE_SERVICE_ROLE_KEY`) — read it through a helper, never inline.
 - Partner staff get **no `profiles` row**, ever.
@@ -95,9 +95,9 @@ Do **not** copy `.next/`, `node_modules/`, or anything under `lib/portal/` — t
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3200",
+    "dev": "next dev -p 3300",
     "build": "next build",
-    "start": "next start -p 3200",
+    "start": "next start -p 3300",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -1221,7 +1221,7 @@ Add all three to `COPIED-FROM.md`.
 - [ ] **Step 6: Run the app and look at it**
 
 Run: `npm run dev`
-Visit `http://localhost:3200`. Signed out, expect the login screen. Sign in as the founder, expect the shell with all fifteen nav items (Super Admin holds every right) and the placeholder home.
+Visit `http://localhost:3300`. Signed out, expect the login screen. Sign in as the founder, expect the shell with all fifteen nav items (Super Admin holds every right) and the placeholder home.
 
 - [ ] **Step 7: Run typecheck, tests, and the design-system test**
 
