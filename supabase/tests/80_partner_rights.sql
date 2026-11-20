@@ -40,15 +40,26 @@ DELETE FROM public.partner_roles WHERE is_system = false AND name NOT IN
   ('Sales Manager', 'Sales Executive', 'Telecaller');
 DELETE FROM auth.users WHERE id::text LIKE 'e0000000-%';
 
-INSERT INTO auth.users (id, email) VALUES
-  (:FOUNDER, 'founder@ozzo.test'),
-  (:MANAGER, 'manager@ozzo.test'),
-  (:EXEC1,   'exec1@ozzo.test'),
-  (:EXEC2,   'exec2@ozzo.test'),
-  (:TELECA,  'teleca@ozzo.test'),
-  (:GONE,    'gone@ozzo.test'),
-  (:OUTSID,  'outsider@ozzo.test'),
-  (:WILDCRD, 'wildcard@ozzo.test');
+-- raw_user_meta_data carries skip_account_provision, exactly as the portal's
+-- app/api/employees/route.ts does. auth.users has an AFTER INSERT trigger
+-- (on_auth_user_created -> handle_new_user) which otherwise provisions a whole
+-- tenant per user: an accounts row, a Customer ID, a plan and a PROFILES row.
+--
+-- Two reasons this matters here rather than being a tidiness detail:
+--   1. A partner employee with a profiles row is the one thing this design
+--      forbids, so the test must create people the way the app does or it is
+--      testing a shape that will never exist.
+--   2. Those eight accounts rows are shared state for every file after this
+--      one, and they made the clean-up below fail on accounts_owner_user_id_fkey.
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+  (:FOUNDER, 'founder@ozzo.test',  '{"skip_account_provision":"true"}'::jsonb),
+  (:MANAGER, 'manager@ozzo.test',  '{"skip_account_provision":"true"}'::jsonb),
+  (:EXEC1,   'exec1@ozzo.test',    '{"skip_account_provision":"true"}'::jsonb),
+  (:EXEC2,   'exec2@ozzo.test',    '{"skip_account_provision":"true"}'::jsonb),
+  (:TELECA,  'teleca@ozzo.test',   '{"skip_account_provision":"true"}'::jsonb),
+  (:GONE,    'gone@ozzo.test',     '{"skip_account_provision":"true"}'::jsonb),
+  (:OUTSID,  'outsider@ozzo.test', '{"skip_account_provision":"true"}'::jsonb),
+  (:WILDCRD, 'wildcard@ozzo.test', '{"skip_account_provision":"true"}'::jsonb);
 
 -- A role granting a VERB WILDCARD, which no seeded role uses. The SQL resolves
 -- split_part(key,'_',1) || '_*', so 'view_*' must grant 'view_invoices'.
@@ -241,6 +252,21 @@ SELECT qa_allowed('P27 the founder can create a role',
 
 RESET ROLE;
 
+-- ── P27b no partner employee ever gets a profiles row ────────
+-- The whole identity argument for this portal. If the auth trigger provisions
+-- one, an OZZO salesperson turns up in a tenant's employee dropdown.
+SELECT qa('P27b creating partner staff provisions no profile and no account',
+  (SELECT count(*) FROM public.profiles p
+     JOIN auth.users u ON u.id = p.user_id
+    WHERE u.email LIKE '%@ozzo.test') = 0
+  AND (SELECT count(*) FROM public.accounts a
+     JOIN auth.users u ON u.id = a.owner_user_id
+    WHERE u.email LIKE '%@ozzo.test') = 0,
+  'profiles=' || (SELECT count(*) FROM public.profiles p
+     JOIN auth.users u ON u.id = p.user_id WHERE u.email LIKE '%@ozzo.test')
+  || ' accounts=' || (SELECT count(*) FROM public.accounts a
+     JOIN auth.users u ON u.id = a.owner_user_id WHERE u.email LIKE '%@ozzo.test'));
+
 -- ── P28 the PostgREST trap ───────────────────────────────────
 -- A SECOND foreign key from partner_employees to itself would make every
 -- embed of this table ambiguous and return 404 for everything — which is how
@@ -270,4 +296,11 @@ SELECT qa('P29 both tables have RLS enabled and policies on them',
 -- would be reported as an error rather than as the tidy-up it is.
 DELETE FROM public.partner_employees WHERE email LIKE '%@ozzo.test';
 DELETE FROM public.partner_roles WHERE name IN ('QA Created', 'QA Viewer');
+-- profiles and accounts should both be empty for these users (P27b asserts
+-- it), but delete in dependency order anyway: if the skip flag ever stops
+-- working, the clean-up should still tidy up rather than fail on a foreign key.
+DELETE FROM public.profiles WHERE user_id IN
+  (SELECT id FROM auth.users WHERE email LIKE '%@ozzo.test');
+DELETE FROM public.accounts WHERE owner_user_id IN
+  (SELECT id FROM auth.users WHERE email LIKE '%@ozzo.test');
 DELETE FROM auth.users WHERE email LIKE '%@ozzo.test';
