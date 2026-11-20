@@ -1772,3 +1772,64 @@ All of these hold on `https://partner.ozzo.co.in`, not on localhost:
 8. `npm run typecheck && npm test` passes, including key containment and design-system parity.
 
 Phase 2 (Leads, Customers, My Activity) gets its own plan, written when Phase 1 is live.
+
+---
+
+## What actually changed during execution (2026-11-20)
+
+Recorded because the next phase builds on what was built, not on what was
+planned. Tasks 1–6 are done; Task 7 (Vercel, domain) and the Supabase apply
+step are not, because both need the founder's own logins.
+
+**Added that the plan did not have:**
+
+- **`app/api/employees/password/route.ts`** — set a new password for a staff
+  login. The plan explicitly deferred this, and then the login screen was
+  written to say "your administrator can set a new one for you". With no reset
+  anywhere, the first person to forget their password is locked out permanently
+  and the founder cannot help. Follows
+  `wacrm-web/src/app/api/admin/users/password/route.ts`. The password is
+  generated, never chosen by the caller.
+- **`supabase/tests/80_partner_rights.sql`** — 30 scenarios over
+  `partner_has_right`, `partner_scope_ids`, both triggers and all five
+  policies, plus an assertion that `partner_employees` has exactly one
+  self-referencing foreign key. Registered in the runner's hard-coded list.
+  The plan had no database test at all, which the working agreement's fourth
+  gate requires.
+- **The five questions** in the migration's own comments, per the working
+  agreement. The plan omitted them.
+- **`DELETE` on the employees route refuses self-deactivation.** Deactivating
+  yourself logs you out with no way back in, because `partner_me()` filters on
+  status.
+
+**Changed from the plan:**
+
+- **Port 3300, not 3200.** `ozzo-site`'s launch config already claims 3200.
+- **The shell is copied from `ozzo-dms`, not from the CRM's `admin-shell.tsx`.**
+  The design-system parity test measures `w-60`, `lg:w-52`, `h-14`, `lg:h-11`,
+  `app-sidebar`, `app-main` and the exact gutter string — and the DMS shell
+  already satisfies every one. Rebuilding from the CRM would have meant
+  guessing at numbers a test was about to check.
+- **Page titles derive from `lib/nav.ts`** rather than a second hand-written
+  route map. Both the CRM's and the DMS's headers keep that map, and the DMS
+  one carries a comment warning that a missing route silently resolves to
+  "Dashboard" — a confident wrong answer. Deriving removes the failure mode
+  instead of testing for it.
+- **`can()` accepts the string `"true"`, not only the boolean.**
+  `permissions ->> key = 'true'` in Postgres renders both identically, so a
+  stricter TypeScript mirror would have hidden menu items the database allows.
+- **Roles and Employees were written fresh**, in the CRM's idiom, rather than
+  copied line-for-line. The CRM's versions are 684 and 735 lines of
+  `account_id` filters, plan gates and custom-field machinery that this portal
+  does not have; what was copied is the design system, the shell and the
+  patterns, which is where the "same as the admin portal" look comes from.
+- **`public/brand/`** had to be copied too — missed in the plan's file list,
+  and the login screen rendered a broken logo until it was.
+
+**Verified:** `npm run typecheck` clean, `npm test` 71 passing across 10 files,
+`npm run build` clean with every route correctly dynamic, and the login screen
+rendered in a browser with all requests 200.
+
+**Not verified, and cannot be until the migration is applied:** every
+signed-in screen. The gate, the sidebar, Roles and Employees have never run
+against real tables.
