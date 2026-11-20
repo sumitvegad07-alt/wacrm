@@ -111,10 +111,11 @@ is absent entirely; here it must be absent from everything except
 ### New tables — all prefixed `partner_`, all with RLS
 
 ```
-partner_roles             name, description, rights jsonb, data_scope, is_system
+partner_roles             name, description, permissions jsonb, data_scope,
+                          is_system
 partner_employees         user_id -> auth.users, full_name, email, phone,
-                          role_id, reporting_manager_id, designation,
-                          is_active, joined_on
+                          role_id, manager_id, designation,
+                          status, joined_on
 partner_lead_statuses     name, colour, sort_order, is_active
 partner_lead_sources      name, sort_order, is_active
 partner_industries        name, sort_order, is_active
@@ -151,9 +152,11 @@ tenant is provisioned) and unique when present (one portal customer per account)
 
 ```
 partner_me()                -> the caller's partner_employees.id, or null
-partner_has_right(key)      -> boolean. Super Admin via rights @> '{"all":true}',
-                               else exact key, else prefix wildcard — the same
-                               resolution rules as the CRM's has_permission()
+partner_has_right(key)      -> boolean. Inactive staff denied, then
+                               permissions ->> 'all' = 'true', else
+                               permissions ->> key = 'true', else the
+                               prefix_* wildcard — the same four rules, in the
+                               same order, as the CRM's has_permission()
 partner_scope_ids()         -> setof partner_employees.id the caller may see:
                                'own'  -> just themselves
                                'team' -> themselves + everyone below them,
@@ -161,10 +164,17 @@ partner_scope_ids()         -> setof partner_employees.id the caller may see:
                                'all'  -> every active employee
 ```
 
-Plus a `BEFORE` trigger on `partner_employees` that rejects a
-`reporting_manager_id` change which would create a loop — the CRM already has this
-(reporting-hierarchy cycle trigger) and the bug it prevents is an infinite recursion
-inside `partner_scope_ids()`.
+Plus a `BEFORE INSERT OR UPDATE OF manager_id` trigger on `partner_employees` that
+rejects a change which would create a loop — a copy of
+`public.prevent_manager_cycle()` from `supabase/migrations/106_reporting_hierarchy.sql`,
+including its self-reference check and its depth cap. The bug it prevents is an
+infinite recursion inside `partner_scope_ids()`.
+
+**Migrations for these tables live in `wacrm-web/supabase/migrations`**, with a
+matching `wacrm-web/docs/RUN-THIS-SQL-partner-*.md` to paste into the Supabase SQL
+editor. One database, one migration history — and it is the precedent the DMS portal
+already set. (The Supabase CLI is still linked to the stale Singapore project, so
+`db push` is not the route; pasting is.)
 
 ### Reused tables — no schema change, read through server routes only
 
@@ -180,8 +190,10 @@ re_outreach_*, re_suppressions     WhatsApp Sender
 
 ## Rights model
 
-`partner_roles.rights` is a JSON array of keys, with `{"all": true}` for Super Admin
-— the same shape the CRM uses, so the roles screen copies across. The registry is
+`partner_roles.permissions` is a JSON **object** of `key -> true`, with
+`{"all": true}` for Super Admin — byte-for-byte the shape of
+`employee_roles.permissions`, which is what lets the Roles screen and
+`has_permission()`'s resolution rules copy across unchanged. The registry is
 **trimmed to this portal's own modules**: listing rights for Orders, Stock, Routes or
 Attendance would be noise.
 
