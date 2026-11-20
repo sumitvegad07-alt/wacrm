@@ -89,6 +89,31 @@ Consequences, both of them desirable:
 The founder signs in with his existing auth user; he gets a `partner_employees` row
 with the Super Admin role. Same email, same password, no second identity.
 
+#### Creating a login must suppress tenant provisioning
+
+`auth.users` carries an `AFTER INSERT` trigger, `on_auth_user_created ->
+handle_new_user()`, restored in `20261003120000`. It provisions a whole tenant for
+a new login: an `accounts` row, a generated Customer ID, a plan, module settings —
+and a **`profiles` row**.
+
+So `auth.admin.createUser()` on its own would give every salesperson a junk tenant
+account and the exact `profiles` row this design exists to prevent. Every route in
+this portal that creates a login must pass:
+
+```ts
+user_metadata: { skip_account_provision: "true", partner_employee: "true" }
+```
+
+`handle_new_user()` returns immediately when it sees that flag. The CRM's DMS route
+(`app/api/portal-access/route.ts`) already does this; its team route uses the
+sibling flag `member_of_account`.
+
+This is easy to miss and silent when missed: the trigger lives in the `auth`
+schema, so nothing in any repo's application code mentions it, and the symptom is
+a tenant quietly appearing in the Companies list. It was caught by the database
+harness during Phase 1, not by review. `supabase/tests/80_partner_rights.sql`
+P27b asserts no partner employee ever gets a profile or an account.
+
 ### The privileged key
 
 The portal holds `service_role` **server-side only** (on Vercel the variable is
