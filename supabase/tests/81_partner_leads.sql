@@ -90,6 +90,16 @@ SELECT qa('L0 four employees and six leads exist',
   'employees=' || (SELECT count(*) FROM public.partner_employees WHERE email LIKE '%@phase2.test')
     || ' leads=' || (SELECT count(*) FROM public.partner_leads WHERE name LIKE 'QA2 %'));
 
+-- Capture ids as postgres, BEFORE any role switch.
+--
+-- L4 needs exec2's employee id as a literal. Looking it up inside the INSERT
+-- would make that statement an `INSERT ... SELECT` whose sub-query matches no
+-- row once RLS is on - inserting nothing, raising nothing, and reporting
+-- "refused" with the policy under test never consulted. Looking it up here
+-- after SET ROLE fails differently: \gset errors with "no rows returned",
+-- because exec1 cannot see exec2's employee row either.
+SELECT id AS exec2_id FROM public.partner_employees WHERE email = 'e2@phase2.test' \gset
+
 -- ── L1-L3 who can read whose leads ───────────────────────────
 SET ROLE authenticated;
 
@@ -112,13 +122,6 @@ SELECT qa('L3 the founder reads every lead',
 
 -- ── L4-L7 who can write what ─────────────────────────────────
 SELECT set_config('test.uid', :EXEC1, false);
--- The owner id is captured as a LITERAL before the role switch, not looked up
--- inside the INSERT. An `INSERT ... SELECT` whose sub-query matches no row
--- inserts nothing and raises nothing, so it would report "refused" without the
--- policy doing any work at all - RLS hides exec2's employee row from exec1,
--- which is a different rule from the one under test.
-SELECT id AS exec2_id FROM public.partner_employees WHERE email = 'e2@phase2.test' \gset
-
 SELECT qa_refused('L4 an executive cannot create a lead owned by somebody else',
   format($$INSERT INTO public.partner_leads (name, owner_id)
            VALUES ('QA2 Smuggled', %L)$$, :'exec2_id'));
