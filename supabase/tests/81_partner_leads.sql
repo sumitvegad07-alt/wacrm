@@ -26,9 +26,9 @@
 RESET ROLE;
 
 -- ── A known starting point ───────────────────────────────────
-DELETE FROM public.partner_tasks     WHERE subject LIKE 'QA2 %';
+DELETE FROM public.partner_tasks     WHERE title LIKE 'QA2 %';   -- renamed from subject by 20261124120000
 DELETE FROM public.partner_leads     WHERE name LIKE 'QA2 %';
-DELETE FROM public.partner_customers WHERE business_name LIKE 'QA2 %';
+DELETE FROM public.partner_customers WHERE company LIKE 'QA2 %';
 DELETE FROM public.partner_table_views WHERE table_key = 'qa2_leads';
 DELETE FROM public.partner_employees WHERE email LIKE '%@phase2.test';
 DELETE FROM auth.users WHERE email LIKE '%@phase2.test';
@@ -229,9 +229,9 @@ SELECT qa('L13 all eight new tables have RLS enabled',
   'a table with RLS off is readable by every signed-in user of the whole database');
 
 -- ── Clean up after ourselves, in dependency order ────────────
-DELETE FROM public.partner_tasks       WHERE subject LIKE 'QA2 %';
+DELETE FROM public.partner_tasks       WHERE title LIKE 'QA2 %'; -- renamed from subject by 20261124120000
 DELETE FROM public.partner_leads       WHERE name LIKE 'QA2 %';
-DELETE FROM public.partner_customers   WHERE business_name LIKE 'QA2 %';
+DELETE FROM public.partner_customers   WHERE company LIKE 'QA2 %';
 DELETE FROM public.partner_table_views WHERE table_key = 'qa2_leads';
 DELETE FROM public.partner_employees   WHERE email LIKE '%@phase2.test';
 DELETE FROM public.profiles WHERE user_id IN

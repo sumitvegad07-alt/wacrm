@@ -98,7 +98,7 @@ truncated=0
 # the tree", "one customer at level 2" - and 71 and 72 both ADD rows to that
 # same tree, so after them those counts are no longer the fixture's and the
 # file would fail for a reason that has nothing to do with filtering.
-for f in 00_fixture 10_buying_status 20_mapping_codes_territory 30_territory_coverage_rls 40_area_channel_mapping 50_rights_and_many_holders 60_dms_foundation 70_dashboard_viewer_scope 70_portal_visibility 75_portal_list_filters 71_portal_customer_create 72_portal_place_order 74_portal_payments_write 76_portal_dispatch_write 77_portal_reports 80_partner_rights 81_partner_leads 82_partner_lead_parity 83_partner_customers; do
+for f in 00_fixture 10_buying_status 20_mapping_codes_territory 30_territory_coverage_rls 40_area_channel_mapping 50_rights_and_many_holders 60_dms_foundation 70_dashboard_viewer_scope 70_portal_visibility 75_portal_list_filters 71_portal_customer_create 72_portal_place_order 74_portal_payments_write 76_portal_dispatch_write 77_portal_reports 80_partner_rights 81_partner_leads 82_partner_lead_parity 83_partner_customers 84_partner_activity; do
   p="$WEB_DIR/supabase/tests/$f.sql"
   [ -f "$p" ] || continue
   before=$("${PSQL[@]}" -tAc "SELECT count(*) FROM qa_results;" 2>/dev/null || echo 0)

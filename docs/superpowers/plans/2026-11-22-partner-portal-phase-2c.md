@@ -2319,3 +2319,121 @@ At the end of this plan file, add a "What actually changed during execution" sec
 **Type consistency.** `employee_id` throughout `partner_task_assignees` (not `profile_id`, which is the CRM's column against its own `profiles` table). `assignee_ids` is the request field; `assignee_id` is the trigger-owned column and appears in `PRIVILEGE_COLUMNS` so a request cannot set it. `activity_type` everywhere after the rename — never `kind`. `ActivityAssignee` is defined in `assignees.ts` and imported by `types.ts`, not redeclared. `matchesPeriod` and `DEFAULT_PERIOD` keep the CRM's names so the two files can be diffed.
 
 **One thing the executor should push back on.** Task 1 renames three columns in a table that has never been written to. The rename buys readability against the CRM and costs a guarded `do $$` block. If `partner_tasks` turns out to hold real rows by the time this runs, the renames are still safe — but check, and say so.
+
+---
+
+## What actually changed during execution
+
+Written 2026-11-22, after building it. The Phase 1 and 2A plans carry one of
+these and they are where the next phase's traps come from.
+
+### Two faults in my own migration, neither of them reachable by review
+
+**1. The two policies were mutually recursive.** The plan's
+`partner_tasks_select` asked `partner_task_assignees` "is one of this
+activity's people in my scope?", and `partner_task_assignees_select` asked
+`partner_tasks` "can I see the parent?". Each is a correct read on its own.
+Together they are a cycle, and Postgres refuses the whole query:
+
+```
+ERROR:  infinite recursion detected in policy for relation "partner_tasks"
+```
+
+Not a degraded case — **every read of both tables fails**. Scenario 84
+aborted at line 179 on the first run.
+
+Fixed with `public.partner_task_has_scoped_assignee(uuid)`, a
+`security definer` function, so the parent's policy no longer consults a
+table whose own policy consults the parent. Same trick and same reason as
+`partner_scope_ids()`. It is not a widening: it answers only about the
+caller's own scope, which is what the policy asked anyway.
+
+**The general rule, now in memory:** whenever a parent policy references a
+child table AND the child policy references the parent, one side must go
+through a definer function. Reviewing either policy alone cannot find it.
+
+**2. `tick_own` permitted moving the row, not just ticking it.** The policy
+was written so somebody holding only `view_activities` can finish their own
+work. It is correct about *who* may write and says nothing about *what* —
+so it also allowed `UPDATE ... SET task_id = <another activity>`. Since the
+parent's select policy grants read on any activity you hold an assignee row
+for, that is self-service privilege escalation: attach yourself to an id you
+once saw in a URL and you can read it.
+
+Postgres has no column-level RLS and `WITH CHECK` cannot see the old row, so
+the policy genuinely cannot tell a tick from a move. Closed with
+`trg_partner_task_assignees_guard_move`, a `BEFORE UPDATE` trigger, which
+sees both rows. Triggers raise, so `qa_refused()` tests it properly.
+
+Found by reading my own migration back while the harness ran — not by the
+harness, which would have passed it.
+
+### One fault in the app, of the same family as the dead menu items
+
+`isMasterKind` was a hand-written OR chain of three, and it is the masters
+API route's allowlist. The plan only caught `KINDS` in `settings-client.tsx`.
+Adding a fourth list without touching `isMasterKind` would have been worse
+than the missing panel the plan anticipated: Settings would have **shown**
+the Activity types panel, **loaded** its rows, and refused every save with
+"That is not a list we know about". The screen looks right until somebody
+types into it.
+
+Both now read `Object.keys(MASTER_TABLES)`, and the tests walk that same
+object so a fifth list is covered the day it is added.
+
+### Where the plan was simply wrong
+
+- **The identity-switch mechanism.** The plan's scenario used
+  `SET request.jwt.claims`. This harness stubs `auth.uid()` from
+  `current_setting('test.uid')` — `00_bootstrap.sql:49`. Every scenario uses
+  `SELECT set_config('test.uid', <uuid>, false)`.
+- **`PATCH` read the request body twice.** `await req.json()` cannot be
+  called twice on one request. The real route reads it once and captures
+  `id` before `stripActivityColumns` removes it.
+- **`useConfirm` does not exist in this app.** The portal has a controlled
+  `ConfirmDialog` component (`components/shared/confirm-dialog.tsx`), not a
+  hook. The screen holds a `deleting` activity in state.
+- **The roles in the plan's fixture proved nothing.** The seeded Sales
+  Executive *has* `edit_activities`, so testing "a rep without edit can
+  still tick their own box" against that role would have passed for the
+  wrong reason. Scenario 84 creates a `QA5 Viewer` role with
+  `view_activities` and `create_activities` only, and puts both reps on the
+  same shared activity so the parent is visible to both and
+  `tick_own` is the only rule deciding the write.
+- **The deliberate bug the plan asked for in A2** was not kept. Proving a
+  scenario file runs is better done by the pass count going up, and the
+  runner already prints `TRUNCATED: recorded N of M scenarios` when a file
+  aborts — which is what caught the recursion.
+- **`qa_refused` catches every exception**, so a typo in its SQL passes too.
+  Each refusal in scenario 84 is paired with a `qa_allowed` of the same
+  statement with only the forbidden part changed.
+
+### What was already right
+
+`date-fns` was already declared in the portal's own `package.json` (4.4.0),
+so the dependency trap the plan warned about did not bite. `lib/nav.ts` and
+its test behaved exactly as designed: the test failed on three assertions
+before the flag was flipped, and the route-folder walk is what makes that
+meaningful.
+
+The per-handler guard test was seen to fail on purpose: hoisting
+`serviceClient()` above the gate in `DELETE` alone fails it by name
+("DELETE builds the service client first"), which is more than the Phase 2B
+version managed.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `tsc --noEmit` | clean |
+| `vitest run` | 264 passed, 28 files (was 204) |
+| `next build` | clean; `/activity`, `/api/activity`, `/api/activity/complete` all present |
+| harness | see the commit that follows this line |
+| click-through | **NOT DONE.** The local dev server redirects every route to `/login` and nobody entered a password. The screen's modules are proven to resolve by `next build`; its behaviour against real tables waits on the migration being pasted into Supabase. |
+
+### Not built, deliberately
+
+- The CRM's **Tasks table** (filter row, Manage Column, export, print). The
+  CRM has both screens; the spec maps the founder's module to My Activity.
+- Task **comments, checklists and attachments** — three more tables, and
+  they live on the CRM's task *detail* page, not on My Activity.
