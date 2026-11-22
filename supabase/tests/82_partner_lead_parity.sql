@@ -11,6 +11,27 @@
 -- the convert function.
 --
 -- Establishes its own state and cleans up after itself.
+--
+-- ---------------------------------------------------------------------
+-- WHEN qa_refused IS THE RIGHT TOOL, AND WHEN IT LIES
+-- ---------------------------------------------------------------------
+-- qa_refused() runs a statement and passes if it RAISES. That makes it
+-- right for a trigger or a constraint, which really do raise:
+--     the reporting-loop guard, the built-in-role guard, a CHECK, a unique
+--     index, a foreign key.
+--
+-- It is WRONG for row-level security on UPDATE or DELETE. RLS filters rows;
+-- it does not raise. A statement that matches no row completes quietly, so
+-- qa_refused reports "refused" whether the policy exists or not — it passes
+-- against a table with RLS switched off entirely.
+--
+-- For those, run the statement plainly and then assert the row did not
+-- change, read back as postgres with RESET ROLE. This was got wrong three
+-- times in a row across files 81 and 82 before it was written down here.
+--
+-- INSERT is the exception: an INSERT that violates a WITH CHECK does raise,
+-- so qa_refused is right for it — as long as the row's values are literals
+-- and not a sub-SELECT that RLS can empty first.
 -- ============================================================
 \set ON_ERROR_STOP on
 
@@ -108,8 +129,10 @@ SELECT qa('P4 and still cannot read the owner''s OTHER leads',
   (SELECT count(*) FROM public.partner_leads WHERE name = 'QA3 Private Lead') = 0,
   'the clause must widen to one lead, not to the owner''s whole list');
 
-SELECT qa_refused('P5 a collaborator cannot edit the lead',
-  format($$UPDATE public.partner_leads SET status = 'Won' WHERE id = %L$$, :'shared_id'));
+-- NOT qa_refused. See the rule at the top of this file: RLS filters, it does
+-- not raise, so this UPDATE matches no row, completes quietly, and would
+-- report "refused" with no policy in place at all. P5b is the real check.
+UPDATE public.partner_leads SET status = 'Won' WHERE id = :'shared_id';
 
 RESET ROLE;
 SELECT qa('P5b proven from outside RLS: the status never moved',
