@@ -1377,3 +1377,58 @@ All of these hold on `https://partner.ozzo.co.in`:
 
 Phase 2B — Customers, convert-lead-to-customer, and My Activity — gets its own
 plan, written when this one is live.
+
+---
+
+## What execution found (2026-11-21/22)
+
+Tasks 1–6 are built, committed and pushed. Task 7 (verification with a second
+account) is blocked on the migration being applied to production.
+
+**Things the plan got wrong, found while building:**
+
+- **The unseen-row highlight needs TWO tables, not one.** `use-record-views`
+  imports `useViewBaseline`, which reads a baselines table — the high-water
+  mark that stops a new joiner seeing every existing lead marked unread on
+  their first visit. The plan created only `partner_record_views`.
+  `partner_record_view_baselines` was added to the migration rather than
+  crippling the feature.
+- **The ported hooks depend on the CRM's `useAuth`**, which carries a profile,
+  an account and a plan — none of which exist here. A stub returning nulls
+  would have silently disabled saved views rather than failing, because both
+  hooks guard on `!accountId`. Replaced with `usePartnerSession`, and every
+  `account_id` removed from both hooks.
+- **`apply-filters.ts` drags in the custom-fields engine.** Only
+  `isEmptyFilterValue` was needed; the four custom-field and
+  assigned-employee helpers were cut with a comment saying where to get them
+  if custom fields ever arrive.
+- **`PageHeader` could not simply be copied.** The CRM's deprecated
+  `subtitle` and does not render it; every Phase 1 screen here passes one and
+  shows it. This app's header was kept and given the toolbar slot instead.
+- **`ColumnDef.valueSource` carried an `idSpace` discriminator** for the CRM's
+  two id spaces. This portal has one, so it was removed rather than carried
+  as a constant that could only be got wrong.
+- **The plan's file list missed `public/brand/`** — not Phase 2A, but the same
+  class of omission as Phase 1's.
+
+**The database harness earned its keep twice:**
+
+1. First run: four scenarios failed. The cause was the **tests**, not the SQL.
+   An `INSERT … SELECT` whose sub-query matches no row, and an `UPDATE` or
+   `DELETE` that matches no row, raise nothing in Postgres — so three
+   "must be refused" checks were passing without the policy under test ever
+   being consulted. L6b's own comment warned about exactly this and L6 did it
+   anyway.
+2. Correcting them introduced a second bug: the replacement captured exec2's
+   id with `\gset` *after* `SET ROLE authenticated`, where RLS hides that row
+   and `\gset` errors with "no rows returned". Moved above the role switch.
+
+**Still outstanding:**
+
+- The migration has **not been applied to production**. The paste doc carries
+  a warning at the top.
+- Task 7 has not run: nobody has yet seen an executive's view of Leads, the
+  filter row, Manage Columns or saved views working against real data.
+- Soft delete lives on the lead's own screen, not in a row menu. The ported
+  DataTable's row-actions slot is wired to the CRM's rights registry and
+  repointing it is Phase 2B work.
