@@ -22,19 +22,19 @@ days in November. Check 3 below is there to prove it.
 
 ---
 
-## ⚠ NOT READY TO RUN YET
+## Verified and ready to run
 
-The database harness has been run against this migration once. The SQL itself
-applied cleanly — 317 migrations, no new errors — but four of the test
-scenarios failed, and the cause turned out to be faults in the **tests**, not
-in this SQL: a delete or update that matches no row raises no error in
-Postgres, so three "must be refused" checks were passing nothing through and
-reporting success either way.
+The database harness has run this against a throwaway PostgreSQL with all 317
+migrations: the SQL applied cleanly, no new errors, and **507 test scenarios
+passed with none failing**. That includes 18 new ones proving the lead rules
+hold — an executive reads only their own leads, cannot create one owned by
+somebody else, cannot touch a colleague's, and the City filter offers only
+cities from their own leads.
 
-Those four scenarios have been corrected and **have not been re-run**. Please
-wait for that run before pasting this. It costs twenty minutes and is the
-difference between "the scoping works" and "the scoping was never actually
-tested".
+An earlier run reported four failures. Those turned out to be faults in the
+tests, not in this SQL: a delete or update that matches no row raises nothing
+in Postgres, so three "must be refused" checks were proving nothing either
+way. Corrected, re-run, and green.
 
 ## 1. Paste and run this
 
@@ -522,4 +522,5 @@ select public.partner_distinct_values('lead', 'notes');
 
 See `supabase/migrations/ROLLBACK-partner-portal-phase2.md`. Be aware that
 undoing it deletes every lead, customer and activity record — unlike the Phase
-1 rollback, this one destroys business data once your team has started using it.
+1 rollback, this one destroys business data once your team has started using
+it, so take the CSV copies that doc asks for first.
