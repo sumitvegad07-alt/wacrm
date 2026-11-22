@@ -2428,7 +2428,8 @@ version managed.
 | `tsc --noEmit` | clean |
 | `vitest run` | 264 passed, 28 files (was 204) |
 | `next build` | clean; `/activity`, `/api/activity`, `/api/activity/complete` all present |
-| harness | see the commit that follows this line |
+| harness | **580 passed, 0 failed, all 20 scenarios ran.** Up from 549 at the end of Phase 2B — 31 new assertions, and no TRUNCATED line. The first run said 558/0 WITH a truncation notice, which is the recursion aborting scenario 84 nine assertions in. |
+| Vercel | All four commits **Ready** and **Production**; b30231f is live. Checked on the dashboard, not assumed from a successful push — two Phase 1 deploys failed silently while everything was green locally. |
 | click-through | **NOT DONE.** The local dev server redirects every route to `/login` and nobody entered a password. The screen's modules are proven to resolve by `next build`; its behaviour against real tables waits on the migration being pasted into Supabase. |
 
 ### Not built, deliberately
