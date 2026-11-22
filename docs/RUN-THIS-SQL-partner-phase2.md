@@ -1,9 +1,9 @@
 # RUN THIS IN SUPABASE — Partner Portal Phase 2
 
-**What it does:** adds the eight tables the Leads module needs — leads,
+**What it does:** adds the nine tables the Leads module needs — leads,
 customers, activity, your three master lists (lead statuses, sources,
-industries), plus two small tables that remember each person's saved views and
-which rows they have already opened.
+industries), plus three small tables that remember each person's saved views,
+which rows they have already opened, and when they first looked at a list.
 
 **What it does NOT touch:** nothing that exists today. No tenant table, no
 column, no policy, no function. Your CRM, the mobile app and the DMS portal
@@ -12,29 +12,56 @@ cannot see this change at all.
 **Where:** the Supabase dashboard for the Mumbai project
 (`ltigfpywdbfilsagtpyd`) → SQL Editor → paste → Run.
 
-It is wrapped in `begin; … commit;` — if any part fails, none of it is applied,
-and you can fix and run it again. It is also safe to run twice.
+It is wrapped in `begin; … commit;` — if any part fails, none of it is applied.
+It is **safe to run twice**: every statement is written so a second run does
+nothing.
 
-**The important rule it enforces:** no two of these tables have more than one
-link between them. That sounds like a technical detail and is not — two links
-between the same pair is what made every order screen say "not found" for three
-days in November. Check 3 below is there to prove it.
+## Verified
+
+The database harness ran this against a throwaway PostgreSQL with all 317
+migrations: the SQL applied cleanly, no new errors, and **507 test scenarios
+passed with none failing** — including 18 proving an executive reads only
+their own leads, cannot create one owned by somebody else, and sees only
+their own cities in the filters.
 
 ---
 
-## Verified and ready to run
+## ⚠ If you already ran the earlier version of this file
 
-The database harness has run this against a throwaway PostgreSQL with all 317
-migrations: the SQL applied cleanly, no new errors, and **507 test scenarios
-passed with none failing**. That includes 18 new ones proving the lead rules
-hold — an executive reads only their own leads, cannot create one owned by
-somebody else, cannot touch a colleague's, and the City filter offers only
-cities from their own leads.
+The first version of this page was generated before the ninth table was
+added, so it is missing `partner_record_view_baselines` — the table that
+stops a new joiner seeing every existing lead marked as unread. Nothing is
+broken without it; the "not yet opened" highlight just does not work.
 
-An earlier run reported four failures. Those turned out to be faults in the
-tests, not in this SQL: a delete or update that matches no row raises nothing
-in Postgres, so three "must be refused" checks were proving nothing either
-way. Corrected, re-run, and green.
+Either re-run the whole block below (it is safe), or run only this:
+
+```sql
+create table if not exists public.partner_record_view_baselines (
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  module_name text not null,
+  baseline_at timestamptz not null default now(),
+  primary key (user_id, module_name)
+);
+
+alter table public.partner_record_view_baselines enable row level security;
+
+drop policy if exists partner_record_view_baselines_own
+  on public.partner_record_view_baselines;
+create policy partner_record_view_baselines_own
+  on public.partner_record_view_baselines
+  for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+```
+
+Then check it landed:
+
+```sql
+select relname, relrowsecurity as rls_on
+from pg_class where relname = 'partner_record_view_baselines';
+-- Expect one row, rls_on = t.
+```
+
+---
 
 ## 1. Paste and run this
 
@@ -60,6 +87,7 @@ way. Corrected, re-run, and green.
 --      tasks -> leads / tasks -> customers        1 each
 --      table_views -> auth.users                  1
 --      record_views -> auth.users                 1
+--      record_view_baselines -> auth.users        1
 --    `created_by` is a bare uuid on every table, and
 --    `partner_customers.source_lead_id` is a bare uuid TOO - leads and
 --    customers already have one FK between them in the other direction,
@@ -73,7 +101,7 @@ way. Corrected, re-run, and green.
 --    referenced by a foreign key, never altered.
 --
 -- 3. New trigger / policy / constraint on a table that gets written?
---    Yes, on new tables only: 20 RLS policies, record_status checks on
+--    Yes, on new tables only: 21 RLS policies, record_status checks on
 --    leads and customers, kind/priority/status checks on tasks, a partial
 --    unique index on customers.account_id, and partner_distinct_values'
 --    allowlist. All exercised by supabase/tests/81_partner_leads.sql.
@@ -258,6 +286,16 @@ create table if not exists public.partner_record_views (
   primary key (user_id, module_name, record_id)
 );
 
+-- The high-water mark that stops a new joiner seeing every existing lead
+-- marked as unread on their first visit. Set once, on first visit, and never
+-- moved forward: moving it would silently clear records they never read.
+create table if not exists public.partner_record_view_baselines (
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  module_name text not null,
+  baseline_at timestamptz not null default now(),
+  primary key (user_id, module_name)
+);
+
 -- ─────────────────────────────────────────────────────────────────────
 -- 4. Values for a `select` filter on a free-text column
 --
@@ -326,6 +364,7 @@ alter table public.partner_customers     enable row level security;
 alter table public.partner_tasks         enable row level security;
 alter table public.partner_table_views   enable row level security;
 alter table public.partner_record_views  enable row level security;
+alter table public.partner_record_view_baselines enable row level security;
 
 -- ── masters: everyone in the portal reads, manage_masters writes ─────
 -- A lead form needs the status list whoever is filling it in.
@@ -439,6 +478,11 @@ create policy partner_record_views_own on public.partner_record_views
   for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+drop policy if exists partner_record_view_baselines_own on public.partner_record_view_baselines;
+create policy partner_record_view_baselines_own on public.partner_record_view_baselines
+  for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
 -- ─────────────────────────────────────────────────────────────────────
 -- 6. Seed the master lists
 -- ─────────────────────────────────────────────────────────────────────
@@ -471,16 +515,17 @@ commit;
 ## 2. Then run these four checks
 
 ```sql
--- 1. Eight new tables, all with row-level security on.
+-- 1. Nine new tables, all with row-level security on.
 select c.relname, c.relrowsecurity as rls_on, count(p.polname) as policies
 from pg_class c left join pg_policy p on p.polrelid = c.oid
 where c.relname in ('partner_lead_statuses','partner_lead_sources','partner_industries',
                     'partner_leads','partner_customers','partner_tasks',
-                    'partner_table_views','partner_record_views')
+                    'partner_table_views','partner_record_views',
+                    'partner_record_view_baselines')
 group by c.relname, c.relrowsecurity order by c.relname;
--- Expect 8 rows, rls_on = t on every one.
+-- Expect 9 rows, rls_on = t on every one.
 -- Policies: the three master lists 2 each, leads/customers/tasks 4 each,
--- the two preference tables 1 each.
+-- the three preference tables 1 each.
 ```
 
 ```sql
@@ -508,19 +553,19 @@ group by 1, 2 having count(*) > 1;
 ```sql
 -- 4. The filter-value list refuses a column it was not told about.
 select public.partner_distinct_values('lead', 'city');
--- Fine — returns nothing yet, because there are no leads.
+-- Fine — returns nothing until there are leads with a city.
 
 select public.partner_distinct_values('lead', 'notes');
 -- MUST fail, with: Unknown filter source lead.notes
--- If this one succeeds, the allowlist is not working and should be fixed
--- before anybody uses the portal.
+-- A red error here is the PASS. If it succeeds instead, the allowlist is not
+-- working and should be fixed before anybody uses the portal.
 ```
 
 ---
 
 ## 3. If you need to undo it
 
-See `supabase/migrations/ROLLBACK-partner-portal-phase2.md`. Be aware that
-undoing it deletes every lead, customer and activity record — unlike the Phase
-1 rollback, this one destroys business data once your team has started using
-it, so take the CSV copies that doc asks for first.
+See `supabase/migrations/ROLLBACK-partner-portal-phase2.md`. Undoing it deletes
+every lead, customer and activity record — unlike the Phase 1 rollback, this
+one destroys business data once your team has started using it, so take the
+CSV copies that doc asks for first.
