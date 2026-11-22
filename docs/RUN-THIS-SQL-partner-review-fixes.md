@@ -2,7 +2,9 @@
 
 Open the Mumbai project (`ltigfpywdbfilsagtpyd`) → **SQL Editor** → **New query**, paste the whole block below, and press **Run**. It is safe to run twice, and safe to run even if you have already run the My Activity block from `RUN-THIS-SQL-partner-activity.md`.
 
-It takes about ten seconds. Nothing in OZZO CRM, the mobile app or the DMS portal is touched — every table and function in here begins with `partner_`.
+It takes about ten seconds.
+
+**Nothing in OZZO CRM, the mobile app or the DMS portal is changed.** Everything this block creates or alters begins with `partner_`. The one thing it touches outside the portal it only *reads*: your CRM's territory list, so the **Copy from OZZO CRM** button has something to copy. It writes nothing there.
 
 ## What it does
 
