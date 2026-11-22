@@ -39,6 +39,14 @@
 --           partner_leads.contact_person is NOT touched here.
 --      grep -rn "partner_customers" wacrm-web/src wacrm-mobile ozzo-dms
 --        -> nothing
+--    MISSED ON THE FIRST PASS, and caught by the harness: the grep above
+--    covered the application repos and NOT supabase/tests. Files 81 and 82
+--    delete partner_customers rows by business_name in their fixtures and
+--    clean-up, so both aborted half way with "column business_name does not
+--    exist" — leaving 509 assertions passing and the rest never run. The
+--    runner's truncation guard is what reported it; the pass count alone
+--    looked fine. **A rename's blast radius includes the test files.**
+--
 --    The ONE live reader of these two columns is
 --    public.partner_convert_lead_to_customer, which inserts them by name.
 --    It is replaced in this same transaction (section 4), so there is no

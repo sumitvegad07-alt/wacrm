@@ -42,7 +42,7 @@
 RESET ROLE;
 
 DELETE FROM public.partner_module_activities WHERE message LIKE 'QA3 %';
-DELETE FROM public.partner_customers WHERE business_name LIKE 'QA3 %';
+DELETE FROM public.partner_customers WHERE company LIKE 'QA3 %';
 DELETE FROM public.partner_leads     WHERE name LIKE 'QA3 %';
 DELETE FROM public.partner_employees WHERE email LIKE '%@parity.test';
 DELETE FROM auth.users WHERE email LIKE '%@parity.test';
@@ -169,8 +169,8 @@ SELECT qa_allowed('P8 the owner can convert their lead',
 RESET ROLE;
 SELECT qa('P8b the customer exists, carrying the lead''s details',
   (SELECT count(*) FROM public.partner_customers
-    WHERE business_name = 'QA3 Shared Lead' AND source_lead_id::text = :'shared_id') = 1,
-  'got ' || (SELECT count(*) FROM public.partner_customers WHERE business_name = 'QA3 Shared Lead'));
+    WHERE company = 'QA3 Shared Lead' AND source_lead_id::text = :'shared_id') = 1,
+  'got ' || (SELECT count(*) FROM public.partner_customers WHERE company = 'QA3 Shared Lead'));
 
 SELECT qa('P8c the lead is stamped and marked Won',
   (SELECT converted_customer_id IS NOT NULL AND converted_at IS NOT NULL AND status = 'Won'
@@ -214,7 +214,7 @@ SELECT qa('P12 no pair of partner_ tables has two foreign keys between them',
 
 -- ── Clean up, in dependency order ────────────────────────────
 DELETE FROM public.partner_module_activities WHERE message LIKE 'QA3 %';
-DELETE FROM public.partner_customers WHERE business_name LIKE 'QA3 %';
+DELETE FROM public.partner_customers WHERE company LIKE 'QA3 %';
 DELETE FROM public.partner_leads     WHERE name LIKE 'QA3 %';
 DELETE FROM public.partner_employees WHERE email LIKE '%@parity.test';
 DELETE FROM public.profiles WHERE user_id IN
