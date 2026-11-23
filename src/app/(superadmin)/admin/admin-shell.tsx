@@ -104,7 +104,7 @@ function SuperAdminShellInner({ children }: { children: React.ReactNode }) {
             </div>
             <div>
               <p className="text-sm font-bold text-foreground leading-tight">Super Admin</p>
-              <p className="text-xs text-muted-foreground leading-tight">WACRM Platform</p>
+              <p className="text-xs text-muted-foreground leading-tight">OZZO Platform</p>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { outstandingReportConfig } from "@/lib/reports/outstandingReportConfig";
 
 export const metadata = {
-  title: "Customer Outstanding | WACRM",
+  title: "Customer Outstanding",
 };
 
 export default function CustomerOutstandingReportPage() {

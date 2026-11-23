@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { dealReportConfig } from "@/lib/reports/dealReportConfig";
 
 export const metadata = {
-  title: "Deal Reports | WACRM",
+  title: "Deal Reports",
 };
 
 export default function DealReportsPage() {

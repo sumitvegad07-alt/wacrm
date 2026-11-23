@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { orderReportConfig } from "@/lib/reports/orderReportConfig";
 
 export const metadata = {
-  title: "Order Reports | WACRM",
+  title: "Order Reports",
 };
 
 export default function OrderReportsPage() {

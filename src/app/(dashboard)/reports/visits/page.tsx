@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { visitReportConfig } from "@/lib/reports/visitReportConfig";
 
 export const metadata = {
-  title: "Visit Reports | WACRM",
+  title: "Visit Reports",
 };
 
 export default function VisitReportsPage() {

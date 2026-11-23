@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { expenseReportConfig } from "@/lib/reports/expenseReportConfig";
 
 export const metadata = {
-  title: "Expense Reports | WACRM",
+  title: "Expense Reports",
 };
 
 export default function ExpenseReportsPage() {

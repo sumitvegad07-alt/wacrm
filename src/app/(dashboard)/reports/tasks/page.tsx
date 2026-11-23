@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { taskReportConfig } from "@/lib/reports/taskReportConfig";
 
 export const metadata = {
-  title: "Task Reports | WACRM",
+  title: "Task Reports",
 };
 
 export default function TaskReportsPage() {

@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { ageingReportConfig } from "@/lib/reports/ageingReportConfig";
 
 export const metadata = {
-  title: "Ageing Reports | WACRM",
+  title: "Ageing Reports",
 };
 
 export default function AgeingReportsPage() {

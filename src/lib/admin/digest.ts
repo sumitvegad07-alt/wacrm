@@ -144,7 +144,7 @@ export function composeDigest(input: DigestInput): Digest {
 /** Plain-text rendering, suitable for email or a chat message. */
 export function renderDigestText(digest: Digest): string {
   const header = [
-    `WACRM ${digest.period} operations digest`,
+    `OZZO ${digest.period} operations digest`,
     new Date(digest.generatedAt).toUTCString(),
     "",
     digest.headline,

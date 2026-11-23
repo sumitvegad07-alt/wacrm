@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { productSummaryReportConfig } from "@/lib/reports/productSummaryReportConfig";
 
 export const metadata = {
-  title: "Product Summary | WACRM",
+  title: "Product Summary",
 };
 
 export default function ProductSummaryReportPage() {

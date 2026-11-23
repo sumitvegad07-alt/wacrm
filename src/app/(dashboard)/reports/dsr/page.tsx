@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { dsrReportConfig } from "@/lib/reports/dsrReportConfig";
 
 export const metadata = {
-  title: "DSR | WACRM",
+  title: "DSR",
 };
 
 export default function DsrReportPage() {

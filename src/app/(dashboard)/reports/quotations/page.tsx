@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { quotationReportConfig } from "@/lib/reports/quotationReportConfig";
 
 export const metadata = {
-  title: "Quotation Reports | WACRM",
+  title: "Quotation Reports",
 };
 
 export default function QuotationReportsPage() {

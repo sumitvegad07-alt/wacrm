@@ -3,7 +3,7 @@ import { ReportPageLayout } from "@/components/shared";
 import { salesReportConfig } from "@/lib/reports/salesReportConfig";
 
 export const metadata = {
-  title: "Sales Reports | WACRM",
+  title: "Sales Reports",
 };
 
 export default function SalesReportsPage() {
