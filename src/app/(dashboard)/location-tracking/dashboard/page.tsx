@@ -56,7 +56,7 @@ const MapView = dynamic(
 );
 
 export default function LocationDashboardPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, accountId } = useAuth();
   const [usersData, setUsersData] = useState<any[]>([]);
   const [pointsData, setPointsData] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -119,10 +119,19 @@ export default function LocationDashboardPage() {
   const supabase = createClient();
 
   useEffect(() => {
+    // `accountId` arrives asynchronously from useAuth. This effect used to run
+    // once on mount with an empty dependency list, which was harmless only
+    // because the profiles query had no account filter and leaned on RLS. Now
+    // that it filters explicitly, firing before the id lands would send
+    // `account_id=eq.null`, return nobody, and leave the dashboard blank until
+    // the 30-second interval happened to catch up. Same guard the Attendance
+    // screen already uses.
+    if (!accountId) return;
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 30000);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
 
   const fetchDashboardData = async () => {
     // 1. Fetch ALL team profiles for this account
@@ -132,6 +141,13 @@ export default function LocationDashboardPage() {
       // value derived from that role's Full Access flag and drives RLS; it is not a label for
       // people, and showing "agent"/"owner" alongside roles the admin actually named was noise.
       .select('id, user_id, full_name, employee_roles(name)')
+      // Belt and braces alongside RLS, the same as Team > Employees and the
+      // Attendance screen: `profiles_select` carried `OR is_superadmin()` until
+      // 2026-10-16, and every screen reading profiles without an explicit account
+      // filter showed the founder every tenant's staff. Code must not depend on
+      // the policy alone. The comment above has claimed "for this account" since
+      // this screen was written; now it is true in the query as well.
+      .eq('account_id', accountId)
       .order('full_name');
 
     // 2. Fetch active tracking sessions (punched in users)

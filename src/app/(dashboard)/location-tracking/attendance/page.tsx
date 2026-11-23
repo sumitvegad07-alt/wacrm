@@ -33,6 +33,7 @@ import {
   type AttendanceTone,
 } from "@/lib/location/attendance-status";
 import { monthWorkingDays, toDateKey } from "@/lib/location/working-days";
+import { rosterOrder } from "@/lib/location/attendance-roster";
 import {
   buildAttendanceMatrix,
   buildDayRollup,
@@ -121,9 +122,29 @@ export default function UserAttendancePage() {
 
     // `id` is needed as well as `user_id`: sessions key on user_id, but leave_days keys on
     // profiles.id. Those are different columns and mixing them up returns nothing at all.
-    const { data: profiles } = await supabase
+    //
+    // ORDER BY and the account filter are both load-bearing, and both were missing.
+    //
+    // Without the order, rows arrive in insertion order: a row is rendered for EVERY
+    // employee whether or not they punched in, the table pages ten at a time, and so the
+    // newest employee lands at the bottom of the last page behind everyone marked Absent.
+    // That is what "the new employee's name does not show" turned out to be, once the
+    // account grew past ten people. Team > Employees has ordered by full_name since it
+    // was written; this screen now matches it.
+    //
+    // The account filter is belt and braces: `profiles_select` is tenant-scoped again
+    // (migration 20261016120000), but that policy carried `OR is_superadmin()` until
+    // 2026-10-16, and any screen reading profiles without an explicit account filter
+    // showed the founder every tenant's staff. Code must not depend on the policy alone.
+    const { data: profilesRaw } = await supabase
       .from('profiles')
-      .select('id, user_id, full_name, avatar_url');
+      .select('id, user_id, full_name, avatar_url, email')
+      .eq('account_id', accountId)
+      .order('full_name');
+
+    // Sorted again here so the three tabs cannot disagree, blanks sort last rather than
+    // taking over the first page, and the rule is unit-tested. See lib/location/attendance-roster.ts.
+    const profiles = profilesRaw ? rosterOrder(profilesRaw) : profilesRaw;
 
     if (!profiles) {
       setAttendanceData([]);
