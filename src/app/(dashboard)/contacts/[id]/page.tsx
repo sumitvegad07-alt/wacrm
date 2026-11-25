@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
+import { RecordNav } from "@/components/shared/record-nav";
 import { useRouter } from "@/lib/navigation";
 import { useParams } from "next/navigation";
 import { Link } from "@/components/ui/link";
@@ -301,6 +302,14 @@ export default function ContactDetailsPage() {
     <DetailPageLayout
       title={contact.company || contact.name || "Unnamed Customer"}
       onBack={() => router.back()}
+      nav={
+        <RecordNav
+          module="contact"
+          currentId={id}
+          noun="customer"
+          hrefOf={(next) => `/contacts/${next}`}
+        />
+      }
       badges={tags.map((t) => (
         <Badge
           key={t.id}

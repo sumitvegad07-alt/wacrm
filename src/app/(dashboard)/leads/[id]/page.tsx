@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useMarkRecordSeen } from "@/hooks/use-record-views";
+import { RecordNav } from "@/components/shared/record-nav";
 import { useRouter } from "@/lib/navigation";
 import { Link } from "@/components/ui/link";
 import { createClient } from "@/lib/supabase/client";
@@ -284,6 +285,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     <DetailPageLayout
       title={lead.name}
       onBack={() => router.push("/leads")}
+      nav={
+        <RecordNav
+          module="lead"
+          currentId={resolvedParams.id}
+          noun="lead"
+          hrefOf={(id) => `/leads/${id}`}
+        />
+      }
       badges={
         lead.is_converted ? (
           <Badge className="gap-1 border-transparent bg-emerald-600 text-white">

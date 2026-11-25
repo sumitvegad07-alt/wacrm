@@ -23,6 +23,7 @@ import { ManageColumnsDialog } from "./manage-columns-dialog";
 import { TableViewsBar } from "./table-views-bar";
 import { useDataExport } from "@/hooks/use-data-export";
 import { useUnseenRecords, type RecordModule } from "@/hooks/use-record-views";
+import { useRememberRecordOrder } from "@/hooks/use-record-nav";
 import type { TableViewApi } from "@/hooks/use-table-view";
 import { reconcileColumns } from "@/lib/table-views";
 import { TableSkeleton, EmptyState } from "@/components/shared";
@@ -77,6 +78,20 @@ interface DataTableProps<T> {
    */
   unseenModule?: RecordModule;
   createdAtOf?: (row: T) => string | null | undefined;
+  /**
+   * Let a record's own page offer ‹ › to the record before and after it.
+   *
+   * Pass the list's module key and the table remembers the ids it is showing,
+   * in the order it is showing them, for `RecordNav` to read back. Same
+   * reasoning as `unseenModule`: the table is the only thing that knows the
+   * order AFTER the search, the column filters and the sort have had their
+   * say, and one caller is what keeps the behaviour identical across lists.
+   *
+   * The whole filtered set is remembered, not the page on screen — "next" has
+   * to be able to walk off the bottom of page one onto page two, which is
+   * exactly where going back to the list costs the most.
+   */
+  navModule?: string;
   selection?: {
     selectedIds: Set<string>;
     onSelectAll: (checked: boolean) => void;
@@ -152,6 +167,7 @@ export function DataTable<T>({
   rowHref,
   unseenModule,
   createdAtOf,
+  navModule,
   selection,
   actions,
   menuActions,
@@ -348,6 +364,22 @@ export function DataTable<T>({
     idOf: rowKey,
     createdAtOf,
   });
+
+  /**
+   * The order a record's own page will offer ‹ › in. `safeData`, not
+   * `paginatedData`: this is every row that survived the search and the
+   * filters, so Next walks past the bottom of the page rather than stopping
+   * at it. On a server-paged screen `safeData` IS the page the server sent,
+   * so the arrows stop at its edge — correct, because nothing else here knows
+   * what the next page holds.
+   *
+   * Above the `isMounted` return for the same reason as the hook above it: a
+   * hook cannot be called conditionally.
+   */
+  useRememberRecordOrder(
+    navModule,
+    useMemo(() => safeData.map(rowKey), [safeData, rowKey]),
+  );
 
   if (!isMounted) return null; // Avoid hydration mismatch
 

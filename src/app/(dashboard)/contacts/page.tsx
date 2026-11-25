@@ -1037,6 +1037,7 @@ export default function ContactsPage() {
         columns={visibleColumns}
         data={filteredContacts}
         unseenModule="contact"
+        navModule="contact"
         createdAtOf={(contact) => contact.created_at as string | undefined}
         serverPagination={{ ...table.serverPagination, exportAll }}
         actions={

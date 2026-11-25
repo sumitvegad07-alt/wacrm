@@ -42,6 +42,15 @@ export interface DetailPageLayoutProps {
    * only as a tab, where back would leave the record).
    */
   onBack?: () => void;
+  /**
+   * Record-to-record movement — `RecordNav`'s two arrows.
+   *
+   * Its own slot rather than part of `actions`, and rendered before them,
+   * because moving between records is not something you do TO this record.
+   * Mixed in among Edit, Convert and Delete, a pair of arrows reads as one
+   * more action and gets the same hesitation before the click.
+   */
+  nav?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }
@@ -52,6 +61,7 @@ export function DetailPageLayout({
   badges,
   actions,
   onBack,
+  nav,
   className,
   children,
 }: DetailPageLayoutProps) {
@@ -87,8 +97,17 @@ export function DetailPageLayout({
             )}
           </div>
         </div>
-        {actions && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        {(nav || actions) && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {nav}
+            {/* A hairline between "where am I in the list" and "what can I do
+                to this record" — on a wide header the two clusters otherwise
+                run together into one undifferentiated row of controls. */}
+            {nav && actions ? (
+              <span aria-hidden className="hidden h-6 w-px bg-border sm:block" />
+            ) : null}
+            {actions}
+          </div>
         )}
       </div>
       {children}
