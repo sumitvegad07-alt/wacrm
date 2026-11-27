@@ -8,6 +8,11 @@ import {
   type AccountBillingState,
 } from "@/lib/admin/billing";
 import { ADDON_LINES } from "@/lib/plans/catalog";
+import {
+  isCustomFeatureKey,
+  isGrantableCustomFeature,
+} from "@/lib/plans/custom-features";
+import { isUndefinedColumn } from "@/lib/auth/account-select";
 
 /**
  * Billing and module changes for one tenant.
@@ -104,6 +109,21 @@ export async function PATCH(
     };
     const curLines = cur.addon_lines ?? [];
 
+    // custom_features is read in a SEPARATE query, on purpose. Adding it to the
+    // select above would break this whole route — every plan change, seat change
+    // and module toggle for every tenant, answering "Account not found" — on any
+    // database where migration 20261127120000 has not been pasted yet. The
+    // column arrives when the founder runs the SQL, which is after this deploy.
+    const { data: cfRow, error: cfErr } = await admin
+      .from("accounts")
+      .select("custom_features")
+      .eq("id", id)
+      .maybeSingle();
+    const customColumnExists = !isUndefinedColumn(cfErr);
+    const curCustom: string[] = customColumnExists
+      ? ((cfRow as { custom_features?: string[] | null } | null)?.custom_features ?? [])
+      : [];
+
     if (body.addonLines !== undefined) {
       if (
         !Array.isArray(body.addonLines) ||
@@ -118,6 +138,57 @@ export async function PATCH(
         return NextResponse.json({ error: `Unknown add-on: ${unknown.join(", ")}` }, { status: 400 });
       }
     }
+    // Per-client switches. Validated against the CODE catalogue, not against
+    // whatever the browser sent: a key with nothing behind it would sit in the
+    // column looking granted and do nothing, and the client would be told their
+    // feature is on. A retired key may stay on an account that already holds it
+    // (removing it is a decision, not a side effect of a save) but may not be
+    // handed to anybody new.
+    let newCustom: string[] | undefined;
+    if (body.customFeatures !== undefined) {
+      if (
+        !Array.isArray(body.customFeatures) ||
+        body.customFeatures.some((k: unknown) => typeof k !== "string")
+      ) {
+        return NextResponse.json(
+          { error: "customFeatures must be a list of feature keys" },
+          { status: 400 },
+        );
+      }
+      const asked = Array.from(new Set(body.customFeatures as string[]));
+      // The screen sends the list on every save, so an empty list on a database
+      // without the column is simply "nothing to do" — only an actual grant has
+      // to stop and say why.
+      if (!customColumnExists && asked.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Custom features are not set up in the database yet. Paste RUN-THIS-IN-SUPABASE-custom-features.sql into the Supabase SQL Editor and run it, then try again.",
+          },
+          { status: 400 },
+        );
+      }
+      const unknownKeys = asked.filter((k) => !isCustomFeatureKey(k));
+      if (unknownKeys.length) {
+        return NextResponse.json(
+          { error: `Unknown custom feature: ${unknownKeys.join(", ")}` },
+          { status: 400 },
+        );
+      }
+      const newlyRetired = asked.filter(
+        (k) => !isGrantableCustomFeature(k) && !curCustom.includes(k),
+      );
+      if (newlyRetired.length) {
+        return NextResponse.json(
+          {
+            error: `${newlyRetired.join(", ")} is retired and cannot be granted to a new account. It became a standard setting — switch that on instead.`,
+          },
+          { status: 400 },
+        );
+      }
+      newCustom = asked.sort();
+    }
+
     if (body.portalSeatsLimit !== undefined) {
       if (
         typeof body.portalSeatsLimit !== "number" ||
@@ -175,6 +246,15 @@ export async function PATCH(
 
     if (linesChanged) patch.addon_lines = newLines;
     if (seatsChanged) patch.portal_seats_limit = body.portalSeatsLimit;
+
+    // Only a real change goes in, so an unchanged save still reads "No changes
+    // to save" and the audit log records a grant as a grant.
+    if (
+      newCustom !== undefined &&
+      JSON.stringify(newCustom) !== JSON.stringify([...curCustom].sort())
+    ) {
+      patch.custom_features = newCustom;
+    }
 
     // Taking the DMS away takes its allowance with it, however the route is
     // called: an account with no add-on but spare logins is a configuration

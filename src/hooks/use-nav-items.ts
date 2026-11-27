@@ -34,6 +34,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
     hasFSM,
     hasDMS,
     isModuleEnabled,
+    hasCustomFeature,
     moduleSettings,
   } = useAuth();
   const { assignmentMode } = useExtraSettings();
@@ -64,6 +65,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
       anyLine?: readonly ProductLine[];
       allLines?: readonly ProductLine[];
       configModule?: keyof ModuleSettings;
+      customFeature?: string;
     }): boolean => {
       if (item.permission && !hasPermission(item.permission)) return false;
       if (item.module && !hasPermission(`view_${item.module}`)) return false;
@@ -80,6 +82,9 @@ export function useVisibleNavItems(): FlatNavItem[] {
       if (item.anyLine && !item.anyLine.some(lineEnabled)) return false;
       if (item.allLines && !item.allLines.every(lineEnabled)) return false;
       if (item.configModule && !isModuleEnabled(item.configModule)) return false;
+      // Per-client switch — keeps one client's screen out of every other
+      // tenant's command palette, the same as out of the sidebar.
+      if (item.customFeature && !hasCustomFeature(item.customFeature)) return false;
       return true;
     };
 
@@ -105,6 +110,7 @@ export function useVisibleNavItems(): FlatNavItem[] {
       if (node.line && !lineEnabled(node.line)) continue;
       if (node.anyLine && !node.anyLine.some(lineEnabled)) continue;
       if (node.configModule && !isModuleEnabled(node.configModule)) continue;
+      if (node.customFeature && !hasCustomFeature(node.customFeature)) continue;
       for (const item of node.items) {
         if (canView(item)) {
           push({
@@ -132,5 +138,6 @@ export function useVisibleNavItems(): FlatNavItem[] {
     hasFSM,
     hasDMS,
     isModuleEnabled,
+    hasCustomFeature,
   ]);
 }

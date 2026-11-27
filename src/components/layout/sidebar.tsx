@@ -167,6 +167,13 @@ interface NavItem {
   /** Shown only if the plan includes EVERY line listed (e.g. Lead Visits need
    *  leads from CRM and visits from WFA). */
   allLines?: readonly ProductLine[];
+  /**
+   * A per-client switch from @/lib/plans/custom-features. When set, the entry
+   * is shown only to an account OZZO granted that switch — this is how a screen
+   * built for one client stays out of every other tenant's menu while living in
+   * the same build. Fails closed: not granted, not listed.
+   */
+  customFeature?: string;
 }
 
 export type MenuNode =
@@ -181,6 +188,7 @@ export type MenuNode =
       configModule?: "whatsapp" | "quotation" | "expense" | "dispatch" | "pending_dispatch" | "territory" | "route" | "payment" | "scheme" | "stock";
       line?: ProductLine;
       anyLine?: readonly ProductLine[];
+      customFeature?: string;
     }
   | {
       type: "spacer";
@@ -559,6 +567,7 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
     hasDMS,
     hasPermission,
     isModuleEnabled,
+    hasCustomFeature,
     moduleSettings,
   } = useAuth();
   const { assignmentMode } = useExtraSettings();
@@ -635,6 +644,8 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
     if (item.allLines && !item.allLines.every(lineEnabled)) return false;
     // Admin-configurable module toggle check
     if (item.configModule && !isModuleEnabled(item.configModule)) return false;
+    // Per-client switch, granted only by OZZO from the superadmin screen.
+    if (item.customFeature && !hasCustomFeature(item.customFeature)) return false;
     return true;
   };
 
@@ -648,6 +659,7 @@ function SidebarInner({ open = false, onClose, onCollapse }: SidebarProps) {
       if (node.line && !lineEnabled(node.line)) return null;
       if (node.anyLine && !node.anyLine.some(lineEnabled)) return null;
       if (node.configModule && !isModuleEnabled(node.configModule)) return null;
+      if (node.customFeature && !hasCustomFeature(node.customFeature)) return null;
       const items = node.items.filter(canViewItem);
       return items.length > 0 ? { ...node, items } : null;
     })

@@ -14,10 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2, ToggleLeft, History } from "lucide-react";
+import { ChevronLeft, UserCircle2, AlertTriangle, Save, Trash2, ToggleLeft, Wrench, History } from "lucide-react";
 import { revokeLoginsConfirmText } from "@/lib/admin/portal-login-text";
 import { displayRoleName, hasFullAccess } from "@/lib/auth/display-role";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/admin/billing";
+import {
+  CUSTOM_FEATURES,
+  type CustomFeature,
+} from "@/lib/plans/custom-features";
 import {
   ADDON_LABEL,
   PLAN_IDS,
@@ -69,6 +73,7 @@ export default function CompanyDetailPage() {
   const [notes, setNotes] = useState("");
   const [dmsEnabled, setDmsEnabled] = useState(false);
   const [portalSeats, setPortalSeats] = useState<string>("0");
+  const [customFeatures, setCustomFeatures] = useState<string[]>([]);
   const [modules, setModules] = useState<Record<string, boolean>>({});
   const [timeline, setTimeline] = useState<
     { occurred_at: string; category: string; summary: string }[]
@@ -93,6 +98,7 @@ export default function CompanyDetailPage() {
     setNotes(c.notes || "");
     setDmsEnabled(Array.isArray(c.addon_lines) && c.addon_lines.includes("dms"));
     setPortalSeats(String(c.portal_seats_limit ?? 0));
+    setCustomFeatures(Array.isArray(c.custom_features) ? [...c.custom_features] : []);
   };
 
   useEffect(() => {
@@ -167,6 +173,7 @@ export default function CompanyDetailPage() {
             modules,
             addonLines: dmsEnabled ? ["dms"] : [],
             portalSeatsLimit: seatsValid ? seatsNumber : undefined,
+            customFeatures,
             ...(confirmRevokeLogins ? { confirmRevokeLogins: true } : {}),
           }),
         });
@@ -454,6 +461,81 @@ export default function CompanyDetailPage() {
               );
             })}
           </div>
+        </div>
+
+        {/* Per-client switches */}
+        {/* The ONLY place a custom feature is granted. A tenant admin has no
+            control for these anywhere in the product, and the database trigger
+            refuses the column from a tenant session, so this screen and the
+            SQL editor are the only two doors. */}
+        <div className="space-y-3 pt-2 border-t border-border">
+          <div className="flex items-center gap-2">
+            <Wrench className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">Custom features</h3>
+            <Link
+              href="/admin/custom-features"
+              className="text-xs text-primary hover:underline"
+            >
+              Who has what
+            </Link>
+          </div>
+          {CUSTOM_FEATURES.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nothing built for one client yet. When OZZO builds something for a
+              single client, it is listed here and you tick it for that company —
+              the same app, the same Play Store and App Store link, the feature
+              simply off for everyone else.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {CUSTOM_FEATURES.map((f: CustomFeature) => {
+                const on = customFeatures.includes(f.key);
+                // A retired key stays visible and can be removed, but cannot be
+                // handed to an account that does not already hold it.
+                const locked = f.retired === true && !on;
+                return (
+                  <label
+                    key={f.key}
+                    title={locked ? f.retiredNote ?? "Retired" : undefined}
+                    className={`flex gap-2 rounded-md px-2 py-1.5 text-sm ${
+                      locked ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-muted"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      disabled={locked}
+                      onChange={(e) =>
+                        setCustomFeatures((keys) =>
+                          e.target.checked
+                            ? Array.from(new Set([...keys, f.key])).sort()
+                            : keys.filter((k) => k !== f.key),
+                        )
+                      }
+                      className="mt-0.5 accent-primary"
+                    />
+                    <span className="space-y-0.5">
+                      <span className="block font-medium">
+                        {f.label}
+                        {f.retired && (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">
+                            retired
+                          </span>
+                        )}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {f.description}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        Asked by {f.requestedBy} · since {f.since} ·{" "}
+                        {f.surfaces.join(", ")}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3">

@@ -39,6 +39,18 @@ export interface SurfaceGate {
    *  against leads (CRM) — neither line alone can produce one. */
   allLines?: readonly ProductLine[];
   configModule?: ModuleKey;
+  /**
+   * Requires a per-client switch from @/lib/plans/custom-features, granted only
+   * from the superadmin company screen. This is how a screen built for ONE
+   * client stays invisible to every other tenant while living in the same
+   * build, the same deploy and the same app store listing.
+   *
+   * Deliberately a plain string rather than a union: the catalogue is empty
+   * until a client is sold something, and `never` would make every gate that
+   * names a feature a type error. custom-features.test.ts checks that each name
+   * used here exists in the catalogue.
+   */
+  customFeature?: string;
 }
 
 export interface GateContext {
@@ -46,6 +58,14 @@ export interface GateContext {
   owns: Record<ProductLine, boolean>;
   /** Admin module toggle, already plan-clamped by /api/account/module-settings. */
   isModuleEnabled: (key: ModuleKey) => boolean;
+  /**
+   * Per-client switch, from useAuth's hasCustomFeature. OPTIONAL so a caller
+   * that gates nothing custom keeps compiling — and absent means DENY, never
+   * allow: a gate whose context forgot to pass this hides the screen from
+   * everybody (visible to nobody) instead of showing one client's screen to
+   * every tenant.
+   */
+  hasCustomFeature?: (key: string) => boolean;
 }
 
 /**
@@ -59,6 +79,7 @@ export function gatePasses(gate: SurfaceGate | undefined, ctx: GateContext): boo
   if (gate.anyLine && !gate.anyLine.some((l) => ctx.owns[l])) return false;
   if (gate.allLines && !gate.allLines.every((l) => ctx.owns[l])) return false;
   if (gate.configModule && !ctx.isModuleEnabled(gate.configModule)) return false;
+  if (gate.customFeature && !ctx.hasCustomFeature?.(gate.customFeature)) return false;
   return true;
 }
 
@@ -187,3 +208,22 @@ export const CUSTOM_FIELD_GATES: Readonly<Record<string, SurfaceGate>> = {
   expense: { line: "wfa", configModule: "expense" },
   // `user`, `contact` and `task` are base modules on every plan.
 };
+
+// ── Every gate in one place, for audits ───────────────────────────────────────
+//
+// Keyed by a human label so a failing test names the surface it found. Exists
+// so a check can run across ALL gates at once — custom-features.test.ts uses it
+// to prove no gate names a per-client switch that does not exist, which would
+// hide a screen from the one client it was built for and from everyone else,
+// with nothing in the UI to say why.
+export const ALL_GATES: Readonly<Record<string, SurfaceGate>> = Object.freeze({
+  ...Object.fromEntries(
+    ROUTE_GATES.map(({ prefix, ...gate }) => [`route:${prefix}`, gate]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(IMPORT_GATES).map(([k, g]) => [`import:${k}`, g]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(CUSTOM_FIELD_GATES).map(([k, g]) => [`custom-field:${k}`, g]),
+  ),
+});

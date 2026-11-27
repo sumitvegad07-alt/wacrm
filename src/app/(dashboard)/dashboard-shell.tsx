@@ -49,6 +49,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasFSM,
     hasDMS,
     isModuleEnabled,
+    hasCustomFeature,
     moduleSettingsLoaded,
     hasPermission,
     signOut,
@@ -104,7 +105,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       (pathname.startsWith("/broadcasts") && !hasBroadcasts) ||
       ((pathname.startsWith("/whatsapp") || pathname.startsWith("/inbox")) && !hasWhatsApp);
 
-    if (featureRestricted || isRouteRestricted(pathname, { owns, isModuleEnabled })) {
+    if (
+      featureRestricted ||
+      isRouteRestricted(pathname, { owns, isModuleEnabled, hasCustomFeature })
+    ) {
       router.replace("/dashboard");
     }
   }, [
@@ -120,6 +124,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     hasFSM,
     hasDMS,
     isModuleEnabled,
+    hasCustomFeature,
     moduleSettingsLoaded,
     router,
   ]);

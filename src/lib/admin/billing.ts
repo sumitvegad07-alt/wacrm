@@ -83,6 +83,8 @@ export interface ValidatedChange {
   // portal_seats_used RPC and the revoke confirmation, which live in the route.
   addon_lines?: string[];
   portal_seats_limit?: number;
+  /** Per-client switches, validated against the catalogue in the route. */
+  custom_features?: string[];
 }
 
 export class BillingValidationError extends Error {}

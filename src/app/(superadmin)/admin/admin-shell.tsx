@@ -20,6 +20,7 @@ import {
   ArchiveRestore,
   Eye,
   Waypoints,
+  Wrench,
   Mail,
   FileText,
   BarChart3,
@@ -37,6 +38,8 @@ const NAV_ITEMS = [
   { href: "/admin/health", label: "Tenant Health", icon: Activity },
   { href: "/admin/companies", label: "Companies", icon: Building2 },
   { href: "/admin/billing", label: "Billing & Plans", icon: CreditCard },
+  // The per-client feature register: which company was given what one-off.
+  { href: "/admin/custom-features", label: "Custom Features", icon: Wrench },
   { href: "/admin/users", label: "All Users", icon: Users },
   { href: "/admin/data", label: "Data Browser", icon: Database },
   { href: "/admin/view-as", label: "View As", icon: Eye },

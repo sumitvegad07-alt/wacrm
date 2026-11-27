@@ -231,3 +231,64 @@ describe("gatePasses", () => {
     expect(isRouteRestricted("/service/assets", legacy)).toBe(true);
   });
 });
+
+// ── Per-client switches ──────────────────────────────────────────────────────
+//
+// A custom feature is built for ONE client and must be invisible to every other
+// tenant on the same deploy, however generous their plan. The dangerous
+// direction is the gate silently passing: an owner on a legacy Enterprise plan
+// (every line true, every module allowed) seeing another client's screen.
+describe("customFeature gates", () => {
+  const gate = { customFeature: "acme_crate_label" } as const;
+  const everything: GateContext = {
+    owns: { crm: true, wfa: true, sfa: true, fsm: true, dms: true },
+    isModuleEnabled: () => true,
+  };
+
+  it("denies an account that holds no custom features, on any plan", () => {
+    for (const plan of PLAN_IDS) {
+      expect(
+        gatePasses(gate, { ...ctxFor(plan), hasCustomFeature: () => false }),
+      ).toBe(false);
+    }
+    expect(
+      gatePasses(gate, { ...everything, hasCustomFeature: () => false }),
+    ).toBe(false);
+  });
+
+  it("denies when the context forgot to pass hasCustomFeature (fails closed)", () => {
+    expect(gatePasses(gate, everything)).toBe(false);
+  });
+
+  it("denies a DIFFERENT custom feature", () => {
+    expect(
+      gatePasses(gate, {
+        ...everything,
+        hasCustomFeature: (k) => k === "someone_elses_feature",
+      }),
+    ).toBe(false);
+  });
+
+  it("allows only the account granted that exact key", () => {
+    expect(
+      gatePasses(gate, {
+        ...everything,
+        hasCustomFeature: (k) => k === "acme_crate_label",
+      }),
+    ).toBe(true);
+  });
+
+  it("still applies the plan and module checks alongside it", () => {
+    const both = { line: "sfa", configModule: "stock", customFeature: "acme_crate_label" } as const;
+    const granted = { hasCustomFeature: () => true };
+    // Granted the switch, but on a CRM plan with no SFA line.
+    expect(gatePasses(both, { ...ctxFor("CRM"), ...granted })).toBe(false);
+    // SFA line, switch granted, but Stock turned off.
+    expect(
+      gatePasses(both, { ...ctxFor("SFA"), ...granted, isModuleEnabled: () => false }),
+    ).toBe(false);
+    expect(
+      gatePasses(both, { ...ctxFor("SFA"), ...granted, isModuleEnabled: () => true }),
+    ).toBe(true);
+  });
+});

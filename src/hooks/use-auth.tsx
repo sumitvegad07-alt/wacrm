@@ -23,6 +23,10 @@ import {
 import { type RolePermissions, hasPermission, getDataScope } from "@/lib/auth/rbac";
 import { selectAccountRow } from "@/lib/auth/account-select";
 import { accountLines, clampModuleSettings } from "@/lib/plans/catalog";
+import {
+  accountHasCustomFeature,
+  normalizeCustomFeatures,
+} from "@/lib/plans/custom-features";
 
 interface Profile {
   id: string;
@@ -70,6 +74,9 @@ interface AccountSummary {
   addon_lines?: string[] | null;
   /** accounts.portal_seats_limit: how many customers may hold a DMS login. */
   portal_seats_limit?: number | null;
+  /** accounts.custom_features: per-client switches OZZO granted this account
+   *  (see @/lib/plans/custom-features). Absent until the column exists. */
+  custom_features?: string[] | null;
   industry: string;
   is_provisioned: boolean;
   subscription_expires_at: string | null;
@@ -223,6 +230,22 @@ interface AuthContextValue {
   /** True when the account holds the DMS add-on line (accounts.addon_lines). */
   hasDMS: boolean;
 
+  /**
+   * Per-client switches granted to this account (accounts.custom_features),
+   * already cleaned against the catalogue in @/lib/plans/custom-features.
+   * Normally read through `hasCustomFeature`; the array itself is here for the
+   * rare screen that has to list them.
+   */
+  customFeatures: string[];
+  /**
+   * True only when OZZO granted this account that exact per-client switch.
+   * False while the profile is still loading and false for every other tenant,
+   * so a one-client screen or rule stays invisible by default. A tenant admin
+   * cannot turn one of these on from their own Settings — there is no control
+   * for it anywhere in the product.
+   */
+  hasCustomFeature: (key: string) => boolean;
+
   /** Admin-configurable module toggles. All true while loading. */
   moduleSettings: ModuleSettings;
   /** Returns true if the given module key is enabled for this account. */
@@ -341,6 +364,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               addon_lines: (account as { addon_lines?: string[] | null }).addon_lines ?? [],
               portal_seats_limit:
                 (account as { portal_seats_limit?: number | null }).portal_seats_limit ?? 0,
+              // Cleaned against the catalogue here, once, so no screen ever
+              // compares against a key this build does not know.
+              custom_features: normalizeCustomFeatures(
+                (account as { custom_features?: unknown }).custom_features,
+              ),
               industry: account.industry ?? 'Other',
               is_provisioned: account.is_provisioned ?? false,
               subscription_expires_at: (account as any).subscription_expires_at ?? null,
@@ -537,6 +565,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // every consumer render. Cheap regardless, but the memo also gives
   // each derived value a stable identity for React.memo / useEffect
   // dependencies downstream.
+  // A stable array identity, so `derived` is not rebuilt on every render by a
+  // fresh [] from the account row. Already catalogue-cleaned at fetch time.
+  const customFeatures = useMemo(
+    () => account?.custom_features ?? [],
+    [account?.custom_features],
+  );
+
   const derived = useMemo(() => {
     const role = profile?.account_role ?? null;
     // Product-line entitlements come from the plan catalog now, not from the
@@ -565,9 +600,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasSFA: lines.sfa,
       hasFSM: lines.fsm,
       hasDMS: lines.dms,
+      customFeatures,
       permissions: profile?.employee_role?.permissions ?? null,
     };
-  }, [profile, account?.subscription_plan, account?.addon_lines]);
+  }, [profile, account?.subscription_plan, account?.addon_lines, customFeatures]);
 
   return (
     <AuthContext.Provider
@@ -584,6 +620,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         moduleSettings,
         moduleSettingsLoaded,
         isModuleEnabled: (key: keyof ModuleSettings) => moduleSettings[key] ?? true,
+        // No owner/admin bypass and no "default true while loading": unlike a
+        // module toggle, a switch nobody bought must read false.
+        hasCustomFeature: (key: string) =>
+          accountHasCustomFeature(derived.customFeatures, key),
         refreshModuleSettings,
         hasPermission: (key: string) => {
           if (derived.isOwner || derived.isAdmin) return true;
@@ -642,6 +682,8 @@ export function useAuth(): AuthContextValue {
       hasSFA: false,
       hasFSM: false,
       hasDMS: false,
+      customFeatures: [],
+      hasCustomFeature: () => false,
       moduleSettings: { ...DEFAULT_MODULE_SETTINGS },
       moduleSettingsLoaded: false,
       isModuleEnabled: () => true,
